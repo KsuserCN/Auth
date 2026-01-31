@@ -1,8 +1,12 @@
 package cn.ksuser.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 public class ApiResponse<T> {
     private Integer code;
     private String msg;
+    
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     private T data;
 
     public ApiResponse() {

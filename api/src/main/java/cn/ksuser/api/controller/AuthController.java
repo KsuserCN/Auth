@@ -1,6 +1,8 @@
 package cn.ksuser.api.controller;
 
 import cn.ksuser.api.dto.ApiResponse;
+import cn.ksuser.api.dto.LoginRequest;
+import cn.ksuser.api.dto.LoginResponse;
 import cn.ksuser.api.dto.RegisterRequest;
 import cn.ksuser.api.dto.RegisterResponse;
 import cn.ksuser.api.dto.RegisterResult;
@@ -60,5 +62,36 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUser(result.getUser())));
+    }
+
+    /**
+     * 登录接口
+     * @param loginRequest 登录请求
+     * @return ApiResponse
+     */
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<LoginResponse>> login(@RequestBody LoginRequest loginRequest) {
+        String email = loginRequest.getEmail();
+        String password = loginRequest.getPassword();
+
+        // 参数校验
+        if (email == null || email.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱不能为空"));
+        }
+        if (password == null || password.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码不能为空"));
+        }
+
+        // 执行登录
+        String uuid = userService.login(email, password);
+        if (uuid == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "邮箱或密码错误"));
+        }
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "登录成功", new LoginResponse(uuid)));
     }
 }

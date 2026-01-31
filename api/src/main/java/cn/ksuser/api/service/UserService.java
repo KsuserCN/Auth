@@ -77,4 +77,24 @@ public class UserService {
     public boolean verifyPassword(String password, String passwordHash) {
         return passwordEncoder.matches(password, passwordHash);
     }
+
+    /**
+     * 用户登录
+     * @param email 邮箱
+     * @param password 密码
+     * @return 登录成功返回用户 UUID，否则返回 null
+     */
+    public String login(String email, String password) {
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            return null;
+        }
+
+        User user = userOpt.get();
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            return null;
+        }
+
+        return user.getUuid();
+    }
 }
