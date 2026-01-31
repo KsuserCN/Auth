@@ -76,4 +76,13 @@ public class UserSessionService {
         session.setRevokedAt(LocalDateTime.now());
         return userSessionRepository.save(session);
     }
+
+    public void revokeAllSessions(User user) {
+        List<UserSession> activeSessions = userSessionRepository.findActiveSessions(user, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        for (UserSession session : activeSessions) {
+            session.setRevokedAt(now);
+        }
+        userSessionRepository.saveAll(activeSessions);
+    }
 }

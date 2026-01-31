@@ -259,4 +259,39 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "退出成功"));
     }
+
+    /**
+     * 所有设备退出登录
+     * @param authentication 认证信息（AccessToken）
+     * @param response HttpServletResponse
+     * @return ApiResponse
+     */
+    @PostMapping("/logout/all")
+    public ResponseEntity<ApiResponse<Void>> logoutAll(Authentication authentication, HttpServletResponse response) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        // 撤销该用户所有会话
+        userSessionService.revokeAllSessions(user);
+
+        // 清除 RefreshToken Cookie
+        Cookie cookie = new Cookie("refreshToken", "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "已从所有设备退出登录"));
+    }
 }
