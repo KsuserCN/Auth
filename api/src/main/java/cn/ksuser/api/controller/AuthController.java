@@ -2,6 +2,7 @@ package cn.ksuser.api.controller;
 
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.RegisterRequest;
+import cn.ksuser.api.dto.RegisterResult;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.service.UserService;
 import org.springframework.http.HttpStatus;
@@ -47,13 +48,17 @@ public class AuthController {
         }
 
         // 执行注册
-        User user = userService.register(username, email, password);
-        if (user == null) {
+        RegisterResult result = userService.register(username, email, password);
+        if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "用户名或邮箱已存在"));
+                .body(new ApiResponse<>(409, "用户名已存在"));
+        }
+        if (result.getStatus() == RegisterResult.Status.EMAIL_EXISTS) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, "邮箱已存在"));
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "注册成功", user));
+            .body(new ApiResponse<>(200, "注册成功", result.getUser()));
     }
 }

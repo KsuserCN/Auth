@@ -1,5 +1,6 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.dto.RegisterResult;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,17 +25,17 @@ public class UserService {
      * @param username 用户名
      * @param email 邮箱
      * @param password 密码
-     * @return 注册成功返回 User，否则返回 null
+     * @return 注册结果（包含状态与用户）
      */
-    public User register(String username, String email, String password) {
+    public RegisterResult register(String username, String email, String password) {
         // 检查用户名是否已存在
         if (userRepository.findByUsername(username).isPresent()) {
-            return null;
+            return new RegisterResult(RegisterResult.Status.USERNAME_EXISTS, null);
         }
 
         // 检查邮箱是否已存在
         if (userRepository.findByEmail(email).isPresent()) {
-            return null;
+            return new RegisterResult(RegisterResult.Status.EMAIL_EXISTS, null);
         }
 
         // 生成 UUID
@@ -45,7 +46,8 @@ public class UserService {
 
         // 创建新用户
         User user = new User(uuid, username, email, passwordHash);
-        return userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        return new RegisterResult(RegisterResult.Status.SUCCESS, savedUser);
     }
 
     /**
