@@ -12,6 +12,9 @@
 | email | string | 是 | 邮箱 |
 | password | string | 是 | 密码 |
 
+## 密码存储说明
+注册时密码将使用 Argon2id 进行哈希后存储（随机 salt）。
+
 ## 请求示例
 ```json
 {
@@ -33,7 +36,7 @@
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "username": "john_doe",
     "email": "john@example.com",
-    "passwordHash": "***",
+    "passwordHash": "$argon2id$v=19$m=16384,t=2,p=1$...",
     "avatarUrl": null,
     "createdAt": "2026-01-31T13:10:00"
   }
