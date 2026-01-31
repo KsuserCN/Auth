@@ -30,6 +30,9 @@ public class UserSession {
     @Column(name = "revoked_at")
     private LocalDateTime revokedAt;
 
+    @Column(name = "session_version", nullable = false)
+    private Integer sessionVersion = 0;
+
     public UserSession() {
     }
 
@@ -39,6 +42,7 @@ public class UserSession {
         this.verifierAlgo = verifierAlgo;
         this.createdAt = LocalDateTime.now();
         this.expiresAt = expiresAt;
+        this.sessionVersion = 0;
     }
 
     // Getters and Setters
@@ -96,5 +100,13 @@ public class UserSession {
 
     public void setRevokedAt(LocalDateTime revokedAt) {
         this.revokedAt = revokedAt;
+    }
+
+    public Integer getSessionVersion() {
+        return sessionVersion;
+    }
+
+    public void setSessionVersion(Integer sessionVersion) {
+        this.sessionVersion = sessionVersion;
     }
 }

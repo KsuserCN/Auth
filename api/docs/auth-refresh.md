@@ -20,7 +20,7 @@ curl -X POST \
 ## 成功响应
 - HTTP Status：200
 
-> 说明：刷新成功后，旧的 AccessToken 立即失效
+> 说明：刷新成功后，同一会话（同设备）的旧 AccessToken 立即失效
 
 ```json
 {

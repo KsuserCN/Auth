@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class UserSessionService {
@@ -33,27 +34,41 @@ public class UserSessionService {
         LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(expirationMs));
 
         UserSession session = new UserSession(user, tokenVerifier, "argon2id", expiresAt);
+        session.setSessionVersion(0);
         return userSessionRepository.save(session);
     }
 
-    public boolean verifyRefreshToken(User user, String refreshToken) {
+    public Optional<UserSession> verifyRefreshToken(User user, String refreshToken) {
         if (!jwtUtil.isTokenValid(refreshToken)) {
-            return false;
+            return Optional.empty();
         }
 
         String uuid = jwtUtil.getUuidFromToken(refreshToken);
         if (uuid == null || !uuid.equals(user.getUuid())) {
-            return false;
+            return Optional.empty();
         }
 
         List<UserSession> sessions = userSessionRepository.findActiveSessions(user, LocalDateTime.now());
         for (UserSession session : sessions) {
             String storedHash = new String(session.getRefreshTokenVerifier(), StandardCharsets.UTF_8);
             if (passwordEncoder.matches(refreshToken, storedHash)) {
-                return true;
+                return Optional.of(session);
             }
         }
 
-        return false;
+        return Optional.empty();
+    }
+
+    public Optional<UserSession> findActiveSessionById(Long sessionId) {
+        return userSessionRepository.findActiveSessionById(sessionId, LocalDateTime.now());
+    }
+
+    public UserSession bumpSessionVersion(UserSession session) {
+        Integer current = session.getSessionVersion();
+        if (current == null) {
+            current = 0;
+        }
+        session.setSessionVersion(current + 1);
+        return userSessionRepository.save(session);
     }
 }

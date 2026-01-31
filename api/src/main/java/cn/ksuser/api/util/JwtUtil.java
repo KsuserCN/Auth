@@ -29,27 +29,20 @@ public class JwtUtil {
     /**
      * 生成 AccessToken
      * @param uuid 用户UUID
-     * @param tokenVersion 令牌版本
+     * @param sessionId 会话ID
+     * @param sessionVersion 会话令牌版本
      * @return AccessToken
      */
-    public String generateAccessToken(String uuid, int tokenVersion) {
+    public String generateAccessToken(String uuid, long sessionId, int sessionVersion) {
         return Jwts.builder()
                 .subject(uuid)
                 .claim("type", "access")
-                .claim("tv", tokenVersion)
+                .claim("sid", sessionId)
+                .claim("sv", sessionVersion)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
                 .signWith(getSigningKey())
                 .compact();
-    }
-
-    /**
-     * 生成 AccessToken（默认 tokenVersion = 0）
-     * @param uuid 用户UUID
-     * @return AccessToken
-     */
-    public String generateAccessToken(String uuid) {
-        return generateAccessToken(uuid, 0);
     }
 
     /**
@@ -124,16 +117,29 @@ public class JwtUtil {
     }
 
     /**
-     * 获取 Token 版本
+     * 获取会话ID
      * @param token JWT Token
-     * @return tokenVersion
+     * @return sessionId
      */
-    public Integer getTokenVersion(String token) {
+    public Long getSessionId(String token) {
         Claims claims = parseToken(token);
         if (claims == null) {
             return null;
         }
-        return claims.get("tv", Integer.class);
+        return claims.get("sid", Long.class);
+    }
+
+    /**
+     * 获取会话版本
+     * @param token JWT Token
+     * @return sessionVersion
+     */
+    public Integer getSessionVersion(String token) {
+        Claims claims = parseToken(token);
+        if (claims == null) {
+            return null;
+        }
+        return claims.get("sv", Integer.class);
     }
 
     /**

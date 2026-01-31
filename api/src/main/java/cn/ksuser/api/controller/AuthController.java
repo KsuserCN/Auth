@@ -2,6 +2,7 @@ package cn.ksuser.api.controller;
 
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
+import cn.ksuser.api.entity.UserSession;
 import cn.ksuser.api.service.UserService;
 import cn.ksuser.api.service.UserSessionService;
 import cn.ksuser.api.util.JwtUtil;
@@ -96,12 +97,12 @@ public class AuthController {
         }
 
         // 生成 Token
-        int tokenVersion = user.getTokenVersion() == null ? 0 : user.getTokenVersion();
-        String accessToken = jwtUtil.generateAccessToken(user.getUuid(), tokenVersion);
         String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
 
         // 保存会话到数据库
-        userSessionService.createSession(user, refreshToken);
+        UserSession session = userSessionService.createSession(user, refreshToken);
+        int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+        String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
         // 将 RefreshToken 设置到 HttpOnly Cookie
         Cookie cookie = new Cookie("refreshToken", refreshToken);
@@ -183,17 +184,18 @@ public class AuthController {
         }
 
         // 验证 RefreshToken
-        if (!userSessionService.verifyRefreshToken(user, refreshToken)) {
+        UserSession session = userSessionService.verifyRefreshToken(user, refreshToken).orElse(null);
+        if (session == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
         }
 
-        // 刷新 tokenVersion，使旧 AccessToken 立即失效
-        User updatedUser = userService.bumpTokenVersion(user);
-        int newTokenVersion = updatedUser.getTokenVersion() == null ? 0 : updatedUser.getTokenVersion();
+        // 刷新 sessionVersion，使旧 AccessToken 立即失效
+        UserSession updatedSession = userSessionService.bumpSessionVersion(session);
+        int newSessionVersion = updatedSession.getSessionVersion() == null ? 0 : updatedSession.getSessionVersion();
 
         // 生成新的 AccessToken
-        String newAccessToken = jwtUtil.generateAccessToken(uuid, newTokenVersion);
+        String newAccessToken = jwtUtil.generateAccessToken(uuid, updatedSession.getId(), newSessionVersion);
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "刷新成功", new RefreshResponse(newAccessToken)));

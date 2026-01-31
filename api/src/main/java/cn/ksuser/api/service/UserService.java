@@ -69,20 +69,6 @@ public class UserService {
     }
 
     /**
-     * 刷新 Token 版本，使旧 AccessToken 失效
-     * @param user 用户
-     * @return 更新后的用户
-     */
-    public User bumpTokenVersion(User user) {
-        Integer current = user.getTokenVersion();
-        if (current == null) {
-            current = 0;
-        }
-        user.setTokenVersion(current + 1);
-        return userRepository.save(user);
-    }
-
-    /**
      * 验证密码
      * @param password 明文密码
      * @param passwordHash 加密后的密码
