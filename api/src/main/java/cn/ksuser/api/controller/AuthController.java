@@ -200,4 +200,63 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "刷新成功", new RefreshResponse(newAccessToken)));
     }
+
+    /**
+     * 退出登录
+     * @param request HttpServletRequest
+     * @param response HttpServletResponse
+     * @return ApiResponse
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request, HttpServletResponse response) {
+        // 从 Cookie 中获取 RefreshToken
+        String refreshToken = null;
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("refreshToken".equals(cookie.getName())) {
+                    refreshToken = cookie.getValue();
+                    break;
+                }
+            }
+        }
+
+        if (refreshToken == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "RefreshToken不存在"));
+        }
+
+        // 从 Token 中获取 uuid
+        String uuid = jwtUtil.getUuidFromToken(refreshToken);
+        if (uuid == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+        }
+
+        // 查找用户
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+        }
+
+        // 验证 RefreshToken 并撤销会话
+        UserSession session = userSessionService.verifyRefreshToken(user, refreshToken).orElse(null);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+        }
+
+        userSessionService.revokeSession(session);
+
+        // 清除 RefreshToken Cookie
+        Cookie cookie = new Cookie("refreshToken", "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "退出成功"));
+    }
 }

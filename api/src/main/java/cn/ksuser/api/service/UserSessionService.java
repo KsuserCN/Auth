@@ -71,4 +71,9 @@ public class UserSessionService {
         session.setSessionVersion(current + 1);
         return userSessionRepository.save(session);
     }
+
+    public UserSession revokeSession(UserSession session) {
+        session.setRevokedAt(LocalDateTime.now());
+        return userSessionRepository.save(session);
+    }
 }

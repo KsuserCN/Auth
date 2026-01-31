@@ -1,0 +1,49 @@
+# 退出登录接口
+
+## 基本信息
+- 方法：POST
+- 路径：/auth/logout
+- 需要认证：否（使用 RefreshToken Cookie）
+
+## 请求头
+```
+Cookie: refreshToken=<refreshToken>
+```
+
+## 请求示例
+```bash
+curl -X POST \
+  -b "refreshToken=<refreshToken>" \
+  http://localhost:8000/auth/logout
+```
+
+## 成功响应
+- HTTP Status：200
+
+```json
+{
+  "code": 200,
+  "msg": "退出成功"
+}
+```
+
+## 失败响应
+### 1) RefreshToken 不存在
+- HTTP Status：401
+
+```json
+{
+  "code": 401,
+  "msg": "RefreshToken不存在"
+}
+```
+
+### 2) RefreshToken 无效或已过期
+- HTTP Status：401
+
+```json
+{
+  "code": 401,
+  "msg": "RefreshToken无效或已过期"
+}
+```
