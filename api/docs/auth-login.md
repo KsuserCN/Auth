@@ -21,16 +21,21 @@
 
 ## 成功响应
 - HTTP Status：200
+- Set-Cookie：refreshToken（HttpOnly，7天过期）
 
 ```json
 {
   "code": 200,
   "msg": "登录成功",
   "data": {
-    "uuid": "550e8400-e29b-41d4-a716-446655440000"
+    "accessToken": "eyJhbGciOiJIUzUxMiJ9..."
   }
 }
 ```
+
+**说明**：
+- `accessToken` 用于调用需要认证的接口，通过 `Authorization: Bearer <accessToken>` 传递，有效期 15 分钟
+- `refreshToken` 自动保存在 HttpOnly Cookie 中，用于刷新 AccessToken，有效期 7 天
 
 ## 失败响应
 ### 1) 参数缺失或为空

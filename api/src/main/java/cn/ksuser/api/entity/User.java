@@ -26,6 +26,9 @@ public class User {
     @Column(name = "avatar_url", length = 255)
     private String avatarUrl;
 
+    @Column(name = "token_version", nullable = false)
+    private Integer tokenVersion = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -38,6 +41,7 @@ public class User {
         this.email = email;
         this.passwordHash = passwordHash;
         this.createdAt = LocalDateTime.now();
+        this.tokenVersion = 0;
     }
 
     // Getters and Setters
@@ -87,6 +91,14 @@ public class User {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public Integer getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void setTokenVersion(Integer tokenVersion) {
+        this.tokenVersion = tokenVersion;
     }
 
     public LocalDateTime getCreatedAt() {

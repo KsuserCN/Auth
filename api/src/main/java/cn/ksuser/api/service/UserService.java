@@ -69,6 +69,20 @@ public class UserService {
     }
 
     /**
+     * 刷新 Token 版本，使旧 AccessToken 失效
+     * @param user 用户
+     * @return 更新后的用户
+     */
+    public User bumpTokenVersion(User user) {
+        Integer current = user.getTokenVersion();
+        if (current == null) {
+            current = 0;
+        }
+        user.setTokenVersion(current + 1);
+        return userRepository.save(user);
+    }
+
+    /**
      * 验证密码
      * @param password 明文密码
      * @param passwordHash 加密后的密码
@@ -82,19 +96,19 @@ public class UserService {
      * 用户登录
      * @param email 邮箱
      * @param password 密码
-     * @return 登录成功返回用户 UUID，否则返回 null
+     * @return 登录成功返回用户，否则返回 Optional.empty
      */
-    public String login(String email, String password) {
+    public Optional<User> login(String email, String password) {
         Optional<User> userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
 
         User user = userOpt.get();
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            return null;
+            return Optional.empty();
         }
 
-        return user.getUuid();
+        return Optional.of(user);
     }
 }
