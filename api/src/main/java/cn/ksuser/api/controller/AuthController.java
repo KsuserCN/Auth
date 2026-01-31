@@ -2,8 +2,8 @@ package cn.ksuser.api.controller;
 
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.RegisterRequest;
+import cn.ksuser.api.dto.RegisterResponse;
 import cn.ksuser.api.dto.RegisterResult;
-import cn.ksuser.api.entity.User;
 import cn.ksuser.api.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,7 +28,7 @@ public class AuthController {
      * @return ApiResponse
      */
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<User>> register(@RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<ApiResponse<RegisterResponse>> register(@RequestBody RegisterRequest registerRequest) {
         String username = registerRequest.getUsername();
         String email = registerRequest.getEmail();
         String password = registerRequest.getPassword();
@@ -59,6 +59,6 @@ public class AuthController {
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "注册成功", result.getUser()));
+            .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUser(result.getUser())));
     }
 }

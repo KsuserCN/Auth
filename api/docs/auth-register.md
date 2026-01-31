@@ -32,13 +32,10 @@
   "code": 200,
   "msg": "注册成功",
   "data": {
-    "id": 1,
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "username": "john_doe",
     "email": "john@example.com",
-    "passwordHash": "$argon2id$v=19$m=16384,t=2,p=1$...",
-    "avatarUrl": null,
-    "createdAt": "2026-01-31T13:10:00"
+    "createdAt": "2026-01-31 13:10:00"
   }
 }
 ```
