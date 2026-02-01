@@ -9,15 +9,21 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.http.HttpMethod;
+import org.springframework.web.servlet.HandlerExecutionChain;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RequestMappingHandlerMapping handlerMapping;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, 
+                          @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.handlerMapping = handlerMapping;
     }
 
     @Bean
@@ -35,6 +41,21 @@ public class SecurityConfig {
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((request, response, authException) -> {
+                    // 检查路由是否存在
+                    try {
+                        HandlerExecutionChain handler = handlerMapping.getHandler(request);
+                        if (handler == null) {
+                            // 路由不存在，返回404
+                            response.setStatus(404);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"code\":404,\"msg\":\"请求的资源不存在\"}");
+                            return;
+                        }
+                    } catch (Exception e) {
+                        // 如果检查过程出错，继续返回401
+                    }
+                    
+                    // 路由存在但未认证，返回401
                     response.setStatus(401);
                     response.setContentType("application/json;charset=UTF-8");
                     response.getWriter().write("{\"code\":401,\"msg\":\"未登录或Token已过期\"}");
