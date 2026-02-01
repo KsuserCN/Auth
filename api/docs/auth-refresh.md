@@ -4,6 +4,7 @@
 - 方法：POST
 - 路径：/auth/refresh
 - 需要认证：否（使用 RefreshToken Cookie）
+- 请求类型：无请求体（仅使用Cookie）
 
 ## 请求头
 ```

@@ -4,6 +4,7 @@
 - 方法：POST
 - 路径：/auth/logout/all
 - 需要认证：是（使用 AccessToken）
+- 请求类型：无请求体（仅使用Authorization）
 
 ## 请求头
 ```

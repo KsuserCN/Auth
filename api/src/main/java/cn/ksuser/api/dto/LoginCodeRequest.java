@@ -1,8 +1,8 @@
 package cn.ksuser.api.dto;
 
-public class SendCodeRequest {
+public class LoginCodeRequest {
     private String email;
-    private String type; // "register" 或 "login"
+    private String code;
 
     public String getEmail() {
         return email;
@@ -12,11 +12,11 @@ public class SendCodeRequest {
         this.email = email;
     }
 
-    public String getType() {
-        return type;
+    public String getCode() {
+        return code;
     }
 
-    public void setType(String type) {
-        this.type = type;
+    public void setCode(String code) {
+        this.code = code;
     }
 }

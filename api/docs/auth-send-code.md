@@ -1,22 +1,37 @@
-# 发送注册验证码接口
+# 发送验证码接口
 
 ## 基本信息
 - 方法：POST
 - 路径：/auth/send-code
 - 需要认证：否
+- 请求类型：application/json
 
 ## 请求体
 ```json
 {
-  "email": "user@example.com"
+  "email": "user@example.com",
+  "type": "register"
 }
 ```
 
+## 字段说明
+- email: 邮箱，不能为空
+- type: 验证码类型，只能是 "register" 或 "login"
+  - register: 用于注册账号
+  - login: 用于验证码登录
+
 ## 请求示例
 ```bash
+# 注册验证码
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com"}' \
+  -d '{"email":"user@example.com","type":"register"}' \
+  http://localhost:8000/auth/send-code
+
+# 登录验证码
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","type":"login"}' \
   http://localhost:8000/auth/send-code
 ```
 
@@ -39,6 +54,7 @@ curl -X POST \
 - 格式：6位数字
 - 有效期：10分钟
 - 仅可使用一次
+- 发送和验证必须来自同一IP地址
 
 ## 失败响应
 ### 1) 邮箱为空
@@ -51,7 +67,26 @@ curl -X POST \
 }
 ```
 
-### 2) 邮箱已被注册
+### 2) 类型为空或无效
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "类型不能为空"
+}
+```
+
+或
+
+```json
+{
+  "code": 400,
+  "msg": "类型只能是 register 或 login"
+}
+```
+
+### 3) 邮箱已被注册（仅注册验证码）
 - HTTP Status：409
 
 ```json
@@ -61,7 +96,17 @@ curl -X POST \
 }
 ```
 
-### 3) 邮箱被锁定
+### 4) 邮箱不存在（仅登录验证码）
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "邮箱不存在"
+}
+```
+
+### 5) 邮箱被锁定
 - HTTP Status：429
 
 ```json
@@ -71,7 +116,7 @@ curl -X POST \
 }
 ```
 
-### 4) 发送过于频繁（分钟限制）
+### 6) 发送过于频繁（分钟限制）
 - HTTP Status：429
 
 ```json
@@ -81,7 +126,7 @@ curl -X POST \
 }
 ```
 
-### 5) 发送次数过多（小时限制）
+### 7) 发送次数过多（小时限制）
 - HTTP Status：429
 
 ```json
@@ -100,7 +145,7 @@ curl -X POST \
 }
 ```
 
-### 6) 邮件发送失败
+### 8) 邮件发送失败
 - HTTP Status：500
 
 ```json
@@ -109,3 +154,18 @@ curl -X POST \
   "msg": "邮件发送失败，请稍后重试"
 }
 ```
+
+### 9) 请求类型错误
+- HTTP Status：415
+
+```json
+{
+  "code": 415,
+  "msg": "不支持的请求类型: text/plain。请使用 Content-Type: application/json"
+}
+```
+
+## 注意事项
+- 所有POST请求必须使用 `Content-Type: application/json` 请求头
+- 不支持其他内容类型（如 text/plain、application/x-www-form-urlencoded等）
+- 请求体必须是有效的JSON格式

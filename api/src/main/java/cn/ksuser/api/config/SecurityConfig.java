@@ -27,6 +27,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/", "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
+                    "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/refresh", "/auth/refresh/", "/auth/logout", "/auth/logout/",
                     "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/")
                 .permitAll()

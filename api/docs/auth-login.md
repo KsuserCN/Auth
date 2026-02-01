@@ -3,7 +3,8 @@
 ## 基本信息
 - 方法：POST
 - 路径：/auth/login
-- Content-Type：application/json
+- 需要认证：否
+- 请求类型：application/json
 
 ## 请求参数（JSON）
 | 字段 | 类型 | 必填 | 说明 |
@@ -62,6 +63,16 @@
 {
   "code": 401,
   "msg": "邮箱或密码错误"
+}
+```
+
+### 3) 请求类型错误
+- HTTP Status：415
+
+```json
+{
+  "code": 415,
+  "msg": "不支持的请求类型: text/plain。请使用 Content-Type: application/json"
 }
 ```
 

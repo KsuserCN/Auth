@@ -57,7 +57,7 @@ public class AuthController {
     }
 
     /**
-     * 发送注册验证码
+     * 发送验证码（用于注册或登录）
      * @param request HttpServletRequest
      * @param sendCodeRequest 发送验证码请求
      * @return ApiResponse
@@ -66,17 +66,32 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> sendVerificationCode(HttpServletRequest request,
                                                                     @RequestBody SendCodeRequest sendCodeRequest) {
         String email = sendCodeRequest.getEmail();
+        String type = sendCodeRequest.getType(); // "register" 或 "login"
 
         // 参数校验
         if (email == null || email.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "邮箱不能为空"));
         }
+        if (type == null || type.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "类型不能为空"));
+        }
+        if (!("register".equals(type) || "login".equals(type))) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "类型只能是 register 或 login"));
+        }
 
-        // 检查邮箱是否已注册
-        if (userService.findByEmail(email).isPresent()) {
+        // 注册验证码：检查邮箱是否已注册
+        if ("register".equals(type) && userService.findByEmail(email).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, "邮箱已被注册"));
+        }
+
+        // 登录验证码：检查邮箱是否存在
+        if ("login".equals(type) && userService.findByEmail(email).isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱不存在"));
         }
 
         // 检查邮箱是否被锁定
@@ -91,7 +106,6 @@ public class AuthController {
         // 检查IP限流
         if (!rateLimitService.isAllowed(clientIp)) {
             int remainingMinute = rateLimitService.getRemainingMinuteRequests(clientIp);
-            int remainingHour = rateLimitService.getRemainingHourRequests(clientIp);
             if (remainingMinute == 0) {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new ApiResponse<>(429, "发送过于频繁，请1分钟后再试"));
@@ -104,7 +118,6 @@ public class AuthController {
         // 检查邮箱限流
         if (!rateLimitService.isAllowed(email)) {
             int remainingMinute = rateLimitService.getRemainingMinuteRequests(email);
-            int remainingHour = rateLimitService.getRemainingHourRequests(email);
             if (remainingMinute == 0) {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new ApiResponse<>(429, "发送过于频繁，请1分钟后再试"));
@@ -116,11 +129,12 @@ public class AuthController {
 
         // 生成并保存验证码
         String code = verificationCodeService.generateCode();
-        verificationCodeService.saveCode(email, code);
+        String action = "register".equals(type) ? "注册账号" : "登录账号";
+        verificationCodeService.saveCode(email, code, clientIp);
 
         // 发送邮件
         try {
-            emailService.sendVerificationCode(email, code, "注册账号");
+            emailService.sendVerificationCode(email, code, action);
         } catch (MessagingException | UnsupportedEncodingException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "邮件发送失败，请稍后重试"));
@@ -137,14 +151,17 @@ public class AuthController {
     /**
      * 注册接口
      * @param registerRequest 注册请求
+     * @param request HttpServletRequest
      * @return ApiResponse
      */
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<RegisterResponse>> register(@RequestBody RegisterRequest registerRequest) {
+    public ResponseEntity<ApiResponse<RegisterResponse>> register(@RequestBody RegisterRequest registerRequest,
+                                                                    HttpServletRequest request) {
         String username = registerRequest.getUsername();
         String email = registerRequest.getEmail();
         String password = registerRequest.getPassword();
         String code = registerRequest.getCode();
+        String clientIp = rateLimitService.getClientIp(request);
 
         // 参数校验
         if (username == null || username.trim().isEmpty()) {
@@ -171,15 +188,23 @@ public class AuthController {
         }
 
         // 验证验证码
-        int verifyResult = verificationCodeService.verifyCode(email, code);
+        int verifyResult = verificationCodeService.verifyCode(email, code, clientIp);
         if (verifyResult != 0) {
-            // 0 = 成功，1 = 已过期，2 = 错误，3 = 被锁定，4 = 未发送
+            // 0 = 成功，1 = 已过期，2 = 错误，3 = 被锁定，4 = 未发送，5 = 邮箱不匹配，6 = IP不匹配
             if (verifyResult == 3) {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
             } else if (verifyResult == 4) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "请先获取验证码"));
+            } else if (verifyResult == 5) {
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "邮箱不匹配（" + errorCount + "/5）"));
+            } else if (verifyResult == 6) {
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "发送验证码的设备与当前设备不匹配（" + errorCount + "/5）"));
             } else if (verifyResult == 1) {
                 // 验证码已过期，但需要检查是否因错误次数导致锁定
                 if (verificationCodeService.isLocked(email)) {
@@ -213,6 +238,96 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUser(result.getUser())));
+    }
+
+    /**
+     * 验证码登录接口
+     * @param loginCodeRequest 验证码登录请求
+     * @param request HttpServletRequest
+     * @param response HttpServletResponse
+     * @return ApiResponse
+     */
+    @PostMapping("/login-with-code")
+    public ResponseEntity<ApiResponse<TokenResponse>> loginWithCode(@RequestBody LoginCodeRequest loginCodeRequest,
+                                                                     HttpServletRequest request,
+                                                                     HttpServletResponse response) {
+        String email = loginCodeRequest.getEmail();
+        String code = loginCodeRequest.getCode();
+        String clientIp = rateLimitService.getClientIp(request);
+
+        // 参数校验
+        if (email == null || email.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱不能为空"));
+        }
+        if (code == null || code.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "验证码不能为空"));
+        }
+
+        // 验证验证码
+        int verifyResult = verificationCodeService.verifyCode(email, code, clientIp);
+        if (verifyResult != 0) {
+            // 0 = 成功，1 = 已过期，2 = 错误，3 = 被锁定，4 = 未发送，5 = 邮箱不匹配，6 = IP不匹配
+            if (verifyResult == 3) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+            } else if (verifyResult == 4) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "请先获取验证码"));
+            } else if (verifyResult == 5) {
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "邮箱不匹配（" + errorCount + "/5）"));
+            } else if (verifyResult == 6) {
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "发送验证码的设备与当前设备不匹配（" + errorCount + "/5）"));
+            } else if (verifyResult == 1) {
+                // 验证码已过期，但需要检查是否因错误次数导致锁定
+                if (verificationCodeService.isLocked(email)) {
+                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                }
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "验证码已过期，请重新获取（" + errorCount + "/5）"));
+            } else {
+                if (verificationCodeService.isLocked(email)) {
+                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                }
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "验证码错误（" + errorCount + "/5）"));
+            }
+        }
+
+        // 查找用户
+        User user = userService.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "邮箱或验证码错误"));
+        }
+
+        // 生成 Token
+        String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
+
+        // 保存会话到数据库
+        UserSession session = userSessionService.createSession(user, refreshToken);
+        int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+        String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
+
+        // 将 RefreshToken 设置到 HttpOnly Cookie
+        Cookie cookie = new Cookie("refreshToken", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false); // 生产环境应该设置为 true
+        cookie.setPath("/");
+        cookie.setMaxAge(604800); // 7天
+        response.addCookie(cookie);
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
     }
 
     /**
