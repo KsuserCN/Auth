@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.http.HttpMethod;
 
 @Configuration
 @EnableWebSecurity
@@ -24,7 +25,11 @@ public class SecurityConfig {
         http
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-                .requestMatchers("/", "/auth/register", "/auth/login", "/auth/refresh", "/auth/logout").permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/", "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
+                    "/auth/refresh", "/auth/refresh/", "/auth/logout", "/auth/logout/",
+                    "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/")
+                .permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

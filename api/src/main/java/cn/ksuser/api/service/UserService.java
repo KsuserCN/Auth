@@ -69,6 +69,15 @@ public class UserService {
     }
 
     /**
+     * 根据邮箱查询用户
+     * @param email 邮箱
+     * @return Optional<User>
+     */
+    public Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
+    }
+
+    /**
      * 验证密码
      * @param password 明文密码
      * @param passwordHash 加密后的密码

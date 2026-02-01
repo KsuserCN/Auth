@@ -3,9 +3,9 @@ package cn.ksuser.api.controller;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserSession;
-import cn.ksuser.api.service.UserService;
-import cn.ksuser.api.service.UserSessionService;
+import cn.ksuser.api.service.*;
 import cn.ksuser.api.util.JwtUtil;
+import jakarta.mail.MessagingException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,6 +14,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.UnsupportedEncodingException;
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -21,11 +23,115 @@ public class AuthController {
     private final UserService userService;
     private final UserSessionService userSessionService;
     private final JwtUtil jwtUtil;
+    private final EmailService emailService;
+    private final VerificationCodeService verificationCodeService;
+    private final RateLimitService rateLimitService;
 
-    public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil) {
+    public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
+                          EmailService emailService, VerificationCodeService verificationCodeService,
+                          RateLimitService rateLimitService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
+        this.emailService = emailService;
+        this.verificationCodeService = verificationCodeService;
+        this.rateLimitService = rateLimitService;
+    }
+
+    /**
+     * 检查用户名是否存在
+     * @param username 用户名
+     * @return ApiResponse
+     */
+    @GetMapping("/check-username")
+    public ResponseEntity<ApiResponse<CheckUsernameResponse>> checkUsername(@RequestParam String username) {
+        if (username == null || username.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "用户名不能为空"));
+        }
+
+        boolean exists = userService.findByUsername(username).isPresent();
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, exists ? "用户名已存在" : "用户名可用",
+                new CheckUsernameResponse(exists)));
+    }
+
+    /**
+     * 发送注册验证码
+     * @param request HttpServletRequest
+     * @param sendCodeRequest 发送验证码请求
+     * @return ApiResponse
+     */
+    @PostMapping("/send-code")
+    public ResponseEntity<ApiResponse<Void>> sendVerificationCode(HttpServletRequest request,
+                                                                    @RequestBody SendCodeRequest sendCodeRequest) {
+        String email = sendCodeRequest.getEmail();
+
+        // 参数校验
+        if (email == null || email.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱不能为空"));
+        }
+
+        // 检查邮箱是否已注册
+        if (userService.findByEmail(email).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, "邮箱已被注册"));
+        }
+
+        // 检查邮箱是否被锁定
+        if (verificationCodeService.isLocked(email)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+        }
+
+        // 获取IP
+        String clientIp = rateLimitService.getClientIp(request);
+
+        // 检查IP限流
+        if (!rateLimitService.isAllowed(clientIp)) {
+            int remainingMinute = rateLimitService.getRemainingMinuteRequests(clientIp);
+            int remainingHour = rateLimitService.getRemainingHourRequests(clientIp);
+            if (remainingMinute == 0) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ApiResponse<>(429, "发送过于频繁，请1分钟后再试"));
+            } else {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ApiResponse<>(429, "发送次数过多，每小时最多发送6次"));
+            }
+        }
+
+        // 检查邮箱限流
+        if (!rateLimitService.isAllowed(email)) {
+            int remainingMinute = rateLimitService.getRemainingMinuteRequests(email);
+            int remainingHour = rateLimitService.getRemainingHourRequests(email);
+            if (remainingMinute == 0) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ApiResponse<>(429, "发送过于频繁，请1分钟后再试"));
+            } else {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ApiResponse<>(429, "该邮箱发送次数过多，每小时最多发送6次"));
+            }
+        }
+
+        // 生成并保存验证码
+        String code = verificationCodeService.generateCode();
+        verificationCodeService.saveCode(email, code);
+
+        // 发送邮件
+        try {
+            emailService.sendVerificationCode(email, code, "注册账号");
+        } catch (MessagingException | UnsupportedEncodingException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "邮件发送失败，请稍后重试"));
+        }
+
+        // 记录限流
+        rateLimitService.recordRequest(clientIp);
+        rateLimitService.recordRequest(email);
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "验证码已发送"));
     }
 
     /**
@@ -38,6 +144,7 @@ public class AuthController {
         String username = registerRequest.getUsername();
         String email = registerRequest.getEmail();
         String password = registerRequest.getPassword();
+        String code = registerRequest.getCode();
 
         // 参数校验
         if (username == null || username.trim().isEmpty()) {
@@ -51,6 +158,46 @@ public class AuthController {
         if (password == null || password.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "密码不能为空"));
+        }
+        if (code == null || code.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "验证码不能为空"));
+        }
+
+        // 密码长度校验
+        if (password.length() < 6 || password.length() > 66) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码长度必须在6-66个字符之间"));
+        }
+
+        // 验证验证码
+        int verifyResult = verificationCodeService.verifyCode(email, code);
+        if (verifyResult != 0) {
+            // 0 = 成功，1 = 已过期，2 = 错误，3 = 被锁定，4 = 未发送
+            if (verifyResult == 3) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+            } else if (verifyResult == 4) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "请先获取验证码"));
+            } else if (verifyResult == 1) {
+                // 验证码已过期，但需要检查是否因错误次数导致锁定
+                if (verificationCodeService.isLocked(email)) {
+                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                }
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "验证码已过期，请重新获取（" + errorCount + "/5）"));
+            } else {
+                if (verificationCodeService.isLocked(email)) {
+                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                }
+                int errorCount = verificationCodeService.getErrorCount(email);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "验证码错误（" + errorCount + "/5）"));
+            }
         }
 
         // 执行注册
