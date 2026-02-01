@@ -2,7 +2,7 @@
 
 ## 基本信息
 - 方法：POST
-- 路径：/auth/change-password
+- 路径：/auth/update/password
 - 需要认证：是（使用 AccessToken）
 - 请求类型：application/json
 - 前置要求：必须先完成敏感操作验证（/auth/verify-sensitive）
@@ -62,7 +62,7 @@ curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"newPassword":"newPassword123"}' \
-  http://localhost:8000/auth/change-password
+  http://localhost:8000/auth/update/password
 ```
 
 ## 成功响应
@@ -194,7 +194,7 @@ curl -X POST \
   -H "Authorization: Bearer eyJhbGc..." \
   -H "Content-Type: application/json" \
   -d '{"newPassword":"newPassword456"}' \
-  http://localhost:8000/auth/change-password
+  http://localhost:8000/auth/update/password
 
 # 响应：
 # {
@@ -237,7 +237,7 @@ curl -X POST \
   -H "Authorization: Bearer eyJhbGc..." \
   -H "Content-Type: application/json" \
   -d '{"newPassword":"newPassword456"}' \
-  http://localhost:8000/auth/change-password
+  http://localhost:8000/auth/update/password
 
 # 响应：
 # {

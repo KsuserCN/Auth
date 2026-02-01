@@ -69,7 +69,7 @@ POST /auth/send-code
 
 ### 5. 完成邮箱更改
 ```bash
-POST /auth/change-email
+POST /auth/update/email
 Authorization: Bearer {accessToken}
 {
   "newEmail": "new-email@example.com",

@@ -327,11 +327,11 @@
           "raw": "{\n  \"newEmail\": \"ksuserkqy@gmail.com\",\n  \"code\": \"{{newEmailCode}}\"\n}"
         },
         "url": {
-          "raw": "http://localhost:8000/auth/change-email",
+          "raw": "http://localhost:8000/auth/update/email",
           "protocol": "http",
           "host": ["localhost"],
           "port": "8000",
-          "path": ["auth", "change-email"]
+          "path": ["auth", "update", "email"]
         }
       }
     }

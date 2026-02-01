@@ -73,7 +73,7 @@
 - 设备（IP）绑定
 
 ### 9. 更改邮箱
-[POST /auth/change-email](auth-change-email.md)
+[POST /auth/update/email](auth-change-email.md)
 
 更改用户绑定邮箱。要求：
 - 需要先完成敏感操作验证
@@ -318,7 +318,7 @@ curl -X POST http://localhost:8000/auth/send-code \
   -d '{"email":"newemail@example.com","type":"change-email"}'
 
 # 第四步：提交新邮箱和验证码
-curl -X POST http://localhost:8000/auth/change-email \
+curl -X POST http://localhost:8000/auth/update/email \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -d '{"newEmail":"newemail@example.com","code":"123456"}'

@@ -775,7 +775,7 @@ public class AuthController {
      * @param request HttpServletRequest
      * @return ApiResponse
      */
-    @PostMapping("/change-email")
+    @PostMapping("/update/email")
     public ResponseEntity<ApiResponse<ChangeEmailResponse>> changeEmail(@RequestBody ChangeEmailRequest changeEmailRequest,
                                                                          Authentication authentication,
                                                                          HttpServletRequest request) {
@@ -908,7 +908,7 @@ public class AuthController {
      * @param request HttpServletRequest
      * @return ApiResponse
      */
-    @PostMapping("/change-password")
+    @PostMapping("/update/password")
     public ResponseEntity<ApiResponse<String>> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest,
                                                                Authentication authentication,
                                                                HttpServletRequest request) {

@@ -277,11 +277,11 @@
           "raw": "{\n  \"newPassword\": \"newPassword123\"\n}"
         },
         "url": {
-          "raw": "http://localhost:8000/auth/change-password",
+          "raw": "http://localhost:8000/auth/update/password",
           "protocol": "http",
           "host": ["localhost"],
           "port": "8000",
-          "path": ["auth", "change-password"]
+          "path": ["auth", "update", "password"]
         }
       }
     },
@@ -393,11 +393,11 @@
           "raw": "{\n  \"newPassword\": \"123456\"\n}"
         },
         "url": {
-          "raw": "http://localhost:8000/auth/change-password",
+          "raw": "http://localhost:8000/auth/update/password",
           "protocol": "http",
           "host": ["localhost"],
           "port": "8000",
-          "path": ["auth", "change-password"]
+          "path": ["auth", "update", "password"]
         }
       }
     }

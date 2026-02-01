@@ -2,7 +2,7 @@
 
 ## 基本信息
 - 方法：POST
-- 路径：/auth/change-email
+- 路径：/auth/update/email
 - 需要认证：是（使用 AccessToken）
 - 请求类型：application/json
 - 前置要求：必须先完成敏感操作验证（/auth/verify-sensitive）
@@ -71,7 +71,7 @@ curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"newEmail":"newemail@example.com","code":"654321"}' \
-  http://localhost:8000/auth/change-email
+  http://localhost:8000/auth/update/email
 ```
 
 ## 成功响应
@@ -336,7 +336,7 @@ curl -X POST \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"newEmail":"new@example.com","code":"123456"}' \
-  http://localhost:8000/auth/change-email
+  http://localhost:8000/auth/update/email
 ```
 
 ### 异常流程
@@ -346,7 +346,7 @@ curl -X POST \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"newEmail":"new@example.com","code":"123456"}' \
-  http://localhost:8000/auth/change-email
+  http://localhost:8000/auth/update/email
 ```
 
 ## 相关文档

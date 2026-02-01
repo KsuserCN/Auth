@@ -223,7 +223,7 @@ Content-Type: application/json
 ### 步骤 7：完成邮箱更改
 
 **请求方法**：POST  
-**URL**：http://localhost:8000/auth/change-email  
+**URL**：http://localhost:8000/auth/update/email  
 **请求头**：
 ```
 Authorization: Bearer {accessToken}
@@ -488,11 +488,11 @@ Content-Type: application/json
           "raw": "{\n  \"newEmail\": \"new-email@example.com\",\n  \"code\": \"654321\"\n}"
         },
         "url": {
-          "raw": "http://localhost:8000/auth/change-email",
+          "raw": "http://localhost:8000/auth/update/email",
           "protocol": "http",
           "host": ["localhost"],
           "port": "8000",
-          "path": ["auth", "change-email"]
+          "path": ["auth", "update", "email"]
         }
       }
     }
@@ -662,7 +662,7 @@ Content-Type: application/json
                    │
 ┌──────────────────▼──────────────────────────────────────────┐
 │ 完成邮箱更改                                                │
-│ POST /auth/change-email                                     │
+│ POST /auth/update/email                                     │
 │ newEmail: "new-email@example.com", code: "yyyyyy"           │
 │ 响应: 邮箱已更改为 new-email@example.com                   │
 └─────────────────────────────────────────────────────────────┘
