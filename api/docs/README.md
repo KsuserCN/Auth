@@ -10,6 +10,7 @@
 
 ## 文档导航
 - [验证码系统设计约束](VERIFICATION_CODE_DESIGN.md) - 验证码系统的核心功能和设计原则
+- [请求类型处理指南](REQUEST_TYPE_HANDLING.md) - Content-Type 验证和错误处理说明
 
 ## API 端点
 
@@ -53,17 +54,26 @@
 
 获取当前登录用户的信息。需要认证。
 
-### 7. 刷新令牌
+### 7. 更新用户信息
+[POST /auth/update/profile](auth-update-profile.md)
+
+更新用户名和/或头像URL。支持：
+- 单独更新用户名或头像
+- 同时更新用户名和头像
+- 用户名唯一性检查
+- 需要认证（AccessToken）
+
+### 8. 刷新令牌
 [POST /auth/refresh](auth-refresh.md)
 
 使用 RefreshToken 获取新的 AccessToken。支持多设备会话。
 
-### 8. 退出登录（单设备）
+### 9. 退出登录（单设备）
 [POST /auth/logout](auth-logout.md)
 
 退出当前设备上的登录。
 
-### 9. 退出登录（全设备）
+### 10. 退出登录（全设备）
 [POST /auth/logout/all](auth-logout-all.md)
 
 从所有设备上退出登录。
@@ -234,6 +244,27 @@ curl -X POST http://localhost:8000/auth/login-with-code \
 ```bash
 curl -X GET http://localhost:8000/auth/info \
   -H "Authorization: Bearer {accessToken}"
+```
+
+### 更新用户信息
+```bash
+# 更新用户名
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"newname"}'
+
+# 更新头像URL
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"avatarUrl":"https://example.com/avatar.jpg"}'
+
+# 同时更新用户名和头像
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"newname","avatarUrl":"https://example.com/avatar.jpg"}'
 ```
 
 ### 刷新令牌

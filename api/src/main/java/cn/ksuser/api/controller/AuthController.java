@@ -556,4 +556,57 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "已从所有设备退出登录"));
     }
+
+    /**
+     * 更新用户信息
+     * @param updateProfileRequest 更新请求（用户名和头像 URL 都是可选的）
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @PostMapping("/update/profile")
+    public ResponseEntity<ApiResponse<UpdateProfileResponse>> updateProfile(@RequestBody UpdateProfileRequest updateProfileRequest,
+                                                                             Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        // 参数校验：至少要更新一个字段
+        String newUsername = updateProfileRequest.getUsername();
+        String newAvatarUrl = updateProfileRequest.getAvatarUrl();
+        
+        boolean hasUpdates = (newUsername != null && !newUsername.trim().isEmpty()) ||
+                             (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty());
+        
+        if (!hasUpdates) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "至少需要提供用户名或头像 URL 中的一个"));
+        }
+
+        // 用户名长度校验
+        if (newUsername != null && !newUsername.trim().isEmpty()) {
+            if (newUsername.trim().length() < 1 || newUsername.trim().length() > 50) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "用户名长度必须在 1-50 个字符之间"));
+            }
+        }
+
+        // 执行更新
+        RegisterResult result = userService.updateProfile(user, newUsername, newAvatarUrl);
+        if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, "用户名已存在"));
+        }
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "更新成功", UpdateProfileResponse.fromUser(result.getUser())));
+    }
 }
+

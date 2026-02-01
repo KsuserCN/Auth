@@ -106,4 +106,30 @@ public class UserService {
 
         return Optional.of(user);
     }
+
+    /**
+     * 更新用户信息
+     * @param user 用户对象
+     * @param newUsername 新用户名（null 表示不更新）
+     * @param newAvatarUrl 新头像 URL（null 表示不更新）
+     * @return 更新结果（包含状态与用户）
+     */
+    public RegisterResult updateProfile(User user, String newUsername, String newAvatarUrl) {
+        // 如果需要更新用户名，检查新用户名是否已存在
+        if (newUsername != null && !newUsername.trim().isEmpty()) {
+            if (!newUsername.equals(user.getUsername()) && userRepository.findByUsername(newUsername).isPresent()) {
+                return new RegisterResult(RegisterResult.Status.USERNAME_EXISTS, null);
+            }
+            user.setUsername(newUsername);
+        }
+
+        // 如果需要更新头像 URL
+        if (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) {
+            user.setAvatarUrl(newAvatarUrl);
+        }
+
+        // 保存更新
+        User updatedUser = userRepository.save(user);
+        return new RegisterResult(RegisterResult.Status.SUCCESS, updatedUser);
+    }
 }
