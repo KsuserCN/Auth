@@ -358,14 +358,18 @@ const handlePasswordLogin = async () => {
       password: passwordInput.value.password
     })
 
-    // 存储 Access Token 和用户信息到 sessionStorage
+    // 存储 Access Token 到 sessionStorage
     sessionStorage.setItem('accessToken', response.accessToken)
-    sessionStorage.setItem('user', JSON.stringify(response.user))
+
+    // 如果返回了用户信息，也一并存储
+    if (response.user) {
+      sessionStorage.setItem('user', JSON.stringify(response.user))
+    }
 
     ElMessage.success('登录成功')
 
     // 跳转到首页
-    router.push('/')
+    router.push('/home')
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
     console.error('Password login failed:', error)
@@ -445,14 +449,18 @@ const handleEmailCodeLogin = async () => {
       code: codeInput.value.code
     })
 
-    // 存储 Access Token 和用户信息到 sessionStorage
+    // 存储 Access Token 到 sessionStorage
     sessionStorage.setItem('accessToken', response.accessToken)
-    sessionStorage.setItem('user', JSON.stringify(response.user))
+
+    // 如果返回了用户信息，也一并存储
+    if (response.user) {
+      sessionStorage.setItem('user', JSON.stringify(response.user))
+    }
 
     ElMessage.success('登录成功')
 
     // 跳转到首页
-    router.push('/')
+    router.push('/home')
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
     console.error('Email code login failed:', error)
@@ -559,14 +567,18 @@ const handlePasskeyLogin = async () => {
     // 5. 验证凭证
     const response = await verifyPasskeyLogin(verifyData)
 
-    // 6. 存储 Access Token 和用户信息到 sessionStorage
+    // 6. 存储 Access Token 到 sessionStorage
     sessionStorage.setItem('accessToken', response.accessToken)
-    sessionStorage.setItem('user', JSON.stringify(response.user))
+
+    // 如果返回了用户信息，也一并存储
+    if (response.user) {
+      sessionStorage.setItem('user', JSON.stringify(response.user))
+    }
 
     ElMessage.success('Passkey 登录成功')
 
     // 7. 跳转到首页
-    router.push('/')
+    router.push('/home')
   } catch (error: unknown) {
     // 处理不同类型的错误
     if (error instanceof Error) {

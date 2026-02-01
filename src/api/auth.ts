@@ -1,43 +1,47 @@
 import request from '@/utils/request'
+import type { ApiResponse } from '@/utils/request'
 
-// 用户信息接口
+// 用户信息类型
 export interface User {
-  id: number
   uuid: string
   username: string
   email: string
+  avatarUrl?: string | null
 }
 
-// 登录响应接口
+// 登录响应类型
 export interface LoginResponse {
   accessToken: string
-  expiresIn: number
-  user: User
+  user?: User
 }
 
-// ========== 邮箱密码登录 ==========
+// ========== 密码登录 ==========
+
 export interface PasswordLoginRequest {
   email: string
   password: string
 }
 
-export const passwordLogin = (data: PasswordLoginRequest): Promise<LoginResponse> => {
-  return request.post('/auth/login', data)
+/**
+ * 密码登录
+ * POST /auth/login
+ */
+export const passwordLogin = async (data: PasswordLoginRequest): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/login', data)
+  return response.data
 }
 
-// ========== 邮箱验证码相关 ==========
-export interface SendCodeRequest {
+// ========== 邮箱验证码登录 ==========
+
+export interface SendEmailCodeRequest {
   email: string
 }
 
-export interface SendCodeResponse {
-  message: string
-  expiresIn: number
-  code?: string // 仅开发环境返回
-}
-
-export const sendEmailCode = (data: SendCodeRequest): Promise<SendCodeResponse> => {
-  return request.post('/auth/email/send-code', data)
+/**
+ * 发送邮箱验证码
+ */
+export const sendEmailCode = async (data: SendEmailCodeRequest): Promise<void> => {
+  await request.post('/auth/send-email-code', data)
 }
 
 export interface EmailCodeLoginRequest {
@@ -45,35 +49,48 @@ export interface EmailCodeLoginRequest {
   code: string
 }
 
-export const emailCodeLogin = (data: EmailCodeLoginRequest): Promise<LoginResponse> => {
-  return request.post('/auth/email/login', data)
+/**
+ * 邮箱验证码登录
+ */
+export const emailCodeLogin = async (data: EmailCodeLoginRequest): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>('/auth/email-login', data)
+  return response.data
 }
 
-// ========== Passkey 登录相关 ==========
+// ========== Passkey 登录 ==========
+
 export interface PasskeyLoginOptionsRequest {
-  username?: string
+  username: string
 }
 
-export interface PasskeyLoginOptionsResponse {
+export interface PasskeyLoginOptions {
   challenge: string
-  rp: {
-    id: string
-    name?: string
-  }
   timeout?: number
+  rpId?: string
+  rp?: {
+    id: string
+    name: string
+  }
   allowCredentials?: Array<{
     type: string
     id: string
   }>
 }
 
-export const getPasskeyLoginOptions = (
+/**
+ * 获取 Passkey 登录选项
+ */
+export const getPasskeyLoginOptions = async (
   data: PasskeyLoginOptionsRequest,
-): Promise<PasskeyLoginOptionsResponse> => {
-  return request.post('/auth/passkey/login/options', data)
+): Promise<PasskeyLoginOptions> => {
+  const response = await request.post<ApiResponse<PasskeyLoginOptions>>(
+    '/auth/passkey-login-options',
+    data,
+  )
+  return response.data
 }
 
-export interface PasskeyLoginVerifyRequest {
+export interface PasskeyCredential {
   id: string
   rawId: string
   response: {
@@ -85,21 +102,32 @@ export interface PasskeyLoginVerifyRequest {
   type: string
 }
 
-export const verifyPasskeyLogin = (data: PasskeyLoginVerifyRequest): Promise<LoginResponse> => {
-  return request.post('/auth/passkey/login/verify', data)
+/**
+ * 验证 Passkey 登录
+ */
+export const verifyPasskeyLogin = async (data: PasskeyCredential): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>('/auth/passkey-login', data)
+  return response.data
 }
 
-// ========== 用户信息 ==========
-export const getUserInfo = (): Promise<User> => {
-  return request.get('/auth/info')
+// ========== 刷新 Token ==========
+
+/**
+ * 刷新 Token
+ * POST /auth/refresh
+ */
+export const refreshAccessToken = async (): Promise<{ accessToken: string }> => {
+  const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/refresh')
+  return response.data
 }
 
-// ========== Token 刷新 ==========
-export const refreshToken = (): Promise<LoginResponse> => {
-  return request.post('/auth/refresh')
-}
+// ========== 获取用户信息 ==========
 
-// ========== 登出 ==========
-export const logout = (): Promise<{ message: string }> => {
-  return request.post('/auth/logout')
+/**
+ * 获取当前用户信息
+ * GET /auth/info
+ */
+export const getUserInfo = async (): Promise<User> => {
+  const response = await request.get<ApiResponse<User>>('/auth/info')
+  return response.data
 }
