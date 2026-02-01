@@ -132,4 +132,13 @@ public class UserService {
         User updatedUser = userRepository.save(user);
         return new RegisterResult(RegisterResult.Status.SUCCESS, updatedUser);
     }
+
+    /**
+     * 保存用户
+     * @param user 用户对象
+     * @return 保存后的用户
+     */
+    public User save(User user) {
+        return userRepository.save(user);
+    }
 }

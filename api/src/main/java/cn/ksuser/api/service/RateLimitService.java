@@ -14,8 +14,9 @@ public class RateLimitService {
     private static final String HOUR_LIMIT_PREFIX = "ratelimit:hour:";
     private static final Duration MINUTE_WINDOW = Duration.ofMinutes(1);
     private static final Duration HOUR_WINDOW = Duration.ofHours(1);
-    private static final int MAX_REQUESTS_PER_MINUTE = 1;
-    private static final int MAX_REQUESTS_PER_HOUR = 6;
+    private static final int MAX_REQUESTS_PER_MINUTE_EMAIL = 1;
+    private static final int MAX_REQUESTS_PER_MINUTE_IP = 3;
+    private static final int MAX_REQUESTS_PER_HOUR = 14;
 
     public RateLimitService(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
@@ -27,7 +28,25 @@ public class RateLimitService {
      * @return 是否允许
      */
     public boolean isAllowed(String identifier) {
-        return isAllowedPerMinute(identifier) && isAllowedPerHour(identifier);
+        return isAllowedPerMinute(identifier, MAX_REQUESTS_PER_MINUTE_EMAIL) && isAllowedPerHour(identifier);
+    }
+
+    /**
+     * 检查邮箱是否允许发送（分钟限制=1，小时限制=14）
+     * @param email 邮箱
+     * @return 是否允许
+     */
+    public boolean isEmailAllowed(String email) {
+        return isAllowedPerMinute(email, MAX_REQUESTS_PER_MINUTE_EMAIL) && isAllowedPerHour(email);
+    }
+
+    /**
+     * 检查IP是否允许发送（分钟限制=3，小时限制=14）
+     * @param ip IP
+     * @return 是否允许
+     */
+    public boolean isIpAllowed(String ip) {
+        return isAllowedPerMinute(ip, MAX_REQUESTS_PER_MINUTE_IP) && isAllowedPerHour(ip);
     }
 
     /**
@@ -40,14 +59,33 @@ public class RateLimitService {
     }
 
     /**
+     * 记录邮箱发送
+     * @param email 邮箱
+     */
+    public void recordEmailRequest(String email) {
+        recordMinuteRequest(email);
+        recordHourRequest(email);
+    }
+
+    /**
+     * 记录IP发送
+     * @param ip IP
+     */
+    public void recordIpRequest(String ip) {
+        recordMinuteRequest(ip);
+        recordHourRequest(ip);
+    }
+
+    /**
      * 检查分钟限制
      * @param identifier 标识符
+     * @param limit 最大次数
      * @return 是否允许
      */
-    private boolean isAllowedPerMinute(String identifier) {
+    private boolean isAllowedPerMinute(String identifier, int limit) {
         String key = MINUTE_LIMIT_PREFIX + identifier;
         String count = redisTemplate.opsForValue().get(key);
-        return count == null || Integer.parseInt(count) < MAX_REQUESTS_PER_MINUTE;
+        return count == null || Integer.parseInt(count) < limit;
     }
 
     /**
@@ -111,10 +149,32 @@ public class RateLimitService {
      * @return 剩余次数
      */
     public int getRemainingMinuteRequests(String identifier) {
+        return getRemainingMinuteRequests(identifier, MAX_REQUESTS_PER_MINUTE_EMAIL);
+    }
+
+    /**
+     * 获取邮箱剩余分钟限制次数（1/分钟）
+     * @param email 邮箱
+     * @return 剩余次数
+     */
+    public int getRemainingMinuteRequestsForEmail(String email) {
+        return getRemainingMinuteRequests(email, MAX_REQUESTS_PER_MINUTE_EMAIL);
+    }
+
+    /**
+     * 获取IP剩余分钟限制次数（3/分钟）
+     * @param ip IP
+     * @return 剩余次数
+     */
+    public int getRemainingMinuteRequestsForIp(String ip) {
+        return getRemainingMinuteRequests(ip, MAX_REQUESTS_PER_MINUTE_IP);
+    }
+
+    private int getRemainingMinuteRequests(String identifier, int limit) {
         String key = MINUTE_LIMIT_PREFIX + identifier;
         String count = redisTemplate.opsForValue().get(key);
         int used = count == null ? 0 : Integer.parseInt(count);
-        return Math.max(0, MAX_REQUESTS_PER_MINUTE - used);
+        return Math.max(0, limit - used);
     }
 
     /**

@@ -64,9 +64,9 @@ verification:ip:{email} = "{ip}"
 **目的**：防止暴力攻击和滥用
 
 **实现要求**：
-- **分钟限制**：同一邮箱或 IP，每分钟最多 1 次
-- **小时限制**：同一邮箱或 IP，每小时最多 6 次
-- 使用 `RateLimitService.isAllowed(identifier)` 进行检查
+- **分钟限制**：同一邮箱每分钟最多 1 次；同一 IP 每分钟最多 3 次
+- **小时限制**：同一邮箱或 IP 每小时最多 14 次
+- 使用 `RateLimitService.isEmailAllowed()` / `RateLimitService.isIpAllowed()` 进行检查
 - 检查失败时，同时检查分钟和小时限制，返回相应错误消息
 
 **HTTP 状态码**：429 Too Many Requests
@@ -82,7 +82,7 @@ verification:ip:{email} = "{ip}"
 ```json
 {
   "code": 429,
-  "msg": "发送次数过多，每小时最多发送6次"  // 小时限制
+  "msg": "发送次数过多，每小时最多发送14次"  // 小时限制
 }
 ```
 
@@ -162,8 +162,8 @@ ratelimit:hour:{identifier}      // TTL: 1小时
 | `verification:ip:{email}` | IP记录 | 10分钟 | 验证IP一致性 |
 | `verification:error:{email}` | 错误计数 | 10分钟 | 0-4（5时锁定） |
 | `verification:lock:{email}` | 锁定标记 | 1小时 | 值为"locked" |
-| `ratelimit:minute:{identifier}` | 分钟计数 | 1分钟 | 最多1次 |
-| `ratelimit:hour:{identifier}` | 小时计数 | 1小时 | 最多6次 |
+| `ratelimit:minute:{identifier}` | 分钟计数 | 1分钟 | 邮箱最多1次，IP最多3次 |
+| `ratelimit:hour:{identifier}` | 小时计数 | 1小时 | 最多14次 |
 
 ---
 
@@ -187,14 +187,56 @@ ratelimit:hour:{identifier}      // TTL: 1小时
 
 - **register**：用于用户注册
   - 检查：邮箱是否已被注册（409 Conflict）
+  - Redis Key：`verification:code:{email}` （不区分类型）
   
 - **login**：用于验证码登录
   - 检查：邮箱是否存在（400 Bad Request）
+  - Redis Key：`verification:code:{email}` （不区分类型）
+
+- **change-email**：用于更改邮箱
+  - 检查：新邮箱是否已被使用（409 Conflict）
+  - Redis Key：`verification:code:{email}` （不区分类型）
+
+- **sensitive-verification**（新增）：用于敏感操作邮箱验证
+  - 特点：单独存储，与其他类型隔离，不与登录验证码混淆
+  - Redis Key：`verification:code:{email}:sensitive-verification` （区分类型）
+  - 使用方式：在 `/auth/verify-sensitive` 中通过 `verifyCodeForType()` 方法验证
+  - 关键好处：
+    - 敏感操作验证码独立有效期，不被登录验证码失效影响
+    - 增强安全性，防止不同场景验证码混淆
+    - 支持用户同时接收登录和敏感操作验证码，互不干扰
+
+### 验证码类型隔离机制
+
+为了确保不同用途的验证码互不干扰，**sensitive-verification** 类型采用独立存储：
+
+**普通类型（register、login、change-email）**：
+```
+verification:code:{email} = "123456"
+verification:sent:{email} = "1"
+verification:email:{email} = "{email}"
+verification:ip:{email} = "{ip}"
+```
+
+**敏感操作类型（sensitive-verification）**：
+```
+verification:code:{email}:sensitive-verification = "123456"
+verification:sent:{email}:sensitive-verification = "1"
+verification:email:{email}:sensitive-verification = "{email}"
+verification:ip:{email}:sensitive-verification = "{ip}"
+```
+
+**验证方法**：
+- 普通类型使用 `verifyCode(email, code, clientIp)`
+- 敏感操作类型使用 `verifyCodeForType(email, code, clientIp, "sensitive-verification")`
 
 ### 扩展验证码类型的要求
 如果未来需要添加新的验证码类型（如密码重置、身份验证等），**必须**：
 1. 在 `SendCodeRequest.type` 中添加新类型值
 2. 在 send-code 接口中添加该类型的前置校验逻辑
+3. 根据是否需要隔离，选择使用 `saveCode()` 或 `saveCodeWithType()` 方法
+4. 在相应业务接口中使用 `verifyCode()` 或 `verifyCodeForType()` 进行验证
+```
 3. **必须保留上述四个核心功能**（邮箱校验、IP校验、频率限制、生命周期）
 4. 在 `AuthController` 对应的验证接口中：
    - 调用 `VerificationCodeService.verifyCode(email, code, clientIp)`
@@ -220,9 +262,10 @@ ratelimit:hour:{identifier}      // TTL: 1小时
 - [x] `getRemainingHourRequests(identifier)` - 获取剩余小时配额
 
 ### AuthController 接口
-- [x] `/auth/send-code` - 发送验证码（支持 register/login）
+- [x] `/auth/send-code` - 发送验证码（支持 register/login/change-email）
 - [x] `/auth/register` - 注册（验证邮箱、IP、验证码）
 - [x] `/auth/login-with-code` - 验证码登录（验证邮箱、IP、验证码）
+- [x] `/auth/change-email` - 更改邮箱（验证邮箱、IP、验证码）
 
 ---
 
@@ -243,3 +286,4 @@ ratelimit:hour:{identifier}      // TTL: 1小时
 | 日期 | 版本 | 描述 |
 |------|------|------|
 | 2026-02-01 | 1.0 | 初始版本，定义四个核心功能和完整的验证码系统设计 |
+| 2026-02-01 | 1.1 | 添加 change-email 验证码类型支持 |

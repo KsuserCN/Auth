@@ -16,6 +16,7 @@ public class VerificationCodeService {
     private static final String IP_PREFIX = "verification:ip:";
     private static final String ERROR_COUNT_PREFIX = "verification:error:";
     private static final String LOCK_PREFIX = "verification:lock:";
+    private static final String TYPE_PREFIX = "verification:type:";
     private static final int CODE_LENGTH = 6;
     private static final Duration CODE_EXPIRATION = Duration.ofMinutes(10);
     private static final Duration LOCK_DURATION = Duration.ofHours(1);
@@ -60,6 +61,27 @@ public class VerificationCodeService {
     }
 
     /**
+     * 保存验证码（指定类型）
+     * @param email 邮箱
+     * @param code 验证码
+     * @param clientIp 客户端IP
+     * @param type 验证码类型（如"register"、"login"、"change-email"、"sensitive-verification"）
+     */
+    public void saveCodeWithType(String email, String code, String clientIp, String type) {
+        String codeKey = CODE_PREFIX + email + ":" + type;
+        String sentKey = SENT_PREFIX + email + ":" + type;
+        String emailKey = EMAIL_PREFIX + email + ":" + type;
+        String ipKey = IP_PREFIX + email + ":" + type;
+        String typeKey = TYPE_PREFIX + email + ":" + type;
+        
+        redisTemplate.opsForValue().set(codeKey, code, CODE_EXPIRATION);
+        redisTemplate.opsForValue().set(sentKey, "1", CODE_EXPIRATION);
+        redisTemplate.opsForValue().set(emailKey, email, CODE_EXPIRATION);
+        redisTemplate.opsForValue().set(ipKey, clientIp, CODE_EXPIRATION);
+        redisTemplate.opsForValue().set(typeKey, type, CODE_EXPIRATION);
+    }
+
+    /**
      * 验证验证码
      * @param email 邮箱
      * @param code 验证码
@@ -76,6 +98,70 @@ public class VerificationCodeService {
         String sentKey = SENT_PREFIX + email;
         String emailKey = EMAIL_PREFIX + email;
         String ipKey = IP_PREFIX + email;
+        String storedCode = redisTemplate.opsForValue().get(codeKey);
+        String storedEmail = redisTemplate.opsForValue().get(emailKey);
+        String storedIp = redisTemplate.opsForValue().get(ipKey);
+        boolean hasSent = Boolean.TRUE.equals(redisTemplate.hasKey(sentKey));
+
+        // 如果从未发送过验证码
+        if (!hasSent) {
+            return 4; // 未发送验证码，不计入错误
+        }
+
+        // 验证邮箱是否匹配
+        if (storedEmail == null || !storedEmail.equals(email)) {
+            incrementErrorCount(email);
+            return 5; // 邮箱不匹配
+        }
+
+        // 验证IP是否匹配
+        if (storedIp == null || !storedIp.equals(clientIp)) {
+            incrementErrorCount(email);
+            return 6; // IP不匹配
+        }
+
+        // 如果验证码不存在但曾经发送过，说明验证码已过期
+        if (storedCode == null) {
+            // 清理已发送标记，保持一致性
+            redisTemplate.delete(sentKey);
+            // 计为一次错误尝试，防止滥用
+            incrementErrorCount(email);
+            return 1; // 验证码已过期
+        }
+
+        if (storedCode.equals(code)) {
+            // 验证成功，删除验证码、已发送标记和错误计数
+            redisTemplate.delete(codeKey);
+            redisTemplate.delete(sentKey);
+            redisTemplate.delete(emailKey);
+            redisTemplate.delete(ipKey);
+            redisTemplate.delete(ERROR_COUNT_PREFIX + email);
+            return 0; // 成功
+        } else {
+            // 验证失败，增加错误计数
+            incrementErrorCount(email);
+            return 2; // 验证码错误
+        }
+    }
+
+    /**
+     * 验证指定类型的验证码
+     * @param email 邮箱
+     * @param code 验证码
+     * @param clientIp 客户端IP
+     * @param type 验证码类型
+     * @return 验证结果，0-成功，1-验证码已过期，2-验证码错误，3-邮箱被锁定，4-未发送验证码，5-邮箱不匹配，6-IP不匹配
+     */
+    public int verifyCodeForType(String email, String code, String clientIp, String type) {
+        // 检查是否被锁定
+        if (isLocked(email)) {
+            return 3;
+        }
+
+        String codeKey = CODE_PREFIX + email + ":" + type;
+        String sentKey = SENT_PREFIX + email + ":" + type;
+        String emailKey = EMAIL_PREFIX + email + ":" + type;
+        String ipKey = IP_PREFIX + email + ":" + type;
         String storedCode = redisTemplate.opsForValue().get(codeKey);
         String storedEmail = redisTemplate.opsForValue().get(emailKey);
         String storedIp = redisTemplate.opsForValue().get(ipKey);
@@ -175,5 +261,17 @@ public class VerificationCodeService {
         String key = ERROR_COUNT_PREFIX + email;
         String count = redisTemplate.opsForValue().get(key);
         return count == null ? 0 : Integer.parseInt(count);
+    }
+
+    /**
+     * 清除邮箱锁定及错误计数
+     * @param email 邮箱
+     */
+    public void clearLockAndError(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return;
+        }
+        redisTemplate.delete(LOCK_PREFIX + email);
+        redisTemplate.delete(ERROR_COUNT_PREFIX + email);
     }
 }

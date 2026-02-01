@@ -63,17 +63,44 @@
 - 用户名唯一性检查
 - 需要认证（AccessToken）
 
-### 8. 刷新令牌
+### 8. 敏感操作验证
+[POST /auth/verify-sensitive](auth-verify-sensitive.md)
+
+验证用户身份以执行敏感操作。支持：
+- 密码验证
+- 邮箱验证码验证
+- 验证有效期15分钟
+- 设备（IP）绑定
+
+### 9. 更改邮箱
+[POST /auth/change-email](auth-change-email.md)
+
+更改用户绑定邮箱。要求：
+- 需要先完成敏感操作验证
+- 新邮箱验证码验证
+- 遵循所有验证码系统约束
+- 需要认证（AccessToken）
+
+### 10. 检查敏感操作验证状态
+[GET /auth/check-sensitive-verification](auth-check-sensitive-verification.md)
+
+检查当前用户是否已完成敏感操作验证及剩余有效时间。特性：
+- 仅供前端 UI 显示使用
+- 返回验证状态和剩余秒数
+- 支持设备（IP）一致性检查
+- 需要认证（AccessToken）
+
+### 11. 刷新令牌
 [POST /auth/refresh](auth-refresh.md)
 
 使用 RefreshToken 获取新的 AccessToken。支持多设备会话。
 
-### 9. 退出登录（单设备）
+### 11. 退出登录（单设备）
 [POST /auth/logout](auth-logout.md)
 
 退出当前设备上的登录。
 
-### 10. 退出登录（全设备）
+### 13. 退出登录（全设备）
 [POST /auth/logout/all](auth-logout-all.md)
 
 从所有设备上退出登录。
@@ -129,8 +156,8 @@
 - 6 位数字验证码，每 10 分钟过期
 - 一次性使用，验证成功后自动删除
 - 错误计数限制：5 次错误后锁定邮箱 1 小时
-- 同一邮箱最多：1 次/分钟，6 次/小时
-- 同一 IP 最多：1 次/分钟，6 次/小时
+- 同一邮箱最多：1 次/分钟，14 次/小时
+- 同一 IP 最多：3 次/分钟，14 次/小时
 
 ### 会话安全
 - 每个会话有唯一 ID 和版本号
@@ -265,6 +292,36 @@ curl -X POST http://localhost:8000/auth/update/profile \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -d '{"username":"newname","avatarUrl":"https://example.com/avatar.jpg"}'
+```
+
+### 更改邮箱（敏感操作）
+```bash
+# 第一步：检查验证状态（可选，用于 UI 显示）
+curl -X GET http://localhost:8000/auth/check-sensitive-verification \
+  -H "Authorization: Bearer {accessToken}"
+# 响应: {"code":200,"msg":"查询成功","data":{"verified":false,"remainingSeconds":0}}
+
+# 第二步：敏感操作验证（使用密码）
+curl -X POST http://localhost:8000/auth/verify-sensitive \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"password","password":"myPassword123"}'
+
+# 第二步（可选）：再次检查验证状态
+curl -X GET http://localhost:8000/auth/check-sensitive-verification \
+  -H "Authorization: Bearer {accessToken}"
+# 响应: {"code":200,"msg":"查询成功","data":{"verified":true,"remainingSeconds":900}}
+
+# 第三步：发送新邮箱验证码
+curl -X POST http://localhost:8000/auth/send-code \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newemail@example.com","type":"change-email"}'
+
+# 第四步：提交新邮箱和验证码
+curl -X POST http://localhost:8000/auth/change-email \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"newEmail":"newemail@example.com","code":"123456"}'
 ```
 
 ### 刷新令牌
