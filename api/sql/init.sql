@@ -92,3 +92,56 @@ CREATE INDEX idx_user_sessions_user_active
 -- ---------------------------
 CREATE UNIQUE INDEX uk_user_sessions_refresh_verifier
   ON user_sessions (refresh_token_verifier);
+
+
+-- ==========================================================
+-- Passkey（WebAuthn）最小化 MySQL 方案：只保留 1 张表
+-- 说明：
+--   - challenge（注册/登录/敏感）全部迁移到 Redis（TTL + 用完即删）
+--   - MySQL 只长期保存 Passkey 凭证（公钥/credential_id/sign_count等）
+-- ==========================================================
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- 如需彻底清理历史表（可选：你以前建过就删掉，没建过也不报错）
+DROP TABLE IF EXISTS passkey_sensitive_verifications;
+DROP TABLE IF EXISTS passkey_authentication_challenges;
+DROP TABLE IF EXISTS passkey_registration_challenges;
+
+-- 只保留这一张
+DROP TABLE IF EXISTS user_passkeys;
+
+CREATE TABLE user_passkeys (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'Passkey凭证主键',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '关联用户ID（users.id）',
+
+  credential_id VARBINARY(512) NOT NULL COMMENT 'WebAuthn credential ID（二进制）',
+  public_key_cose VARBINARY(1024) NOT NULL COMMENT '公钥（COSE Key 二进制）',
+
+  sign_count BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT 'WebAuthn signCount（计数器）',
+
+  transports VARCHAR(255) DEFAULT NULL COMMENT 'usb,nfc,ble,internal等（逗号分隔，可后续改JSON）',
+  aaguid BINARY(16) DEFAULT NULL COMMENT '认证器AAGUID（二进制16字节）',
+
+  name VARCHAR(100) NOT NULL COMMENT 'Passkey名称/标签（用户自定义）',
+  is_primary TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为主要Passkey（每用户最多一个建议由业务层保证）',
+
+  last_used_at DATETIME DEFAULT NULL COMMENT '最后使用时间',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+
+  CONSTRAINT fk_user_passkeys_user
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+
+  UNIQUE KEY uk_user_passkeys_credential (credential_id),
+
+  KEY idx_user_passkeys_user (user_id),
+  KEY idx_user_passkeys_user_last_used (user_id, last_used_at)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+COMMENT='用户Passkey凭证表（challenge/敏感验证迁Redis，MySQL仅保留凭证）';
+
+SET FOREIGN_KEY_CHECKS = 1;
