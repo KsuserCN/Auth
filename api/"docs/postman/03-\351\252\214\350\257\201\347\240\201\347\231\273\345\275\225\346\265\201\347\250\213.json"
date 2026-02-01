@@ -1,0 +1,91 @@
+{
+  "info": {
+    "name": "03-验证码登录流程",
+    "description": "使用邮箱验证码登录",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 发送登录验证码",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    console.log('✓ 验证码已发送到邮箱');",
+              "    console.log('⚠️ 请检查邮箱获取验证码');",
+              "    console.log('💡 收到验证码后，在环境变量中设置：');",
+              "    console.log('   pm.environment.set(\"loginCode\", \"123456\")');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"2765301200@qq.com\",\n  \"type\": \"login\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/send-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "send-code"]
+        }
+      }
+    },
+    {
+      "name": "2. 验证码登录",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    pm.environment.set('accessToken', data.accessToken);",
+              "    pm.environment.set('userUuid', data.uuid);",
+              "    console.log('✓ 登录成功！');",
+              "    console.log('用户 UUID: ' + data.uuid);",
+              "    console.log('用户名: ' + data.username);",
+              "    console.log('邮箱: ' + data.email);",
+              "    console.log('AccessToken 已保存到环境变量');",
+              "    console.log('');",
+              "    console.log('💡 RefreshToken 已保存在 Cookie 中');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"2765301200@qq.com\",\n  \"code\": \"{{loginCode}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/login-with-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "login-with-code"]
+        }
+      }
+    }
+  ]
+}

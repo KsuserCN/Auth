@@ -1,0 +1,339 @@
+{
+  "info": {
+    "name": "06-修改敏感信息-绑定邮箱流程",
+    "description": "完整的邮箱更改流程：登录 → 敏感验证 → 发送新邮箱验证码 → 完成更改\n\n使用账号：2765301200@qq.com / 123456\n新邮箱：ksuserkqy@gmail.com\n\n说明：\n1. 必须先使用密码或验证码完成登录\n2. 登录后需要进行敏感验证（使用密码或旧邮箱验证码）\n3. 敏感验证成功后，系统会清除旧邮箱的所有锁定限制\n4. 然后发送验证码到新邮箱\n5. 最后使用新邮箱验证码完成邮箱更换\n\n环境变量：\n- accessToken: 访问令牌（登录后自动保存）\n- sensitiveCode: 敏感操作验证码（手动设置）\n- newEmailCode: 新邮箱验证码（手动设置）",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 登录获取 AccessToken",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    pm.environment.set('accessToken', data.accessToken);",
+              "    console.log('✓ 登录成功！AccessToken 已保存');",
+              "    console.log('RefreshToken 已保存在 Cookie 中');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"2765301200@qq.com\",\n  \"password\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/login/password",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "login", "password"]
+        }
+      }
+    },
+    {
+      "name": "2. 检查验证状态（更改前）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 当前验证状态：');",
+              "    console.log('已验证: ' + data.verified);",
+              "    console.log('验证方式: ' + (data.verifiedBy || '未验证'));",
+              "    console.log('验证时间: ' + (data.verifiedAt || '未验证'));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/auth/verification-status",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "verification-status"]
+        }
+      }
+    },
+    {
+      "name": "3. 发送敏感操作验证码（旧邮箱）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    console.log('✓ 验证码已发送到旧邮箱');",
+              "    console.log('请查收邮件并将验证码设置到环境变量 sensitiveCode');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"sensitive-verification\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/send-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "send-code"]
+        }
+      }
+    },
+    {
+      "name": "4. 使用旧邮箱验证码验证（敏感操作）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 敏感操作验证成功！');",
+              "    console.log('验证方式: ' + data.verifiedBy);",
+              "    console.log('验证时间: ' + data.verifiedAt);",
+              "    console.log('旧邮箱的所有锁定限制已清除');",
+              "    console.log('验证状态有效期: 5分钟');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"2765301200@qq.com\",\n  \"code\": \"{{sensitiveCode}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/verify-sensitive?method=email",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "verify-sensitive"],
+          "query": [
+            {
+              "key": "method",
+              "value": "email"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "4-替代. 使用密码验证（敏感操作）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 敏感操作验证成功！');",
+              "    console.log('验证方式: ' + data.verifiedBy);",
+              "    console.log('验证时间: ' + data.verifiedAt);",
+              "    console.log('旧邮箱的所有锁定限制已清除');",
+              "    console.log('验证状态有效期: 5分钟');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/verify-sensitive?method=password",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "verify-sensitive"],
+          "query": [
+            {
+              "key": "method",
+              "value": "password"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "5. 检查验证状态（验证后）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 验证状态已更新：');",
+              "    console.log('已验证: ' + data.verified);",
+              "    console.log('验证方式: ' + data.verifiedBy);",
+              "    console.log('验证时间: ' + data.verifiedAt);",
+              "    if (data.verified) {",
+              "        console.log('可以进行敏感操作（5分钟内有效）');",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/auth/verification-status",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "verification-status"]
+        }
+      }
+    },
+    {
+      "name": "6. 发送验证码到新邮箱",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    console.log('✓ 验证码已发送到新邮箱');",
+              "    console.log('请查收邮件并将验证码设置到环境变量 newEmailCode');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"ksuserkqy@gmail.com\",\n  \"type\": \"change-email\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/send-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "send-code"]
+        }
+      }
+    },
+    {
+      "name": "7. 使用新邮箱验证码完成更改",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 邮箱修改成功！');",
+              "    console.log('旧邮箱: 2765301200@qq.com');",
+              "    console.log('新邮箱: ' + data.email);",
+              "    console.log('用户UUID: ' + data.uuid);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"newEmail\": \"ksuserkqy@gmail.com\",\n  \"code\": \"{{newEmailCode}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/change-email",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "change-email"]
+        }
+      }
+    }
+  ]
+}
