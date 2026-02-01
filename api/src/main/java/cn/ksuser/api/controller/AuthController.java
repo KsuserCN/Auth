@@ -900,4 +900,58 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "查询成功", response));
     }
+
+    /**
+     * 修改密码
+     * @param changePasswordRequest 修改密码请求
+     * @param authentication 认证信息（AccessToken）
+     * @param request HttpServletRequest
+     * @return ApiResponse
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<ApiResponse<String>> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest,
+                                                               Authentication authentication,
+                                                               HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+
+        // 检查是否已完成敏感操作验证
+        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+        }
+
+        // 参数校验
+        String newPassword = changePasswordRequest.getNewPassword();
+
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "新密码不能为空"));
+        }
+
+        if (newPassword.length() < 6) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码长度至少为6位"));
+        }
+
+        // 更新密码
+        userService.updatePassword(user, newPassword);
+
+        // 清除敏感操作验证状态
+        sensitiveOperationService.clearVerification(uuid);
+        
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "密码修改成功"));
+    }
 }

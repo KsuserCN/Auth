@@ -141,4 +141,16 @@ public class UserService {
     public User save(User user) {
         return userRepository.save(user);
     }
+
+    /**
+     * 更新用户密码
+     * @param user 用户对象
+     * @param newPassword 新密码（明文）
+     * @return 保存后的用户
+     */
+    public User updatePassword(User user, String newPassword) {
+        String passwordHash = passwordEncoder.encode(newPassword);
+        user.setPasswordHash(passwordHash);
+        return userRepository.save(user);
+    }
 }
