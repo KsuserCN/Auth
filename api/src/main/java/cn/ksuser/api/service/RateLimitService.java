@@ -1,5 +1,6 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.util.IpUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -129,18 +130,30 @@ public class RateLimitService {
      * @return IP地址
      */
     public String getClientIp(HttpServletRequest request) {
+        String remoteAddr = request.getRemoteAddr();
+        if (!isTrustedProxy(remoteAddr)) {
+            return remoteAddr;
+        }
         String ip = request.getHeader("X-Forwarded-For");
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("X-Real-IP");
+        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip.split(",")[0].trim();
         }
-        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
+
+        ip = request.getHeader("X-Real-IP");
+        if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+            return ip;
         }
-        // 处理多级代理的情况
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
+
+        return remoteAddr;
+    }
+
+    /**
+     * 判断是否是可信的代理IP
+     * @param ip IP地址
+     * @return 是否是可信代理
+     */
+    private boolean isTrustedProxy(String ip) {
+        return IpUtil.isTrustedProxyIp(ip);
     }
 
     /**
