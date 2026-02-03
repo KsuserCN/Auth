@@ -19,6 +19,8 @@ const request: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   timeout: 30000,
   withCredentials: true, // 允许携带 Cookie
+  xsrfCookieName: 'XSRF-TOKEN', // 从 Cookie 中读取的 CSRF token 名称
+  xsrfHeaderName: 'X-XSRF-TOKEN', // 发送到服务器的请求头名称
   headers: {
     'Content-Type': 'application/json',
   },
@@ -43,16 +45,11 @@ const onRefreshed = (token: string) => {
 // 刷新 Token
 const refreshToken = async (): Promise<string> => {
   try {
-    const response = await axios.post<ApiResponse<{ accessToken: string }>>(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/auth/refresh`,
-      {},
-      {
-        withCredentials: true, // 携带 refreshToken Cookie
-      },
-    )
+    const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', {})
 
-    if (response.data.code === 200 && response.data.data?.accessToken) {
-      const newToken = response.data.data.accessToken
+    // 响应拦截器已经返回 ApiResponse，所以直接访问 response.code 和 response.data
+    if (response.code === 200 && response.data?.accessToken) {
+      const newToken = response.data.accessToken
       // 更新 sessionStorage 中的 token
       sessionStorage.setItem('accessToken', newToken)
       return newToken
@@ -68,6 +65,14 @@ const refreshToken = async (): Promise<string> => {
   }
 }
 
+// 从 Cookie 中获取指定的值
+const getCookieValue = (name: string): string => {
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length === 2) return parts.pop()?.split(';').shift() || ''
+  return ''
+}
+
 // 请求拦截器
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -76,6 +81,13 @@ request.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
+
+    // 手动从 Cookie 中读取 XSRF-TOKEN 并添加到请求头
+    const xsrfToken = getCookieValue('XSRF-TOKEN')
+    if (xsrfToken && config.headers) {
+      config.headers['X-XSRF-TOKEN'] = xsrfToken
+    }
+
     return config
   },
   (error) => {

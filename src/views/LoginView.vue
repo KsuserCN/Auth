@@ -209,6 +209,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Lock, Lightning, Key, Message, Loading } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
@@ -242,18 +243,12 @@ const updateStep = (newStep: 'email' | 'method' | 'password' | 'email-code' | 'p
   step.value = newStep
 }
 
-// 暗黑模式
-const isDark = ref(false)
-let darkMedia: MediaQueryList | null = null
-
-const applyDarkMode = (value: boolean) => {
-  isDark.value = value
-  document.documentElement.classList.toggle('dark', value)
-}
-
-const handleDarkChange = (event: MediaQueryListEvent) => {
-  applyDarkMode(event.matches)
-}
+// 使用 VueUse 的 useDark 同步暗黑模式
+const isDark = useDark({
+  storageKey: 'theme-preference',
+  valueDark: 'dark',
+  valueLight: 'light'
+})
 
 // 邮箱输入
 const emailInput = ref({
@@ -623,18 +618,11 @@ const handleKeyPress = (e: KeyboardEvent) => {
 
 onMounted(() => {
   isPasskeySupported.value = Boolean(window.PublicKeyCredential)
-  darkMedia = window.matchMedia('(prefers-color-scheme: dark)')
-  applyDarkMode(darkMedia.matches)
-  darkMedia.addEventListener('change', handleDarkChange)
   window.addEventListener('keypress', handleKeyPress)
 })
 
 onBeforeUnmount(() => {
   cleanupCodeCountdown()
-  if (darkMedia) {
-    darkMedia.removeEventListener('change', handleDarkChange)
-  }
-  document.documentElement.classList.remove('dark')
   window.removeEventListener('keypress', handleKeyPress)
 })
 </script>
@@ -663,18 +651,22 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.login-container.dark {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+}
+
 .login-box {
   width: 100%;
   max-width: 1000px;
   display: flex;
-  background: white;
+  background: var(--el-bg-color);
   border-radius: 20px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.12),
     0 16px 40px rgba(0, 0, 0, 0.08);
   animation: slideIn 0.6s ease-out;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--el-border-color-light);
   overflow: hidden;
   transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -682,8 +674,8 @@ onBeforeUnmount(() => {
 .login-left {
   flex: 1;
   padding: 60px 48px;
-  background: linear-gradient(135deg, #fff8f0 0%, #fffbf5 100%);
-  border-right: 1px solid #f0f0f0;
+  background: var(--el-bg-color-overlay);
+  border-right: 1px solid var(--el-border-color-light);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -696,6 +688,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
+  background: var(--el-bg-color);
   transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -759,14 +752,14 @@ onBeforeUnmount(() => {
 .login-title {
   font-size: 36px;
   font-weight: 700;
-  color: #202124;
+  color: var(--el-text-color-primary);
   margin: 0 0 12px 0;
   letter-spacing: -0.5px;
 }
 
 .login-description {
   font-size: 15px;
-  color: #5f6368;
+  color: var(--el-text-color-regular);
   margin: 0 0 32px 0;
   font-weight: 400;
   line-height: 1.6;
@@ -783,7 +776,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
   font-size: 14px;
-  color: #5f6368;
+  color: var(--el-text-color-regular);
 }
 
 .feature-icon {
@@ -820,14 +813,14 @@ onBeforeUnmount(() => {
 .step-title {
   font-size: 28px;
   font-weight: 600;
-  color: #202124;
+  color: var(--el-text-color-primary);
   margin: 0 0 8px 0;
   letter-spacing: -0.3px;
 }
 
 .step-subtitle {
   font-size: 16px;
-  color: #5f6368;
+  color: var(--el-text-color-regular);
   margin: 0 0 32px 0;
   font-weight: 400;
 }
@@ -842,33 +835,33 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-input__wrapper) {
-  border: 1.5px solid #e8eaed;
+  border: 1.5px solid var(--el-border-color);
   border-radius: 12px;
-  background: #fafafa;
+  background: var(--el-fill-color-light);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 14px 16px;
 }
 
 :deep(.el-input__wrapper:hover) {
-  border-color: #f0f0f0;
+  border-color: var(--el-border-color-hover);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-  background: white;
+  background: var(--el-bg-color);
 }
 
 :deep(.el-input__wrapper.is-focus) {
   border-color: var(--el-color-primary);
   box-shadow: 0 4px 12px rgba(255, 185, 15, 0.25);
-  background: white;
+  background: var(--el-bg-color);
 }
 
 :deep(.el-input__inner) {
   font-size: 16px;
-  color: #202124;
+  color: var(--el-text-color-primary);
 }
 
 :deep(.el-input__inner::placeholder) {
-  color: #9aa0a6;
+  color: var(--el-text-color-placeholder);
 }
 
 /* 邮箱确认 */
@@ -878,15 +871,15 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   margin-bottom: 32px;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+  background: var(--el-fill-color-light);
   border-radius: 12px;
-  border: 1px solid #e8eaed;
+  border: 1px solid var(--el-border-color);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .email-display {
   font-size: 16px;
-  color: #202124;
+  color: var(--el-text-color-primary);
   font-weight: 500;
   flex: 1;
   overflow: hidden;
@@ -906,7 +899,7 @@ onBeforeUnmount(() => {
 .code-hint {
   margin: 0;
   font-size: 13px;
-  color: #5f6368;
+  color: var(--el-text-color-secondary);
   margin-top: 8px;
 }
 
@@ -923,15 +916,15 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 16px;
   padding: 18px 20px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
-  border: 1.5px solid #e8eaed;
+  background: var(--el-fill-color-light);
+  border: 1.5px solid var(--el-border-color);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .method-option:hover {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  background: var(--el-bg-color);
   border-color: var(--el-color-primary);
   box-shadow: 0 8px 16px rgba(255, 185, 15, 0.15);
   transform: translateY(-2px);
@@ -974,17 +967,17 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 15px;
   font-weight: 500;
-  color: #202124;
+  color: var(--el-text-color-primary);
 }
 
 .method-info p {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #5f6368;
+  color: var(--el-text-color-regular);
 }
 
 .method-arrow {
-  color: #dadce0;
+  color: var(--el-text-color-secondary);
   flex-shrink: 0;
   font-size: 20px;
 }
@@ -1007,9 +1000,9 @@ onBeforeUnmount(() => {
 }
 
 .resend-btn.resend-disabled {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
-  color: #9aa0a6;
-  border: 1.5px solid #e8eaed;
+  background: var(--el-fill-color);
+  color: var(--el-text-color-placeholder);
+  border: 1.5px solid var(--el-border-color);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   cursor: not-allowed;
 }
@@ -1074,13 +1067,13 @@ onBeforeUnmount(() => {
 }
 
 .back-btn {
-  background: white;
-  border: 1.5px solid #e8eaed;
-  color: #202124;
+  background: var(--el-bg-color);
+  border: 1.5px solid var(--el-border-color);
+  color: var(--el-text-color-primary);
 }
 
 .back-btn:hover {
-  background: #fafafa;
+  background: var(--el-fill-color-light);
   border-color: var(--el-color-primary);
   color: var(--el-color-primary);
 }
@@ -1107,7 +1100,7 @@ onBeforeUnmount(() => {
 .create-account {
   text-align: center;
   font-size: 14px;
-  color: #5f6368;
+  color: var(--el-text-color-regular);
   margin-top: 24px;
 }
 
@@ -1171,8 +1164,8 @@ onBeforeUnmount(() => {
 
 /* Passkey 提示 */
 .passkey-hint {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
-  border: 1.5px solid #e8eaed;
+  background: var(--el-fill-color-light);
+  border: 1.5px solid var(--el-border-color);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
@@ -1183,7 +1176,7 @@ onBeforeUnmount(() => {
 .passkey-hint p {
   margin: 0;
   font-size: 14px;
-  color: #5f6368;
+  color: var(--el-text-color-regular);
 }
 
 /* 响应式设计 */
@@ -1290,133 +1283,6 @@ onBeforeUnmount(() => {
 
   .method-info p {
     font-size: 12px;
-  }
-}
-
-/* 深色模式支持 */
-@media (prefers-color-scheme: dark) {
-  .login-container {
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  }
-
-  .login-box {
-    background: #202124;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  }
-
-  .login-left {
-    background: linear-gradient(135deg, #2a2a2d 0%, #262629 100%);
-    border-right-color: #3a3a3d;
-  }
-
-  .login-title {
-    color: #e8eaed;
-  }
-
-  .login-description {
-    color: #9aa0a6;
-  }
-
-  .feature-item {
-    color: #9aa0a6;
-  }
-
-  .step-title {
-    color: #fff;
-  }
-
-  .step-subtitle {
-    color: #9aa0a6;
-  }
-
-  :deep(.el-input__wrapper) {
-    background: #292a2d;
-    border-color: #5f6368;
-  }
-
-  :deep(.el-input__wrapper:hover) {
-    border-color: #9aa0a6;
-    background: #323437;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  }
-
-  :deep(.el-input__wrapper.is-focus) {
-    border-color: var(--el-color-primary);
-    background: #292a2d;
-  }
-
-  :deep(.el-input__inner) {
-    color: #e8eaed;
-  }
-
-  .email-confirm {
-    background: #292a2d;
-  }
-
-  .email-display {
-    color: #e8eaed;
-  }
-
-  .method-option {
-    background: #292a2d;
-    border-color: #5f6368;
-  }
-
-  .method-option:hover {
-    background: #323437;
-    border-color: var(--el-color-primary);
-  }
-
-  .method-info h3 {
-    color: #e8eaed;
-  }
-
-  .method-info p {
-    color: #9aa0a6;
-  }
-
-  .back-btn {
-    background: #292a2d;
-    border-color: #5f6368;
-    color: #e8eaed;
-  }
-
-  .back-btn:hover {
-    background: #323437;
-    border-color: #9aa0a6;
-  }
-
-  .resend-btn.resend-disabled {
-    background: linear-gradient(135deg, #2a2a2d 0%, #262629 100%);
-    color: #5f6368;
-    border: 1.5px solid #3a3a3d;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  }
-
-  .resend-btn:not(.resend-disabled) {
-    background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
-    box-shadow: 0 4px 12px rgba(255, 185, 15, 0.3);
-  }
-
-  .resend-btn:not(.resend-disabled):hover {
-    box-shadow: 0 8px 16px rgba(255, 185, 15, 0.4);
-  }
-
-  .code-hint {
-    color: #9aa0a6;
-  }
-
-  .create-account {
-    color: #9aa0a6;
-  }
-
-  .passkey-hint {
-    background: #292a2d;
-    border-color: #5f6368;
-  }
-
-  .passkey-hint p {
-    color: #9aa0a6;
   }
 }
 </style>

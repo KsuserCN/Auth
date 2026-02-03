@@ -7,11 +7,24 @@ import './styles/element/dark-override.css'
 
 import App from './App.vue'
 import router from './router'
+import request from './utils/request'
 
-const app = createApp(App)
+// 应用启动前获取 CSRF Token
+async function initApp() {
+  try {
+    // 调用任意接口让服务端下发 XSRF-TOKEN cookie
+    await request.get('/auth/health')
+  } catch (error) {
+    console.warn('Failed to fetch CSRF token:', error)
+  }
 
-app.use(createPinia())
-app.use(router)
-app.use(ElementPlus)
+  const app = createApp(App)
 
-app.mount('#app')
+  app.use(createPinia())
+  app.use(router)
+  app.use(ElementPlus)
+
+  app.mount('#app')
+}
+
+initApp()

@@ -13,8 +13,8 @@
           <el-dropdown @command="handleThemeCommand" trigger="click">
             <el-button class="icon-btn">
               <el-icon>
-                <Sunny v-if="themeMode === 'light'" />
-                <Moon v-else-if="themeMode === 'dark'" />
+                <Sunny v-if="currentThemeIcon === 'light'" />
+                <Moon v-else-if="currentThemeIcon === 'dark'" />
                 <Monitor v-else />
               </el-icon>
               <span class="theme-label">外观</span>
@@ -279,7 +279,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import { useDark, useToggle, useStorage } from '@vueuse/core'
 import {
   Bell,
   Cloudy,
@@ -304,8 +305,21 @@ const user = ref<User | null>(null)
 const loading = ref(true)
 const error = ref('')
 const activeMenu = ref('overview')
-const themeMode = ref<'light' | 'dark' | 'system'>('system')
-let themeMedia: MediaQueryList | null = null
+
+// 使用 VueUse 的 useDark 和 useStorage 实现持久化主题
+const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')
+const isDark = useDark({
+  storageKey: 'theme-preference',
+  valueDark: 'dark',
+  valueLight: 'light'
+})
+
+// 计算当前主题图标
+const currentThemeIcon = computed(() => {
+  if (themeMode.value === 'light') return 'light'
+  if (themeMode.value === 'dark') return 'dark'
+  return 'system'
+})
 
 // 进度条使用主题色
 const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--el-color-primary').trim()
@@ -329,34 +343,24 @@ async function load() {
   }
 }
 
-const applyTheme = (mode: 'light' | 'dark' | 'system') => {
-  themeMode.value = mode
-  const prefersDark = themeMedia?.matches ?? false
-  const isDark = mode === 'dark' || (mode === 'system' && prefersDark)
-  document.documentElement.classList.toggle('dark', isDark)
-}
+// 监听主题模式变化并应用
+watch(themeMode, (mode) => {
+  if (mode === 'system') {
+    // 跟随系统，让 useDark 自动处理
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    isDark.value = prefersDark
+  } else {
+    // 手动设置
+    isDark.value = mode === 'dark'
+  }
+}, { immediate: true })
 
 const handleThemeCommand = (command: 'light' | 'dark' | 'system') => {
-  applyTheme(command)
-}
-
-const handleThemeMediaChange = () => {
-  if (themeMode.value === 'system') {
-    applyTheme('system')
-  }
+  themeMode.value = command
 }
 
 onMounted(() => {
   load()
-  themeMedia = window.matchMedia('(prefers-color-scheme: dark)')
-  applyTheme(themeMode.value)
-  themeMedia.addEventListener('change', handleThemeMediaChange)
-})
-
-onBeforeUnmount(() => {
-  if (themeMedia) {
-    themeMedia.removeEventListener('change', handleThemeMediaChange)
-  }
 })
 </script>
 
