@@ -6,6 +6,7 @@ import cn.ksuser.api.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -114,7 +115,9 @@ public class UserService {
      * @param newAvatarUrl 新头像 URL（null 表示不更新）
      * @return 更新结果（包含状态与用户）
      */
-    public RegisterResult updateProfile(User user, String newUsername, String newAvatarUrl) {
+    public RegisterResult updateProfile(User user, String newUsername, String newAvatarUrl,
+                                       String newRealName, String newGender, LocalDateTime newBirthDate,
+                                       String newRegion, String newBio) {
         // 如果需要更新用户名，检查新用户名是否已存在
         if (newUsername != null && !newUsername.trim().isEmpty()) {
             if (!newUsername.equals(user.getUsername()) && userRepository.findByUsername(newUsername).isPresent()) {
@@ -127,6 +130,34 @@ public class UserService {
         if (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) {
             user.setAvatarUrl(newAvatarUrl);
         }
+
+        // 如果需要更新真实姓名
+        if (newRealName != null && !newRealName.trim().isEmpty()) {
+            user.setRealName(newRealName);
+        }
+
+        // 如果需要更新性别
+        if (newGender != null && !newGender.trim().isEmpty()) {
+            user.setGender(newGender);
+        }
+
+        // 如果需要更新出生日期
+        if (newBirthDate != null) {
+            user.setBirthDate(newBirthDate);
+        }
+
+        // 如果需要更新地区
+        if (newRegion != null && !newRegion.trim().isEmpty()) {
+            user.setRegion(newRegion);
+        }
+
+        // 如果需要更新个人简介
+        if (newBio != null && !newBio.trim().isEmpty()) {
+            user.setBio(newBio);
+        }
+
+        // 设置更新时间
+        user.setUpdatedAt(LocalDateTime.now());
 
         // 保存更新
         User updatedUser = userRepository.save(user);

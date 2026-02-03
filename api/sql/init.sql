@@ -11,34 +11,39 @@ DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
 
 
--- ---------------------------
--- users：内部ID + 对外UUID(sub)
--- ---------------------------
+DROP TABLE IF EXISTS users;
 CREATE TABLE users (
-  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '内部主键ID（数据库内部使用，外键引用它）',
-
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '内部主键ID',
   uuid CHAR(36)
     CHARACTER SET ascii
     COLLATE ascii_bin
     NOT NULL
     COMMENT '公开用户ID(sub)，OAuth返回给第三方使用（严格大小写匹配）',
+    
+  username VARCHAR(50) NOT NULL COMMENT '登录用户名',
+  email VARCHAR(255) DEFAULT NULL COMMENT '邮箱（可选）',
+  password_hash VARCHAR(255) DEFAULT NULL COMMENT '密码哈希（Passkey用户可为空）',
 
-  username VARCHAR(50) NOT NULL COMMENT '登录用户名（唯一）',
-  email VARCHAR(255) DEFAULT NULL COMMENT '邮箱（可选，用于找回密码；允许多个NULL）',
+  real_name VARCHAR(50) DEFAULT NULL COMMENT '真实姓名',
+  gender ENUM('male','female','secret') DEFAULT 'secret' COMMENT '性别',
+  birth_date DATE DEFAULT NULL COMMENT '出生日期 YYYY-MM-DD',
+  region VARCHAR(100) DEFAULT NULL COMMENT '地区',
+  bio VARCHAR(200) DEFAULT NULL COMMENT '个人简介（最多200字）',
 
-  password_hash VARCHAR(255) DEFAULT NULL COMMENT '加盐后的密码哈希（纯Passkey用户可为空）',
   avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像地址',
-
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
 
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_uuid (uuid) COMMENT '唯一约束：对外公开UUID(sub)不可重复',
   UNIQUE KEY uk_users_username (username) COMMENT '唯一约束：用户名不可重复',
   UNIQUE KEY uk_users_email (email) COMMENT '唯一约束：邮箱不可重复（NULL可重复）'
+
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='用户表：内部使用自增ID，对外使用UUID(sub)';
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户表';
 
 
 -- ---------------------------

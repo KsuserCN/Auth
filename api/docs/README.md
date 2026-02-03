@@ -271,6 +271,9 @@ curl -X POST http://localhost:8000/auth/login-with-code \
 ```bash
 curl -X GET http://localhost:8000/auth/info \
   -H "Authorization: Bearer {accessToken}"
+
+curl -X GET "http://localhost:8000/auth/info?type=details" \
+  -H "Authorization: Bearer {accessToken}"
 ```
 
 ### 更新用户信息
@@ -292,6 +295,12 @@ curl -X POST http://localhost:8000/auth/update/profile \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
   -d '{"username":"newname","avatarUrl":"https://example.com/avatar.jpg"}'
+
+# 更新扩展资料
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"realName":"张三","gender":"male","birthDate":"1999-01-01","region":"Beijing","bio":"这里是个人简介"}'
 ```
 
 ### 更改邮箱（敏感操作）

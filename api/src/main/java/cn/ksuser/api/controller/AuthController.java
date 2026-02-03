@@ -18,6 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
+import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -514,7 +515,8 @@ public class AuthController {
      * @return ApiResponse
      */
     @GetMapping("/info")
-    public ResponseEntity<ApiResponse<UserInfoResponse>> info(Authentication authentication) {
+    public ResponseEntity<ApiResponse<UserInfoResponse>> info(@RequestParam(value = "type", required = false, defaultValue = "basic") String type,
+                                                              Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "未登录"));
@@ -527,12 +529,28 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "用户不存在"));
         }
 
-        UserInfoResponse userInfo = new UserInfoResponse(
-            user.getUuid(),
-            user.getUsername(),
-            user.getEmail(),
-            user.getAvatarUrl()
-        );
+        UserInfoResponse userInfo;
+        if ("details".equalsIgnoreCase(type)) {
+            userInfo = new UserInfoResponse(
+                user.getUuid(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getAvatarUrl(),
+                user.getRealName(),
+                user.getGender(),
+                user.getBirthDate(),
+                user.getRegion(),
+                user.getBio(),
+                user.getUpdatedAt()
+            );
+        } else {
+            userInfo = new UserInfoResponse(
+                user.getUuid(),
+                user.getUsername(),
+                user.getEmail(),
+                user.getAvatarUrl()
+            );
+        }
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "获取成功", userInfo));
@@ -738,13 +756,23 @@ public class AuthController {
         // 参数校验：至少要更新一个字段
         String newUsername = updateProfileRequest.getUsername();
         String newAvatarUrl = updateProfileRequest.getAvatarUrl();
+        String newRealName = updateProfileRequest.getRealName();
+        String newGender = updateProfileRequest.getGender();
+        LocalDateTime newBirthDate = updateProfileRequest.getBirthDate();
+        String newRegion = updateProfileRequest.getRegion();
+        String newBio = updateProfileRequest.getBio();
         
         boolean hasUpdates = (newUsername != null && !newUsername.trim().isEmpty()) ||
-                             (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty());
+                             (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) ||
+                             (newRealName != null && !newRealName.trim().isEmpty()) ||
+                             (newGender != null && !newGender.trim().isEmpty()) ||
+                             (newBirthDate != null) ||
+                             (newRegion != null && !newRegion.trim().isEmpty()) ||
+                             (newBio != null && !newBio.trim().isEmpty());
         
         if (!hasUpdates) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "至少需要提供用户名或头像 URL 中的一个"));
+                .body(new ApiResponse<>(400, "至少需要提供一个字段用于更新"));
         }
 
         // 用户名格式校验
@@ -761,7 +789,9 @@ public class AuthController {
         }
 
         // 执行更新
-        RegisterResult result = userService.updateProfile(user, newUsername, newAvatarUrl);
+        RegisterResult result = userService.updateProfile(user, newUsername, newAvatarUrl, 
+                                                          newRealName, newGender, newBirthDate,
+                                                          newRegion, newBio);
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, "用户名已存在"));

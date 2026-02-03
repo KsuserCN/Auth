@@ -15,13 +15,23 @@ Authorization: Bearer <accessToken>
 ```json
 {
   "username": "newusername",
-  "avatarUrl": "https://example.com/avatar.jpg"
+  "avatarUrl": "https://example.com/avatar.jpg",
+  "realName": "张三",
+  "gender": "male",
+  "birthDate": "1999-01-01T00:00:00",
+  "region": "Beijing",
+  "bio": "这里是个人简介"
 }
 ```
 
 ## 字段说明
-- username: 新用户名（可选，3-20个字符，仅字母数字下划线连字符）
+- username: 新用户名（可选，3-20个字符，仅字母数字下划线连字符或简体中文）
 - avatarUrl: 新头像URL（可选，任意长度）
+- realName: 真实姓名（可选）
+- gender: 性别（可选，male/female/secret）
+- birthDate: 出生日期（可选，格式：YYYY-MM-DD 或 ISO-8601）
+- region: 地区（可选）
+- bio: 个人简介（可选，最多200字）
 - 注意：至少需要提供以上字段中的一个，不能都为空或空字符串
 
 ## 请求示例
@@ -53,6 +63,15 @@ curl -X POST \
   http://localhost:8000/auth/update/profile
 ```
 
+### 更新扩展资料
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"realName":"张三","gender":"male","birthDate":"1999-01-01","region":"Beijing","bio":"这里是个人简介"}' \
+  http://localhost:8000/auth/update/profile
+```
+
 ## 成功响应
 - HTTP Status：200
 
@@ -64,7 +83,13 @@ curl -X POST \
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "username": "newname",
     "email": "user@example.com",
-    "avatarUrl": "https://example.com/avatar.jpg"
+    "avatarUrl": "https://example.com/avatar.jpg",
+    "realName": "张三",
+    "gender": "male",
+    "birthDate": "1999-01-01T00:00:00",
+    "region": "Beijing",
+    "bio": "这里是个人简介",
+    "updatedAt": "2026-02-03T12:00:00"
   }
 }
 ```
@@ -97,7 +122,7 @@ curl -X POST \
 ```json
 {
   "code": 400,
-  "msg": "至少需要提供用户名或头像 URL 中的一个"
+  "msg": "至少需要提供一个字段用于更新"
 }
 ```
 
@@ -107,7 +132,7 @@ curl -X POST \
 ```json
 {
   "code": 400,
-  "msg": "用户名格式不正确（3-20字符，仅字母数字下划线连字符）"
+  "msg": "用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）"
 }
 ```
 
@@ -143,9 +168,9 @@ curl -X POST \
 
 ## 注意事项
 - 所有POST请求必须使用 `Content-Type: application/json` 请求头
-- 至少需要提供 username 或 avatarUrl 中的一个字段
-- 如果只想更新其中一个字段，可以只提供那个字段，另一个字段可以省略或设置为 null
-- username 和 avatarUrl 都不能是空字符串 ""，如果不更新可以不提供该字段
+- 至少需要提供一个字段用于更新
+- 如果只想更新其中一个字段，可以只提供那个字段，其他字段可以省略或设置为 null
+- 所有字段都不能是空字符串 ""，如果不更新可以不提供该字段
 - AccessToken 有效期为 15 分钟，过期后需要使用 refreshToken 调用 `/auth/refresh` 获取新的 AccessToken
 - 更新用户名后，新的用户名必须在系统中唯一，不能与其他用户重复
 
@@ -161,5 +186,10 @@ curl -X POST \
 |------|------|------|------|------|
 | username | string | 1-50 | 否* | 新用户名，必须唯一 |
 | avatarUrl | string | 0-255 | 否* | 新头像URL，通常是图片链接 |
+| realName | string | 0-50 | 否* | 真实姓名 |
+| gender | string | 0-10 | 否* | male / female / secret |
+| birthDate | string | - | 否* | 出生日期 |
+| region | string | 0-100 | 否* | 地区 |
+| bio | string | 0-200 | 否* | 个人简介 |
 
 *至少填一个
