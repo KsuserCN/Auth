@@ -6,7 +6,7 @@
         <div class="navbar-left">
           <div class="brand">
             <img src="/favicon.ico" class="brand-logo" alt="logo" />
-            <span class="brand-text">账号管理</span>
+            <span class="brand-text">Ksuser 统一认证中心</span>
           </div>
         </div>
         <div class="navbar-right">
@@ -27,20 +27,6 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-tooltip content="通知" placement="bottom">
-            <el-button circle class="icon-btn">
-              <el-icon>
-                <Bell />
-              </el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="帮助" placement="bottom">
-            <el-button circle class="icon-btn">
-              <el-icon>
-                <QuestionFilled />
-              </el-icon>
-            </el-button>
-          </el-tooltip>
           <el-divider direction="vertical" />
           <div class="user-chip">
             <el-avatar :size="32" :src="user?.avatarUrl">
