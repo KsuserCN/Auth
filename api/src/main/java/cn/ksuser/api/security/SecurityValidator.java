@@ -19,11 +19,6 @@ public class SecurityValidator {
         "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[a-zA-Z]{2,}$"
     );
 
-    // 密码强度: 至少包含大小写字母、数字和特殊字符
-    private static final Pattern STRONG_PASSWORD_PATTERN = Pattern.compile(
-        "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[a-zA-Z\\d@$!%*?&]{8,}$"
-    );
-
     private final AppProperties appProperties;
 
     public SecurityValidator(AppProperties appProperties) {
