@@ -72,6 +72,25 @@ public class UserSessionService {
         return userSessionRepository.save(session);
     }
 
+    /**
+     * 更新会话的 RefreshToken（用于 Token 轮换）
+     * @param session 会话对象
+     * @param newRefreshToken 新的 RefreshToken
+     * @return 更新后的会话
+     */
+    public UserSession updateRefreshToken(UserSession session, String newRefreshToken) {
+        String hashedToken = passwordEncoder.encode(newRefreshToken);
+        byte[] tokenVerifier = hashedToken.getBytes(StandardCharsets.UTF_8);
+        
+        // 更新 RefreshToken 和过期时间
+        session.setRefreshTokenVerifier(tokenVerifier);
+        long expirationMs = jwtUtil.getRefreshTokenExpirationTime();
+        LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(expirationMs));
+        session.setExpiresAt(expiresAt);
+        
+        return userSessionRepository.save(session);
+    }
+
     public UserSession revokeSession(UserSession session) {
         session.setRevokedAt(LocalDateTime.now());
         return userSessionRepository.save(session);

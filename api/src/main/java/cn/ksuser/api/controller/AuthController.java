@@ -1,8 +1,11 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserSession;
+import cn.ksuser.api.security.SecurityValidator;
+import cn.ksuser.api.service.TokenBlacklistService;
 import cn.ksuser.api.service.*;
 import cn.ksuser.api.util.JwtUtil;
 import jakarta.mail.MessagingException;
@@ -15,6 +18,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 @RequestMapping("/auth")
@@ -27,10 +33,15 @@ public class AuthController {
     private final VerificationCodeService verificationCodeService;
     private final RateLimitService rateLimitService;
     private final SensitiveOperationService sensitiveOperationService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final SecurityValidator securityValidator;
+    private final AppProperties appProperties;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
-                          RateLimitService rateLimitService, SensitiveOperationService sensitiveOperationService) {
+                          RateLimitService rateLimitService, SensitiveOperationService sensitiveOperationService,
+                          TokenBlacklistService tokenBlacklistService, SecurityValidator securityValidator,
+                          AppProperties appProperties) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -38,6 +49,9 @@ public class AuthController {
         this.verificationCodeService = verificationCodeService;
         this.rateLimitService = rateLimitService;
         this.sensitiveOperationService = sensitiveOperationService;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.securityValidator = securityValidator;
+        this.appProperties = appProperties;
     }
 
     /**
@@ -102,6 +116,10 @@ public class AuthController {
             if (email == null || email.trim().isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "邮箱不能为空"));
+            }
+            if (!securityValidator.isValidEmail(email)) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "邮箱格式不正确"));
             }
         }
 
@@ -216,6 +234,10 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "邮箱不能为空"));
         }
+        if (!securityValidator.isValidEmail(email)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+        }
         if (password == null || password.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "密码不能为空"));
@@ -225,10 +247,38 @@ public class AuthController {
                 .body(new ApiResponse<>(400, "验证码不能为空"));
         }
 
-        // 密码长度校验
-        if (password.length() < 6 || password.length() > 66) {
+        // 使用 SecurityValidator 进行安全验证
+        if (!securityValidator.isValidUsername(username)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码长度必须在6-66个字符之间"));
+                .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，仅字母数字下划线连字符）"));
+        }
+
+        if (!securityValidator.isValidEmail(email)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+        }
+
+        if (!securityValidator.isValidPasswordLength(password)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码长度必须在" + appProperties.getPassword().getMinLength() + 
+                    "-" + appProperties.getPassword().getMaxLength() + "个字符之间"));
+        }
+
+        if (!securityValidator.isStrongPassword(password)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, buildPasswordRequirementMessage()));
+        }
+
+        if (securityValidator.isCommonWeakPassword(password)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码过于简单，请使用更复杂的密码"));
+        }
+
+        // 检查 SQL 注入
+        if (securityValidator.possibleSqlInjection(username) || 
+            securityValidator.possibleSqlInjection(email)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "输入包含非法字符"));
         }
 
         // 验证验证码
@@ -309,6 +359,12 @@ public class AuthController {
                 .body(new ApiResponse<>(400, "验证码不能为空"));
         }
 
+        // 邮箱格式验证
+        if (!securityValidator.isValidEmail(email)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+        }
+
         // 验证验证码
         int verifyResult = verificationCodeService.verifyCode(email, code, clientIp);
         if (verifyResult != 0) {
@@ -362,13 +418,11 @@ public class AuthController {
         int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
         String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
-        // 将 RefreshToken 设置到 HttpOnly Cookie
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // 生产环境应该设置为 true
-        cookie.setPath("/");
-        cookie.setMaxAge(604800); // 7天
-        response.addCookie(cookie);
+        // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
+        setRefreshTokenCookie(response, refreshToken);
+
+        // 登录成功后清除所有速率限制
+        rateLimitService.clearAllLimits(email, clientIp);
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
@@ -381,9 +435,12 @@ public class AuthController {
      * @return ApiResponse
      */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<TokenResponse>> login(@RequestBody LoginRequest loginRequest, HttpServletResponse response) {
+    public ResponseEntity<ApiResponse<TokenResponse>> login(@RequestBody LoginRequest loginRequest, 
+                                                            HttpServletRequest request,
+                                                            HttpServletResponse response) {
         String email = loginRequest.getEmail();
         String password = loginRequest.getPassword();
+        String clientIp = rateLimitService.getClientIp(request);
 
         // 参数校验
         if (email == null || email.trim().isEmpty()) {
@@ -394,6 +451,20 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "密码不能为空"));
         }
+
+        // 速率限制检查
+        if (!rateLimitService.isEmailAllowed(email, RateLimitService.TYPE_LOGIN)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, "登录请求过于频繁，请稍后再试"));
+        }
+        if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, "登录请求过于频繁，请稍后再试"));
+        }
+
+        // 记录请求
+        rateLimitService.recordEmailRequest(email, RateLimitService.TYPE_LOGIN);
+        rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
         // 执行登录
         User user = userService.login(email, password).orElse(null);
@@ -410,13 +481,8 @@ public class AuthController {
         int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
         String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
-        // 将 RefreshToken 设置到 HttpOnly Cookie
-        Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false); // 生产环境应该设置为 true
-        cookie.setPath("/");
-        cookie.setMaxAge(604800); // 7天
-        response.addCookie(cookie);
+        // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
+        setRefreshTokenCookie(response, refreshToken);
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
@@ -455,28 +521,35 @@ public class AuthController {
     /**
      * 刷新 AccessToken
      * @param request HttpServletRequest
+     * @param response HttpServletResponse
      * @return ApiResponse
      */
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<RefreshResponse>> refresh(HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<RefreshResponse>> refresh(HttpServletRequest request, HttpServletResponse response) {
         // 从 Cookie 中获取 RefreshToken
-        String refreshToken = null;
+        String oldRefreshToken = null;
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
                 if ("refreshToken".equals(cookie.getName())) {
-                    refreshToken = cookie.getValue();
+                    oldRefreshToken = cookie.getValue();
                     break;
                 }
             }
         }
 
-        if (refreshToken == null) {
+        if (oldRefreshToken == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "RefreshToken不存在"));
         }
 
+        // 检查旧RefreshToken是否已在黑名单中
+        if (tokenBlacklistService.isBlacklisted(oldRefreshToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "RefreshToken已失效"));
+        }
+
         // 从 Token 中获取 uuid
-        String uuid = jwtUtil.getUuidFromToken(refreshToken);
+        String uuid = jwtUtil.getUuidFromToken(oldRefreshToken);
         if (uuid == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
@@ -490,18 +563,30 @@ public class AuthController {
         }
 
         // 验证 RefreshToken
-        UserSession session = userSessionService.verifyRefreshToken(user, refreshToken).orElse(null);
+        UserSession session = userSessionService.verifyRefreshToken(user, oldRefreshToken).orElse(null);
         if (session == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
         }
 
+        // 生成新的 RefreshToken
+        String newRefreshToken = jwtUtil.generateRefreshToken(uuid);
+
         // 刷新 sessionVersion，使旧 AccessToken 立即失效
         UserSession updatedSession = userSessionService.bumpSessionVersion(session);
         int newSessionVersion = updatedSession.getSessionVersion() == null ? 0 : updatedSession.getSessionVersion();
 
+        // 更新数据库中的 RefreshToken
+        userSessionService.updateRefreshToken(updatedSession, newRefreshToken);
+
+        // 将旧的 RefreshToken 加入黑名单（7天过期）
+        tokenBlacklistService.addToBlacklist(oldRefreshToken, Duration.ofDays(7));
+
         // 生成新的 AccessToken
         String newAccessToken = jwtUtil.generateAccessToken(uuid, updatedSession.getId(), newSessionVersion);
+
+        // 将新的 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
+        setRefreshTokenCookie(response, newRefreshToken);
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "刷新成功", new RefreshResponse(newAccessToken)));
@@ -515,6 +600,13 @@ public class AuthController {
      */
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request, HttpServletResponse response) {
+        // 从 Authorization Header 中提取 AccessToken
+        String accessToken = null;
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            accessToken = bearerToken.substring(7);
+        }
+
         // 从 Cookie 中获取 RefreshToken
         String refreshToken = null;
         if (request.getCookies() != null) {
@@ -554,13 +646,16 @@ public class AuthController {
 
         userSessionService.revokeSession(session);
 
+        // ✅ 将 AccessToken 和 RefreshToken 加入黑名单
+        if (accessToken != null) {
+            // AccessToken 有效期：15分钟
+            tokenBlacklistService.addToBlacklist(accessToken, Duration.ofMinutes(15));
+        }
+        // RefreshToken 有效期：7天
+        tokenBlacklistService.addToBlacklist(refreshToken, Duration.ofDays(7));
+
         // 清除 RefreshToken Cookie
-        Cookie cookie = new Cookie("refreshToken", "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        setRefreshTokenCookie(response, "");
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "退出成功"));
@@ -589,13 +684,11 @@ public class AuthController {
         // 撤销该用户所有会话
         userSessionService.revokeAllSessions(user);
 
+        // ✅ 吊销用户的所有 Token（7天有效期对应 RefreshToken）
+        tokenBlacklistService.revokeAllUserTokens(uuid, 7 * 24 * 60);
+
         // 清除 RefreshToken Cookie
-        Cookie cookie = new Cookie("refreshToken", "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        setRefreshTokenCookie(response, "");
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "已从所有设备退出登录"));
@@ -636,9 +729,9 @@ public class AuthController {
 
         // 用户名长度校验
         if (newUsername != null && !newUsername.trim().isEmpty()) {
-            if (newUsername.trim().length() < 1 || newUsername.trim().length() > 50) {
+            if (!securityValidator.isValidUsername(newUsername)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "用户名长度必须在 1-50 个字符之间"));
+                    .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，仅字母数字下划线连字符）"));
             }
         }
 
@@ -807,6 +900,10 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "新邮箱不能为空"));
         }
+        if (!securityValidator.isValidEmail(newEmail)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+        }
         if (code == null || code.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "验证码不能为空"));
@@ -940,9 +1037,20 @@ public class AuthController {
                 .body(new ApiResponse<>(400, "新密码不能为空"));
         }
 
-        if (newPassword.length() < 6) {
+        if (!securityValidator.isValidPasswordLength(newPassword)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码长度至少为6位"));
+                .body(new ApiResponse<>(400, "密码长度必须在" + appProperties.getPassword().getMinLength() + 
+                    "-" + appProperties.getPassword().getMaxLength() + "个字符之间"));
+        }
+
+        if (!securityValidator.isStrongPassword(newPassword)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, buildPasswordRequirementMessage()));
+        }
+
+        if (securityValidator.isCommonWeakPassword(newPassword)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码过于简单，请使用更复杂的密码"));
         }
 
         // 更新密码
@@ -953,5 +1061,60 @@ public class AuthController {
         
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "密码修改成功"));
+    }
+
+    /**
+     * 根据配置动态生成密码要求消息
+     * @return 密码要求描述
+     */
+    private String buildPasswordRequirementMessage() {
+        AppProperties.Password pwdConfig = appProperties.getPassword();
+        List<String> requirements = new ArrayList<>();
+        
+        if (pwdConfig.isRequireUppercase()) {
+            requirements.add("大写字母");
+        }
+        if (pwdConfig.isRequireLowercase()) {
+            requirements.add("小写字母");
+        }
+        if (pwdConfig.isRequireDigits()) {
+            requirements.add("数字");
+        }
+        if (pwdConfig.isRequireSpecialChars()) {
+            requirements.add("特殊字符");
+        }
+        
+        if (requirements.isEmpty()) {
+            return "密码强度不足";
+        }
+        
+        return "密码强度不足：需包含" + String.join("、", requirements);
+    }
+
+    /**
+     * 设置 RefreshToken Cookie (包含 SameSite=Strict CSRF 保护)
+     */
+    private void setRefreshTokenCookie(HttpServletResponse response, String token) {
+        Cookie cookie = new Cookie("refreshToken", token);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(!appProperties.isDebug());
+        cookie.setPath("/");
+        if (token != null && !token.isEmpty()) {
+            cookie.setMaxAge(604800); // 7天
+        } else {
+            cookie.setMaxAge(0); // 清除 cookie
+        }
+        response.addCookie(cookie);
+        
+        // 添加 SameSite=Strict 属性用于 CSRF 保护
+        // 由于 javax.servlet.http.Cookie 不直接支持 SameSite，通过 Set-Cookie 响应头设置
+        String sameSiteValue = "SameSite=Strict";
+        String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
+            token != null ? token : "",
+            cookie.getSecure() ? "Secure; " : "",
+            sameSiteValue,
+            cookie.getMaxAge()
+        );
+        response.addHeader("Set-Cookie", setCookieHeader);
     }
 }

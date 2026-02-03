@@ -8,6 +8,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
@@ -67,7 +68,18 @@ public class SecurityConfig {
                     response.getWriter().write("{\"code\":403,\"msg\":\"无权限\"}");
                 })
             )
-            .csrf(csrf -> csrf.disable())
+            .csrf(csrf -> csrf
+                // 使用 CSRF Cookie Repository
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                // 为无状态认证端点排除 CSRF 检查
+                .ignoringRequestMatchers(
+                    "/auth/register", "/auth/register/",
+                    "/auth/login", "/auth/login/",
+                    "/auth/login-with-code", "/auth/login-with-code/",
+                    "/auth/check-username", "/auth/check-username/",
+                    "/auth/send-code", "/auth/send-code/"
+                )
+            )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

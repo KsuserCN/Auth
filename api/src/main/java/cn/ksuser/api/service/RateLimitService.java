@@ -1,5 +1,6 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.util.IpUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -11,16 +12,19 @@ import java.time.Duration;
 public class RateLimitService {
 
     private final StringRedisTemplate redisTemplate;
+    private final AppProperties appProperties;
     private static final String MINUTE_LIMIT_PREFIX = "ratelimit:minute:";
     private static final String HOUR_LIMIT_PREFIX = "ratelimit:hour:";
     private static final Duration MINUTE_WINDOW = Duration.ofMinutes(1);
     private static final Duration HOUR_WINDOW = Duration.ofHours(1);
-    private static final int MAX_REQUESTS_PER_MINUTE_EMAIL = 1;
-    private static final int MAX_REQUESTS_PER_MINUTE_IP = 3;
-    private static final int MAX_REQUESTS_PER_HOUR = 14;
+    
+    // 操作类型常量
+    public static final String TYPE_VERIFICATION_CODE = "verify";
+    public static final String TYPE_LOGIN = "login";
 
-    public RateLimitService(StringRedisTemplate redisTemplate) {
+    public RateLimitService(StringRedisTemplate redisTemplate, AppProperties appProperties) {
         this.redisTemplate = redisTemplate;
+        this.appProperties = appProperties;
     }
 
     /**
@@ -29,25 +33,50 @@ public class RateLimitService {
      * @return 是否允许
      */
     public boolean isAllowed(String identifier) {
-        return isAllowedPerMinute(identifier, MAX_REQUESTS_PER_MINUTE_EMAIL) && isAllowedPerHour(identifier);
+        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getEmailPerMinute()) 
+            && isAllowedPerHour(identifier, appProperties.getRateLimit().getEmailPerHour());
     }
 
     /**
-     * 检查邮箱是否允许发送（分钟限制=1，小时限制=14）
+     * 检查邮箱是否允许发送（带操作类型）
+     * @param email 邮箱
+     * @param type 操作类型（verify/login）
+     * @return 是否允许
+     */
+    public boolean isEmailAllowed(String email, String type) {
+        String identifier = type + ":" + email;
+        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getEmailPerMinute()) 
+            && isAllowedPerHour(identifier, appProperties.getRateLimit().getEmailPerHour());
+    }
+
+    /**
+     * 检查邮箱是否允许发送（兼容旧接口，默认验证码类型）
      * @param email 邮箱
      * @return 是否允许
      */
     public boolean isEmailAllowed(String email) {
-        return isAllowedPerMinute(email, MAX_REQUESTS_PER_MINUTE_EMAIL) && isAllowedPerHour(email);
+        return isEmailAllowed(email, TYPE_VERIFICATION_CODE);
     }
 
     /**
-     * 检查IP是否允许发送（分钟限制=3，小时限制=14）
+     * 检查IP是否允许发送（带操作类型）
+     * @param ip IP
+     * @param type 操作类型（verify/login）
+     * @return 是否允许
+     */
+    public boolean isIpAllowed(String ip, String type) {
+        String identifier = type + ":" + ip;
+        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getIpPerMinute()) 
+            && isAllowedPerHour(identifier, appProperties.getRateLimit().getIpPerHour());
+    }
+
+    /**
+     * 检查IP是否允许发送（兼容旧接口，默认验证码类型）
      * @param ip IP
      * @return 是否允许
      */
     public boolean isIpAllowed(String ip) {
-        return isAllowedPerMinute(ip, MAX_REQUESTS_PER_MINUTE_IP) && isAllowedPerHour(ip);
+        return isIpAllowed(ip, TYPE_VERIFICATION_CODE);
     }
 
     /**
@@ -60,21 +89,41 @@ public class RateLimitService {
     }
 
     /**
-     * 记录邮箱发送
+     * 记录邮箱发送（带操作类型）
      * @param email 邮箱
+     * @param type 操作类型（verify/login）
      */
-    public void recordEmailRequest(String email) {
-        recordMinuteRequest(email);
-        recordHourRequest(email);
+    public void recordEmailRequest(String email, String type) {
+        String identifier = type + ":" + email;
+        recordMinuteRequest(identifier);
+        recordHourRequest(identifier);
     }
 
     /**
-     * 记录IP发送
+     * 记录邮箱发送（兼容旧接口，默认验证码类型）
+     * @param email 邮箱
+     */
+    public void recordEmailRequest(String email) {
+        recordEmailRequest(email, TYPE_VERIFICATION_CODE);
+    }
+
+    /**
+     * 记录IP发送（带操作类型）
+     * @param ip IP
+     * @param type 操作类型（verify/login）
+     */
+    public void recordIpRequest(String ip, String type) {
+        String identifier = type + ":" + ip;
+        recordMinuteRequest(identifier);
+        recordHourRequest(identifier);
+    }
+
+    /**
+     * 记录IP发送（兼容旧接口，默认验证码类型）
      * @param ip IP
      */
     public void recordIpRequest(String ip) {
-        recordMinuteRequest(ip);
-        recordHourRequest(ip);
+        recordIpRequest(ip, TYPE_VERIFICATION_CODE);
     }
 
     /**
@@ -94,10 +143,10 @@ public class RateLimitService {
      * @param identifier 标识符
      * @return 是否允许
      */
-    private boolean isAllowedPerHour(String identifier) {
+    private boolean isAllowedPerHour(String identifier, int limit) {
         String key = HOUR_LIMIT_PREFIX + identifier;
         String count = redisTemplate.opsForValue().get(key);
-        return count == null || Integer.parseInt(count) < MAX_REQUESTS_PER_HOUR;
+        return count == null || Integer.parseInt(count) < limit;
     }
 
     /**
@@ -162,25 +211,25 @@ public class RateLimitService {
      * @return 剩余次数
      */
     public int getRemainingMinuteRequests(String identifier) {
-        return getRemainingMinuteRequests(identifier, MAX_REQUESTS_PER_MINUTE_EMAIL);
+        return getRemainingMinuteRequests(identifier, appProperties.getRateLimit().getEmailPerMinute());
     }
 
     /**
-     * 获取邮箱剩余分钟限制次数（1/分钟）
+     * 获取邮箱剩余分钟限制次数
      * @param email 邮箱
      * @return 剩余次数
      */
     public int getRemainingMinuteRequestsForEmail(String email) {
-        return getRemainingMinuteRequests(email, MAX_REQUESTS_PER_MINUTE_EMAIL);
+        return getRemainingMinuteRequests(email, appProperties.getRateLimit().getEmailPerMinute());
     }
 
     /**
-     * 获取IP剩余分钟限制次数（3/分钟）
+     * 获取IP剩余分钟限制次数
      * @param ip IP
      * @return 剩余次数
      */
     public int getRemainingMinuteRequestsForIp(String ip) {
-        return getRemainingMinuteRequests(ip, MAX_REQUESTS_PER_MINUTE_IP);
+        return getRemainingMinuteRequests(ip, appProperties.getRateLimit().getIpPerMinute());
     }
 
     private int getRemainingMinuteRequests(String identifier, int limit) {
@@ -199,6 +248,29 @@ public class RateLimitService {
         String key = HOUR_LIMIT_PREFIX + identifier;
         String count = redisTemplate.opsForValue().get(key);
         int used = count == null ? 0 : Integer.parseInt(count);
-        return Math.max(0, MAX_REQUESTS_PER_HOUR - used);
+        return Math.max(0, appProperties.getRateLimit().getIpPerHour() - used);
+    }
+
+    /**
+     * 清除指定标识符的所有速率限制（成功登录后调用）
+     * @param email 邮箱
+     * @param ip IP地址
+     */
+    public void clearAllLimits(String email, String ip) {
+        // 清除登录相关的邮箱限制
+        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_LOGIN + ":" + email);
+        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_LOGIN + ":" + email);
+        
+        // 清除登录相关的IP限制
+        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_LOGIN + ":" + ip);
+        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_LOGIN + ":" + ip);
+        
+        // 清除验证码相关的邮箱限制
+        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + email);
+        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + email);
+        
+        // 清除验证码相关的IP限制
+        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + ip);
+        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + ip);
     }
 }

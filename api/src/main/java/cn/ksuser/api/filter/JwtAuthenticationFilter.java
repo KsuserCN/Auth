@@ -1,6 +1,7 @@
 package cn.ksuser.api.filter;
 
 import cn.ksuser.api.entity.UserSession;
+import cn.ksuser.api.service.TokenBlacklistService;
 import cn.ksuser.api.service.UserSessionService;
 import cn.ksuser.api.util.JwtUtil;
 import jakarta.servlet.FilterChain;
@@ -21,10 +22,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final UserSessionService userSessionService;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserSessionService userSessionService) {
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, UserSessionService userSessionService, TokenBlacklistService tokenBlacklistService) {
         this.jwtUtil = jwtUtil;
         this.userSessionService = userSessionService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
@@ -35,6 +38,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractTokenFromRequest(request);
             
             if (StringUtils.hasText(token)) {
+                // ✅ 检查 token 是否在黑名单中
+                if (tokenBlacklistService.isBlacklisted(token)) {
+                    filterChain.doFilter(request, response);
+                    return;  // Token 已被吊销，跳过认证
+                }
+
                 String uuid = jwtUtil.getUuidFromToken(token);
                 String tokenType = jwtUtil.getTokenType(token);
                 Long sessionId = jwtUtil.getSessionId(token);
