@@ -727,11 +727,16 @@ public class AuthController {
                 .body(new ApiResponse<>(400, "至少需要提供用户名或头像 URL 中的一个"));
         }
 
-        // 用户名长度校验
+        // 用户名格式校验
         if (newUsername != null && !newUsername.trim().isEmpty()) {
             if (!securityValidator.isValidUsername(newUsername)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，仅字母数字下划线连字符）"));
+                    .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）"));
+            }
+            // SQL 注入检查
+            if (securityValidator.possibleSqlInjection(newUsername)) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "输入包含非法字符"));
             }
         }
 

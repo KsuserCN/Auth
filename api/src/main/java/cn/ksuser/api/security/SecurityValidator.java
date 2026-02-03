@@ -11,8 +11,8 @@ import java.util.regex.Pattern;
 @Component
 public class SecurityValidator {
 
-    // 用户名: 3-20个字符，仅包含字母、数字、下划线和连字符
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]{3,20}$");
+    // 用户名: 3-20个字符，包含字母、数字、下划线、连字符和简体中文
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-\u4E00-\u9FFF]{3,20}$");
 
     // 邮箱: 标准邮箱格式
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
