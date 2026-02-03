@@ -681,8 +681,8 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 
-.login-left.dark {
-  background: var(--el-bg-color-overlay);
+.login-container.dark .login-left {
+  background: var(--el-bg-color-overlay) !important;
 }
 
 .login-right {
