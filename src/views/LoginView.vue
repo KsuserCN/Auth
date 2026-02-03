@@ -787,7 +787,7 @@ onBeforeUnmount(() => {
 }
 
 .feature-icon {
-  color: #ffb90f;
+  color: var(--el-color-primary);
   min-width: 24px;
 }
 
@@ -857,7 +857,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-input__wrapper.is-focus) {
-  border-color: #ffb90f;
+  border-color: var(--el-color-primary);
   box-shadow: 0 4px 12px rgba(255, 185, 15, 0.25);
   background: white;
 }
@@ -897,7 +897,7 @@ onBeforeUnmount(() => {
 
 .change-email-btn,
 .change-email-btn:hover {
-  color: #ffb90f;
+  color: var(--el-color-primary);
   font-weight: 500;
   flex-shrink: 0;
   margin-left: 16px;
@@ -932,7 +932,7 @@ onBeforeUnmount(() => {
 
 .method-option:hover {
   background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-  border-color: #ffb90f;
+  border-color: var(--el-color-primary);
   box-shadow: 0 8px 16px rgba(255, 185, 15, 0.15);
   transform: translateY(-2px);
 }
@@ -962,7 +962,7 @@ onBeforeUnmount(() => {
 }
 
 .method-icon {
-  color: #ffb90f;
+  color: var(--el-color-primary);
   flex-shrink: 0;
 }
 
@@ -1015,7 +1015,7 @@ onBeforeUnmount(() => {
 }
 
 .resend-btn:not(.resend-disabled) {
-  background: linear-gradient(135deg, #ffb90f 0%, #ffd700 100%);
+  background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
   color: white;
   border: none;
   box-shadow: 0 4px 12px rgba(255, 185, 15, 0.2);
@@ -1051,7 +1051,7 @@ onBeforeUnmount(() => {
 }
 
 .next-btn {
-  background: linear-gradient(135deg, #ffb90f 0%, #ffd700 100%);
+  background: var(--el-color-primary);
   border: none;
   color: white;
   flex: 1;
@@ -1081,8 +1081,8 @@ onBeforeUnmount(() => {
 
 .back-btn:hover {
   background: #fafafa;
-  border-color: #ffb90f;
-  color: #ffb90f;
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
 }
 
 .back-btn:active {
@@ -1093,7 +1093,7 @@ onBeforeUnmount(() => {
 .forgot-link {
   display: inline-block;
   font-size: 14px;
-  color: #ffb90f;
+  color: var(--el-color-primary);
   text-decoration: none;
   margin-bottom: 24px;
   transition: all 0.2s;
@@ -1112,7 +1112,7 @@ onBeforeUnmount(() => {
 }
 
 .create-account .link {
-  color: #ffb90f;
+  color: var(--el-color-primary);
   text-decoration: none;
   font-weight: 500;
   margin-left: 4px;
@@ -1134,14 +1134,14 @@ onBeforeUnmount(() => {
   box-shadow:
     0 0 0 2px rgba(255, 185, 15, 0.1),
     0 1px 8px rgba(255, 185, 15, 0.2);
-  border-color: #ffb90f;
+  border-color: var(--el-color-primary);
 }
 
 :deep(.el-input__wrapper.is-focus) {
   box-shadow:
     0 0 0 2px rgba(255, 185, 15, 0.1),
     0 1px 8px rgba(255, 185, 15, 0.2);
-  border-color: #ffb90f;
+  border-color: var(--el-color-primary);
 }
 
 :deep(.el-input input) {
@@ -1341,7 +1341,7 @@ onBeforeUnmount(() => {
   }
 
   :deep(.el-input__wrapper.is-focus) {
-    border-color: #ffb90f;
+    border-color: var(--el-color-primary);
     background: #292a2d;
   }
 
@@ -1364,7 +1364,7 @@ onBeforeUnmount(() => {
 
   .method-option:hover {
     background: #323437;
-    border-color: #ffb90f;
+    border-color: var(--el-color-primary);
   }
 
   .method-info h3 {
@@ -1394,7 +1394,7 @@ onBeforeUnmount(() => {
   }
 
   .resend-btn:not(.resend-disabled) {
-    background: linear-gradient(135deg, #ffb90f 0%, #ffd700 100%);
+    background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
     box-shadow: 0 4px 12px rgba(255, 185, 15, 0.3);
   }
 

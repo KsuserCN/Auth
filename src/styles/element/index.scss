@@ -1,0 +1,11 @@
+/* Override Element Plus primary color theme */
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $colors: (
+    'primary': (
+      'base': #ffb90f,
+    ),
+  )
+);
+
+/* Import all Element Plus component styles */
+@use 'element-plus/theme-chalk/src/index.scss' as *;

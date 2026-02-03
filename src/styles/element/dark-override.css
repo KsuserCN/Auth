@@ -1,0 +1,10 @@
+/* Dark mode overrides for custom primary color */
+html.dark {
+  --el-color-primary: #ffb90f;
+  --el-color-primary-light-3: #ffd54f;
+  --el-color-primary-light-5: #ffdd71;
+  --el-color-primary-light-7: #ffe599;
+  --el-color-primary-light-8: #ffecb3;
+  --el-color-primary-light-9: #fff3cd;
+  --el-color-primary-dark-2: #e6a500;
+}
