@@ -178,46 +178,4 @@ public class SecurityValidator {
 
         return false;
     }
-
-    /**
-     * 防止时序攻击 - 常量时间比较
-     * @param a 第一个值
-     * @param b 第二个值
-     * @return 是否相等
-     */
-    public static boolean constantTimeEquals(String a, String b) {
-        if (a == null || b == null) {
-            return a == b;
-        }
-
-        byte[] aBytes = a.getBytes();
-        byte[] bBytes = b.getBytes();
-
-        int result = 0;
-        result |= aBytes.length ^ bBytes.length;
-
-        for (int i = 0; i < Math.min(aBytes.length, bBytes.length); i++) {
-            result |= aBytes[i] ^ bBytes[i];
-        }
-
-        return result == 0;
-    }
-
-    /**
-     * 模拟常量时间延迟 - 用于防止时序攻击
-     * @param baseDelayMs 基础延迟毫秒数
-     * @throws InterruptedException 当线程被中断时
-     */
-    public static void constantTimeDelay(long baseDelayMs) throws InterruptedException {
-        long startTime = System.currentTimeMillis();
-        long elapsed = 0;
-
-        while (elapsed < baseDelayMs) {
-            elapsed = System.currentTimeMillis() - startTime;
-            // 使用 volatile 变量防止编译器优化
-            if (elapsed < baseDelayMs) {
-                Thread.sleep(Math.min(1, baseDelayMs - elapsed));
-            }
-        }
-    }
 }

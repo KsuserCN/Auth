@@ -101,15 +101,4 @@ public class TokenBlacklistService {
             return token.substring(Math.max(0, token.length() - 32));
         }
     }
-
-    /**
-     * 批量检查 Token 是否有效
-     * @param tokens Token 列表
-     * @return 有效的 Token 列表
-     */
-    public java.util.List<String> filterValidTokens(java.util.List<String> tokens) {
-        return tokens.stream()
-            .filter(token -> !isBlacklisted(token))
-            .toList();
-    }
 }

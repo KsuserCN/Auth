@@ -16,7 +16,6 @@ public class VerificationCodeService {
     private static final String IP_PREFIX = "verification:ip:";
     private static final String ERROR_COUNT_PREFIX = "verification:error:";
     private static final String LOCK_PREFIX = "verification:lock:";
-    private static final String TYPE_PREFIX = "verification:type:";
     private static final int CODE_LENGTH = 6;
     private static final Duration CODE_EXPIRATION = Duration.ofMinutes(10);
     private static final Duration LOCK_DURATION = Duration.ofHours(1);
@@ -72,13 +71,11 @@ public class VerificationCodeService {
         String sentKey = SENT_PREFIX + email + ":" + type;
         String emailKey = EMAIL_PREFIX + email + ":" + type;
         String ipKey = IP_PREFIX + email + ":" + type;
-        String typeKey = TYPE_PREFIX + email + ":" + type;
         
         redisTemplate.opsForValue().set(codeKey, code, CODE_EXPIRATION);
         redisTemplate.opsForValue().set(sentKey, "1", CODE_EXPIRATION);
         redisTemplate.opsForValue().set(emailKey, email, CODE_EXPIRATION);
         redisTemplate.opsForValue().set(ipKey, clientIp, CODE_EXPIRATION);
-        redisTemplate.opsForValue().set(typeKey, type, CODE_EXPIRATION);
     }
 
     /**

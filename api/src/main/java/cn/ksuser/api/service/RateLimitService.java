@@ -33,8 +33,8 @@ public class RateLimitService {
      * @return 是否允许
      */
     public boolean isAllowed(String identifier) {
-        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getEmailPerMinute()) 
-            && isAllowedPerHour(identifier, appProperties.getRateLimit().getEmailPerHour());
+        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getSendCodeEmailPerMinute())
+            && isAllowedPerHour(identifier, appProperties.getRateLimit().getSendCodeEmailPerHour());
     }
 
     /**
@@ -45,8 +45,12 @@ public class RateLimitService {
      */
     public boolean isEmailAllowed(String email, String type) {
         String identifier = type + ":" + email;
-        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getEmailPerMinute()) 
-            && isAllowedPerHour(identifier, appProperties.getRateLimit().getEmailPerHour());
+        if (TYPE_LOGIN.equals(type)) {
+            return isAllowedPerMinute(identifier, appProperties.getRateLimit().getLoginEmailPerMinute())
+                && isAllowedPerHour(identifier, appProperties.getRateLimit().getLoginEmailPerHour());
+        }
+        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getSendCodeEmailPerMinute())
+            && isAllowedPerHour(identifier, appProperties.getRateLimit().getSendCodeEmailPerHour());
     }
 
     /**
@@ -66,8 +70,12 @@ public class RateLimitService {
      */
     public boolean isIpAllowed(String ip, String type) {
         String identifier = type + ":" + ip;
-        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getIpPerMinute()) 
-            && isAllowedPerHour(identifier, appProperties.getRateLimit().getIpPerHour());
+        if (TYPE_LOGIN.equals(type)) {
+            return isAllowedPerMinute(identifier, appProperties.getRateLimit().getLoginIpPerMinute())
+                && isAllowedPerHour(identifier, appProperties.getRateLimit().getLoginIpPerHour());
+        }
+        return isAllowedPerMinute(identifier, appProperties.getRateLimit().getSendCodeIpPerMinute())
+            && isAllowedPerHour(identifier, appProperties.getRateLimit().getSendCodeIpPerHour());
     }
 
     /**
@@ -206,21 +214,12 @@ public class RateLimitService {
     }
 
     /**
-     * 获取剩余分钟限制次数
-     * @param identifier 标识符
-     * @return 剩余次数
-     */
-    public int getRemainingMinuteRequests(String identifier) {
-        return getRemainingMinuteRequests(identifier, appProperties.getRateLimit().getEmailPerMinute());
-    }
-
-    /**
      * 获取邮箱剩余分钟限制次数
      * @param email 邮箱
      * @return 剩余次数
      */
     public int getRemainingMinuteRequestsForEmail(String email) {
-        return getRemainingMinuteRequests(email, appProperties.getRateLimit().getEmailPerMinute());
+        return getRemainingMinuteRequests(email, appProperties.getRateLimit().getSendCodeEmailPerMinute());
     }
 
     /**
@@ -229,7 +228,7 @@ public class RateLimitService {
      * @return 剩余次数
      */
     public int getRemainingMinuteRequestsForIp(String ip) {
-        return getRemainingMinuteRequests(ip, appProperties.getRateLimit().getIpPerMinute());
+        return getRemainingMinuteRequests(ip, appProperties.getRateLimit().getSendCodeIpPerMinute());
     }
 
     private int getRemainingMinuteRequests(String identifier, int limit) {
@@ -237,18 +236,6 @@ public class RateLimitService {
         String count = redisTemplate.opsForValue().get(key);
         int used = count == null ? 0 : Integer.parseInt(count);
         return Math.max(0, limit - used);
-    }
-
-    /**
-     * 获取剩余小时限制次数
-     * @param identifier 标识符
-     * @return 剩余次数
-     */
-    public int getRemainingHourRequests(String identifier) {
-        String key = HOUR_LIMIT_PREFIX + identifier;
-        String count = redisTemplate.opsForValue().get(key);
-        int used = count == null ? 0 : Integer.parseInt(count);
-        return Math.max(0, appProperties.getRateLimit().getIpPerHour() - used);
     }
 
     /**

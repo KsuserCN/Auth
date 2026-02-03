@@ -14,10 +14,8 @@ public class AppProperties {
     private boolean debug = false;
     private final Password password = new Password();
     private final Token token = new Token();
-    private final VerificationCode verificationCode = new VerificationCode();
     private final RateLimit rateLimit = new RateLimit();
     private final SensitiveOperation sensitiveOperation = new SensitiveOperation();
-    private final Cors cors = new Cors();
 
     public boolean isDebug() {
         return debug;
@@ -35,20 +33,12 @@ public class AppProperties {
         return token;
     }
 
-    public VerificationCode getVerificationCode() {
-        return verificationCode;
-    }
-
     public RateLimit getRateLimit() {
         return rateLimit;
     }
 
     public SensitiveOperation getSensitiveOperation() {
         return sensitiveOperation;
-    }
-
-    public Cors getCors() {
-        return cors;
     }
 
     /**
@@ -135,87 +125,83 @@ public class AppProperties {
         }
     }
 
-    /**
-     * 验证码配置
-     */
-    public static class VerificationCode {
-        private int length = 6;
-        private int expirationMinutes = 10;
-        private int maxErrorCount = 5;
-        private int lockDurationHours = 1;
-
-        public int getLength() {
-            return length;
-        }
-
-        public void setLength(int length) {
-            this.length = length;
-        }
-
-        public int getExpirationMinutes() {
-            return expirationMinutes;
-        }
-
-        public void setExpirationMinutes(int expirationMinutes) {
-            this.expirationMinutes = expirationMinutes;
-        }
-
-        public int getMaxErrorCount() {
-            return maxErrorCount;
-        }
-
-        public void setMaxErrorCount(int maxErrorCount) {
-            this.maxErrorCount = maxErrorCount;
-        }
-
-        public int getLockDurationHours() {
-            return lockDurationHours;
-        }
-
-        public void setLockDurationHours(int lockDurationHours) {
-            this.lockDurationHours = lockDurationHours;
-        }
-    }
 
     /**
      * 速率限制配置
      */
     public static class RateLimit {
-        private int emailPerMinute = 1;
-        private int emailPerHour = 14;
-        private int ipPerMinute = 3;
-        private int ipPerHour = 14;
+        private int sendCodeEmailPerMinute = 1;
+        private int sendCodeEmailPerHour = 14;
+        private int sendCodeIpPerMinute = 3;
+        private int sendCodeIpPerHour = 14;
 
-        public int getEmailPerMinute() {
-            return emailPerMinute;
+        private int loginEmailPerMinute = 5;
+        private int loginEmailPerHour = 60;
+        private int loginIpPerMinute = 10;
+        private int loginIpPerHour = 120;
+
+        public int getSendCodeEmailPerMinute() {
+            return sendCodeEmailPerMinute;
         }
 
-        public void setEmailPerMinute(int emailPerMinute) {
-            this.emailPerMinute = emailPerMinute;
+        public void setSendCodeEmailPerMinute(int sendCodeEmailPerMinute) {
+            this.sendCodeEmailPerMinute = sendCodeEmailPerMinute;
         }
 
-        public int getEmailPerHour() {
-            return emailPerHour;
+        public int getSendCodeEmailPerHour() {
+            return sendCodeEmailPerHour;
         }
 
-        public void setEmailPerHour(int emailPerHour) {
-            this.emailPerHour = emailPerHour;
+        public void setSendCodeEmailPerHour(int sendCodeEmailPerHour) {
+            this.sendCodeEmailPerHour = sendCodeEmailPerHour;
         }
 
-        public int getIpPerMinute() {
-            return ipPerMinute;
+        public int getSendCodeIpPerMinute() {
+            return sendCodeIpPerMinute;
         }
 
-        public void setIpPerMinute(int ipPerMinute) {
-            this.ipPerMinute = ipPerMinute;
+        public void setSendCodeIpPerMinute(int sendCodeIpPerMinute) {
+            this.sendCodeIpPerMinute = sendCodeIpPerMinute;
         }
 
-        public int getIpPerHour() {
-            return ipPerHour;
+        public int getSendCodeIpPerHour() {
+            return sendCodeIpPerHour;
         }
 
-        public void setIpPerHour(int ipPerHour) {
-            this.ipPerHour = ipPerHour;
+        public void setSendCodeIpPerHour(int sendCodeIpPerHour) {
+            this.sendCodeIpPerHour = sendCodeIpPerHour;
+        }
+
+        public int getLoginEmailPerMinute() {
+            return loginEmailPerMinute;
+        }
+
+        public void setLoginEmailPerMinute(int loginEmailPerMinute) {
+            this.loginEmailPerMinute = loginEmailPerMinute;
+        }
+
+        public int getLoginEmailPerHour() {
+            return loginEmailPerHour;
+        }
+
+        public void setLoginEmailPerHour(int loginEmailPerHour) {
+            this.loginEmailPerHour = loginEmailPerHour;
+        }
+
+        public int getLoginIpPerMinute() {
+            return loginIpPerMinute;
+        }
+
+        public void setLoginIpPerMinute(int loginIpPerMinute) {
+            this.loginIpPerMinute = loginIpPerMinute;
+        }
+
+        public int getLoginIpPerHour() {
+            return loginIpPerHour;
+        }
+
+        public void setLoginIpPerHour(int loginIpPerHour) {
+            this.loginIpPerHour = loginIpPerHour;
         }
     }
 
@@ -243,18 +229,4 @@ public class AppProperties {
         }
     }
 
-    /**
-     * CORS 配置
-     */
-    public static class Cors {
-        private boolean production = false;
-
-        public boolean isProduction() {
-            return production;
-        }
-
-        public void setProduction(boolean production) {
-            this.production = production;
-        }
-    }
 }
