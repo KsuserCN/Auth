@@ -28,9 +28,19 @@
             </template>
           </el-dropdown>
           <el-divider direction="vertical" />
-          <div class="user-chip">
-            <el-avatar :size="32" :src="user?.avatarUrl">
-              {{ user?.username?.slice(0, 1) || 'U' }}
+          <!-- 加载中：显示骨架屏 -->
+          <div v-if="loading" class="user-skeleton">
+            <el-skeleton-item variant="text" class="skeleton-avatar"
+              style="width: 32px; height: 32px; min-width: 32px;" />
+            <div class="skeleton-text">
+              <el-skeleton-item variant="text" style="width: 80px; height: 16px;" />
+              <el-skeleton-item variant="text" style="width: 140px; height: 14px;" />
+            </div>
+          </div>
+          <!-- 加载完成：显示用户信息 -->
+          <div v-else class="user-chip">
+            <el-avatar class="rounded-avatar" shape="square" :size="32" :src="user?.avatarUrl">
+              {{ user?.username?.slice(0, 1) || 'K' }}
             </el-avatar>
             <div class="user-meta">
               <div class="user-name">{{ user?.username || '未登录' }}</div>
@@ -267,10 +277,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useDark, useToggle, useStorage } from '@vueuse/core'
+import { useDark, useStorage } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import {
-  Bell,
   Cloudy,
   CollectionTag,
   Connection,
@@ -281,7 +290,6 @@ import {
   Lock,
   Monitor,
   Moon,
-  QuestionFilled,
   Setting,
   Sunny,
   SwitchButton,
@@ -327,8 +335,9 @@ async function load() {
   try {
     const res = await getUserInfo()
     user.value = res as User
-  } catch (err: any) {
-    error.value = err?.message || '获取用户信息失败'
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    error.value = message || '获取用户信息失败'
   } finally {
     loading.value = false
   }
@@ -367,8 +376,9 @@ const handleLogout = async () => {
 
     // 跳转到登录页面
     router.push('/login')
-  } catch (err: any) {
-    ElMessage.error(err?.message || '退出登录失败')
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    ElMessage.error(message || '退出登录失败')
     logoutLoading.value = false
   }
 }
@@ -470,6 +480,55 @@ onMounted(() => {
 .user-email {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.user-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  animation: pulse 2s infinite;
+}
+
+.user-skeleton :deep(.el-skeleton__item) {
+  background: var(--el-skeleton-color, rgba(0, 0, 0, 0.06));
+}
+
+:root.dark .user-skeleton :deep(.el-skeleton__item) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.skeleton-avatar {
+  border-radius: 6px !important;
+}
+
+.skeleton-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.skeleton-text :deep(.el-skeleton__item) {
+  background: var(--el-skeleton-color, rgba(0, 0, 0, 0.06));
+  border-radius: 4px;
+}
+
+:root.dark .skeleton-text :deep(.el-skeleton__item) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .body {
