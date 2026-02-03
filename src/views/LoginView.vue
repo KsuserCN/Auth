@@ -674,11 +674,15 @@ onBeforeUnmount(() => {
 .login-left {
   flex: 1;
   padding: 60px 48px;
-  background: var(--el-bg-color-overlay);
+  background: linear-gradient(135deg, #fff8f0, #fffbf5);
   border-right: 1px solid var(--el-border-color-light);
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.login-left.dark {
+  background: var(--el-bg-color-overlay);
 }
 
 .login-right {

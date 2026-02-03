@@ -131,3 +131,13 @@ export const getUserInfo = async (): Promise<User> => {
   const response = await request.get<ApiResponse<User>>('/auth/info')
   return response.data
 }
+
+// ========== 退出登录 ==========
+
+/**
+ * 退出登录
+ * POST /auth/logout
+ */
+export const logout = async (): Promise<void> => {
+  await request.post('/auth/logout')
+}

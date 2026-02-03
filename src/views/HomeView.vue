@@ -78,11 +78,12 @@
           </el-menu>
 
           <div class="side-footer">
-            <el-button class="ghost-btn" plain>
+            <el-button class="logout-btn" type="danger" plain :loading="logoutLoading" :disabled="logoutLoading"
+              @click="handleLogout">
               <el-icon>
                 <SwitchButton />
               </el-icon>
-              退出登录
+              <span>退出登录</span>
             </el-button>
           </div>
         </el-aside>
@@ -267,6 +268,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDark, useToggle, useStorage } from '@vueuse/core'
+import { useRouter } from 'vue-router'
 import {
   Bell,
   Cloudy,
@@ -285,12 +287,15 @@ import {
   SwitchButton,
   User as UserIcon
 } from '@element-plus/icons-vue'
-import { getUserInfo, type User } from '@/api/auth'
+import { getUserInfo, logout, type User } from '@/api/auth'
+import { ElMessage } from 'element-plus'
 
 const user = ref<User | null>(null)
 const loading = ref(true)
 const error = ref('')
 const activeMenu = ref('overview')
+const logoutLoading = ref(false)
+const router = useRouter()
 
 // 使用 VueUse 的 useDark 和 useStorage 实现持久化主题
 const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')
@@ -343,6 +348,29 @@ watch(themeMode, (mode) => {
 
 const handleThemeCommand = (command: 'light' | 'dark' | 'system') => {
   themeMode.value = command
+}
+
+const handleLogout = async () => {
+  try {
+    logoutLoading.value = true
+
+    // 调用退出登录接口
+    await logout()
+
+    // 清除本地存储的数据
+    sessionStorage.removeItem('accessToken')
+    sessionStorage.removeItem('user')
+    localStorage.removeItem('theme-mode')
+    localStorage.removeItem('theme-preference')
+
+    ElMessage.success('退出登录成功')
+
+    // 跳转到登录页面
+    router.push('/login')
+  } catch (err: any) {
+    ElMessage.error(err?.message || '退出登录失败')
+    logoutLoading.value = false
+  }
 }
 
 onMounted(() => {
@@ -518,6 +546,19 @@ onMounted(() => {
 .ghost-btn:hover {
   background: var(--el-fill-color-light);
   border-color: var(--el-border-color);
+}
+
+.logout-btn {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logout-btn :deep(.el-icon) {
+  margin-right: 8px;
+  font-size: 18px;
 }
 
 .content {
