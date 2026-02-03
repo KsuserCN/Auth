@@ -1,18 +1,45 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 import HomeView from '../views/HomeView.vue'
+import MainLayout from '../layouts/MainLayout.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/home',
+      redirect: '/home/overview',
     },
     {
       path: '/home',
-      name: 'home',
-      component: HomeView,
+      component: MainLayout,
+      children: [
+        {
+          path: 'overview',
+          name: 'overview',
+          component: () => import('../views/HomeView.vue'),
+        },
+        {
+          path: 'security',
+          name: 'security',
+          component: () => import('../views/SecurityView.vue'),
+        },
+        {
+          path: 'devices',
+          name: 'devices',
+          component: () => import('../views/DevicesView.vue'),
+        },
+        {
+          path: 'privacy',
+          name: 'privacy',
+          component: () => import('../views/PrivacyView.vue'),
+        },
+        {
+          path: 'preferences',
+          name: 'preferences',
+          component: () => import('../views/PreferencesView.vue'),
+        },
+      ],
     },
     {
       path: '/login',
