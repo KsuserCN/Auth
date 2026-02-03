@@ -1,7 +1,6 @@
 import axios from 'axios'
 import type {
   AxiosInstance,
-  AxiosRequestConfig,
   AxiosResponse,
   InternalAxiosRequestConfig,
 } from 'axios'
@@ -75,17 +74,32 @@ const getCookieValue = (name: string): string => {
 
 // 请求拦截器
 request.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
+  async (config: InternalAxiosRequestConfig) => {
     // 从 sessionStorage 获取 accessToken
     const token = sessionStorage.getItem('accessToken')
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
 
-    // 手动从 Cookie 中读取 XSRF-TOKEN 并添加到请求头
+    // 检查 Cookie 中是否有 XSRF-TOKEN，如果没有则请求一次获取
     const xsrfToken = getCookieValue('XSRF-TOKEN')
-    if (xsrfToken && config.headers) {
-      config.headers['X-XSRF-TOKEN'] = xsrfToken
+    if (!xsrfToken) {
+      try {
+        await axios.get(
+          `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/auth/health`,
+          {
+            withCredentials: true,
+          },
+        )
+      } catch (error) {
+        console.warn('Failed to fetch XSRF token from /auth/health:', error)
+      }
+    }
+
+    // 从 Cookie 中读取 XSRF-TOKEN 并添加到请求头
+    const currentXsrfToken = getCookieValue('XSRF-TOKEN')
+    if (currentXsrfToken && config.headers) {
+      config.headers['X-XSRF-TOKEN'] = currentXsrfToken
     }
 
     return config
