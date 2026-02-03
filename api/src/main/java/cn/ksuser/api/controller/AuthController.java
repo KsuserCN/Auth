@@ -55,6 +55,26 @@ public class AuthController {
     }
 
     /**
+     * 健康检查/初始化接口（用于获取 CSRF Token）
+     * @param request HttpServletRequest
+     * @param response HttpServletResponse
+     * @return ApiResponse
+     */
+    @GetMapping("/health")
+    public ResponseEntity<ApiResponse<Void>> health(HttpServletRequest request, HttpServletResponse response) {
+        // 触发 CSRF Token 生成与下发
+        org.springframework.security.web.csrf.CsrfToken csrf = 
+            (org.springframework.security.web.csrf.CsrfToken) request.getAttribute(
+                org.springframework.security.web.csrf.CsrfToken.class.getName());
+        if (csrf != null) {
+            // Token 会通过 Set-Cookie 自动下发
+            csrf.getToken();
+        }
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "服务正常"));
+    }
+
+    /**
      * 检查用户名是否存在
      * @param username 用户名
      * @return ApiResponse

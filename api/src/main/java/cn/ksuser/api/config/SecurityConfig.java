@@ -34,7 +34,8 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/", "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
+                .requestMatchers("/", "/auth/health", "/auth/health/",
+                    "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
                     "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/refresh", "/auth/refresh/", "/auth/logout", "/auth/logout/",
                     "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/")
@@ -69,15 +70,13 @@ public class SecurityConfig {
                 })
             )
             .csrf(csrf -> csrf
-                // 使用 CSRF Cookie Repository
+                // 使用 Cookie CSRF Token Repository，但改为标准 Spring 配置
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                // 为无状态认证端点排除 CSRF 检查
+                // CSRF Token 在 Cookie 中的名称
+                .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
+                // 只为查询接口排除 CSRF 检查
                 .ignoringRequestMatchers(
-                    "/auth/register", "/auth/register/",
-                    "/auth/login", "/auth/login/",
-                    "/auth/login-with-code", "/auth/login-with-code/",
-                    "/auth/check-username", "/auth/check-username/",
-                    "/auth/send-code", "/auth/send-code/"
+                    "/auth/check-username", "/auth/check-username/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

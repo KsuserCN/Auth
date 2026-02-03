@@ -57,7 +57,9 @@ public class CorsConfig {
             "Accept",
             "Origin",
             "Access-Control-Request-Method",
-            "Access-Control-Request-Headers"
+            "Access-Control-Request-Headers",
+            "X-XSRF-TOKEN",
+            "X-CSRF-TOKEN"
         ));
         
         // 指定哪些响应头可以暴露给客户端
