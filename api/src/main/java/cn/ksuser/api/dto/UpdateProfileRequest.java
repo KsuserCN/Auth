@@ -1,13 +1,13 @@
 package cn.ksuser.api.dto;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 public class UpdateProfileRequest {
     private String username;
     private String avatarUrl;
     private String realName;
     private String gender;
-    private LocalDateTime birthDate;
+    private LocalDate birthDate;
     private String region;
     private String bio;
 
@@ -51,11 +51,11 @@ public class UpdateProfileRequest {
         this.gender = gender;
     }
 
-    public LocalDateTime getBirthDate() {
+    public LocalDate getBirthDate() {
         return birthDate;
     }
 
-    public void setBirthDate(LocalDateTime birthDate) {
+    public void setBirthDate(LocalDate birthDate) {
         this.birthDate = birthDate;
     }
 

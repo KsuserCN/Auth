@@ -18,7 +18,7 @@ Authorization: Bearer <accessToken>
   "avatarUrl": "https://example.com/avatar.jpg",
   "realName": "张三",
   "gender": "male",
-  "birthDate": "1999-01-01T00:00:00",
+  "birthDate": "1999-01-01",
   "region": "Beijing",
   "bio": "这里是个人简介"
 }
@@ -29,7 +29,7 @@ Authorization: Bearer <accessToken>
 - avatarUrl: 新头像URL（可选，任意长度）
 - realName: 真实姓名（可选）
 - gender: 性别（可选，male/female/secret）
-- birthDate: 出生日期（可选，格式：YYYY-MM-DD 或 ISO-8601）
+- birthDate: 出生日期（可选，格式：YYYY-MM-DD）
 - region: 地区（可选）
 - bio: 个人简介（可选，最多200字）
 - 注意：至少需要提供以上字段中的一个，不能都为空或空字符串
@@ -86,7 +86,7 @@ curl -X POST \
     "avatarUrl": "https://example.com/avatar.jpg",
     "realName": "张三",
     "gender": "male",
-    "birthDate": "1999-01-01T00:00:00",
+    "birthDate": "1999-01-01",
     "region": "Beijing",
     "bio": "这里是个人简介",
     "updatedAt": "2026-02-03T12:00:00"

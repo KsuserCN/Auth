@@ -6,6 +6,7 @@ import cn.ksuser.api.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -116,7 +117,7 @@ public class UserService {
      * @return 更新结果（包含状态与用户）
      */
     public RegisterResult updateProfile(User user, String newUsername, String newAvatarUrl,
-                                       String newRealName, String newGender, LocalDateTime newBirthDate,
+                                       String newRealName, String newGender, LocalDate newBirthDate,
                                        String newRegion, String newBio) {
         // 如果需要更新用户名，检查新用户名是否已存在
         if (newUsername != null && !newUsername.trim().isEmpty()) {

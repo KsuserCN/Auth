@@ -1,5 +1,6 @@
 package cn.ksuser.api.dto;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class UserInfoResponse {
@@ -9,7 +10,7 @@ public class UserInfoResponse {
     private String avatarUrl;
     private String realName;
     private String gender;
-    private LocalDateTime birthDate;
+    private LocalDate birthDate;
     private String region;
     private String bio;
     private LocalDateTime updatedAt;
@@ -25,7 +26,7 @@ public class UserInfoResponse {
     }
 
     public UserInfoResponse(String uuid, String username, String email, String avatarUrl,
-                           String realName, String gender, LocalDateTime birthDate,
+                           String realName, String gender, LocalDate birthDate,
                            String region, String bio, LocalDateTime updatedAt) {
         this.uuid = uuid;
         this.username = username;
@@ -87,11 +88,11 @@ public class UserInfoResponse {
         this.gender = gender;
     }
 
-    public LocalDateTime getBirthDate() {
+    public LocalDate getBirthDate() {
         return birthDate;
     }
 
-    public void setBirthDate(LocalDateTime birthDate) {
+    public void setBirthDate(LocalDate birthDate) {
         this.birthDate = birthDate;
     }
 

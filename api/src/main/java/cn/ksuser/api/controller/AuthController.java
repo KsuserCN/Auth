@@ -18,7 +18,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -758,7 +758,7 @@ public class AuthController {
         String newAvatarUrl = updateProfileRequest.getAvatarUrl();
         String newRealName = updateProfileRequest.getRealName();
         String newGender = updateProfileRequest.getGender();
-        LocalDateTime newBirthDate = updateProfileRequest.getBirthDate();
+        LocalDate newBirthDate = updateProfileRequest.getBirthDate();
         String newRegion = updateProfileRequest.getRegion();
         String newBio = updateProfileRequest.getBio();
         

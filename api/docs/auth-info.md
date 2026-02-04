@@ -57,7 +57,7 @@ curl -X GET \
     "avatarUrl": null,
     "realName": "张三",
     "gender": "male",
-    "birthDate": "1999-01-01T00:00:00",
+    "birthDate": "1999-01-01",
     "region": "Beijing",
     "bio": "这里是个人简介",
     "updatedAt": "2026-02-03T12:00:00"
