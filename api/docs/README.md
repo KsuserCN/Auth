@@ -282,25 +282,19 @@ curl -X GET "http://localhost:8000/auth/info?type=details" \
 curl -X POST http://localhost:8000/auth/update/profile \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
-  -d '{"username":"newname"}'
+  -d '{"key":"username","value":"newname"}'
 
 # 更新头像URL
 curl -X POST http://localhost:8000/auth/update/profile \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
-  -d '{"avatarUrl":"https://example.com/avatar.jpg"}'
-
-# 同时更新用户名和头像
-curl -X POST http://localhost:8000/auth/update/profile \
-  -H "Authorization: Bearer {accessToken}" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"newname","avatarUrl":"https://example.com/avatar.jpg"}'
+  -d '{"key":"avatarUrl","value":"https://example.com/avatar.jpg"}'
 
 # 更新扩展资料
 curl -X POST http://localhost:8000/auth/update/profile \
   -H "Authorization: Bearer {accessToken}" \
   -H "Content-Type: application/json" \
-  -d '{"realName":"张三","gender":"male","birthDate":"1999-01-01","region":"Beijing","bio":"这里是个人简介"}'
+  -d '{"key":"realName","value":"张三"}'
 ```
 
 ### 更改邮箱（敏感操作）

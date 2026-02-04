@@ -14,25 +14,25 @@ Authorization: Bearer <accessToken>
 ## 请求体
 ```json
 {
-  "username": "newusername",
-  "avatarUrl": "https://example.com/avatar.jpg",
-  "realName": "张三",
-  "gender": "male",
-  "birthDate": "1999-01-01",
-  "region": "Beijing",
-  "bio": "这里是个人简介"
+  "key": "username",
+  "value": "newusername"
 }
 ```
 
 ## 字段说明
-- username: 新用户名（可选，3-20个字符，仅字母数字下划线连字符或简体中文）
-- avatarUrl: 新头像URL（可选，任意长度）
-- realName: 真实姓名（可选）
-- gender: 性别（可选，male/female/secret）
-- birthDate: 出生日期（可选，格式：YYYY-MM-DD）
-- region: 地区（可选）
-- bio: 个人简介（可选，最多200字）
-- 注意：至少需要提供以上字段中的一个，不能都为空或空字符串
+- key: 要更新的字段（必填，只能填写以下之一：username / avatarUrl / realName / gender / birthDate / region / bio）
+- value: 新值（必填）
+
+### 允许更新的字段与规则
+- username: 3-20 个字符，仅字母数字下划线连字符或简体中文
+- avatarUrl: 任意长度 URL 字符串
+- realName: 真实姓名
+- gender: male / female / secret
+- birthDate: 出生日期（格式：YYYY-MM-DD）
+- region: 地区
+- bio: 个人简介（最多200字）
+
+> 注意：一次只能更新一个字段
 
 ## 请求示例
 
@@ -41,7 +41,7 @@ Authorization: Bearer <accessToken>
 curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d '{"username":"newname"}' \
+  -d '{"key":"username","value":"newname"}' \
   http://localhost:8000/auth/update/profile
 ```
 
@@ -50,16 +50,7 @@ curl -X POST \
 curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d '{"avatarUrl":"https://example.com/avatar.jpg"}' \
-  http://localhost:8000/auth/update/profile
-```
-
-### 同时更新用户名和头像
-```bash
-curl -X POST \
-  -H "Authorization: Bearer <accessToken>" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"newname","avatarUrl":"https://example.com/avatar.jpg"}' \
+  -d '{"key":"avatarUrl","value":"https://example.com/avatar.jpg"}' \
   http://localhost:8000/auth/update/profile
 ```
 
@@ -68,7 +59,31 @@ curl -X POST \
 curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d '{"realName":"张三","gender":"male","birthDate":"1999-01-01","region":"Beijing","bio":"这里是个人简介"}' \
+  -d '{"key":"realName","value":"张三"}' \
+  http://localhost:8000/auth/update/profile
+
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"gender","value":"male"}' \
+  http://localhost:8000/auth/update/profile
+
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"birthDate","value":"1999-01-01"}' \
+  http://localhost:8000/auth/update/profile
+
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"region","value":"Beijing"}' \
+  http://localhost:8000/auth/update/profile
+
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"bio","value":"这里是个人简介"}' \
   http://localhost:8000/auth/update/profile
 ```
 
@@ -116,13 +131,20 @@ curl -X POST \
 }
 ```
 
-### 3) 没有提供任何更新字段
+### 3) 参数为空
 - HTTP Status：400
 
 ```json
 {
   "code": 400,
-  "msg": "至少需要提供一个字段用于更新"
+  "msg": "key 不能为空"
+}
+```
+
+```json
+{
+  "code": 400,
+  "msg": "value 不能为空"
 }
 ```
 
@@ -145,8 +167,16 @@ curl -X POST \
   "msg": "用户名已存在"
 }
 ```
+### 6) key 不支持
+- HTTP Status：400
 
-### 6) 请求类型错误
+```json
+{
+  "code": 400,
+  "msg": "key 不支持"
+}
+```
+### 7) 请求类型错误
 - HTTP Status：415
 
 ```json
@@ -156,7 +186,7 @@ curl -X POST \
 }
 ```
 
-### 7) token 无效或已过期
+### 8) token 无效或已过期
 - HTTP Status：401
 
 ```json
@@ -168,9 +198,9 @@ curl -X POST \
 
 ## 注意事项
 - 所有POST请求必须使用 `Content-Type: application/json` 请求头
-- 至少需要提供一个字段用于更新
-- 如果只想更新其中一个字段，可以只提供那个字段，其他字段可以省略或设置为 null
-- 所有字段都不能是空字符串 ""，如果不更新可以不提供该字段
+- 一次只能更新一个字段
+- key/value 都不能为空
+- value 不能是空字符串 ""
 - AccessToken 有效期为 15 分钟，过期后需要使用 refreshToken 调用 `/auth/refresh` 获取新的 AccessToken
 - 更新用户名后，新的用户名必须在系统中唯一，不能与其他用户重复
 
@@ -182,14 +212,9 @@ curl -X POST \
 
 ## 字段约束
 
-| 字段 | 类型 | 长度 | 必填 | 说明 |
-|------|------|------|------|------|
-| username | string | 1-50 | 否* | 新用户名，必须唯一 |
-| avatarUrl | string | 0-255 | 否* | 新头像URL，通常是图片链接 |
-| realName | string | 0-50 | 否* | 真实姓名 |
-| gender | string | 0-10 | 否* | male / female / secret |
-| birthDate | string | - | 否* | 出生日期 |
-| region | string | 0-100 | 否* | 地区 |
-| bio | string | 0-200 | 否* | 个人简介 |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| key | string | 是 | 要更新的字段名 |
+| value | string | 是 | 字段的新值 |
 
-*至少填一个
+允许的 key：username / avatarUrl / realName / gender / birthDate / region / bio

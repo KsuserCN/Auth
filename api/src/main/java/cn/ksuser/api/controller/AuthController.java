@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.UnsupportedEncodingException;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -345,6 +346,10 @@ public class AuthController {
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, "用户名已存在"));
+        }
+        if (result.getStatus() == RegisterResult.Status.BAD_REQUEST) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "key 不支持"));
         }
         if (result.getStatus() == RegisterResult.Status.EMAIL_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -753,45 +758,47 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "用户不存在"));
         }
 
-        // 参数校验：至少要更新一个字段
-        String newUsername = updateProfileRequest.getUsername();
-        String newAvatarUrl = updateProfileRequest.getAvatarUrl();
-        String newRealName = updateProfileRequest.getRealName();
-        String newGender = updateProfileRequest.getGender();
-        LocalDate newBirthDate = updateProfileRequest.getBirthDate();
-        String newRegion = updateProfileRequest.getRegion();
-        String newBio = updateProfileRequest.getBio();
-        
-        boolean hasUpdates = (newUsername != null && !newUsername.trim().isEmpty()) ||
-                             (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) ||
-                             (newRealName != null && !newRealName.trim().isEmpty()) ||
-                             (newGender != null && !newGender.trim().isEmpty()) ||
-                             (newBirthDate != null) ||
-                             (newRegion != null && !newRegion.trim().isEmpty()) ||
-                             (newBio != null && !newBio.trim().isEmpty());
-        
-        if (!hasUpdates) {
+        // 参数校验：一次只能更新一个字段
+        String key = updateProfileRequest.getKey();
+        String value = updateProfileRequest.getValue();
+
+        if (key == null || key.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "至少需要提供一个字段用于更新"));
+                .body(new ApiResponse<>(400, "key 不能为空"));
+        }
+        if (value == null || value.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "value 不能为空"));
         }
 
+        String normalizedKey = key.trim();
+
         // 用户名格式校验
-        if (newUsername != null && !newUsername.trim().isEmpty()) {
-            if (!securityValidator.isValidUsername(newUsername)) {
+        if ("username".equalsIgnoreCase(normalizedKey)) {
+            if (!securityValidator.isValidUsername(value)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）"));
             }
             // SQL 注入检查
-            if (securityValidator.possibleSqlInjection(newUsername)) {
+            if (securityValidator.possibleSqlInjection(value)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "输入包含非法字符"));
             }
         }
 
-        // 执行更新
-        RegisterResult result = userService.updateProfile(user, newUsername, newAvatarUrl, 
-                                                          newRealName, newGender, newBirthDate,
-                                                          newRegion, newBio);
+        // 出生日期校验（YYYY-MM-DD）
+        LocalDate parsedBirthDate = null;
+        if ("birthDate".equalsIgnoreCase(normalizedKey)) {
+            try {
+                parsedBirthDate = LocalDate.parse(value.trim());
+            } catch (DateTimeParseException ex) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "birthDate 格式不正确，应为 YYYY-MM-DD"));
+            }
+        }
+
+        // 执行更新（一次只更新一个字段）
+        RegisterResult result = userService.updateProfileSingleField(user, normalizedKey, value.trim(), parsedBirthDate);
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, "用户名已存在"));

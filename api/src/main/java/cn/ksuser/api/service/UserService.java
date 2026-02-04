@@ -116,45 +116,36 @@ public class UserService {
      * @param newAvatarUrl 新头像 URL（null 表示不更新）
      * @return 更新结果（包含状态与用户）
      */
-    public RegisterResult updateProfile(User user, String newUsername, String newAvatarUrl,
-                                       String newRealName, String newGender, LocalDate newBirthDate,
-                                       String newRegion, String newBio) {
-        // 如果需要更新用户名，检查新用户名是否已存在
-        if (newUsername != null && !newUsername.trim().isEmpty()) {
-            if (!newUsername.equals(user.getUsername()) && userRepository.findByUsername(newUsername).isPresent()) {
-                return new RegisterResult(RegisterResult.Status.USERNAME_EXISTS, null);
-            }
-            user.setUsername(newUsername);
-        }
+    public RegisterResult updateProfileSingleField(User user, String key, String value, LocalDate parsedBirthDate) {
+        String normalizedKey = key == null ? "" : key.trim();
 
-        // 如果需要更新头像 URL
-        if (newAvatarUrl != null && !newAvatarUrl.trim().isEmpty()) {
-            user.setAvatarUrl(newAvatarUrl);
-        }
-
-        // 如果需要更新真实姓名
-        if (newRealName != null && !newRealName.trim().isEmpty()) {
-            user.setRealName(newRealName);
-        }
-
-        // 如果需要更新性别
-        if (newGender != null && !newGender.trim().isEmpty()) {
-            user.setGender(newGender);
-        }
-
-        // 如果需要更新出生日期
-        if (newBirthDate != null) {
-            user.setBirthDate(newBirthDate);
-        }
-
-        // 如果需要更新地区
-        if (newRegion != null && !newRegion.trim().isEmpty()) {
-            user.setRegion(newRegion);
-        }
-
-        // 如果需要更新个人简介
-        if (newBio != null && !newBio.trim().isEmpty()) {
-            user.setBio(newBio);
+        switch (normalizedKey) {
+            case "username":
+                if (!value.equals(user.getUsername()) && userRepository.findByUsername(value).isPresent()) {
+                    return new RegisterResult(RegisterResult.Status.USERNAME_EXISTS, null);
+                }
+                user.setUsername(value);
+                break;
+            case "avatarUrl":
+                user.setAvatarUrl(value);
+                break;
+            case "realName":
+                user.setRealName(value);
+                break;
+            case "gender":
+                user.setGender(value);
+                break;
+            case "birthDate":
+                user.setBirthDate(parsedBirthDate);
+                break;
+            case "region":
+                user.setRegion(value);
+                break;
+            case "bio":
+                user.setBio(value);
+                break;
+            default:
+                return new RegisterResult(RegisterResult.Status.BAD_REQUEST, null);
         }
 
         // 设置更新时间

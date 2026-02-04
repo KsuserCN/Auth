@@ -7,7 +7,8 @@ public class RegisterResult {
     public enum Status {
         SUCCESS,
         USERNAME_EXISTS,
-        EMAIL_EXISTS
+        EMAIL_EXISTS,
+        BAD_REQUEST
     }
 
     private final Status status;
