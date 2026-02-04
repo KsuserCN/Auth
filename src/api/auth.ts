@@ -1,12 +1,22 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
 
-// 用户信息类型
+// 用户基本信息类型
 export interface User {
   uuid: string
   username: string
   email: string
   avatarUrl?: string | null
+}
+
+// 用户详细信息类型
+export interface UserDetails extends User {
+  realName?: string
+  gender?: string
+  birthDate?: string
+  region?: string
+  bio?: string
+  updatedAt?: string
 }
 
 // 登录响应类型
@@ -124,12 +134,47 @@ export const refreshAccessToken = async (): Promise<{ accessToken: string }> => 
 // ========== 获取用户信息 ==========
 
 /**
- * 获取当前用户信息
- * GET /auth/info
+ * 获取当前用户基本信息
+ * GET /auth/info?type=basic
  */
 export const getUserInfo = async (): Promise<User> => {
-  const response = await request.get<ApiResponse<User>>('/auth/info')
-  return response.data
+  const response = await request.get<any>('/auth/info', { params: { type: 'basic' } })
+  // 响应拦截器返回的是 { code, msg, data: {...} }
+  // response.data 就是真实的用户数据
+  return response.data as User
+}
+
+/**
+ * 获取当前用户详细信息
+ * GET /auth/info?type=details
+ */
+export const getUserDetailsInfo = async (): Promise<UserDetails> => {
+  const response = await request.get<any>('/auth/info', { params: { type: 'details' } })
+  // 响应拦截器返回的是 { code, msg, data: {...} }
+  // response.data 就是真实的用户详细数据
+  return response.data as UserDetails
+}
+
+// ========== 更新用户信息 ==========
+
+/**
+ * 更新用户信息
+ * POST /auth/update/profile
+ */
+export interface UpdateProfileRequest {
+  username?: string
+  avatarUrl?: string | null
+  realName?: string | null
+  gender?: string | null
+  birthDate?: string | null
+  region?: string | null
+  bio?: string | null
+}
+
+export const updateUserProfile = async (data: UpdateProfileRequest): Promise<UserDetails> => {
+  const response = await request.post<any>('/auth/update/profile', data)
+  // 响应拦截器返回的是 { code, msg, data: {...} }
+  return response.data as UserDetails
 }
 
 // ========== 退出登录 ==========

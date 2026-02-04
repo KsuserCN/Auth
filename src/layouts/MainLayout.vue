@@ -61,6 +61,12 @@
               </el-icon>
               <span>概览</span>
             </el-menu-item>
+            <el-menu-item index="/home/profile" to="/home/profile">
+              <el-icon>
+                <User />
+              </el-icon>
+              <span>基本信息</span>
+            </el-menu-item>
             <el-menu-item index="/home/security" to="/home/security">
               <el-icon>
                 <Lock />
@@ -119,7 +125,8 @@ import {
   Moon,
   Setting,
   Sunny,
-  SwitchButton
+  SwitchButton,
+  User
 } from '@element-plus/icons-vue'
 import { logout } from '@/api/auth'
 import { ElMessage } from 'element-plus'

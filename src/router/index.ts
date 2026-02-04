@@ -15,6 +15,11 @@ const router = createRouter({
       component: MainLayout,
       children: [
         {
+          path: 'profile',
+          name: 'profile',
+          component: () => import('../views/ProfileView.vue'),
+        },
+        {
           path: 'overview',
           name: 'overview',
           component: () => import('../views/HomeView.vue'),
