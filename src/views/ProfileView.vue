@@ -7,7 +7,7 @@
       </div>
     </div>
 
-    <el-row :gutter="16">
+    <el-row :gutter="16" class="profile-grid">
       <el-col :xs="24" :lg="8">
         <el-card class="card avatar-card" shadow="never">
           <div class="avatar-section">
@@ -30,7 +30,7 @@
               </div>
               <div class="info-item">
                 <span class="label">账户状态</span>
-                <el-tag type="success">正常</el-tag>
+                <el-tag type="success" class="status-tag">正常</el-tag>
               </div>
             </div>
           </div>
@@ -46,113 +46,218 @@
             <span>个人信息</span>
           </div>
 
-          <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" @submit.prevent="handleSubmit">
-            <el-form-item label="用户名" prop="username">
-              <el-input v-if="!detailsLoading" v-model="form.username" placeholder="请输入用户名" clearable maxlength="20">
-                <template #suffix>
-                  <span class="char-count">{{ form.username?.length || 0 }}/20</span>
-                </template>
-              </el-input>
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 32px;" />
-                </template>
-              </el-skeleton>
-            </el-form-item>
+          <!-- 只读信息列表 -->
+          <el-skeleton v-if="detailsLoading" animated>
+            <template #template>
+              <div v-for="i in 6" :key="i" style="height: 52px; margin-bottom: 12px;">
+                <el-skeleton-item variant="text" style="width: 100%; height: 52px;" />
+              </div>
+            </template>
+          </el-skeleton>
 
-            <el-form-item label="邮箱" prop="email">
-              <el-input v-if="!detailsLoading" v-model="form.email" type="email" placeholder="请输入邮箱地址" disabled />
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 32px;" />
-                </template>
-              </el-skeleton>
-              <div v-if="!detailsLoading" class="field-tip">邮箱地址不可修改，如需更改请联系管理员</div>
-            </el-form-item>
-
-            <el-form-item label="真实姓名" prop="realName">
-              <el-input v-if="!detailsLoading" v-model="form.realName" placeholder="请输入真实姓名" clearable maxlength="30" />
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 32px;" />
-                </template>
-              </el-skeleton>
-            </el-form-item>
-
-            <el-form-item label="性别" prop="gender">
-              <el-select v-if="!detailsLoading" v-model="form.gender" placeholder="请选择性别" clearable>
-                <el-option label="男" value="male" />
-                <el-option label="女" value="female" />
-                <el-option label="保密" value="secret" />
-              </el-select>
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 32px;" />
-                </template>
-              </el-skeleton>
-            </el-form-item>
-
-            <el-form-item label="出生日期" prop="birthday">
-              <el-date-picker v-if="!detailsLoading" v-model="form.birthday" type="date" placeholder="请选择出生日期"
-                value-format="YYYY-MM-DD" />
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 32px;" />
-                </template>
-              </el-skeleton>
-            </el-form-item>
-
-            <el-form-item label="地区" prop="region">
-              <el-select v-if="!detailsLoading" v-model="form.region" placeholder="请选择地区" clearable>
-                <el-option label="中国" value="CN" />
-                <el-option label="美国" value="US" />
-                <el-option label="日本" value="JP" />
-                <el-option label="其他" value="OTHER" />
-              </el-select>
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 32px;" />
-                </template>
-              </el-skeleton>
-            </el-form-item>
-
-            <el-form-item label="个人简介" prop="bio">
-              <el-input v-if="!detailsLoading" v-model="form.bio" type="textarea" placeholder="请输入个人简介" maxlength="200"
-                show-word-limit rows="4" />
-              <el-skeleton v-else animated>
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 96px;" />
-                </template>
-              </el-skeleton>
-            </el-form-item>
-
-            <div class="form-actions">
-              <el-button @click="handleReset" :disabled="detailsLoading">重置</el-button>
-              <el-button type="primary" @click="handleSubmit" :loading="submitLoading"
-                :disabled="detailsLoading || !hasChanged">
-                保存修改
-              </el-button>
+          <div v-else class="info-list">
+            <!-- 用户名 -->
+            <div class="info-row" @click="openEditDialog('username')">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <User />
+                </el-icon>
+                <span class="row-label">用户名</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ form.username || '—' }}</span>
+                <el-icon class="row-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </div>
             </div>
-          </el-form>
+
+            <!-- 邮箱（只读） -->
+            <div class="info-row disabled">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Message />
+                </el-icon>
+                <span class="row-label">邮箱</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ form.email || '—' }}</span>
+                <el-icon class="row-arrow" style="opacity: 0.3;">
+                  <Lock />
+                </el-icon>
+              </div>
+            </div>
+
+            <!-- 真实姓名 -->
+            <div class="info-row" @click="openEditDialog('realName')">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Iphone />
+                </el-icon>
+                <span class="row-label">真实姓名</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ form.realName || '—' }}</span>
+                <el-icon class="row-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </div>
+            </div>
+
+            <!-- 性别 -->
+            <div class="info-row" @click="openEditDialog('gender')">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <User />
+                </el-icon>
+                <span class="row-label">性别</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ genderText(form.gender) }}</span>
+                <el-icon class="row-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </div>
+            </div>
+
+            <!-- 出生日期 -->
+            <div class="info-row" @click="openEditDialog('birthday')">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Calendar />
+                </el-icon>
+                <span class="row-label">出生日期</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ form.birthday || '—' }}</span>
+                <el-icon class="row-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </div>
+            </div>
+
+            <!-- 地区 -->
+            <div class="info-row" @click="openEditDialog('region')">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Location />
+                </el-icon>
+                <span class="row-label">地区</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ regionText(form.region) }}</span>
+                <el-icon class="row-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </div>
+            </div>
+
+            <!-- 个人简介 -->
+            <div class="info-row" @click="openEditDialog('bio')">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Document />
+                </el-icon>
+                <span class="row-label">个人简介</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value bio-preview">{{ form.bio || '—' }}</span>
+                <el-icon class="row-arrow">
+                  <ArrowRight />
+                </el-icon>
+              </div>
+            </div>
+          </div>
         </el-card>
       </el-col>
     </el-row>
+
+    <!-- 编辑对话框 -->
+    <el-dialog v-model="editDialogVisible" :title="editDialogTitle" width="500px" @close="resetEditDialog">
+      <el-form ref="editFormRef" :model="editForm" :rules="getFieldRules()" label-width="80px" @submit.prevent>
+        <!-- 用户名编辑 -->
+        <el-form-item v-if="editingField === 'username'" label="用户名" prop="value">
+          <el-input v-model="editForm.value" placeholder="请输入用户名" maxlength="20" clearable>
+            <template #suffix>
+              <span class="char-count">{{ editForm.value?.length || 0 }}/20</span>
+            </template>
+          </el-input>
+        </el-form-item>
+
+        <!-- 真实姓名编辑 -->
+        <el-form-item v-if="editingField === 'realName'" label="真实姓名" prop="value">
+          <el-input v-model="editForm.value" placeholder="请输入真实姓名" maxlength="30" clearable />
+        </el-form-item>
+
+        <!-- 性别编辑 -->
+        <el-form-item v-if="editingField === 'gender'" label="性别" prop="value">
+          <el-select v-model="editForm.value" placeholder="请选择性别" clearable>
+            <el-option label="男" value="male" />
+            <el-option label="女" value="female" />
+            <el-option label="保密" value="secret" />
+          </el-select>
+        </el-form-item>
+
+        <!-- 出生日期编辑 -->
+        <el-form-item v-if="editingField === 'birthday'" label="出生日期" prop="value">
+          <el-date-picker v-model="editForm.value" type="date" placeholder="请选择出生日期" value-format="YYYY-MM-DD" />
+        </el-form-item>
+
+        <!-- 地区编辑 -->
+        <el-form-item v-if="editingField === 'region'" label="地区" prop="value">
+          <el-select v-model="editForm.value" placeholder="请选择地区" clearable>
+            <el-option label="中国" value="CN" />
+            <el-option label="美国" value="US" />
+            <el-option label="日本" value="JP" />
+            <el-option label="其他" value="OTHER" />
+          </el-select>
+        </el-form-item>
+
+        <!-- 个人简介编辑 -->
+        <el-form-item v-if="editingField === 'bio'" label="个人简介" prop="value">
+          <el-input v-model="editForm.value" type="textarea" placeholder="请输入个人简介" maxlength="200" show-word-limit
+            rows="4" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="editDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="handleEditSave" :loading="submitLoading">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Camera } from '@element-plus/icons-vue'
+import { User, Camera, Message, ArrowRight, Lock, Iphone, Calendar, Location, Document } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { updateUserProfile } from '@/api/auth'
+import { updateUserProfile, type UserDetails } from '@/api/auth'
 import { storeToRefs } from 'pinia'
 
+type ValidationRule = {
+  required?: boolean
+  message: string
+  trigger: string
+  min?: number
+  max?: number
+}
+
 const userStore = useUserStore()
-const { user, userDetails, detailsLoading } = storeToRefs(userStore)
+const { user, detailsLoading } = storeToRefs(userStore)
 const fileInput = ref<HTMLInputElement>()
-const formRef = ref()
+const editFormRef = ref()
 const submitLoading = ref(false)
+
+// 编辑对话框相关
+const editDialogVisible = ref(false)
+const editingField = ref<string | null>(null)
+const editForm = reactive({
+  value: ''
+})
 
 const form = reactive({
   username: '',
@@ -166,43 +271,58 @@ const form = reactive({
   avatarUrl: ''
 })
 
-// 保存原始数据，用于比对是否有改动
-const originalForm = reactive({
-  username: '',
-  email: '',
-  realName: '',
-  gender: '',
-  birthday: '',
-  phone: '',
-  region: '',
-  bio: '',
-  avatarUrl: ''
+// 性别文本转换
+const genderText = (value: string | null | undefined) => {
+  if (!value) return '—'
+  const genderMap: Record<string, string> = {
+    male: '男',
+    female: '女',
+    secret: '保密'
+  }
+  return genderMap[value] || '—'
+}
+
+// 地区文本转换
+const regionText = (value: string | null | undefined) => {
+  if (!value) return '—'
+  const regionMap: Record<string, string> = {
+    CN: '中国',
+    US: '美国',
+    JP: '日本',
+    OTHER: '其他'
+  }
+  return regionMap[value] || '—'
+}
+
+// 获取字段对应的编辑对话框标题
+const editDialogTitle = computed(() => {
+  const titleMap: Record<string, string> = {
+    username: '编辑用户名',
+    realName: '编辑真实姓名',
+    gender: '编辑性别',
+    birthday: '编辑出生日期',
+    region: '编辑地区',
+    bio: '编辑个人简介'
+  }
+  return titleMap[editingField.value || ''] || '编辑'
 })
 
-// 检查表单是否有改动
-const hasChanged = computed(() => {
-  return (
-    form.username !== originalForm.username ||
-    form.realName !== originalForm.realName ||
-    form.gender !== originalForm.gender ||
-    form.birthday !== originalForm.birthday ||
-    form.region !== originalForm.region ||
-    form.bio !== originalForm.bio ||
-    form.avatarUrl !== originalForm.avatarUrl
-  )
-})
-
-const rules = {
-  username: [
-    { required: true, message: '用户名不能为空', trigger: 'blur' },
-    { min: 2, max: 20, message: '用户名长度应为 2-20 个字符', trigger: 'blur' }
-  ],
-  realName: [
-    { max: 30, message: '真实姓名长度不超过 30 个字符', trigger: 'blur' }
-  ],
-  phone: [
-    { pattern: /^[0-9\-+]*$/, message: '请输入有效的电话号码', trigger: 'blur' }
-  ]
+// 获取字段对应的验证规则
+const getFieldRules = (): { value: ValidationRule[] } => {
+  const rulesMap: Record<string, ValidationRule[]> = {
+    username: [
+      { required: true, message: '用户名不能为空', trigger: 'blur' },
+      { min: 2, max: 20, message: '用户名长度应为 2-20 个字符', trigger: 'blur' }
+    ],
+    realName: [
+      { max: 30, message: '真实姓名长度不超过 30 个字符', trigger: 'blur' }
+    ],
+    gender: [],
+    birthday: [],
+    region: [],
+    bio: []
+  }
+  return { value: rulesMap[editingField.value || ''] || [] }
 }
 
 // 初始化表单数据
@@ -212,7 +332,7 @@ onMounted(async () => {
 
   // 然后获取详细信息
   try {
-    const details = await userStore.fetchUserDetails()
+    const details = await userStore.fetchUserDetails() as UserDetails
     // 使用返回的详细信息更新表单（包含所有字段）
     if (details && typeof details === 'object') {
       form.username = details.username || ''
@@ -223,16 +343,83 @@ onMounted(async () => {
       form.birthday = details.birthDate || ''
       form.region = details.region || ''
       form.bio = details.bio || ''
-
-      // 保存原始数据
-      Object.assign(originalForm, form)
     } else {
       ElMessage.error('获取的详细信息格式不正确')
     }
-  } catch (err) {
+  } catch {
     ElMessage.error('获取详细信息失败')
   }
 })
+
+// 打开编辑对话框
+const openEditDialog = (field: string) => {
+  editingField.value = field
+  editForm.value = form[field as keyof typeof form] || ''
+  editDialogVisible.value = true
+}
+
+// 重置编辑对话框
+const resetEditDialog = () => {
+  editingField.value = null
+  editForm.value = ''
+  editFormRef.value?.clearValidate()
+}
+
+// 保存编辑
+const handleEditSave = async () => {
+  try {
+    await editFormRef.value.validate()
+
+    if (!editingField.value) return
+
+    const fieldName = editingField.value
+    const oldValue = form[fieldName as keyof typeof form]
+    const newValue = editForm.value
+
+    // 检查是否有实际改动
+    if (oldValue === newValue) {
+      ElMessage.info('没有任何改动')
+      editDialogVisible.value = false
+      return
+    }
+
+    submitLoading.value = true
+
+    // 构建更新数据
+    const updateData: Record<string, string | null> = {}
+
+    if (fieldName === 'username') {
+      updateData.username = newValue
+    } else if (fieldName === 'realName') {
+      updateData.realName = newValue || null
+    } else if (fieldName === 'gender') {
+      updateData.gender = newValue || null
+    } else if (fieldName === 'birthday') {
+      updateData.birthDate = newValue || null
+    } else if (fieldName === 'region') {
+      updateData.region = newValue || null
+    } else if (fieldName === 'bio') {
+      updateData.bio = newValue || null
+    }
+
+    // 调用更新接口
+    const result = await updateUserProfile(updateData)
+
+    // 更新表单数据
+    form[fieldName as keyof typeof form] = newValue
+
+    // 同步更新用户信息到 store
+    userStore.user = result
+    userStore.userDetails = result
+
+    ElMessage.success('信息保存成功')
+    editDialogVisible.value = false
+    submitLoading.value = false
+  } catch {
+    ElMessage.error('保存失败，请检查信息')
+    submitLoading.value = false
+  }
+}
 
 const handleAvatarChange = (event: Event) => {
   const target = event.target as HTMLInputElement
@@ -259,71 +446,6 @@ const handleAvatarChange = (event: Event) => {
     ElMessage.success('头像已更新')
   }
   reader.readAsDataURL(file)
-}
-
-const handleSubmit = async () => {
-  try {
-    await formRef.value.validate()
-
-    // 如果没有改动，提示用户
-    if (!hasChanged.value) {
-      ElMessage.info('没有任何改动')
-      return
-    }
-
-    submitLoading.value = true
-
-    // 构建只包含改动字段的请求数据
-    const updateData: any = {}
-    if (form.username !== originalForm.username) {
-      updateData.username = form.username
-    }
-    if (form.realName !== originalForm.realName) {
-      updateData.realName = form.realName || null
-    }
-    if (form.gender !== originalForm.gender) {
-      updateData.gender = form.gender || null
-    }
-    if (form.birthday !== originalForm.birthday) {
-      updateData.birthDate = form.birthday || null
-    }
-    if (form.region !== originalForm.region) {
-      updateData.region = form.region || null
-    }
-    if (form.bio !== originalForm.bio) {
-      updateData.bio = form.bio || null
-    }
-    if (form.avatarUrl !== originalForm.avatarUrl) {
-      updateData.avatarUrl = form.avatarUrl || null
-    }
-
-    // 调用更新接口
-    const result = await updateUserProfile(updateData)
-
-    // 更新原始数据和表单
-    Object.assign(originalForm, form)
-
-    // 同步更新用户信息到 store
-    userStore.user = result
-    userStore.userDetails = result
-
-    ElMessage.success('信息保存成功')
-    submitLoading.value = false
-  } catch (err) {
-    ElMessage.error('保存失败，请检查表单信息')
-    submitLoading.value = false
-  }
-}
-
-const handleReset = () => {
-  // 重置表单，但不重置用户名和邮箱
-  form.realName = originalForm.realName
-  form.gender = originalForm.gender
-  form.birthday = originalForm.birthday
-  form.region = originalForm.region
-  form.bio = originalForm.bio
-  form.avatarUrl = originalForm.avatarUrl
-  ElMessage.info('已重置为原始数据')
 }
 </script>
 
@@ -354,11 +476,24 @@ const handleReset = () => {
   background: var(--el-bg-color);
 }
 
+.profile-grid {
+  align-items: stretch;
+}
+
+.profile-grid :deep(.el-col) {
+  display: flex;
+}
+
+.profile-grid :deep(.el-card) {
+  width: 100%;
+}
+
 .avatar-card {
   display: flex;
-  justify-content: center;
   align-items: center;
-  min-height: 400px;
+  min-height: 100%;
+  padding: 8px;
+  background: linear-gradient(180deg, var(--el-bg-color) 0%, var(--el-fill-color-extra-light) 100%);
 }
 
 .avatar-section {
@@ -366,7 +501,8 @@ const handleReset = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
+  padding: 8px 6px;
 }
 
 .avatar-preview {
@@ -379,8 +515,10 @@ const handleReset = () => {
 .profile-avatar {
   width: 120px;
   height: 120px;
-  border-radius: 16px;
-  transition: all 0.3s ease;
+  border-radius: 20px;
+  transition: all 0.25s ease;
+  border: 2px solid var(--el-border-color-lighter);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
 }
 
 .avatar-preview:hover .profile-avatar {
@@ -393,11 +531,11 @@ const handleReset = () => {
   left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 16px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -426,16 +564,17 @@ const handleReset = () => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .info-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: 10px 12px;
   background: var(--el-fill-color-light);
-  border-radius: 8px;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color-lighter);
 }
 
 .info-item .label {
@@ -447,7 +586,16 @@ const handleReset = () => {
 .info-item .value {
   font-size: 13px;
   color: var(--el-text-color-primary);
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  max-width: 180px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.status-tag {
+  border-radius: 999px;
+  padding: 0 10px;
 }
 
 .card-title {
@@ -460,6 +608,101 @@ const handleReset = () => {
   font-size: 16px;
 }
 
+/* 信息列表样式 */
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 -16px;
+  padding: 0;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid var(--el-border-color-light);
+  user-select: none;
+}
+
+.info-row:hover:not(.disabled) {
+  background-color: var(--el-fill-color-light);
+}
+
+.info-row.disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.row-icon {
+  font-size: 18px;
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+
+.row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+  min-width: 80px;
+}
+
+.row-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.row-value {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  text-align: right;
+  flex: 1;
+  word-break: break-all;
+}
+
+.row-value.bio-preview {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-arrow {
+  font-size: 16px;
+  color: var(--el-text-color-secondary);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.info-row:hover:not(.disabled) .row-arrow {
+  color: var(--el-color-primary);
+}
+
+:deep(.el-dialog) {
+  border-radius: 12px;
+}
+
+:deep(.el-dialog__header) {
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+:deep(.el-dialog__body) {
+  padding: 20px;
+}
+
 :deep(.el-form-item) {
   margin-bottom: 20px;
 }
@@ -469,28 +712,15 @@ const handleReset = () => {
   font-weight: 500;
 }
 
-.field-tip {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .char-count {
   font-size: 12px;
   color: var(--el-text-color-secondary);
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid var(--el-border-color-light);
-}
-
-:deep(.el-button) {
-  transition: all 0.2s ease;
 }
 
 @media (max-width: 1024px) {
@@ -500,7 +730,8 @@ const handleReset = () => {
 
   .avatar-section {
     flex-direction: row;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 16px;
   }
 
   .avatar-preview {
@@ -511,11 +742,55 @@ const handleReset = () => {
   .profile-avatar {
     width: 100px;
     height: 100px;
+    border-radius: 16px;
   }
 
   .avatar-info {
     flex: 1;
     margin-left: 16px;
+  }
+
+  .info-item .value {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .profile-grid :deep(.el-col) {
+    display: block;
+  }
+
+  .avatar-section {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .avatar-info {
+    width: 100%;
+  }
+
+  .info-item {
+    padding: 10px 12px;
+  }
+
+  .info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px;
+  }
+
+  .row-right {
+    width: 100%;
+    margin-top: 6px;
+    justify-content: flex-start;
+  }
+
+  .row-value {
+    text-align: left;
+  }
+
+  .row-value.bio-preview {
+    max-width: 100%;
   }
 }
 </style>
