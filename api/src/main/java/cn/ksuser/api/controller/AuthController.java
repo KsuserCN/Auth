@@ -1061,6 +1061,64 @@ public class AuthController {
     }
 
     /**
+     * 注销账号
+     * @param deleteAccountRequest 注销请求
+     * @param authentication 认证信息（AccessToken）
+     * @param request HttpServletRequest
+     * @return ApiResponse
+     */
+    @PostMapping("/delete")
+    public ResponseEntity<ApiResponse<String>> deleteAccount(@RequestBody DeleteAccountRequest deleteAccountRequest,
+                                                              Authentication authentication,
+                                                              HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+
+        // 检查是否已完成敏感操作验证
+        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+        }
+
+        // 参数校验
+        String confirmText = deleteAccountRequest.getConfirmText();
+        if (confirmText == null || !confirmText.equals("DELETE")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "请输入正确的确认文本"));
+        }
+
+        // 删除用户账号
+        userService.deleteUser(user);
+
+        // 删除该用户的所有会话
+        userSessionService.deleteAllSessionsByUser(user);
+
+        // 清除该用户的敏感操作验证状态
+        sensitiveOperationService.clearVerification(uuid);
+
+        // 将当前 AccessToken 加入黑名单
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String accessToken = authHeader.substring(7);
+            tokenBlacklistService.addToBlacklist(accessToken);
+        }
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "账号已注销"));
+    }
+
+    /**
      * 修改密码
      * @param changePasswordRequest 修改密码请求
      * @param authentication 认证信息（AccessToken）

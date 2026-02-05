@@ -95,17 +95,36 @@
 - 支持设备（IP）一致性检查
 - 需要认证（AccessToken）
 
-### 12. 刷新令牌
+### 12. 修改密码
+[POST /auth/update/password](auth-change-password.md)
+
+修改用户登录密码。要求：
+- 需要先完成敏感操作验证
+- 密码强度验证（6-66 字符，大小写+数字）
+- 防止弱密码
+- 需要认证（AccessToken）
+
+### 13. 注销账号
+[POST /auth/delete](auth-delete-account.md)
+
+注销用户账号，完全删除账号和所有相关数据。特性：
+- 需要先完成敏感操作验证
+- 双确认机制（需输入 "DELETE"）
+- 删除后所有会话失效
+- 账号不可恢复
+- 需要认证（AccessToken）
+
+### 14. 刷新令牌
 [POST /auth/refresh](auth-refresh.md)
 
 使用 RefreshToken 获取新的 AccessToken。支持多设备会话。
 
-### 13. 退出登录（单设备）
+### 15. 退出登录（单设备）
 [POST /auth/logout](auth-logout.md)
 
 退出当前设备上的登录。
 
-### 14. 退出登录（全设备）
+### 16. 退出登录（全设备）
 [POST /auth/logout/all](auth-logout-all.md)
 
 从所有设备上退出登录。

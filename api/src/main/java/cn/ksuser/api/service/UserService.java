@@ -176,4 +176,12 @@ public class UserService {
         user.setPasswordHash(passwordHash);
         return userRepository.save(user);
     }
+
+    /**
+     * 删除用户账号
+     * @param user 用户对象
+     */
+    public void deleteUser(User user) {
+        userRepository.delete(user);
+    }
 }

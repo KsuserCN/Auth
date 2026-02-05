@@ -104,4 +104,12 @@ public class UserSessionService {
         }
         userSessionRepository.saveAll(activeSessions);
     }
+
+    /**
+     * 删除用户的所有会话
+     * @param user 用户对象
+     */
+    public void deleteAllSessionsByUser(User user) {
+        userSessionRepository.deleteByUser(user);
+    }
 }
