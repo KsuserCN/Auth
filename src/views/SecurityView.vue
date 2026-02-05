@@ -106,17 +106,48 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
+        <el-card class="card card-danger" shadow="never">
+          <div class="card-title danger-title">
+            <el-icon>
+              <Delete />
+            </el-icon>
+            <span>危险操作区域</span>
+          </div>
+          <div class="danger-zone">
+            <div class="danger-item">
+              <div class="item-left">
+                <div class="item-header">
+                  <span class="item-title danger">注销账号</span>
+                </div>
+                <p class="item-desc">永久删除您的账号和所有相关数据。此操作不可逆转。</p>
+              </div>
+              <div class="item-right">
+                <el-button type="danger" plain size="small" @click="handleDeleteAccount">注销</el-button>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import {
   Key,
   Lock,
   Monitor,
+  Delete,
 } from '@element-plus/icons-vue'
+import { checkSensitiveVerification } from '@/api/auth'
+
+const router = useRouter()
 
 const sessions = ref([
   { device: 'MacBook Pro (Chrome)', location: '上海', lastActive: '现在' },
@@ -131,6 +162,30 @@ const handleSessionLogout = (row: any) => {
   const index = sessions.value.findIndex(s => s.device === row.device)
   if (index > -1) {
     sessions.value.splice(index, 1)
+  }
+}
+
+const handleDeleteAccount = async () => {
+  try {
+    // 检查敏感操作验证状态
+    const status = await checkSensitiveVerification()
+    if (!status.verified) {
+      // 先进行敏感操作验证
+      router.push({
+        path: '/sensitive-verification',
+        query: { returnTo: '/delete-account' }
+      })
+    } else {
+      // 验证已完成，直接跳转到删除账号页面
+      router.push('/delete-account')
+    }
+  } catch (error) {
+    // 未验证，需要先验证
+    ElMessage.info('需要先完成身份验证')
+    router.push({
+      path: '/sensitive-verification',
+      query: { returnTo: '/delete-account' }
+    })
   }
 }
 </script>
@@ -162,6 +217,11 @@ const handleSessionLogout = (row: any) => {
   background: var(--el-bg-color);
 }
 
+.card-danger {
+  border-color: #f56c6c;
+  background: var(--el-bg-color);
+}
+
 .card-title {
   display: flex;
   align-items: center;
@@ -172,12 +232,28 @@ const handleSessionLogout = (row: any) => {
   font-size: 16px;
 }
 
+.card-title.danger-title {
+  color: #f56c6c;
+}
+
 .security-list {
   display: flex;
   flex-direction: column;
 }
 
+.danger-zone {
+  display: flex;
+  flex-direction: column;
+}
+
 .security-item {
+  padding: 16px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.danger-item {
   padding: 16px 0;
   display: flex;
   align-items: center;
@@ -206,6 +282,10 @@ const handleSessionLogout = (row: any) => {
   font-size: 15px;
   font-weight: 500;
   color: var(--el-text-color-primary);
+}
+
+.item-title.danger {
+  color: #f56c6c;
 }
 
 .item-desc {

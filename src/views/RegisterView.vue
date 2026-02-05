@@ -534,15 +534,26 @@ const handleRegister = async () => {
         await codeFormRef.value?.validate()
         registerLoading.value = true
 
-        await register({
+        const response = await register({
             username: formData.value.username,
             email: formData.value.email,
             password: formData.value.password,
             code: formData.value.code,
         })
 
-        ElMessage.success('注册成功，请登录')
-        router.push('/login')
+        // 存储 Access Token 到 sessionStorage
+        sessionStorage.setItem('accessToken', response.accessToken)
+
+        // 存储用户信息
+        sessionStorage.setItem('user', JSON.stringify({
+            uuid: response.uuid,
+            username: response.username,
+            email: response.email
+        }))
+
+        ElMessage.success('注册成功')
+        // 直接跳转到首页
+        router.push('/home')
     } catch (error: any) {
         console.error('Register failed:', error)
     } finally {

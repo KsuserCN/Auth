@@ -76,6 +76,11 @@ const router = createRouter({
       name: 'change-email',
       component: () => import('../views/ChangeEmailView.vue'),
     },
+    {
+      path: '/delete-account',
+      name: 'delete-account',
+      component: () => import('../views/DeleteAccountView.vue'),
+    },
   ],
 })
 

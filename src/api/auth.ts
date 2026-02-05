@@ -331,9 +331,31 @@ export interface RegisterRequest {
   code: string
 }
 
-export const register = async (data: RegisterRequest): Promise<User> => {
-  const response = await request.post<ApiResponse<User>>('/auth/register', data)
-  return response.data as User
+export interface RegisterResponse {
+  uuid: string
+  username: string
+  email: string
+  accessToken: string
+  createdAt: string
+}
+
+export const register = async (data: RegisterRequest): Promise<RegisterResponse> => {
+  const response = await request.post<ApiResponse<RegisterResponse>>('/auth/register', data)
+  return response.data as RegisterResponse
+}
+
+// ========== 删除账号 ==========
+
+/**
+ * 删除账号
+ * POST /auth/delete
+ */
+export interface DeleteAccountRequest {
+  confirmText: string
+}
+
+export const deleteAccount = async (data: DeleteAccountRequest): Promise<void> => {
+  await request.post('/auth/delete', data)
 }
 
 // ========== 退出登录 ==========
