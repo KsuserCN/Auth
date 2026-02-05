@@ -76,7 +76,7 @@
               <el-icon class="warning-icon">
                 <WarningFilled />
               </el-icon>
-              <p>此操作<strong>不可撤销</strong>。您的账号和所有相关数据将被永久删除。</p>
+              <p>此操作<strong>不可撤销</strong><br>您的账号和所有相关数据将被永久删除。</p>
             </div>
 
             <el-form ref="confirmTextFormRef" :model="confirmTextInput" :rules="confirmTextRules" label-position="top">
@@ -86,7 +86,7 @@
               </el-form-item>
             </el-form>
 
-            <p class="confirm-hint">输入确切的英文单词 <strong>我真的不想要我的号辣</strong> 来确认账号注销</p>
+            <p class="confirm-hint">输入确切的短语 <strong>我真的不想要我的号辣</strong> 来确认账号注销</p>
 
             <div class="step-actions">
               <el-button class="back-btn" @click="backToUsername">返回</el-button>
