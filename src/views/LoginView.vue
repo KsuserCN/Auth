@@ -216,8 +216,8 @@ import type { FormInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
   passwordLogin,
-  sendEmailCode,
-  emailCodeLogin,
+  sendLoginCode,
+  loginWithCode,
   getPasskeyLoginOptions,
   verifyPasskeyLogin
 } from '@/api/auth'
@@ -377,8 +377,8 @@ const handlePasswordLogin = async () => {
 
 const sendCode = async () => {
   try {
-    // 调用发送验证码接口
-    await sendEmailCode({
+    // 调用发送登录验证码接口
+    await sendLoginCode({
       email: emailInput.value.email
     })
 
@@ -396,8 +396,8 @@ const resendCode = async () => {
   try {
     codeLoading.value = true
 
-    // 调用发送验证码接口
-    await sendEmailCode({
+    // 调用发送登录验证码接口
+    await sendLoginCode({
       email: emailInput.value.email
     })
 
@@ -439,7 +439,7 @@ const handleEmailCodeLogin = async () => {
     codeLoading.value = true
 
     // 调用邮箱验证码登录接口
-    const response = await emailCodeLogin({
+    const response = await loginWithCode({
       email: emailInput.value.email,
       code: codeInput.value.code
     })

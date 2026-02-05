@@ -86,14 +86,31 @@ onMounted(async () => {
   await userStore.fetchUserInfo()
 })
 
-const handleChangeEmail = () => {
+const handleChangeEmail = async () => {
   if (emailLoading.value) return
   emailLoading.value = true
 
-  setTimeout(() => {
+  try {
+    const status = await checkSensitiveVerification()
+
+    if (status.verified) {
+      router.push('/change-email')
+    } else {
+      ElMessage.info('需要验证身份')
+      router.push({
+        path: '/sensitive-verification',
+        query: { returnTo: '/change-email' }
+      })
+    }
+  } catch (error: any) {
+    console.error('Check sensitive verification failed:', error)
+    router.push({
+      path: '/sensitive-verification',
+      query: { returnTo: '/change-email' }
+    })
+  } finally {
     emailLoading.value = false
-    ElMessage.info('邮箱更改功能开发中')
-  }, 300)
+  }
 }
 
 const handleChangePassword = async () => {

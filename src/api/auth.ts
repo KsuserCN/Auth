@@ -43,27 +43,32 @@ export const passwordLogin = async (data: PasswordLoginRequest): Promise<LoginRe
 
 // ========== 邮箱验证码登录 ==========
 
-export interface SendEmailCodeRequest {
-  email: string
-}
-
 /**
- * 发送邮箱验证码
+ * 发送登录验证码
+ * POST /auth/send-code
  */
-export const sendEmailCode = async (data: SendEmailCodeRequest): Promise<void> => {
-  await request.post('/auth/send-email-code', data)
+export interface SendLoginCodeRequest {
+  email: string
 }
 
-export interface EmailCodeLoginRequest {
-  email: string
-  code: string
+export const sendLoginCode = async (data: SendLoginCodeRequest): Promise<void> => {
+  await request.post('/auth/send-code', { email: data.email, type: 'login' })
 }
 
 /**
  * 邮箱验证码登录
+ * POST /auth/login-with-code
  */
-export const emailCodeLogin = async (data: EmailCodeLoginRequest): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<LoginResponse>>('/auth/email-login', data)
+export interface LoginWithCodeRequest {
+  email: string
+  code: string
+}
+
+export const loginWithCode = async (data: LoginWithCodeRequest): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<{ accessToken: string }>>(
+    '/auth/login-with-code',
+    data,
+  )
   return response.data
 }
 
@@ -217,6 +222,34 @@ export interface SensitiveVerificationStatus {
 export const checkSensitiveVerification = async (): Promise<SensitiveVerificationStatus> => {
   const response = await request.get<any>('/auth/check-sensitive-verification')
   return response.data as SensitiveVerificationStatus
+}
+
+// ========== 更改邮箱 ==========
+
+/**
+ * 发送新邮箱验证码
+ * POST /auth/send-code
+ */
+export interface SendChangeEmailCodeRequest {
+  email: string
+}
+
+export const sendChangeEmailCode = async (data: SendChangeEmailCodeRequest): Promise<void> => {
+  await request.post('/auth/send-code', { email: data.email, type: 'change-email' })
+}
+
+/**
+ * 更改邮箱
+ * POST /auth/update/email
+ */
+export interface ChangeEmailRequest {
+  newEmail: string
+  code: string
+}
+
+export const changeEmail = async (data: ChangeEmailRequest): Promise<User> => {
+  const response = await request.post<ApiResponse<User>>('/auth/update/email', data)
+  return response.data as User
 }
 
 // ========== 修改密码 ==========
