@@ -74,6 +74,24 @@
                   <Loading />
                 </el-icon>
               </div>
+
+              <!-- Passkey 验证 -->
+              <div v-if="isPasskeySupported" class="method-option" @click="!methodSelecting && selectMethod('passkey')"
+                :class="{ 'is-disabled': methodSelecting }">
+                <el-icon class="method-icon" :size="28">
+                  <Key />
+                </el-icon>
+                <div class="method-info">
+                  <h3>使用 Passkey 验证</h3>
+                  <p>使用生物识别或安全密钥</p>
+                </div>
+                <el-icon class="method-arrow" v-if="!methodSelecting">
+                  <ArrowRight />
+                </el-icon>
+                <el-icon class="method-arrow loading-icon" v-else>
+                  <Loading />
+                </el-icon>
+              </div>
             </div>
 
             <div class="step-actions">
@@ -128,6 +146,23 @@
               </el-button>
             </div>
           </div>
+
+          <!-- 第二步：Passkey 验证 -->
+          <div v-else-if="step === 'passkey'" class="step-container" key="passkey">
+            <h2 class="step-title">Passkey 验证</h2>
+            <p class="step-subtitle">使用生物识别或安全密钥进行身份验证</p>
+
+            <div class="passkey-hint">
+              <p>点击"验证身份"按钮，然后按照浏览器提示完成验证</p>
+            </div>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMethod">返回</el-button>
+              <el-button class="next-btn" @click="handlePasskeyVerify" :loading="passkeyLoading">
+                {{ passkeyLoading ? '验证中...' : '验证身份' }}
+              </el-button>
+            </div>
+          </div>
         </Transition>
       </div>
     </div>
@@ -142,7 +177,13 @@ import { ArrowRight, Lock, Lightning, Key, Message, Loading } from '@element-plu
 import type { FormInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { verifySensitiveOperation, sendSensitiveVerificationCode } from '@/api/auth'
+import {
+  verifySensitiveOperation,
+  sendSensitiveVerificationCode,
+  getPasskeySensitiveVerificationOptions,
+  verifyPasskeySensitiveOperation
+} from '@/api/auth'
+import { isWebAuthnSupported, getPasskeyCredential, extractAuthenticationData } from '@/utils/webauthn'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -152,12 +193,12 @@ const passwordFormRef = ref<FormInstance>()
 const codeFormRef = ref<FormInstance>()
 
 // 流程步骤
-const step = ref<'method' | 'password' | 'email-code'>('method')
+const step = ref<'method' | 'password' | 'email-code' | 'passkey'>('method')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['method', 'password', 'email-code']
+const stepOrder = ['method', 'password', 'email-code', 'passkey']
 
-const updateStep = (newStep: 'method' | 'password' | 'email-code') => {
+const updateStep = (newStep: 'method' | 'password' | 'email-code' | 'passkey') => {
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -198,7 +239,11 @@ const codeRules = {
 // 加载状态
 const passwordLoading = ref(false)
 const codeLoading = ref(false)
+const passkeyLoading = ref(false)
 const methodSelecting = ref(false)
+
+// Passkey 支持检测
+const isPasskeySupported = ref(false)
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -207,10 +252,11 @@ let codeCountdownTimer: number | null = null
 
 onMounted(async () => {
   await userStore.fetchUserInfo()
+  isPasskeySupported.value = isWebAuthnSupported()
 })
 
 // 选择验证方式
-const selectMethod = async (method: 'password' | 'email-code') => {
+const selectMethod = async (method: 'password' | 'email-code' | 'passkey') => {
   if (methodSelecting.value) return
 
   methodSelecting.value = true
@@ -221,6 +267,9 @@ const selectMethod = async (method: 'password' | 'email-code') => {
       updateStep('password')
     } else if (method === 'email-code') {
       await sendCode()
+    } else if (method === 'passkey') {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      updateStep('passkey')
     }
   } finally {
     methodSelecting.value = false
@@ -335,6 +384,71 @@ const cleanupCodeCountdown = () => {
 onBeforeUnmount(() => {
   cleanupCodeCountdown()
 })
+
+// Passkey 验证
+const handlePasskeyVerify = async () => {
+  if (passkeyLoading.value) return
+  if (!isPasskeySupported.value) {
+    ElMessage.error('当前浏览器不支持 Passkey')
+    return
+  }
+
+  try {
+    passkeyLoading.value = true
+
+    // 1. 获取 Passkey 敏感操作验证选项
+    const options = await getPasskeySensitiveVerificationOptions()
+
+    // 2. 调用浏览器 WebAuthn API 进行认证
+    const credential = await getPasskeyCredential({
+      challenge: options.challenge,
+      timeout: options.timeout,
+      rpId: options.rpId,
+      userVerification: options.userVerification,
+    })
+
+    if (!credential) {
+      throw new Error('未获取到凭证')
+    }
+
+    // 3. 提取认证数据
+    const authData = extractAuthenticationData(credential)
+
+    // 4. 验证凭证
+    await verifyPasskeySensitiveOperation(options.challengeId, authData)
+
+    ElMessage.success('验证成功，有效期15分钟')
+
+    // 5. 获取返回地址并跳转
+    const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+    router.push(returnTo)
+  } catch (error: unknown) {
+    // 处理不同类型的错误
+    if (error instanceof Error) {
+      if (error.name === 'NotAllowedError') {
+        ElMessage.error('用户取消了认证')
+        return
+      }
+      if (error.name === 'NotSupportedError') {
+        ElMessage.error('浏览器不支持该操作')
+        return
+      }
+      if (error.name === 'SecurityError') {
+        ElMessage.error('安全错误，请检查网络连接')
+        return
+      }
+      if (error.name === 'InvalidStateError') {
+        ElMessage.error('当前账号没有可用的 Passkey')
+        return
+      }
+      console.error('Passkey verify failed:', error)
+    } else {
+      console.error('Passkey verify failed:', error)
+    }
+  } finally {
+    passkeyLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -734,6 +848,21 @@ onBeforeUnmount(() => {
 
 .back-btn:active {
   transform: scale(0.98);
+}
+
+/* Passkey 提示 */
+.passkey-hint {
+  padding: 16px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.passkey-hint p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
 }
 
 /* 响应式设计 */

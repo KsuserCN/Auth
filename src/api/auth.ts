@@ -37,8 +37,8 @@ export interface PasswordLoginRequest {
  * POST /auth/login
  */
 export const passwordLogin = async (data: PasswordLoginRequest): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/login', data)
-  return response.data
+  const response = await request.post<ApiResponse<LoginResponse>>('/auth/login', data)
+  return (response as unknown as ApiResponse<LoginResponse>).data
 }
 
 // ========== 邮箱验证码登录 ==========
@@ -65,64 +65,186 @@ export interface LoginWithCodeRequest {
 }
 
 export const loginWithCode = async (data: LoginWithCodeRequest): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<{ accessToken: string }>>(
-    '/auth/login-with-code',
-    data,
-  )
-  return response.data
+  const response = await request.post<ApiResponse<LoginResponse>>('/auth/login-with-code', data)
+  return (response as unknown as ApiResponse<LoginResponse>).data
 }
 
 // ========== Passkey 登录 ==========
 
-export interface PasskeyLoginOptionsRequest {
-  username: string
+/**
+ * 获取 Passkey 认证选项（登录用）
+ * POST /auth/passkey/authentication-options
+ */
+export interface PasskeyAuthenticationOptions {
+  challenge: string
+  challengeId: string
+  timeout: string
+  rpId: string
+  userVerification: string
 }
 
-export interface PasskeyLoginOptions {
-  challenge: string
-  timeout?: number
-  rpId?: string
-  rp?: {
-    id: string
-    name: string
-  }
-  allowCredentials?: Array<{
-    type: string
-    id: string
-  }>
+export const getPasskeyAuthenticationOptions = async (): Promise<PasskeyAuthenticationOptions> => {
+  const response = await request.post<ApiResponse<PasskeyAuthenticationOptions>>(
+    '/auth/passkey/authentication-options',
+  )
+  return (response as unknown as ApiResponse<PasskeyAuthenticationOptions>).data
 }
 
 /**
- * 获取 Passkey 登录选项
+ * 验证 Passkey 认证（登录用）
+ * POST /auth/passkey/authentication-verify
  */
-export const getPasskeyLoginOptions = async (
-  data: PasskeyLoginOptionsRequest,
-): Promise<PasskeyLoginOptions> => {
-  const response = await request.post<ApiResponse<PasskeyLoginOptions>>(
-    '/auth/passkey-login-options',
+export interface PasskeyAuthenticationRequest {
+  credentialRawId: string
+  clientDataJSON: string
+  authenticatorData: string
+  signature: string
+}
+
+export const verifyPasskeyAuthentication = async (
+  challengeId: string,
+  data: PasskeyAuthenticationRequest,
+): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>(
+    `/auth/passkey/authentication-verify?challengeId=${challengeId}`,
     data,
   )
-  return response.data
+  return (response as unknown as ApiResponse<LoginResponse>).data
 }
 
-export interface PasskeyCredential {
-  id: string
-  rawId: string
-  response: {
-    authenticatorData: string
-    clientDataJSON: string
-    signature: string
-    userHandle?: string
-  }
-  type: string
+// ========== Passkey 注册 ==========
+
+/**
+ * 获取 Passkey 注册选项
+ * POST /auth/passkey/registration-options
+ */
+export interface PasskeyRegistrationOptionsRequest {
+  passkeyName: string
+}
+
+export interface PasskeyRegistrationOptions {
+  challenge: string
+  rp: string
+  user: string
+  pubKeyCredParams: string
+  timeout: string
+  attestation: string
+  authenticatorSelection: string
+}
+
+export const getPasskeyRegistrationOptions = async (
+  data: PasskeyRegistrationOptionsRequest,
+): Promise<PasskeyRegistrationOptions> => {
+  const response = await request.post<ApiResponse<PasskeyRegistrationOptions>>(
+    '/auth/passkey/registration-options',
+    data,
+  )
+  return (response as unknown as ApiResponse<PasskeyRegistrationOptions>).data
 }
 
 /**
- * 验证 Passkey 登录
+ * 完成 Passkey 注册
+ * POST /auth/passkey/registration-verify
  */
-export const verifyPasskeyLogin = async (data: PasskeyCredential): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<LoginResponse>>('/auth/passkey-login', data)
-  return response.data
+export interface PasskeyRegistrationRequest {
+  credentialRawId: string
+  clientDataJSON: string
+  attestationObject: string
+  passkeyName: string
+  transports: string
+}
+
+export interface PasskeyInfo {
+  passkeyId: number
+  passkeyName: string
+  isPrimary: boolean
+  createdAt: string
+}
+
+export const verifyPasskeyRegistration = async (
+  data: PasskeyRegistrationRequest,
+): Promise<PasskeyInfo> => {
+  const response = await request.post<ApiResponse<PasskeyInfo>>(
+    '/auth/passkey/registration-verify',
+    data,
+  )
+  return (response as unknown as ApiResponse<PasskeyInfo>).data
+}
+
+// ========== Passkey 敏感操作验证 ==========
+
+/**
+ * 获取敏感操作验证选项（Passkey）
+ * POST /auth/passkey/sensitive-verification-options
+ */
+export interface PasskeySensitiveVerificationOptions {
+  challengeId: string
+  challenge: string
+  timeout: string
+  rpId: string
+  userVerification: string
+}
+
+export const getPasskeySensitiveVerificationOptions =
+  async (): Promise<PasskeySensitiveVerificationOptions> => {
+    const response = await request.post<ApiResponse<PasskeySensitiveVerificationOptions>>(
+      '/auth/passkey/sensitive-verification-options',
+    )
+    return (response as unknown as ApiResponse<PasskeySensitiveVerificationOptions>).data
+  }
+
+/**
+ * 验证敏感操作（Passkey）
+ * POST /auth/passkey/sensitive-verification-verify
+ */
+export interface PasskeySensitiveVerificationRequest {
+  credentialRawId: string
+  clientDataJSON: string
+  authenticatorData: string
+  signature: string
+}
+
+export const verifyPasskeySensitiveOperation = async (
+  challengeId: string,
+  data: PasskeySensitiveVerificationRequest,
+): Promise<void> => {
+  await request.post(`/auth/passkey/sensitive-verification-verify?challengeId=${challengeId}`, data)
+}
+
+// ========== Passkey 管理 ==========
+
+/**
+ * 获取 Passkey 列表
+ * GET /auth/passkey/list
+ */
+export interface PasskeyListItem {
+  id: number
+  name: string
+  transports: string
+  lastUsedAt: string | null
+  createdAt: string
+}
+
+export const getPasskeyList = async (): Promise<PasskeyListItem[]> => {
+  const response =
+    await request.get<ApiResponse<{ passkeys: PasskeyListItem[] }>>('/auth/passkey/list')
+  return (response as unknown as ApiResponse<{ passkeys: PasskeyListItem[] }>).data.passkeys
+}
+
+/**
+ * 删除 Passkey
+ * DELETE /auth/passkey/{passkeyId}
+ */
+export const deletePasskey = async (passkeyId: number): Promise<void> => {
+  await request.delete(`/auth/passkey/${passkeyId}`)
+}
+
+/**
+ * 重命名 Passkey
+ * PUT /auth/passkey/{passkeyId}/rename
+ */
+export const renamePasskey = async (passkeyId: number, newName: string): Promise<void> => {
+  await request.put(`/auth/passkey/${passkeyId}/rename`, { newName })
 }
 
 // ========== 刷新 Token ==========

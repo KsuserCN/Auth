@@ -218,9 +218,10 @@ import {
   passwordLogin,
   sendLoginCode,
   loginWithCode,
-  getPasskeyLoginOptions,
-  verifyPasskeyLogin
+  getPasskeyAuthenticationOptions,
+  verifyPasskeyAuthentication
 } from '@/api/auth'
+import { isWebAuthnSupported, getPasskeyCredential, extractAuthenticationData } from '@/utils/webauthn'
 
 // 表单引用
 const emailFormRef = ref<FormInstance>()
@@ -297,6 +298,10 @@ let codeCountdownTimer: number | null = null
 
 // Passkey 支持检测
 const isPasskeySupported = ref(false)
+
+onMounted(() => {
+  isPasskeySupported.value = isWebAuthnSupported()
+})
 
 // ===== 第一步：邮箱验证 =====
 
@@ -466,103 +471,38 @@ const handleEmailCodeLogin = async () => {
 
 // ===== 第三步：Passkey登录 =====
 
-// 辅助函数：将 Base64URL 转换为 ArrayBuffer
-const base64UrlToArrayBuffer = (base64url: string): ArrayBuffer => {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  const paddedBase64 = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=')
-  const binaryString = atob(paddedBase64)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
-  return bytes.buffer
-}
-
-// 辅助函数：将 ArrayBuffer 转换为 Base64URL
-const arrayBufferToBase64Url = (buffer: ArrayBuffer): string => {
-  const bytes = new Uint8Array(buffer)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!)
-  }
-  const base64 = btoa(binary)
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
-}
-
 const handlePasskeyLogin = async () => {
   if (passkeyLoading.value) return
-  if (!window.PublicKeyCredential) {
+  if (!isPasskeySupported.value) {
     ElMessage.error('当前浏览器不支持 Passkey')
-    return
-  }
-  if (!window.isSecureContext) {
-    ElMessage.error('Passkey 需要 HTTPS 或本地环境')
-    return
-  }
-  if (!navigator.credentials?.get) {
-    ElMessage.error('浏览器凭证 API 不可用')
     return
   }
 
   try {
     passkeyLoading.value = true
 
-    // 1. 获取 Passkey 登录选项
-    const options = await getPasskeyLoginOptions({
-      username: emailInput.value.email,
+    // 1. 获取 Passkey 认证选项
+    const options = await getPasskeyAuthenticationOptions()
+
+    // 2. 调用浏览器 WebAuthn API 进行认证
+    const credential = await getPasskeyCredential({
+      challenge: options.challenge,
+      timeout: options.timeout,
+      rpId: options.rpId,
+      userVerification: options.userVerification,
     })
-
-    // 2. 将选项转换为 WebAuthn 格式
-    const rpId = options.rp?.id || (options as { rpId?: string }).rpId || window.location.hostname
-    if (!options.challenge) {
-      throw new Error('Passkey 登录选项缺少 challenge')
-    }
-    if (!rpId) {
-      throw new Error('Passkey 登录选项缺少 rpId')
-    }
-
-    const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
-      challenge: base64UrlToArrayBuffer(options.challenge),
-      rpId,
-      timeout: options.timeout || 60000,
-    }
-
-    if (options.allowCredentials && options.allowCredentials.length > 0) {
-      publicKeyCredentialRequestOptions.allowCredentials = options.allowCredentials.map((cred) => ({
-        type: cred.type as PublicKeyCredentialType,
-        id: base64UrlToArrayBuffer(cred.id),
-      }))
-    }
-
-    // 3. 调用浏览器 WebAuthn API 进行认证
-    const credential = (await navigator.credentials.get({
-      publicKey: publicKeyCredentialRequestOptions,
-    })) as PublicKeyCredential
 
     if (!credential) {
       throw new Error('未获取到凭证')
     }
 
-    // 4. 转换凭证数据为后端需要的格式
-    const assertionResponse = credential.response as AuthenticatorAssertionResponse
-    const verifyData = {
-      id: credential.id,
-      rawId: arrayBufferToBase64Url(credential.rawId),
-      response: {
-        authenticatorData: arrayBufferToBase64Url(assertionResponse.authenticatorData),
-        clientDataJSON: arrayBufferToBase64Url(assertionResponse.clientDataJSON),
-        signature: arrayBufferToBase64Url(assertionResponse.signature),
-        userHandle: assertionResponse.userHandle
-          ? arrayBufferToBase64Url(assertionResponse.userHandle)
-          : undefined,
-      },
-      type: credential.type,
-    }
+    // 3. 提取认证数据
+    const authData = extractAuthenticationData(credential)
 
-    // 5. 验证凭证
-    const response = await verifyPasskeyLogin(verifyData)
+    // 4. 验证凭证
+    const response = await verifyPasskeyAuthentication(options.challengeId, authData)
 
-    // 6. 存储 Access Token 到 sessionStorage
+    // 5. 存储 Access Token 到 sessionStorage
     sessionStorage.setItem('accessToken', response.accessToken)
 
     // 如果返回了用户信息，也一并存储
@@ -572,7 +512,7 @@ const handlePasskeyLogin = async () => {
 
     ElMessage.success('Passkey 登录成功')
 
-    // 7. 跳转到首页
+    // 6. 跳转到首页
     router.push('/home')
   } catch (error: unknown) {
     // 处理不同类型的错误

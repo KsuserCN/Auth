@@ -1,9 +1,5 @@
 import axios from 'axios'
-import type {
-  AxiosInstance,
-  AxiosResponse,
-  InternalAxiosRequestConfig,
-} from 'axios'
+import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 // API 响应格式
@@ -59,7 +55,7 @@ const refreshToken = async (): Promise<string> => {
     // 刷新失败，清除本地存储并跳转到登录页
     sessionStorage.removeItem('accessToken')
     sessionStorage.removeItem('user')
-    window.location.href = '/login'
+    // window.location.href = '/login'
     throw error
   }
 }
