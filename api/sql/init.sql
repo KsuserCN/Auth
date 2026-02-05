@@ -130,7 +130,6 @@ CREATE TABLE user_passkeys (
   aaguid BINARY(16) DEFAULT NULL COMMENT '认证器AAGUID（二进制16字节）',
 
   name VARCHAR(100) NOT NULL COMMENT 'Passkey名称/标签（用户自定义）',
-  is_primary TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为主要Passkey（每用户最多一个建议由业务层保证）',
 
   last_used_at DATETIME DEFAULT NULL COMMENT '最后使用时间',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

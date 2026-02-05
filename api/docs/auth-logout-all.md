@@ -31,6 +31,7 @@ curl -X POST \
 ## 说明
 - 调用此接口后，该用户所有设备的 AccessToken 和 RefreshToken 都将失效
 - 当前请求的 RefreshToken Cookie 也会被清除
+- 会自动清除该用户的敏感操作验证状态（如果存在）
 - 本地开发（app.debug=true）时 Cookie 为非 Secure；生产环境会自动设置 Secure
 
 ## 失败响应

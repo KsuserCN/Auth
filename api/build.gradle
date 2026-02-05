@@ -32,6 +32,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
     implementation 'io.github.cdimascio:dotenv-java:3.0.0'
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'

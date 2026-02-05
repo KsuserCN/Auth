@@ -38,12 +38,13 @@ public class AuthController {
     private final TokenBlacklistService tokenBlacklistService;
     private final SecurityValidator securityValidator;
     private final AppProperties appProperties;
+    private final PasskeyService passkeyService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
                           RateLimitService rateLimitService, SensitiveOperationService sensitiveOperationService,
                           TokenBlacklistService tokenBlacklistService, SecurityValidator securityValidator,
-                          AppProperties appProperties) {
+                          AppProperties appProperties, PasskeyService passkeyService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -54,6 +55,7 @@ public class AuthController {
         this.tokenBlacklistService = tokenBlacklistService;
         this.securityValidator = securityValidator;
         this.appProperties = appProperties;
+        this.passkeyService = passkeyService;
     }
 
     /**
@@ -727,6 +729,9 @@ public class AuthController {
         // RefreshToken 有效期：7天
         tokenBlacklistService.addToBlacklist(refreshToken, Duration.ofDays(7));
 
+        // 清除敏感操作验证标记
+        sensitiveOperationService.clearVerification(uuid);
+
         // 清除 RefreshToken Cookie
         setRefreshTokenCookie(response, "");
 
@@ -759,6 +764,9 @@ public class AuthController {
 
         // ✅ 吊销用户的所有 Token（7天有效期对应 RefreshToken）
         tokenBlacklistService.revokeAllUserTokens(uuid, 7 * 24 * 60);
+
+        // 清除敏感操作验证标记
+        sensitiveOperationService.clearVerification(uuid);
 
         // 清除 RefreshToken Cookie
         setRefreshTokenCookie(response, "");
@@ -1267,5 +1275,313 @@ public class AuthController {
             cookie.getMaxAge()
         );
         response.addHeader("Set-Cookie", setCookieHeader);
+    }
+
+    // ==================== Passkey (WebAuthn) 端点 ====================
+
+    /**
+     * 生成 Passkey 注册选项
+     * @param request 注册选项请求
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @PostMapping("/passkey/registration-options")
+    public ResponseEntity<ApiResponse<PasskeyRegistrationOptionsResponse>> generatePasskeyRegistrationOptions(
+            @RequestBody PasskeyRegistrationOptionsRequest request,
+            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            PasskeyRegistrationOptionsResponse options = passkeyService.generateRegistrationOptions(user);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "生成注册选项成功", options));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "生成注册选项失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 验证 Passkey 注册
+     * @param request 注册验证请求
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @PostMapping("/passkey/registration-verify")
+    public ResponseEntity<ApiResponse<PasskeyRegistrationVerifyResponse>> verifyPasskeyRegistration(
+            @RequestBody PasskeyRegistrationVerifyRequest request,
+            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            cn.ksuser.api.entity.UserPasskey passkey = passkeyService.verifyRegistration(user, request);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "Passkey 注册成功", PasskeyRegistrationVerifyResponse.fromUserPasskey(passkey)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "Passkey 注册失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 生成 Passkey 认证选项
+     * @return ApiResponse
+     */
+    @PostMapping("/passkey/authentication-options")
+    public ResponseEntity<ApiResponse<PasskeyAuthenticationOptionsResponse>> generatePasskeyAuthenticationOptions() {
+        try {
+            PasskeyAuthenticationOptionsResponse options = passkeyService.generateAuthenticationOptions();
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "生成认证选项成功", options));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "生成认证选项失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 验证 Passkey 认证（登录）
+     * @param request 认证验证请求
+     * @param response HttpServletResponse
+     * @return ApiResponse
+     */
+    @PostMapping("/passkey/authentication-verify")
+    public ResponseEntity<ApiResponse<TokenResponse>> verifyPasskeyAuthentication(
+            @RequestBody PasskeyAuthenticationVerifyRequest request,
+            @RequestParam(required = false) String challengeId,
+            HttpServletResponse response) {
+        try {
+            // 检查 challengeId 是否传递
+            if (challengeId == null || challengeId.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "challengeId 不能为空"));
+            }
+            
+            // 验证 Passkey 并获取用户 ID
+            Long userId = passkeyService.verifyAuthenticationAndGetUserId(request, challengeId);
+            
+            // 通过用户 ID 从数据库查询用户
+            User user = userService.findById(userId).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(401, "Passkey 验证失败"));
+            }
+
+            // 生成 Token
+            String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
+            UserSession session = userSessionService.createSession(user, refreshToken);
+            int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+            String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
+
+            // 设置 RefreshToken Cookie
+            setRefreshTokenCookie(response, refreshToken);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "Passkey 认证失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 生成敏感操作验证选项（Passkey）
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @PostMapping("/passkey/sensitive-verification-options")
+    public ResponseEntity<ApiResponse<PasskeyAuthenticationOptionsResponse>> generateSensitiveVerificationOptions(
+            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        
+        try {
+            PasskeyAuthenticationOptionsResponse options = passkeyService.generateSensitiveVerificationOptions(uuid);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "生成敏感操作验证选项成功", options));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "生成验证选项失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 验证敏感操作（Passkey）
+     * @param request 认证验证请求
+     * @param authentication 认证信息（AccessToken）
+     * @param httpRequest HttpServletRequest
+     * @return ApiResponse
+     */
+    @PostMapping("/passkey/sensitive-verification-verify")
+    public ResponseEntity<ApiResponse<Void>> verifySensitiveOperationWithPasskey(
+            @RequestBody PasskeyAuthenticationVerifyRequest request,
+            @RequestParam(required = false) String challengeId,
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
+        // 检查 challengeId 是否传递
+        if (challengeId == null || challengeId.trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+        }
+        
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            passkeyService.verifySensitiveOperation(user, request, challengeId);
+            
+            String clientIp = rateLimitService.getClientIp(httpRequest);
+            sensitiveOperationService.markVerified(uuid, clientIp);
+            
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "敏感操作验证失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 获取用户 Passkey 列表
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @GetMapping("/passkey/list")
+    public ResponseEntity<ApiResponse<PasskeyListResponse>> getUserPasskeys(Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            List<PasskeyListResponse.PasskeyInfo> passkeys = passkeyService.getUserPasskeys(user.getId());
+            PasskeyListResponse response = new PasskeyListResponse(passkeys);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "获取成功", response));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "获取 Passkey 列表失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 删除 Passkey
+     * @param passkeyId Passkey ID
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @DeleteMapping("/passkey/{passkeyId}")
+    public ResponseEntity<ApiResponse<Void>> deletePasskey(
+            @PathVariable Long passkeyId,
+            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            passkeyService.deletePasskey(passkeyId, user.getId());
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "Passkey 删除成功"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "删除失败：" + e.getMessage()));
+        }
+    }
+
+    /**
+     * 重命名 Passkey
+     * @param passkeyId Passkey ID
+     * @param request 重命名请求
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @PutMapping("/passkey/{passkeyId}/rename")
+    public ResponseEntity<ApiResponse<Void>> renamePasskey(
+            @PathVariable Long passkeyId,
+            @RequestBody PasskeyRenameRequest request,
+            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            passkeyService.renamePasskey(passkeyId, user.getId(), request.getNewName());
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "Passkey 重命名成功"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "重命名失败：" + e.getMessage()));
+        }
     }
 }

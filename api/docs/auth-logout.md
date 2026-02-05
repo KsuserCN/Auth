@@ -30,6 +30,7 @@ curl -X POST \
 
 **说明**：
 - 本地开发（app.debug=true）时 Cookie 为非 Secure；生产环境会自动设置 Secure
+- 退出后会自动清除该用户的敏感操作验证状态（如果存在）
 
 ## 失败响应
 ### 1) RefreshToken 不存在

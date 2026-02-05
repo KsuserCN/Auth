@@ -39,6 +39,8 @@ public class SecurityConfig {
                     "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/refresh", "/auth/refresh/", "/auth/logout", "/auth/logout/",
                     "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/",
+                    "/auth/passkey/authentication-options", "/auth/passkey/authentication-options/",
+                    "/auth/passkey/authentication-verify", "/auth/passkey/authentication-verify/",
                     "/info/password-requirement", "/info/password-requirement/")
                 .permitAll()
                 .anyRequest().authenticated()

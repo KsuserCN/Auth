@@ -62,6 +62,15 @@ public class UserService {
     }
 
     /**
+     * 根据 ID 查询用户
+     * @param id 用户ID
+     * @return Optional<User>
+     */
+    public Optional<User> findById(Long id) {
+        return userRepository.findById(id);
+    }
+
+    /**
      * 根据 UUID 查询用户
      * @param uuid UUID
      * @return Optional<User>

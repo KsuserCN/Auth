@@ -16,6 +16,7 @@ public class AppProperties {
     private final Token token = new Token();
     private final RateLimit rateLimit = new RateLimit();
     private final SensitiveOperation sensitiveOperation = new SensitiveOperation();
+    private final Passkey passkey = new Passkey();
 
     public boolean isDebug() {
         return debug;
@@ -39,6 +40,10 @@ public class AppProperties {
 
     public SensitiveOperation getSensitiveOperation() {
         return sensitiveOperation;
+    }
+
+    public Passkey getPasskey() {
+        return passkey;
     }
 
     /**
@@ -226,6 +231,75 @@ public class AppProperties {
 
         public void setRequireIpMatch(boolean requireIpMatch) {
             this.requireIpMatch = requireIpMatch;
+        }
+    }
+
+    /**
+     * Passkey (WebAuthn) 配置
+     */
+    public static class Passkey {
+        private String rpName = "KSUser Auth API";
+        private String rpId = "localhost";
+        private String origin = "http://localhost:5173";
+        private String attestation = "none";
+        private String userVerification = "preferred";
+        private String residentKey = "preferred";
+        private long timeout = 300000; // 毫秒
+
+        public String getRpName() {
+            return rpName;
+        }
+
+        public void setRpName(String rpName) {
+            this.rpName = rpName;
+        }
+
+        public String getRpId() {
+            return rpId;
+        }
+
+        public void setRpId(String rpId) {
+            this.rpId = rpId;
+        }
+
+        public String getOrigin() {
+            return origin;
+        }
+
+        public void setOrigin(String origin) {
+            this.origin = origin;
+        }
+
+        public String getAttestation() {
+            return attestation;
+        }
+
+        public void setAttestation(String attestation) {
+            this.attestation = attestation;
+        }
+
+        public String getUserVerification() {
+            return userVerification;
+        }
+
+        public void setUserVerification(String userVerification) {
+            this.userVerification = userVerification;
+        }
+
+        public String getResidentKey() {
+            return residentKey;
+        }
+
+        public void setResidentKey(String residentKey) {
+            this.residentKey = residentKey;
+        }
+
+        public long getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(long timeout) {
+            this.timeout = timeout;
         }
     }
 

@@ -11,6 +11,7 @@
 ## 文档导航
 - [验证码系统设计约束](VERIFICATION_CODE_DESIGN.md) - 验证码系统的核心功能和设计原则
 - [请求类型处理指南](REQUEST_TYPE_HANDLING.md) - Content-Type 验证和错误处理说明
+- [Passkey (WebAuthn) 支持](passkey.md) - 现代身份验证方式，支持登录和敏感操作验证
 
 ## API 端点
 
@@ -109,7 +110,7 @@
 
 注销用户账号，完全删除账号和所有相关数据。特性：
 - 需要先完成敏感操作验证
-- 双确认机制（需输入 "DELETE"）
+- 双确认机制（需输入 "我真的不想要我的号辣"）
 - 删除后所有会话失效
 - 账号不可恢复
 - 需要认证（AccessToken）
@@ -128,6 +129,48 @@
 [POST /auth/logout/all](auth-logout-all.md)
 
 从所有设备上退出登录。
+
+## Passkey (WebAuthn) 端点
+
+### 17. 生成 Passkey 注册选项
+[POST /auth/passkey/registration-options](passkey.md#1-获取注册选项)
+
+为新用户生成 Passkey 注册选项。需要认证。
+
+### 18. 验证 Passkey 注册
+[POST /auth/passkey/registration-verify](passkey.md#2-完成-passkey-注册)
+
+验证并保存用户的 Passkey 凭证。需要认证。
+
+### 19. 生成 Passkey 认证选项
+[POST /auth/passkey/authentication-options](passkey.md#1-获取认证选项)
+
+生成 Passkey 登录所需的认证选项。无需认证。
+
+### 20. Passkey 认证验证（登录）
+[POST /auth/passkey/authentication-verify](passkey.md#2-完成-passkey-认证)
+
+验证 Passkey 认证并完成登录。无需认证。
+
+### 21. 生成敏感操作验证选项（Passkey）
+[POST /auth/passkey/sensitive-verification-options](passkey.md#1-获取敏感操作验证选项)
+
+为敏感操作生成 Passkey 验证选项。需要认证。
+
+### 22. 验证敏感操作（Passkey）
+[POST /auth/passkey/sensitive-verification-verify](passkey.md#2-验证敏感操作)
+
+使用 Passkey 验证敏感操作。需要认证。
+
+### 23. 获取 Passkey 列表
+[GET /auth/passkey/list](passkey.md#获取-passkey-列表)
+
+获取用户所有已注册的 Passkey。需要认证。
+
+### 24. 删除 Passkey
+[DELETE /auth/passkey/{passkeyId}](passkey.md#删除-passkey)
+
+删除用户的指定 Passkey。需要认证。
 
 ## 认证流程
 
