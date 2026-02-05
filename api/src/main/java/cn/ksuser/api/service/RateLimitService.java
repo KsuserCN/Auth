@@ -6,7 +6,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class RateLimitService {
@@ -15,8 +21,13 @@ public class RateLimitService {
     private final AppProperties appProperties;
     private static final String MINUTE_LIMIT_PREFIX = "ratelimit:minute:";
     private static final String HOUR_LIMIT_PREFIX = "ratelimit:hour:";
+    private static final String REGISTER_SUCCESS_PREFIX = "register:success:";
+    private static final String REGISTER_LOCK_PREFIX = "register:lock:";
     private static final Duration MINUTE_WINDOW = Duration.ofMinutes(1);
     private static final Duration HOUR_WINDOW = Duration.ofHours(1);
+    private static final Duration REGISTER_LOCK_10_MIN = Duration.ofMinutes(10);
+    private static final Duration REGISTER_LOCK_1_HOUR = Duration.ofHours(1);
+    private static final Duration REGISTER_LOCK_1_DAY = Duration.ofDays(1);
     
     // 操作类型常量
     public static final String TYPE_VERIFICATION_CODE = "verify";
@@ -233,11 +244,118 @@ public class RateLimitService {
         return getRemainingMinuteRequests(identifier, appProperties.getRateLimit().getSendCodeIpPerMinute());
     }
 
+    /**
+     * 获取客户端 User-Agent
+     * @param request HttpServletRequest
+     * @return User-Agent
+     */
+    public String getClientUserAgent(HttpServletRequest request) {
+        String userAgent = request.getHeader("User-Agent");
+        if (userAgent == null || userAgent.trim().isEmpty()) {
+            return "unknown";
+        }
+        return userAgent.trim();
+    }
+
+    /**
+     * 注册功能是否被锁定（按 IP 或 UA 任一命中即锁定）
+     * @param ip IP
+     * @param userAgent User-Agent
+     * @return 是否锁定
+     */
+    public boolean isRegisterLocked(String ip, String userAgent) {
+        return getRegisterLockRemainingSeconds(ip, userAgent) > 0;
+    }
+
+    /**
+     * 获取注册锁定剩余时间（秒）
+     * @param ip IP
+     * @param userAgent User-Agent
+     * @return 剩余秒数，0 表示未锁定
+     */
+    public long getRegisterLockRemainingSeconds(String ip, String userAgent) {
+        String ipKey = REGISTER_LOCK_PREFIX + "ip:" + ip;
+        String uaKey = REGISTER_LOCK_PREFIX + "ua:" + normalizeUserAgent(userAgent);
+        long ipTtl = getTtlSeconds(ipKey);
+        long uaTtl = getTtlSeconds(uaKey);
+        return Math.max(ipTtl, uaTtl);
+    }
+
+    /**
+     * 记录注册成功次数，并根据次数设置锁定
+     * @param ip IP
+     * @param userAgent User-Agent
+     */
+    public void recordRegisterSuccess(String ip, String userAgent) {
+        String uaKey = normalizeUserAgent(userAgent);
+        String dateKey = LocalDate.now().toString();
+
+        String ipCountKey = REGISTER_SUCCESS_PREFIX + "ip:" + ip + ":" + dateKey;
+        String uaCountKey = REGISTER_SUCCESS_PREFIX + "ua:" + uaKey + ":" + dateKey;
+
+        long ipCount = incrementWithDailyExpiry(ipCountKey);
+        long uaCount = incrementWithDailyExpiry(uaCountKey);
+
+        applyRegisterLockIfNeeded("ip", ip, ipCount);
+        applyRegisterLockIfNeeded("ua", uaKey, uaCount);
+    }
+
     private int getRemainingMinuteRequests(String identifier, int limit) {
         String key = MINUTE_LIMIT_PREFIX + identifier;
         String count = redisTemplate.opsForValue().get(key);
         int used = count == null ? 0 : Integer.parseInt(count);
         return Math.max(0, limit - used);
+    }
+
+    private long incrementWithDailyExpiry(String key) {
+        Long count = redisTemplate.opsForValue().increment(key);
+        if (count != null && count == 1) {
+            long secondsUntilEndOfDay = getSecondsUntilEndOfDay();
+            redisTemplate.expire(key, secondsUntilEndOfDay, TimeUnit.SECONDS);
+        }
+        return count == null ? 0 : count;
+    }
+
+    private void applyRegisterLockIfNeeded(String scope, String identifier, long count) {
+        if (count == 2) {
+            setRegisterLock(scope, identifier, REGISTER_LOCK_10_MIN);
+        } else if (count == 3) {
+            setRegisterLock(scope, identifier, REGISTER_LOCK_1_HOUR);
+        } else if (count >= 4) {
+            setRegisterLock(scope, identifier, REGISTER_LOCK_1_DAY);
+        }
+    }
+
+    private void setRegisterLock(String scope, String identifier, Duration duration) {
+        String key = REGISTER_LOCK_PREFIX + scope + ":" + identifier;
+        redisTemplate.opsForValue().set(key, "locked", duration);
+    }
+
+    private long getTtlSeconds(String key) {
+        Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+        return ttl == null || ttl < 0 ? 0 : ttl;
+    }
+
+    private long getSecondsUntilEndOfDay() {
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        LocalDateTime endOfDay = now.toLocalDate().plusDays(1).atStartOfDay();
+        long seconds = Duration.between(now, endOfDay).getSeconds();
+        return Math.max(1, seconds);
+    }
+
+    private String normalizeUserAgent(String userAgent) {
+        String ua = userAgent == null || userAgent.trim().isEmpty() ? "unknown" : userAgent.trim();
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(ua.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return Integer.toHexString(ua.hashCode());
+        }
     }
 
     /**

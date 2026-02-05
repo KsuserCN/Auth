@@ -164,6 +164,15 @@ public class AuthController {
         // 获取IP
         String clientIp = rateLimitService.getClientIp(request);
 
+        // 获取 User-Agent
+        String userAgent = rateLimitService.getClientUserAgent(request);
+
+        // 注册功能锁定检查（按 IP/UA）
+        if ("register".equals(type) && rateLimitService.isRegisterLocked(clientIp, userAgent)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, "注册过于频繁，请稍后再试"));
+        }
+
         // 检查IP限流（3次/分钟，14次/小时）
         if (!rateLimitService.isIpAllowed(clientIp)) {
             int remainingMinute = rateLimitService.getRemainingMinuteRequestsForIp(clientIp);
@@ -238,6 +247,14 @@ public class AuthController {
         String password = registerRequest.getPassword();
         String code = registerRequest.getCode();
         String clientIp = rateLimitService.getClientIp(request);
+
+        String userAgent = rateLimitService.getClientUserAgent(request);
+
+        // 注册功能锁定检查（按 IP/UA）
+        if (rateLimitService.isRegisterLocked(clientIp, userAgent)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(new ApiResponse<>(429, "注册过于频繁，请稍后再试"));
+        }
 
         // 参数校验
         if (username == null || username.trim().isEmpty()) {
@@ -353,6 +370,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, "邮箱已存在"));
         }
+
+        // 记录注册成功次数（按 IP/UA）
+        rateLimitService.recordRegisterSuccess(clientIp, userAgent);
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUser(result.getUser())));

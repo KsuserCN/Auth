@@ -140,6 +140,7 @@
    → 请求体: {"email": "xxx@xxx.com", "type": "register"}
    → 发送注册验证码到邮箱
    → 注意：无论邮箱是否已注册都会发送验证码（保护邮箱隐私）
+  → 注册成功次数达到阈值会触发锁定（按 IP/UA，当天 2 次=10分钟，3次=1小时，4次=1天）
 
 3. POST /auth/register
    → 请求体: {"username": "xxx", "email": "xxx@xxx.com", "password": "xxx", "code": "xxxxxx"}
