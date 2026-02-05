@@ -73,6 +73,12 @@
               </el-icon>
               <span>安全性</span>
             </el-menu-item>
+            <el-menu-item index="/home/login-options" to="/home/login-options">
+              <el-icon>
+                <Key />
+              </el-icon>
+              <span>登录选项</span>
+            </el-menu-item>
             <el-menu-item index="/home/devices" to="/home/devices">
               <el-icon>
                 <Monitor />
@@ -120,6 +126,7 @@ import { useRouter, RouterView } from 'vue-router'
 import {
   DataLine,
   HomeFilled,
+  Key,
   Lock,
   Monitor,
   Moon,

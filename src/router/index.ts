@@ -30,6 +30,11 @@ const router = createRouter({
           component: () => import('../views/SecurityView.vue'),
         },
         {
+          path: 'login-options',
+          name: 'login-options',
+          component: () => import('../views/LoginOptionsView.vue'),
+        },
+        {
           path: 'devices',
           name: 'devices',
           component: () => import('../views/DevicesView.vue'),
@@ -50,6 +55,16 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: LoginView,
+    },
+    {
+      path: '/sensitive-verification',
+      name: 'sensitive-verification',
+      component: () => import('../views/SensitiveVerificationView.vue'),
+    },
+    {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('../views/ChangePasswordView.vue'),
     },
   ],
 })

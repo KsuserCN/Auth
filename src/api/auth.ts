@@ -181,6 +181,83 @@ export const updateUserProfile = async (data: UpdateProfileRequest): Promise<Use
   return response.data as UserDetails
 }
 
+// ========== 敏感操作验证 ==========
+
+/**
+ * 敏感操作验证
+ * POST /auth/verify-sensitive
+ */
+export interface VerifySensitiveRequest {
+  method: 'password' | 'email-code'
+  password?: string
+  code?: string
+}
+
+export const verifySensitiveOperation = async (data: VerifySensitiveRequest): Promise<void> => {
+  await request.post('/auth/verify-sensitive', data)
+}
+
+/**
+ * 发送敏感操作验证码
+ * POST /auth/send-code
+ */
+export const sendSensitiveVerificationCode = async (): Promise<void> => {
+  await request.post('/auth/send-code', { type: 'sensitive-verification' })
+}
+
+/**
+ * 检查敏感操作验证状态
+ * GET /auth/check-sensitive-verification
+ */
+export interface SensitiveVerificationStatus {
+  verified: boolean
+  remainingSeconds: number
+}
+
+export const checkSensitiveVerification = async (): Promise<SensitiveVerificationStatus> => {
+  const response = await request.get<any>('/auth/check-sensitive-verification')
+  return response.data as SensitiveVerificationStatus
+}
+
+// ========== 修改密码 ==========
+
+/**
+ * 修改密码
+ * POST /auth/update/password
+ */
+export interface ChangePasswordRequest {
+  newPassword: string
+}
+
+export const changePassword = async (data: ChangePasswordRequest): Promise<void> => {
+  await request.post('/auth/update/password', data)
+}
+
+// ========== 密码强度要求 ==========
+
+/**
+ * 密码强度要求
+ */
+export interface PasswordRequirement {
+  minLength: number
+  maxLength: number
+  requireUppercase: boolean
+  requireLowercase: boolean
+  requireDigits: boolean
+  requireSpecialChars: boolean
+  rejectCommonWeakPasswords: boolean
+  requirementMessage: string
+}
+
+/**
+ * 获取密码强度要求
+ * GET /info/password-requirement
+ */
+export const getPasswordRequirement = async (): Promise<PasswordRequirement> => {
+  const response = await request.get<any>('/info/password-requirement')
+  return response.data as PasswordRequirement
+}
+
 // ========== 退出登录 ==========
 
 /**
