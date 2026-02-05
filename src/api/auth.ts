@@ -161,14 +161,18 @@ export const getUserDetailsInfo = async (): Promise<UserDetails> => {
  * 更新用户信息
  * POST /auth/update/profile
  */
+export type UpdateProfileKey =
+  | 'username'
+  | 'avatarUrl'
+  | 'realName'
+  | 'gender'
+  | 'birthDate'
+  | 'region'
+  | 'bio'
+
 export interface UpdateProfileRequest {
-  username?: string
-  avatarUrl?: string | null
-  realName?: string | null
-  gender?: string | null
-  birthDate?: string | null
-  region?: string | null
-  bio?: string | null
+  key: UpdateProfileKey
+  value: string
 }
 
 export const updateUserProfile = async (data: UpdateProfileRequest): Promise<UserDetails> => {

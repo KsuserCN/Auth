@@ -8,36 +8,7 @@
     </div>
 
     <el-row :gutter="16" class="profile-grid">
-      <el-col :xs="24" :lg="8">
-        <el-card class="card avatar-card" shadow="never">
-          <div class="avatar-section">
-            <div class="avatar-preview">
-              <el-avatar :size="120" :src="form.avatarUrl" class="profile-avatar">
-                {{ form.username?.slice(0, 1) || 'K' }}
-              </el-avatar>
-              <div class="upload-overlay">
-                <el-icon class="upload-icon">
-                  <Camera />
-                </el-icon>
-              </div>
-              <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
-              <div class="upload-tip">点击上传头像</div>
-            </div>
-            <div class="avatar-info">
-              <div class="info-item">
-                <span class="label">用户 ID</span>
-                <span class="value">{{ user?.uuid || '—' }}</span>
-              </div>
-              <div class="info-item">
-                <span class="label">账户状态</span>
-                <el-tag type="success" class="status-tag">正常</el-tag>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :lg="16">
+      <el-col :xs="24" :lg="24">
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon>
@@ -49,13 +20,82 @@
           <!-- 只读信息列表 -->
           <el-skeleton v-if="detailsLoading" animated>
             <template #template>
-              <div v-for="i in 6" :key="i" style="height: 52px; margin-bottom: 12px;">
-                <el-skeleton-item variant="text" style="width: 100%; height: 52px;" />
+              <div class="info-list">
+                <div class="info-row avatar-row skeleton-row">
+                  <div class="row-left">
+                    <el-skeleton-item variant="circle" class="skeleton-icon" />
+                    <el-skeleton-item variant="text" class="skeleton-label" />
+                  </div>
+                  <div class="row-right">
+                    <el-skeleton-item variant="circle" class="skeleton-avatar" />
+                    <el-skeleton-item variant="text" class="skeleton-tip" />
+                  </div>
+                </div>
+
+                <div v-for="index in skeletonRowCount" :key="index" class="info-row skeleton-row">
+                  <div class="row-left">
+                    <el-skeleton-item variant="circle" class="skeleton-icon" />
+                    <el-skeleton-item variant="text" class="skeleton-label" />
+                  </div>
+                  <div class="row-right">
+                    <el-skeleton-item variant="text" class="skeleton-value" />
+                  </div>
+                </div>
               </div>
             </template>
           </el-skeleton>
 
           <div v-else class="info-list">
+            <!-- 头像 -->
+            <div class="info-row avatar-row">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Camera />
+                </el-icon>
+                <span class="row-label">头像</span>
+              </div>
+              <div class="row-right">
+                <div class="avatar-preview">
+                  <el-avatar :size="72" :src="form.avatarUrl" class="profile-avatar">
+                    {{ form.username?.slice(0, 1) || 'K' }}
+                  </el-avatar>
+                  <div class="upload-overlay">
+                    <el-icon class="upload-icon">
+                      <Camera />
+                    </el-icon>
+                  </div>
+                  <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
+                </div>
+                <span class="upload-tip">点击上传头像</span>
+              </div>
+            </div>
+
+            <!-- 用户 ID -->
+            <div class="info-row disabled">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <User />
+                </el-icon>
+                <span class="row-label">用户 ID</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ user?.uuid || '—' }}</span>
+              </div>
+            </div>
+
+            <!-- 账户状态 -->
+            <div class="info-row disabled">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Lock />
+                </el-icon>
+                <span class="row-label">账户状态</span>
+              </div>
+              <div class="row-right">
+                <el-tag type="success" class="status-tag">正常</el-tag>
+              </div>
+            </div>
+
             <!-- 用户名 -->
             <div class="info-row" @click="openEditDialog('username')">
               <div class="row-left">
@@ -244,6 +284,7 @@ type ValidationRule = {
   trigger: string
   min?: number
   max?: number
+  pattern?: RegExp
 }
 
 const userStore = useUserStore()
@@ -258,6 +299,8 @@ const editingField = ref<string | null>(null)
 const editForm = reactive({
   value: ''
 })
+
+const skeletonRowCount = 9
 
 const form = reactive({
   username: '',
@@ -312,7 +355,13 @@ const getFieldRules = (): { value: ValidationRule[] } => {
   const rulesMap: Record<string, ValidationRule[]> = {
     username: [
       { required: true, message: '用户名不能为空', trigger: 'blur' },
-      { min: 2, max: 20, message: '用户名长度应为 2-20 个字符', trigger: 'blur' }
+      { min: 3, max: 20, message: '用户名长度应为 3-20 个字符', trigger: 'blur' },
+      {
+        message: '用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）',
+        trigger: 'blur',
+
+        pattern: /^[A-Za-z0-9_\-\u4e00-\u9fa5]{3,20}$/
+      }
     ],
     realName: [
       { max: 30, message: '真实姓名长度不超过 30 个字符', trigger: 'blur' }
@@ -376,6 +425,11 @@ const handleEditSave = async () => {
     const oldValue = form[fieldName as keyof typeof form]
     const newValue = editForm.value
 
+    if (newValue === '') {
+      ElMessage.error('新值不能为空')
+      return
+    }
+
     // 检查是否有实际改动
     if (oldValue === newValue) {
       ElMessage.info('没有任何改动')
@@ -386,24 +440,19 @@ const handleEditSave = async () => {
     submitLoading.value = true
 
     // 构建更新数据
-    const updateData: Record<string, string | null> = {}
+    let updateKey: 'username' | 'realName' | 'gender' | 'birthDate' | 'region' | 'bio'
 
-    if (fieldName === 'username') {
-      updateData.username = newValue
-    } else if (fieldName === 'realName') {
-      updateData.realName = newValue || null
-    } else if (fieldName === 'gender') {
-      updateData.gender = newValue || null
-    } else if (fieldName === 'birthday') {
-      updateData.birthDate = newValue || null
-    } else if (fieldName === 'region') {
-      updateData.region = newValue || null
-    } else if (fieldName === 'bio') {
-      updateData.bio = newValue || null
+    if (fieldName === 'birthday') {
+      updateKey = 'birthDate'
+    } else {
+      updateKey = fieldName as 'username' | 'realName' | 'gender' | 'region' | 'bio'
     }
 
     // 调用更新接口
-    const result = await updateUserProfile(updateData)
+    const result = await updateUserProfile({
+      key: updateKey,
+      value: newValue
+    })
 
     // 更新表单数据
     form[fieldName as keyof typeof form] = newValue
@@ -441,9 +490,22 @@ const handleAvatarChange = (event: Event) => {
 
   // 读取文件并显示预览
   const reader = new FileReader()
-  reader.onload = (e) => {
-    form.avatarUrl = e.target?.result as string
-    ElMessage.success('头像已更新')
+  reader.onload = async (e) => {
+    const avatarUrl = e.target?.result as string
+    if (!avatarUrl) return
+
+    try {
+      const result = await updateUserProfile({
+        key: 'avatarUrl',
+        value: avatarUrl
+      })
+      form.avatarUrl = avatarUrl
+      userStore.user = result
+      userStore.userDetails = result
+      ElMessage.success('头像已更新')
+    } catch {
+      ElMessage.error('头像更新失败')
+    }
   }
   reader.readAsDataURL(file)
 }
@@ -500,7 +562,7 @@ const handleAvatarChange = (event: Event) => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 18px;
   padding: 8px 6px;
 }
@@ -508,13 +570,13 @@ const handleAvatarChange = (event: Event) => {
 .avatar-preview {
   position: relative;
   cursor: pointer;
-  width: 120px;
-  height: 120px;
+  width: 72px;
+  height: 72px;
 }
 
 .profile-avatar {
-  width: 120px;
-  height: 120px;
+  width: 72px;
+  height: 72px;
   border-radius: 20px;
   transition: all 0.25s ease;
   border: 2px solid var(--el-border-color-lighter);
@@ -554,10 +616,14 @@ const handleAvatarChange = (event: Event) => {
 }
 
 .upload-tip {
-  margin-top: 8px;
+  margin-left: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  text-align: center;
+  text-align: left;
+}
+
+.avatar-row .row-right {
+  gap: 10px;
 }
 
 .avatar-info {
@@ -606,6 +672,37 @@ const handleAvatarChange = (event: Event) => {
   color: var(--el-text-color-primary);
   margin-bottom: 20px;
   font-size: 16px;
+}
+
+.skeleton-row {
+  cursor: default;
+}
+
+.skeleton-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.skeleton-label {
+  width: 80px;
+  height: 14px;
+}
+
+.skeleton-value {
+  width: 160px;
+  height: 14px;
+}
+
+.skeleton-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+}
+
+.skeleton-tip {
+  width: 88px;
+  height: 12px;
 }
 
 /* 信息列表样式 */
@@ -735,13 +832,13 @@ const handleAvatarChange = (event: Event) => {
   }
 
   .avatar-preview {
-    width: 100px;
-    height: 100px;
+    width: 64px;
+    height: 64px;
   }
 
   .profile-avatar {
-    width: 100px;
-    height: 100px;
+    width: 64px;
+    height: 64px;
     border-radius: 16px;
   }
 
