@@ -20,27 +20,9 @@
           <!-- 只读信息列表 -->
           <el-skeleton v-if="detailsLoading" animated>
             <template #template>
-              <div class="info-list">
-                <div class="info-row avatar-row skeleton-row">
-                  <div class="row-left">
-                    <el-skeleton-item variant="circle" class="skeleton-icon" />
-                    <el-skeleton-item variant="text" class="skeleton-label" />
-                  </div>
-                  <div class="row-right">
-                    <el-skeleton-item variant="circle" class="skeleton-avatar" />
-                    <el-skeleton-item variant="text" class="skeleton-tip" />
-                  </div>
-                </div>
-
-                <div v-for="index in skeletonRowCount" :key="index" class="info-row skeleton-row">
-                  <div class="row-left">
-                    <el-skeleton-item variant="circle" class="skeleton-icon" />
-                    <el-skeleton-item variant="text" class="skeleton-label" />
-                  </div>
-                  <div class="row-right">
-                    <el-skeleton-item variant="text" class="skeleton-value" />
-                  </div>
-                </div>
+              <div v-for="(rowHeight, index) in skeletonRows" :key="index" class="skeleton-row"
+                :style="{ height: `${rowHeight}px` }">
+                <el-skeleton-item variant="text" class="skeleton-item" />
               </div>
             </template>
           </el-skeleton>
@@ -300,7 +282,7 @@ const editForm = reactive({
   value: ''
 })
 
-const skeletonRowCount = 9
+const skeletonRows = [101, 40, 40, 40, 40, 40, 40, 40, 40, 40]
 
 const form = reactive({
   username: '',
@@ -355,7 +337,7 @@ const getFieldRules = (): { value: ValidationRule[] } => {
   const rulesMap: Record<string, ValidationRule[]> = {
     username: [
       { required: true, message: '用户名不能为空', trigger: 'blur' },
-      { min: 3, max: 20, message: '用户名长度应为 3-20 个字符', trigger: 'blur' },
+      { min: 3, max: 30, message: '用户名长度应为 3-20 个字符', trigger: 'blur' },
       {
         message: '用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）',
         trigger: 'blur',
@@ -675,34 +657,12 @@ const handleAvatarChange = (event: Event) => {
 }
 
 .skeleton-row {
-  cursor: default;
+  margin-bottom: 12px;
 }
 
-.skeleton-icon {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-}
-
-.skeleton-label {
-  width: 80px;
-  height: 14px;
-}
-
-.skeleton-value {
-  width: 160px;
-  height: 14px;
-}
-
-.skeleton-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 20px;
-}
-
-.skeleton-tip {
-  width: 88px;
-  height: 12px;
+.skeleton-item {
+  width: 100%;
+  height: 100%;
 }
 
 /* 信息列表样式 */
