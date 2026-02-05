@@ -157,7 +157,6 @@ export interface PasskeyRegistrationRequest {
 export interface PasskeyInfo {
   passkeyId: number
   passkeyName: string
-  isPrimary: boolean
   createdAt: string
 }
 

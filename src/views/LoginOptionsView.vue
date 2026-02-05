@@ -138,11 +138,9 @@ import {
   getPasskeyList,
   deletePasskey,
   renamePasskey,
-  getPasskeyRegistrationOptions,
-  verifyPasskeyRegistration,
   type PasskeyListItem,
 } from '@/api/auth'
-import { isWebAuthnSupported, createPasskeyCredential, extractRegistrationData } from '@/utils/webauthn'
+import { isWebAuthnSupported } from '@/utils/webauthn'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -216,69 +214,29 @@ const getTransportTags = (transports: string) => {
 
 const handleAddPasskey = async () => {
   if (addLoading.value) return
-
-  // 输入 Passkey 名称
-  const { value: passkeyName } = await ElMessageBox.prompt('请输入 Passkey 名称', '添加 Passkey', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    inputPlaceholder: '例如：我的 MacBook Pro',
-    inputValidator: (value) => {
-      if (!value || value.trim().length === 0) {
-        return '请输入 Passkey 名称'
-      }
-      if (value.trim().length > 50) {
-        return '名称不能超过50个字符'
-      }
-      return true
-    },
-  }).catch(() => ({ value: null }))
-
-  if (!passkeyName) return
+  addLoading.value = true
 
   try {
-    addLoading.value = true
+    const status = await checkSensitiveVerification()
 
-    // 1. 获取注册选项
-    const options = await getPasskeyRegistrationOptions({ passkeyName: passkeyName.trim() })
-
-    // 2. 创建凭证
-    const credential = await createPasskeyCredential(options)
-
-    if (!credential) {
-      throw new Error('未创建凭证')
-    }
-
-    // 3. 提取注册数据
-    const regData = extractRegistrationData(credential)
-
-    // 4. 验证并完成注册
-    await verifyPasskeyRegistration({
-      ...regData,
-      passkeyName: passkeyName.trim(),
-    })
-
-    ElMessage.success('Passkey 添加成功')
-
-    // 5. 重新加载列表
-    await loadPasskeyList()
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      if (error.name === 'NotAllowedError') {
-        ElMessage.error('用户取消了操作')
-        return
-      }
-      if (error.name === 'NotSupportedError') {
-        ElMessage.error('浏览器不支持该操作')
-        return
-      }
-      if (error.name === 'SecurityError') {
-        ElMessage.error('安全错误，请检查网络连接')
-        return
-      }
-      console.error('Add passkey failed:', error)
+    if (status.verified) {
+      // 已验证，直接跳转到添加 Passkey 页面
+      router.push('/add-passkey')
     } else {
-      console.error('Add passkey failed:', error)
+      // 未验证，跳转到验证页面
+      ElMessage.info('需要验证身份')
+      router.push({
+        path: '/sensitive-verification',
+        query: { returnTo: '/add-passkey' }
+      })
     }
+  } catch (error: unknown) {
+    console.error('Check sensitive verification failed:', error)
+    // 出错时也跳转到验证页面
+    router.push({
+      path: '/sensitive-verification',
+      query: { returnTo: '/add-passkey' }
+    })
   } finally {
     addLoading.value = false
   }
@@ -351,7 +309,7 @@ const handleChangeEmail = async () => {
         query: { returnTo: '/change-email' }
       })
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Check sensitive verification failed:', error)
     router.push({
       path: '/sensitive-verification',
@@ -380,7 +338,7 @@ const handleChangePassword = async () => {
         query: { returnTo: '/change-password' }
       })
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Check sensitive verification failed:', error)
     // 出错时也跳转到验证页面
     router.push({

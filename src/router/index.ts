@@ -81,6 +81,11 @@ const router = createRouter({
       name: 'delete-account',
       component: () => import('../views/DeleteAccountView.vue'),
     },
+    {
+      path: '/add-passkey',
+      name: 'add-passkey',
+      component: () => import('../views/AddPasskeyView.vue'),
+    },
   ],
 })
 
