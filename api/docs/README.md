@@ -54,7 +54,12 @@
 
 获取当前登录用户的信息。需要认证。
 
-### 7. 更新用户信息
+### 7. 查询密码强度要求
+[GET /info/password-requirement](info-password-requirement.md)
+
+获取当前密码强度要求，供前端动态校验和提示。
+
+### 8. 更新用户信息
 [POST /auth/update/profile](auth-update-profile.md)
 
 更新用户名和/或头像URL。支持：
@@ -63,7 +68,7 @@
 - 用户名唯一性检查
 - 需要认证（AccessToken）
 
-### 8. 敏感操作验证
+### 9. 敏感操作验证
 [POST /auth/verify-sensitive](auth-verify-sensitive.md)
 
 验证用户身份以执行敏感操作。支持：
@@ -72,7 +77,7 @@
 - 验证有效期15分钟
 - 设备（IP）绑定
 
-### 9. 更改邮箱
+### 10. 更改邮箱
 [POST /auth/update/email](auth-change-email.md)
 
 更改用户绑定邮箱。要求：
@@ -81,7 +86,7 @@
 - 遵循所有验证码系统约束
 - 需要认证（AccessToken）
 
-### 10. 检查敏感操作验证状态
+### 11. 检查敏感操作验证状态
 [GET /auth/check-sensitive-verification](auth-check-sensitive-verification.md)
 
 检查当前用户是否已完成敏感操作验证及剩余有效时间。特性：
@@ -90,17 +95,17 @@
 - 支持设备（IP）一致性检查
 - 需要认证（AccessToken）
 
-### 11. 刷新令牌
+### 12. 刷新令牌
 [POST /auth/refresh](auth-refresh.md)
 
 使用 RefreshToken 获取新的 AccessToken。支持多设备会话。
 
-### 11. 退出登录（单设备）
+### 13. 退出登录（单设备）
 [POST /auth/logout](auth-logout.md)
 
 退出当前设备上的登录。
 
-### 13. 退出登录（全设备）
+### 14. 退出登录（全设备）
 [POST /auth/logout/all](auth-logout-all.md)
 
 从所有设备上退出登录。
