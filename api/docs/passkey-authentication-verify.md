@@ -10,6 +10,30 @@
 ## 用途
 此接口用于提交 WebAuthn 认证结果，完成 Passkey 登录。需要先调用 `/auth/passkey/authentication-options` 获取认证选项。
 
+## ⚠️ 编码要求
+
+**所有二进制数据必须使用 Base64URL 编码（RFC 4648 Section 5）**
+
+- `credentialRawId`: ✅ 必须是 Base64URL（不含 `+`, `/`, `=`）
+- `clientDataJSON`: ✅ 必须是 Base64URL
+- `authenticatorData`: ✅ 必须是 Base64URL
+- `signature`: ✅ 必须是 Base64URL
+
+**常见错误：** 如果使用标准 Base64 编码（包含 `+`, `/`, `=`），后端会返回 "Input data does not match expected form" 错误。
+
+**解决方案：** 参考 [前端集成指南](./PASSKEY_FRONTEND_INTEGRATION.md) 中的 `arrayBufferToBase64URL()` 函数。
+
+## 安全说明
+生产级的完整验证流程（使用 webauthn4j 库）：
+1. ✅ Challenge 验证和一次性使用（防重放）
+2. ✅ 从数据库加载存储的公钥（COSE_Key）
+3. ✅ 使用公钥进行完整的签名验证（最关键）⭐
+4. ✅ ClientDataJSON 验证（type/challenge/origin）
+5. ✅ AuthenticatorData 验证（RP ID Hash/flags）
+6. ✅ Sign Count 检查（防克隆）
+7. ✅ User Present 标志验证
+8. ✅ 更新 Sign Count 到数据库（防重放和克隆）
+
 ## 查询参数
 | 参数 | 类型 | 必填 | 说明 |
 |---|---|---|---|
@@ -123,6 +147,19 @@ curl -X POST \
 ## 前端集成示例
 
 ```javascript
+// Base64URL 编码函数（必须使用，不能用 btoa）
+function arrayBufferToBase64URL(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')    // 替换 + 为 -
+    .replace(/\//g, '_')    // 替换 / 为 _
+    .replace(/=/g, '');     // 删除 padding
+}
+
 // 接上一步：passkey-authentication-options.md
 
 // 4. 进行认证
@@ -131,17 +168,17 @@ const assertion = await navigator.credentials.get(credentialRequestOptions);
 // 5. 提取 challengeId（从之前保存的 challenge 中提取，或从后端返回的数据中获取）
 const challengeId = extractChallengeId(options.challenge);
 
-// 6. 提交认证结果
+// 6. 提交认证结果（使用 Base64URL 编码）
 const verifyResponse = await fetch(`/auth/passkey/authentication-verify?challengeId=${challengeId}`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    credentialRawId: btoa(String.fromCharCode.apply(null, new Uint8Array(assertion.rawId))),
-    clientDataJSON: btoa(String.fromCharCode.apply(null, new Uint8Array(assertion.response.clientDataJSON))),
-    authenticatorData: btoa(String.fromCharCode.apply(null, new Uint8Array(assertion.response.authenticatorData))),
-    signature: btoa(String.fromCharCode.apply(null, new Uint8Array(assertion.response.signature)))
+    credentialRawId: arrayBufferToBase64URL(assertion.rawId),                           // ✅ Base64URL
+    clientDataJSON: arrayBufferToBase64URL(assertion.response.clientDataJSON),          // ✅ Base64URL
+    authenticatorData: arrayBufferToBase64URL(assertion.response.authenticatorData),    // ✅ Base64URL
+    signature: arrayBufferToBase64URL(assertion.response.signature)                     // ✅ Base64URL
   })
 });
 

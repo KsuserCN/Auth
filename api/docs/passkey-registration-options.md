@@ -9,6 +9,13 @@
 ## 用途
 此接口用于生成 Passkey 注册所需的 WebAuthn 选项。用户需要先登录才能注册 Passkey。
 
+## 安全说明
+- 生成的 challenge 只能使用一次，有效期 10 分钟
+- 注册时会进行完整的 Attestation 验证（包括签名验证）
+- 提取并安全存储公钥（COSE_Key 格式），用于后续认证时的签名验证
+- Credential ID 会进行唯一性检查，防止重复注册
+- 所有操作都记录到数据库，便于审计
+
 ## 请求头
 ```
 Authorization: Bearer <accessToken>

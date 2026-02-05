@@ -9,6 +9,13 @@
 ## 用途
 此接口用于生成 Passkey 登录所需的 WebAuthn 认证选项。用户无需登录即可获取认证选项，这是 Passkey 登录流程的第一步。
 
+## 安全说明
+- 生成的 challenge 只能使用一次，有效期 10 分钟
+- 后续认证时会使用存储的公钥进行完整的签名验证
+- 会检查 Sign Count，防止克隆的 Passkey
+- Origin 和 RP ID 必须匹配，防止跨域攻击
+- User Presence 标志必须为真
+
 ## 请求体
 无需请求体（空 JSON 对象 `{}` 或不传递）
 

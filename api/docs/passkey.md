@@ -1,5 +1,24 @@
 # Passkey (WebAuthn) API 文档
 
+## ⚠️ 重要：前端集成要求
+
+**所有二进制数据必须使用 Base64URL 编码（RFC 4648 Section 5）发送给后端。**
+
+### 快速说明
+
+- ✅ **正确**：使用 Base64URL（字符集：`A-Za-z0-9-_`，无 padding）
+- ❌ **错误**：使用标准 Base64（字符集：`A-Za-z0-9+/`，有 `=` padding）
+
+**示例对比：**
+```
+Base64URL:    __uxKQbLE8aYZ4GIWRmJq9eorb4     ✅ 正确
+标准 Base64:  //uxKQbLE8aYZ4GIWRmJq9eorb4=    ❌ 错误（会导致验证失败）
+```
+
+**完整集成指南：** 请参考 [Passkey 前端集成指南](./PASSKEY_FRONTEND_INTEGRATION.md)
+
+---
+
 ## 概述
 
 Passkey 是基于 WebAuthn 标准的现代身份验证方式，支持以下场景：

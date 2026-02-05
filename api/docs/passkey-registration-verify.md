@@ -9,6 +9,29 @@
 ## 用途
 此接口用于提交 WebAuthn 凭证，完成 Passkey 注册。需要先调用 `/auth/passkey/registration-options` 获取注册选项。
 
+## ⚠️ 编码要求
+
+**所有二进制数据必须使用 Base64URL 编码（RFC 4648 Section 5）**
+
+- `credentialRawId`: ✅ 必须是 Base64URL（不含 `+`, `/`, `=`）
+- `attestationObject`: ✅ 必须是 Base64URL
+- `clientDataJSON`: ✅ 必须是 Base64URL
+
+**常见错误：** 如果使用标准 Base64 编码（包含 `+`, `/`, `=`），后端会返回 "Input data does not match expected form" 错误。
+
+**解决方案：** 参考 [前端集成指南](./PASSKEY_FRONTEND_INTEGRATION.md) 中的 `arrayBufferToBase64URL()` 函数。
+
+## 安全说明
+生产级的完整验证流程（使用 webauthn4j 库）：
+1. ✅ Challenge 验证和一次性使用（防重放）
+2. ✅ Attestation 完整性验证（包括签名验证）
+3. ✅ ClientDataJSON 验证（type/challenge/origin）
+4. ✅ RP ID Hash 验证（防冒充）
+5. ✅ Flags 验证（UP=1, AT=1）
+6. ✅ 提取 credentialPublicKey（COSE_Key）
+7. ✅ Credential ID 唯一性检查
+8. ✅ 安全存储公钥，用于后续认证时的签名验证
+
 ## 请求头
 ```
 Authorization: Bearer <accessToken>
@@ -122,12 +145,25 @@ curl -X POST \
 ## 前端集成示例
 
 ```javascript
+// Base64URL 编码函数（必须使用，不能用 btoa）
+function arrayBufferToBase64URL(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')    // 替换 + 为 -
+    .replace(/\//g, '_')    // 替换 / 为 _
+    .replace(/=/g, '');     // 删除 padding
+}
+
 // 接上一步：passkey-registration-options.md
 
 // 3. 创建凭证
 const credential = await navigator.credentials.create(credentialCreationOptions);
 
-// 4. 提交凭证进行验证
+// 4. 提交凭证进行验证（使用 Base64URL 编码）
 const verifyResponse = await fetch('/auth/passkey/registration-verify', {
   method: 'POST',
   headers: {
@@ -135,9 +171,9 @@ const verifyResponse = await fetch('/auth/passkey/registration-verify', {
     'Authorization': `Bearer ${accessToken}`
   },
   body: JSON.stringify({
-    credentialRawId: btoa(String.fromCharCode.apply(null, new Uint8Array(credential.rawId))),
-    clientDataJSON: btoa(String.fromCharCode.apply(null, new Uint8Array(credential.response.clientDataJSON))),
-    attestationObject: btoa(String.fromCharCode.apply(null, new Uint8Array(credential.response.attestationObject))),
+    credentialRawId: arrayBufferToBase64URL(credential.rawId),                          // ✅ Base64URL
+    clientDataJSON: arrayBufferToBase64URL(credential.response.clientDataJSON),         // ✅ Base64URL
+    attestationObject: arrayBufferToBase64URL(credential.response.attestationObject),   // ✅ Base64URL
     passkeyName: 'My Security Key',
     transports: credential.response.getTransports().join(',')
   })

@@ -1288,7 +1288,8 @@ public class AuthController {
     @PostMapping("/passkey/registration-options")
     public ResponseEntity<ApiResponse<PasskeyRegistrationOptionsResponse>> generatePasskeyRegistrationOptions(
             @RequestBody PasskeyRegistrationOptionsRequest request,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest httpRequest) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "未登录"));
@@ -1301,6 +1302,14 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "用户不存在"));
         }
 
+        // ========== 检查是否已通过敏感操作验证 ==========
+        String clientIp = rateLimitService.getClientIp(httpRequest);
+        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, "需要先通过敏感操作验证"));
+        }
+
+        // ========== 生成注册选项 ==========
         try {
             PasskeyRegistrationOptionsResponse options = passkeyService.generateRegistrationOptions(user);
             return ResponseEntity.status(HttpStatus.OK)
@@ -1423,10 +1432,8 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "未登录"));
         }
 
-        String uuid = authentication.getPrincipal().toString();
-        
         try {
-            PasskeyAuthenticationOptionsResponse options = passkeyService.generateSensitiveVerificationOptions(uuid);
+            PasskeyAuthenticationOptionsResponse options = passkeyService.generateSensitiveVerificationOptions();
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "生成敏感操作验证选项成功", options));
         } catch (Exception e) {
