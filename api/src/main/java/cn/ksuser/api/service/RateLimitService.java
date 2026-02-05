@@ -219,7 +219,8 @@ public class RateLimitService {
      * @return 剩余次数
      */
     public int getRemainingMinuteRequestsForEmail(String email) {
-        return getRemainingMinuteRequests(email, appProperties.getRateLimit().getSendCodeEmailPerMinute());
+        String identifier = TYPE_VERIFICATION_CODE + ":" + email;
+        return getRemainingMinuteRequests(identifier, appProperties.getRateLimit().getSendCodeEmailPerMinute());
     }
 
     /**
@@ -228,7 +229,8 @@ public class RateLimitService {
      * @return 剩余次数
      */
     public int getRemainingMinuteRequestsForIp(String ip) {
-        return getRemainingMinuteRequests(ip, appProperties.getRateLimit().getSendCodeIpPerMinute());
+        String identifier = TYPE_VERIFICATION_CODE + ":" + ip;
+        return getRemainingMinuteRequests(identifier, appProperties.getRateLimit().getSendCodeIpPerMinute());
     }
 
     private int getRemainingMinuteRequests(String identifier, int limit) {
