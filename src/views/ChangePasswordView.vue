@@ -145,31 +145,7 @@ const passwordInput = ref({
 })
 
 onMounted(async () => {
-  // 先检查是否已完成敏感操作验证
-  try {
-    const status = await checkSensitiveVerification()
-
-    // 如果未验证，跳转到验证页面
-    if (!status.verified) {
-      ElMessage.warning('请先完成身份验证')
-      router.push({
-        path: '/sensitive-verification',
-        query: { returnTo: '/change-password' }
-      })
-      return
-    }
-  } catch (error: any) {
-    // 其他错误也跳转到验证页面
-    console.error('Check sensitive verification failed:', error)
-    ElMessage.error('验证状态检查失败')
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: '/change-password' }
-    })
-    return
-  }
-
-  // 验证通过后再获取密码要求
+  // 获取密码要求
   try {
     passwordRequirement.value = await getPasswordRequirement()
   } catch (error) {

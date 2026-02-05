@@ -18,7 +18,7 @@
           </div>
           <div class="info-list">
             <!-- 邮箱 -->
-            <div class="info-row" @click="handleChangeEmail">
+            <div class="info-row" :class="{ loading: emailLoading }" @click="handleChangeEmail">
               <div class="row-left">
                 <el-icon class="row-icon">
                   <Message />
@@ -27,14 +27,17 @@
               </div>
               <div class="row-right">
                 <span class="row-value">{{ userEmail }}</span>
-                <el-icon class="row-arrow">
+                <el-icon v-if="!emailLoading" class="row-arrow">
                   <ArrowRight />
+                </el-icon>
+                <el-icon v-else class="row-arrow loading-icon" :size="16">
+                  <Loading />
                 </el-icon>
               </div>
             </div>
 
             <!-- 密码 -->
-            <div class="info-row" @click="handleChangePassword">
+            <div class="info-row" :class="{ loading: passwordLoading }" @click="handleChangePassword">
               <div class="row-left">
                 <el-icon class="row-icon">
                   <Key />
@@ -43,8 +46,11 @@
               </div>
               <div class="row-right">
                 <span class="row-value">••••••••</span>
-                <el-icon class="row-arrow">
+                <el-icon v-if="!passwordLoading" class="row-arrow">
                   <ArrowRight />
+                </el-icon>
+                <el-icon v-else class="row-arrow loading-icon" :size="16">
+                  <Loading />
                 </el-icon>
               </div>
             </div>
@@ -56,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
@@ -65,23 +71,59 @@ import {
   Lock,
   Message,
   ArrowRight,
+  Loading,
 } from '@element-plus/icons-vue'
+import { checkSensitiveVerification } from '@/api/auth'
 
 const router = useRouter()
 const userStore = useUserStore()
 
 const userEmail = computed(() => userStore.user?.email || '—')
+const emailLoading = ref(false)
+const passwordLoading = ref(false)
 
 onMounted(async () => {
   await userStore.fetchUserInfo()
 })
 
 const handleChangeEmail = () => {
-  ElMessage.info('邮箱更改功能开发中')
+  if (emailLoading.value) return
+  emailLoading.value = true
+
+  setTimeout(() => {
+    emailLoading.value = false
+    ElMessage.info('邮箱更改功能开发中')
+  }, 300)
 }
 
-const handleChangePassword = () => {
-  router.push('/change-password')
+const handleChangePassword = async () => {
+  if (passwordLoading.value) return
+
+  passwordLoading.value = true
+  try {
+    const status = await checkSensitiveVerification()
+
+    if (status.verified) {
+      // 已验证，直接跳转到修改密码页面
+      router.push('/change-password')
+    } else {
+      // 未验证，跳转到验证页面
+      ElMessage.info('需要验证身份')
+      router.push({
+        path: '/sensitive-verification',
+        query: { returnTo: '/change-password' }
+      })
+    }
+  } catch (error: any) {
+    console.error('Check sensitive verification failed:', error)
+    // 出错时也跳转到验证页面
+    router.push({
+      path: '/sensitive-verification',
+      query: { returnTo: '/change-password' }
+    })
+  } finally {
+    passwordLoading.value = false
+  }
 }
 </script>
 
@@ -195,5 +237,25 @@ const handleChangePassword = () => {
 
 .info-row:hover .row-arrow {
   color: var(--el-color-primary);
+}
+
+.info-row.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.loading-icon {
+  animation: rotate 1s linear infinite;
+  color: var(--el-color-primary);
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
