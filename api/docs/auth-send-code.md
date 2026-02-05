@@ -17,9 +17,9 @@
 ## 字段说明
 - email: 邮箱。除 sensitive-verification 外必填；sensitive-verification 将自动使用当前登录用户绑定邮箱
 - type: 验证码类型，只能是 "register"、"login"、"change-email" 或 "sensitive-verification"
-  - register: 用于注册账号
-  - login: 用于验证码登录
-  - change-email: 用于更改邮箱
+  - register: 用于注册账号，**不检查邮箱是否已注册**（为了保护邮箱隐私）
+  - login: 用于验证码登录，**不检查邮箱是否存在**（为了保护邮箱隐私）
+  - change-email: 用于更改邮箱，检查邮箱是否已被使用
   - sensitive-verification: 用于敏感操作邮箱验证（与 login 类型隔离，单独存储）
 
 ## 请求示例
@@ -129,16 +129,6 @@ curl -X POST \
 {
   "code": 409,
   "msg": "邮箱已被使用"
-}
-```
-
-### 4) 邮箱不存在（仅登录验证码）
-- HTTP Status：400
-
-```json
-{
-  "code": 400,
-  "msg": "邮箱不存在"
 }
 ```
 

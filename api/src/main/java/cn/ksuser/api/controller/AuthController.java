@@ -145,18 +145,10 @@ public class AuthController {
             }
         }
 
-        // 注册验证码：检查邮箱是否已注册
-        if ("register".equals(type) && userService.findByEmail(email).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "邮箱已被注册"));
-        }
-
-        // 登录验证码：检查邮箱是否存在
-        if ("login".equals(type) && userService.findByEmail(email).isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱不存在"));
-        }
-
+        // 注册验证码：不检查邮箱是否已注册，在用户提交验证码后再检查
+        
+        // 登录验证码：不检查邮箱是否存在，在用户提交验证码后再检查
+        
         // 更改邮箱验证码：检查邮箱是否已被使用
         if ("change-email".equals(type) && userService.findByEmail(email).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -341,6 +333,12 @@ public class AuthController {
             }
         }
 
+        // 验证码验证成功后，检查邮箱是否已注册
+        if (userService.findByEmail(email).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiResponse<>(409, "邮箱已被注册"));
+        }
+
         // 执行注册
         RegisterResult result = userService.register(username, email, password);
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
@@ -433,7 +431,7 @@ public class AuthController {
         User user = userService.findByEmail(email).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "邮箱或验证码错误"));
+                .body(new ApiResponse<>(401, "邮箱未注册或验证码错误"));
         }
 
         // 生成 Token
@@ -1111,7 +1109,8 @@ public class AuthController {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String accessToken = authHeader.substring(7);
-            tokenBlacklistService.addToBlacklist(accessToken);
+            // AccessToken 有效期：15分钟
+            tokenBlacklistService.addToBlacklist(accessToken, Duration.ofMinutes(15));
         }
 
         return ResponseEntity.status(HttpStatus.OK)
