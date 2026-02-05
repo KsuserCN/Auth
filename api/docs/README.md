@@ -146,7 +146,7 @@
    → 请求体: {"username": "xxx", "email": "xxx@xxx.com", "password": "xxx", "code": "xxxxxx"}
    → 验证码验证成功后才检查邮箱是否已注册
    → 如果邮箱已注册，返回 409 "邮箱已被注册"
-   → 如果验证成功并邮箱未注册，返回用户信息完成注册
+  → 如果验证成功并邮箱未注册，注册成功并直接登录（返回 AccessToken，设置 RefreshToken Cookie）
 ```
 
 ### 密码登录流程

@@ -139,11 +139,11 @@ curl -X POST \
 ```
 
 ### 6) 密码错误（method=password时）
-- HTTP Status：401
+- HTTP Status：400
 
 ```json
 {
-  "code": 401,
+  "code": 400,
   "msg": "密码错误"
 }
 ```

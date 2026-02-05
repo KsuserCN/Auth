@@ -241,7 +241,8 @@ public class AuthController {
      */
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<RegisterResponse>> register(@RequestBody RegisterRequest registerRequest,
-                                                                    HttpServletRequest request) {
+                                                                    HttpServletRequest request,
+                                                                    HttpServletResponse response) {
         String username = registerRequest.getUsername();
         String email = registerRequest.getEmail();
         String password = registerRequest.getPassword();
@@ -371,11 +372,22 @@ public class AuthController {
                 .body(new ApiResponse<>(409, "邮箱已存在"));
         }
 
+        // 生成 Token
+        String refreshToken = jwtUtil.generateRefreshToken(result.getUser().getUuid());
+
+        // 保存会话到数据库
+        UserSession session = userSessionService.createSession(result.getUser(), refreshToken);
+        int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+        String accessToken = jwtUtil.generateAccessToken(result.getUser().getUuid(), session.getId(), sessionVersion);
+
+        // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
+        setRefreshTokenCookie(response, refreshToken);
+
         // 记录注册成功次数（按 IP/UA）
         rateLimitService.recordRegisterSuccess(clientIp, userAgent);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUser(result.getUser())));
+            .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUserWithToken(result.getUser(), accessToken)));
     }
 
     /**
@@ -872,8 +884,8 @@ public class AuthController {
             }
 
             if (!userService.verifyPassword(password, user.getPasswordHash())) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "密码错误"));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "密码错误"));
             }
 
             // 验证成功，标记用户已验证
@@ -1111,7 +1123,7 @@ public class AuthController {
 
         // 参数校验
         String confirmText = deleteAccountRequest.getConfirmText();
-        if (confirmText == null || !confirmText.equals("DELETE")) {
+        if (confirmText == null || !confirmText.equals("我真的不想要我的号辣")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "请输入正确的确认文本"));
         }

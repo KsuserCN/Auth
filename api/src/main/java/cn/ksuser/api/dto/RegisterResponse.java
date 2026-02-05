@@ -9,6 +9,8 @@ public class RegisterResponse {
     private String uuid;
     private String username;
     private String email;
+
+    private String accessToken;
     
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
@@ -16,10 +18,11 @@ public class RegisterResponse {
     public RegisterResponse() {
     }
 
-    public RegisterResponse(String uuid, String username, String email, LocalDateTime createdAt) {
+    public RegisterResponse(String uuid, String username, String email, String accessToken, LocalDateTime createdAt) {
         this.uuid = uuid;
         this.username = username;
         this.email = email;
+        this.accessToken = accessToken;
         this.createdAt = createdAt;
     }
 
@@ -28,6 +31,17 @@ public class RegisterResponse {
             user.getUuid(),
             user.getUsername(),
             user.getEmail(),
+            null,
+            user.getCreatedAt()
+        );
+    }
+
+    public static RegisterResponse fromUserWithToken(User user, String accessToken) {
+        return new RegisterResponse(
+            user.getUuid(),
+            user.getUsername(),
+            user.getEmail(),
+            accessToken,
             user.getCreatedAt()
         );
     }
@@ -54,6 +68,14 @@ public class RegisterResponse {
 
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
     }
 
     public LocalDateTime getCreatedAt() {

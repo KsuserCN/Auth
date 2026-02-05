@@ -55,6 +55,7 @@ curl -X POST \
 
 ## 成功响应
 - HTTP Status：200
+- Cookie：设置 refreshToken（HttpOnly）
 
 ```json
 {
@@ -64,11 +65,13 @@ curl -X POST \
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "username": "test",
     "email": "test@example.com",
-    "avatarUrl": null,
+    "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
     "createdAt": "2026-01-31T17:00:00"
   }
 }
 ```
+
+**说明**：注册成功后会直接登录，返回 `accessToken`，并通过 Cookie 下发 `refreshToken`。
 
 ## 失败响应
 ### 1) 参数为空
