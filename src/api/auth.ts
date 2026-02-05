@@ -291,6 +291,51 @@ export const getPasswordRequirement = async (): Promise<PasswordRequirement> => 
   return response.data as PasswordRequirement
 }
 
+// ========== 注册 ==========
+
+/**
+ * 检查用户名是否可用
+ * GET /auth/check-username
+ */
+export const checkUsername = async (username: string): Promise<boolean> => {
+  try {
+    const response = await request.get<ApiResponse<{ exists: boolean }>>('/auth/check-username', {
+      params: { username },
+    })
+    return !response.data.exists
+  } catch (error) {
+    return false
+  }
+}
+
+/**
+ * 发送注册验证码
+ * POST /auth/send-code
+ */
+export interface SendRegisterCodeRequest {
+  email: string
+}
+
+export const sendRegisterCode = async (data: SendRegisterCodeRequest): Promise<void> => {
+  await request.post('/auth/send-code', { email: data.email, type: 'register' })
+}
+
+/**
+ * 注册
+ * POST /auth/register
+ */
+export interface RegisterRequest {
+  username: string
+  email: string
+  password: string
+  code: string
+}
+
+export const register = async (data: RegisterRequest): Promise<User> => {
+  const response = await request.post<ApiResponse<User>>('/auth/register', data)
+  return response.data as User
+}
+
 // ========== 退出登录 ==========
 
 /**

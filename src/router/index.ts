@@ -57,6 +57,11 @@ const router = createRouter({
       component: LoginView,
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('../views/RegisterView.vue'),
+    },
+    {
       path: '/sensitive-verification',
       name: 'sensitive-verification',
       component: () => import('../views/SensitiveVerificationView.vue'),
