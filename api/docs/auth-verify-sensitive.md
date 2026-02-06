@@ -31,12 +31,22 @@ Authorization: Bearer <accessToken>
 }
 ```
 
+或
+
+```json
+{
+  "method": "totp",
+  "code": "123456"
+}
+```
+
 ## 字段说明
-- method: 验证方式，只能是 "password" 或 "email-code"
+- method: 验证方式，只能是 "password"、"email-code" 或 "totp"
   - password: 使用密码验证
   - email-code: 使用当前邮箱的验证码验证
+  - totp: 使用 TOTP 动态验证码验证
 - password: 用户密码（当 method=password 时必填）
-- code: 验证码（当 method=email-code 时必填）
+- code: 验证码（当 method=email-code 或 totp 时必填）
 
 ## 验证方式说明
 
@@ -73,6 +83,18 @@ curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"method":"email-code","code":"123456"}' \
+  http://localhost:8000/auth/verify-sensitive
+```
+
+### 3. TOTP 验证
+使用已启用 TOTP 的动态验证码进行验证。
+
+**请求示例**：
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"totp","code":"123456"}' \
   http://localhost:8000/auth/verify-sensitive
 ```
 
@@ -124,7 +146,7 @@ curl -X POST \
 ```json
 {
   "code": 400,
-  "msg": "验证方式只能是 password 或 email-code"
+  "msg": "验证方式只能是 password、email-code 或 totp"
 }
 ```
 
@@ -190,6 +212,25 @@ curl -X POST \
 
 ### 11) 邮箱不匹配（method=email-code时）
 - HTTP Status：400
+### 12) 未启用 TOTP（method=totp时）
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "用户未启用 TOTP"
+}
+```
+
+### 13) TOTP 验证失败（method=totp时）
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "验证码错误或已过期"
+}
+```
 
 ```json
 {

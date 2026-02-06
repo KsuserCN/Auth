@@ -62,6 +62,15 @@ curl -X POST \
   http://localhost:8000/auth/verify-sensitive
 ```
 
+#### 方式3：TOTP 验证
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"totp","code":"123456"}' \
+  http://localhost:8000/auth/verify-sensitive
+```
+
 ### 第二步：提交新密码
 ```bash
 curl -X POST \

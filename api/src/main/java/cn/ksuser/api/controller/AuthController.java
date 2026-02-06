@@ -8,6 +8,7 @@ import cn.ksuser.api.security.SecurityValidator;
 import cn.ksuser.api.service.TokenBlacklistService;
 import cn.ksuser.api.service.*;
 import cn.ksuser.api.util.JwtUtil;
+import cn.ksuser.api.util.EncryptionUtil;
 import jakarta.mail.MessagingException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -39,12 +40,15 @@ public class AuthController {
     private final SecurityValidator securityValidator;
     private final AppProperties appProperties;
     private final PasskeyService passkeyService;
+    private final TotpService totpService;
+    private final EncryptionUtil encryptionUtil;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
                           RateLimitService rateLimitService, SensitiveOperationService sensitiveOperationService,
                           TokenBlacklistService tokenBlacklistService, SecurityValidator securityValidator,
-                          AppProperties appProperties, PasskeyService passkeyService) {
+                          AppProperties appProperties, PasskeyService passkeyService,
+                          TotpService totpService, EncryptionUtil encryptionUtil) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -56,6 +60,8 @@ public class AuthController {
         this.securityValidator = securityValidator;
         this.appProperties = appProperties;
         this.passkeyService = passkeyService;
+        this.totpService = totpService;
+        this.encryptionUtil = encryptionUtil;
     }
 
     /**
@@ -623,6 +629,13 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "RefreshToken已失效"));
         }
 
+        // 验证 Token 类型是否为 refresh
+        String tokenType = jwtUtil.getTokenType(oldRefreshToken);
+        if (tokenType == null || !tokenType.equals("refresh")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "Token类型无效，应为RefreshToken"));
+        }
+
         // 从 Token 中获取 uuid
         String uuid = jwtUtil.getUuidFromToken(oldRefreshToken);
         if (uuid == null) {
@@ -876,9 +889,9 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "验证方式不能为空"));
         }
-        if (!("password".equals(method) || "email-code".equals(method))) {
+        if (!("password".equals(method) || "email-code".equals(method) || "totp".equals(method))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "验证方式只能是 password 或 email-code"));
+            .body(new ApiResponse<>(400, "验证方式只能是 password、email-code 或 totp"));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -953,6 +966,38 @@ public class AuthController {
             // 验证成功，标记用户已验证
             sensitiveOperationService.markVerified(uuid, clientIp);
             verificationCodeService.clearLockAndError(email);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+        }
+
+        // TOTP 验证
+        if ("totp".equals(method)) {
+            String code = verifySensitiveOperationRequest.getCode();
+            if (code == null || code.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "验证码不能为空"));
+            }
+
+            // 检查是否已启用 TOTP
+            if (!totpService.isTotpEnabled(user.getId())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "用户未启用 TOTP"));
+            }
+
+            try {
+                byte[] masterKey = encryptionUtil.getMasterKey();
+                boolean ok = totpService.verifyTotpCode(user.getId(), code, masterKey);
+                if (!ok) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "验证码错误或已过期"));
+                }
+            } catch (Exception e) {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(500, "TOTP 验证失败：" + e.getMessage()));
+            }
+
+            // 验证成功，标记用户已验证
+            sensitiveOperationService.markVerified(uuid, clientIp);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
         }

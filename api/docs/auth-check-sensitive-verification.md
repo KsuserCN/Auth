@@ -307,6 +307,15 @@ curl -X GET \
 # (900秒 = 15分钟)
 ```
 
+### 测试2-补充：使用 TOTP 验证
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"totp","code":"123456"}' \
+  http://localhost:8000/auth/verify-sensitive
+```
+
 ### 测试3：跨设备检查
 ```bash
 # 在设备A进行验证（IP: 192.168.1.100）
