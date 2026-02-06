@@ -17,7 +17,7 @@ export default defineConfig({
   css: {
     preprocessorOptions: {
       scss: {
-        api: 'modern-compiler',
+        // 注意: 移除 api: 'modern-compiler' 配置，避免与 Dart Sass 冲突
       },
     },
   },

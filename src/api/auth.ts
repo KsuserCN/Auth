@@ -7,6 +7,7 @@ export interface User {
   username: string
   email: string
   avatarUrl?: string | null
+  settings?: UserSettings
 }
 
 // 用户详细信息类型
@@ -17,6 +18,14 @@ export interface UserDetails extends User {
   region?: string
   bio?: string
   updatedAt?: string
+}
+
+// 用户设置类型
+export interface UserSettings {
+  mfaEnabled: boolean
+  detectUnusualLogin: boolean
+  notifySensitiveActionEmail: boolean
+  subscribeNewsEmail: boolean
 }
 
 // 登录响应类型
@@ -87,7 +96,7 @@ export const getPasskeyAuthenticationOptions = async (): Promise<PasskeyAuthenti
   const response = await request.post<ApiResponse<PasskeyAuthenticationOptions>>(
     '/auth/passkey/authentication-options',
   )
-  return (response as unknown as ApiResponse<PasskeyAuthenticationOptions>).data
+  return (response as any).data
 }
 
 /**
@@ -109,7 +118,7 @@ export const verifyPasskeyAuthentication = async (
     `/auth/passkey/authentication-verify?challengeId=${challengeId}`,
     data,
   )
-  return (response as unknown as ApiResponse<LoginResponse>).data
+  return (response as any).data
 }
 
 // ========== Passkey 注册 ==========
@@ -254,7 +263,7 @@ export const renamePasskey = async (passkeyId: number, newName: string): Promise
  */
 export const refreshAccessToken = async (): Promise<{ accessToken: string }> => {
   const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/refresh')
-  return response.data
+  return response.data as unknown as { accessToken: string }
 }
 
 // ========== 获取用户信息 ==========
@@ -279,6 +288,30 @@ export const getUserDetailsInfo = async (): Promise<UserDetails> => {
   // 响应拦截器返回的是 { code, msg, data: {...} }
   // response.data 就是真实的用户详细数据
   return response.data as UserDetails
+}
+
+// ========== 更新用户设置 ==========
+
+/**
+ * 更新用户设置
+ * POST /auth/update/setting
+ */
+export interface UpdateUserSettingRequest {
+  field:
+    | 'mfa_enabled'
+    | 'mfaEnabled'
+    | 'detect_unusual_login'
+    | 'detectUnusualLogin'
+    | 'notify_sensitive_action_email'
+    | 'notifySensitiveActionEmail'
+    | 'subscribe_news_email'
+    | 'subscribeNewsEmail'
+  value: boolean
+}
+
+export const updateUserSetting = async (data: UpdateUserSettingRequest): Promise<UserSettings> => {
+  const response = await request.post<ApiResponse<UserSettings>>('/auth/update/setting', data)
+  return (response as unknown as ApiResponse<UserSettings>).data
 }
 
 // ========== 更新用户信息 ==========
@@ -370,7 +403,7 @@ export interface ChangeEmailRequest {
 
 export const changeEmail = async (data: ChangeEmailRequest): Promise<User> => {
   const response = await request.post<ApiResponse<User>>('/auth/update/email', data)
-  return response.data as User
+  return response.data as unknown as User
 }
 
 // ========== 修改密码 ==========
@@ -423,7 +456,7 @@ export const checkUsername = async (username: string): Promise<boolean> => {
     const response = await request.get<ApiResponse<{ exists: boolean }>>('/auth/check-username', {
       params: { username },
     })
-    return !response.data.exists
+    return !(response.data as unknown as { exists: boolean }).exists
   } catch (error) {
     return false
   }
@@ -462,7 +495,7 @@ export interface RegisterResponse {
 
 export const register = async (data: RegisterRequest): Promise<RegisterResponse> => {
   const response = await request.post<ApiResponse<RegisterResponse>>('/auth/register', data)
-  return response.data as RegisterResponse
+  return response.data as unknown as RegisterResponse
 }
 
 // ========== 删除账号 ==========

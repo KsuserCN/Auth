@@ -128,6 +128,10 @@
             <Lock />
           </el-icon>
           <span>双因素认证 (TOTP)</span>
+          <el-button v-if="totpEnabled" type="danger" plain size="small" @click="handleDisableTotp"
+            style="margin-left: auto">
+            禁用 TOTP
+          </el-button>
         </div>
         <div v-if="!totpStatusFetched" class="passkey-loading">
           <el-icon class="loading-icon">
@@ -135,49 +139,47 @@
           </el-icon>
           <span>加载中...</span>
         </div>
-        <div v-else class="info-list">
-          <div class="info-row">
-            <div class="row-left">
-              <el-icon class="row-icon">
-                <Lock />
-              </el-icon>
-              <span class="row-label">状态</span>
-            </div>
-            <div class="row-right">
-              <el-tag v-if="totpEnabled" type="success" size="small">已启用</el-tag>
-              <el-tag v-else type="info" size="small">未启用</el-tag>
-            </div>
-          </div>
-          <div v-if="totpEnabled" class="info-row">
-            <div class="row-left">
-              <el-icon class="row-icon">
-                <Key />
-              </el-icon>
-              <span class="row-label">剩余恢复码</span>
-            </div>
-            <div class="row-right">
-              <span class="row-value">{{ recoveryCodesCount }} 个</span>
-              <el-tag v-if="recoveryCodesCount < 3" type="warning" size="small" style="margin-left: 8px">
-                ⚠️ 即将用完
-              </el-tag>
-            </div>
-          </div>
+        <div v-else>
           <div class="passkey-empty" style="padding: 12px 0;">
             <p v-if="!totpEnabled">使用身份验证器应用保护您的账户</p>
-            <p v-else>管理您的 TOTP 设置和恢复码</p>
-            <p class="empty-desc">敏感操作需验证身份</p>
+          </div>
+          <div class="info-list">
+            <div class="info-row">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Lock />
+                </el-icon>
+                <span class="row-label">状态</span>
+              </div>
+              <div class="row-right">
+                <el-tag v-if="totpEnabled" type="success" size="small">已启用</el-tag>
+                <el-tag v-else type="info" size="small">未启用</el-tag>
+              </div>
+            </div>
+            <div v-if="totpEnabled" class="info-row">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Key />
+                </el-icon>
+                <span class="row-label">剩余恢复码</span>
+              </div>
+              <div class="row-right">
+                <span class="row-value">{{ recoveryCodesCount }} 个</span>
+                <el-tag v-if="recoveryCodesCount < 3" type="warning" size="small" style="margin-left: 8px">
+                  ⚠️ 即将用完
+                </el-tag>
+                <el-button text size="small" @click="handleViewRecoveryCodes">查看恢复码</el-button>
+                <el-button text type="warning" size="small" @click="handleRegenerateRecoveryCodes"
+                  :disabled="recoveryCodesCount >= 10">
+                  重新生成恢复码
+                </el-button>
+              </div>
+            </div>
           </div>
           <div class="totp-actions">
-            <el-button v-if="!totpEnabled" type="primary" @click="handleEnableTotp">
+            <el-button v-if="!totpEnabled" type="primary" plain size="small" @click="handleEnableTotp">
               启用 TOTP
             </el-button>
-            <template v-else>
-              <el-button @click="handleViewRecoveryCodes">查看恢复码</el-button>
-              <el-button type="warning" @click="handleRegenerateRecoveryCodes" :disabled="recoveryCodesCount >= 10">
-                重新生成恢复码
-              </el-button>
-              <el-button type="danger" plain @click="handleDisableTotp">禁用 TOTP</el-button>
-            </template>
           </div>
         </div>
       </el-card>

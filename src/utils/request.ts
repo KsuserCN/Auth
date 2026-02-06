@@ -42,9 +42,10 @@ const refreshToken = async (): Promise<string> => {
   try {
     const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', {})
 
-    // 响应拦截器已经返回 ApiResponse，所以直接访问 response.code 和 response.data
-    if (response.code === 200 && response.data?.accessToken) {
-      const newToken = response.data.accessToken
+    // 拦截器直接返回 ApiResponse，所以直接访问 response.data
+    const apiResponse = response as any as ApiResponse<{ accessToken: string }>
+    if (apiResponse.code === 200 && apiResponse.data?.accessToken) {
+      const newToken = apiResponse.data.accessToken
       // 更新 sessionStorage 中的 token
       sessionStorage.setItem('accessToken', newToken)
       return newToken
@@ -108,11 +109,12 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
-    const { code, msg, data } = response.data
+    const data = response.data
+    const { code, msg } = data
 
-    // 成功响应
+    // 成功响应 - 直接返回 ApiResponse 对象
     if (code === 200) {
-      return response.data
+      return response.data as any
     }
 
     // 其他错误码

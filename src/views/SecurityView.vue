@@ -38,33 +38,69 @@
                 <p class="item-desc">使用生物识别或设备密码进行快速安全登录</p>
               </div>
               <div class="item-right">
-                <el-tag type="info">未启用</el-tag>
-                <el-button type="primary" plain size="small">启用</el-button>
+                <el-tag v-if="passkeyLoading" type="info">检测中</el-tag>
+                <el-tag v-else-if="passkeyEnabled" type="success">已启用</el-tag>
+                <el-tag v-else type="info">未启用</el-tag>
+                <el-button type="primary" plain size="small" @click="goToLoginOptions">
+                  {{ passkeyEnabled ? '管理' : '前往设置' }}
+                </el-button>
+              </div>
+            </div>
+            <el-divider />
+            <div class="security-item">
+              <div class="item-left">
+                <div class="item-header">
+                  <span class="item-title">TOTP 动态验证码</span>
+                </div>
+                <p class="item-desc">使用身份验证器生成的动态验证码进行登录</p>
+              </div>
+              <div class="item-right">
+                <el-tag v-if="totpLoading" type="info">检测中</el-tag>
+                <el-tag v-else-if="totpEnabled" type="success">已启用</el-tag>
+                <el-tag v-else type="info">未启用</el-tag>
+                <el-button type="primary" plain size="small" @click="goToLoginOptions">
+                  {{ totpEnabled ? '管理' : '前往设置' }}
+                </el-button>
               </div>
             </div>
           </div>
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :lg="8">
+    </el-row>
+
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon>
               <Key />
             </el-icon>
-            <span>密码管理</span>
+            <span>安全开关</span>
           </div>
-          <div class="password-info">
-            <div class="info-item">
-              <span class="info-label">密码强度</span>
-              <el-progress :percentage="80" :color="progressColor" />
+          <div class="toggle-list">
+            <div class="toggle-item">
+              <div class="toggle-left">
+                <span class="toggle-title">开启 MFA</span>
+                <span class="toggle-desc">登录时启用多因素验证</span>
+              </div>
+              <el-switch v-model="mfaEnabled" />
             </div>
-            <div class="info-item">
-              <span class="info-label">上次修改</span>
-              <span class="info-value">45 天前</span>
+            <div class="toggle-item">
+              <div class="toggle-left">
+                <span class="toggle-title">开启异地登录检测</span>
+                <span class="toggle-desc">检测异常地点登录并提醒</span>
+              </div>
+              <el-switch v-model="geoLoginEnabled" />
+            </div>
+            <div class="toggle-item">
+              <div class="toggle-left">
+                <span class="toggle-title">敏感操作邮件提醒</span>
+                <span class="toggle-desc">敏感操作时向邮箱发送通知</span>
+              </div>
+              <el-switch v-model="sensitiveEmailEnabled" />
             </div>
           </div>
-          <el-button type="primary" class="change-pwd-btn">修改密码</el-button>
         </el-card>
       </el-col>
     </el-row>
@@ -136,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import {
@@ -145,7 +181,7 @@ import {
   Monitor,
   Delete,
 } from '@element-plus/icons-vue'
-import { checkSensitiveVerification } from '@/api/auth'
+import { checkSensitiveVerification, getPasskeyList, getTotpStatus, getUserInfo, updateUserSetting } from '@/api/auth'
 
 const router = useRouter()
 
@@ -155,7 +191,77 @@ const sessions = ref([
   { device: 'Windows (Edge)', location: '深圳', lastActive: '2 小时前' },
 ])
 
-const progressColor = getComputedStyle(document.documentElement).getPropertyValue('--el-color-primary').trim()
+const passkeyEnabled = ref(false)
+const totpEnabled = ref(false)
+const passkeyLoading = ref(true)
+const totpLoading = ref(true)
+const mfaEnabled = ref(false)
+const geoLoginEnabled = ref(false)
+const sensitiveEmailEnabled = ref(false)
+const settingsReady = ref(false)
+const settingsUpdating = ref(false)
+
+onMounted(async () => {
+  try {
+    passkeyLoading.value = true
+    const passkeys = await getPasskeyList()
+    passkeyEnabled.value = passkeys.length > 0
+  } catch (error) {
+    console.error('Get passkey list failed:', error)
+  } finally {
+    passkeyLoading.value = false
+  }
+
+  try {
+    totpLoading.value = true
+    const status = await getTotpStatus()
+    totpEnabled.value = status.enabled
+  } catch (error) {
+    console.error('Get TOTP status failed:', error)
+  } finally {
+    totpLoading.value = false
+  }
+
+  try {
+    const info = await getUserInfo()
+    mfaEnabled.value = Boolean(info.settings?.mfaEnabled)
+    geoLoginEnabled.value = Boolean(info.settings?.detectUnusualLogin)
+    sensitiveEmailEnabled.value = Boolean(info.settings?.notifySensitiveActionEmail)
+  } catch (error) {
+    console.error('Get user settings failed:', error)
+  } finally {
+    settingsReady.value = true
+  }
+})
+
+const updateSetting = async (field: 'mfaEnabled' | 'detectUnusualLogin' | 'notifySensitiveActionEmail', value: boolean, rollback: () => void) => {
+  if (!settingsReady.value || settingsUpdating.value) return
+  settingsUpdating.value = true
+  try {
+    await updateUserSetting({ field, value })
+  } catch (error) {
+    console.error('Update setting failed:', error)
+    rollback()
+  } finally {
+    settingsUpdating.value = false
+  }
+}
+
+watch(mfaEnabled, async (value, prev) => {
+  await updateSetting('mfaEnabled', value, () => { mfaEnabled.value = prev })
+})
+
+watch(geoLoginEnabled, async (value, prev) => {
+  await updateSetting('detectUnusualLogin', value, () => { geoLoginEnabled.value = prev })
+})
+
+watch(sensitiveEmailEnabled, async (value, prev) => {
+  await updateSetting('notifySensitiveActionEmail', value, () => { sensitiveEmailEnabled.value = prev })
+})
+
+const goToLoginOptions = () => {
+  router.push('/home/login-options')
+}
 
 const handleSessionLogout = (row: any) => {
   ElMessage.success(`已退出会话：${row.device}`)
@@ -300,6 +406,41 @@ const handleDeleteAccount = async () => {
   flex-direction: column;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.toggle-item:last-child {
+  border-bottom: none;
+}
+
+.toggle-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggle-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.toggle-desc {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .info-item {

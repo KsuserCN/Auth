@@ -33,6 +33,9 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
  * 用于解码服务器返回的 challenge 等数据
  */
 export function base64UrlToArrayBuffer(base64url: string): ArrayBuffer {
+  if (!base64url) {
+    throw new Error('base64url 不能为空')
+  }
   // 将 Base64URL 转换为标准 Base64
   let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
 
@@ -52,7 +55,7 @@ export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
   let binary = ''
   for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
+    binary += String.fromCharCode(bytes[i]!)
   }
   return btoa(binary)
 }
@@ -79,7 +82,7 @@ export function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
   // 将每个字节转换为字符
   // 注意：这里使用 String.fromCharCode 处理二进制数据
   for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
+    binary += String.fromCharCode(bytes[i]!)
   }
 
   // 先转换为标准 Base64
@@ -151,16 +154,24 @@ export async function createPasskeyCredential(options: {
  */
 export async function getPasskeyCredential(options: {
   challenge: string
-  timeout: string
+  timeout: string | number
   rpId: string
   userVerification: string
 }): Promise<PublicKeyCredential | null> {
   try {
+    // 验证必事字段
+    if (!options.challenge) {
+      throw new Error('challenge 不能为空')
+    }
+    if (!options.rpId) {
+      throw new Error('rpId 不能为空')
+    }
+
     // 构建获取凭证的选项
     const credentialRequestOptions: CredentialRequestOptions = {
       publicKey: {
         challenge: base64UrlToArrayBuffer(options.challenge),
-        timeout: parseInt(options.timeout),
+        timeout: typeof options.timeout === 'string' ? parseInt(options.timeout) : options.timeout,
         rpId: options.rpId,
         userVerification: options.userVerification as UserVerificationRequirement,
       },

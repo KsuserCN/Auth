@@ -174,11 +174,9 @@ const handleLogout = async () => {
     // 清除用户信息
     userStore.clearUser()
 
-    // 清除本地存储的数据
+    // 清除本地存储的数据（仅清除认证相关的，保留主题偏好）
     sessionStorage.removeItem('accessToken')
     sessionStorage.removeItem('user')
-    localStorage.removeItem('theme-mode')
-    localStorage.removeItem('theme-preference')
 
     ElMessage.success('退出登录成功')
 

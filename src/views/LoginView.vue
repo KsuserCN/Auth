@@ -7,7 +7,7 @@
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
         <h1 class="login-title">登录</h1>
-        <p class="login-description">使用您的邮箱地址登录您的账户</p>
+        <p class="login-description">使用多种验证方式登录您的Ksuser账户</p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
@@ -104,22 +104,6 @@
               </div>
 
               <!-- Passkey 登录 -->
-              <div v-if="isPasskeySupported" class="method-option" @click="!methodSelecting && selectMethod('passkey')"
-                :class="{ 'is-disabled': methodSelecting }">
-                <el-icon class="method-icon" :size="28">
-                  <Key />
-                </el-icon>
-                <div class="method-info">
-                  <h3>使用 Passkey 登录</h3>
-                  <p>快速安全的生物识别登录</p>
-                </div>
-                <el-icon class="method-arrow" v-if="!methodSelecting">
-                  <ArrowRight />
-                </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
-              </div>
             </div>
           </div>
 
@@ -181,27 +165,31 @@
             </div>
           </div>
 
-          <!-- 第三步：Passkey登录 -->
-          <div v-else-if="step === 'passkey'" class="step-container" key="passkey">
-            <h2 class="step-title">验证身份</h2>
-
-            <div class="email-confirm">
-              <span class="email-display">{{ emailInput.email }}</span>
-              <el-button link class="change-email-btn" @click="backToMethod">回到上一页</el-button>
-            </div>
-
-            <div class="passkey-hint">
-              <p>请使用您的生物识别或安全密钥进行身份验证</p>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMethod">返回</el-button>
-              <el-button class="next-btn" @click="handlePasskeyLogin" :loading="passkeyLoading">
-                {{ passkeyLoading ? '验证中...' : '验证身份' }}
-              </el-button>
-            </div>
-          </div>
         </Transition>
+
+        <div class="extra-login">
+          <div class="extra-title">其他登录方式</div>
+          <div class="extra-actions">
+            <div class="extra-icons">
+              <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
+                <img src="/oauth-icons/wechat.svg" alt="WeChat" />
+              </button>
+              <button class="icon-btn" @click="handleUnsupportedLogin('qq')" aria-label="QQ 登录" type="button">
+                <img src="/oauth-icons/qq.svg" alt="QQ" />
+              </button>
+              <button class="icon-btn" @click="handleUnsupportedLogin('Github')" aria-label="Github 登录" type="button">
+                <img src="/oauth-icons/github.svg" alt="Github" />
+              </button>
+              <button class="icon-btn" @click="handleUnsupportedLogin('微软')" aria-label="微软登录" type="button">
+                <img src="/oauth-icons/microsoft.svg" alt="Microsoft" />
+              </button>
+            </div>
+            <el-button class="extra-btn" :loading="passkeyLoading" :disabled="!isPasskeySupported"
+              @click="handlePasskeyLogin">
+              {{ isPasskeySupported ? 'Passkey 登录' : 'Passkey 不可用' }}
+            </el-button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -232,12 +220,12 @@ const codeFormRef = ref<FormInstance>()
 const router = useRouter()
 
 // 流程步骤
-const step = ref<'email' | 'method' | 'password' | 'email-code' | 'passkey'>('email')
+const step = ref<'email' | 'method' | 'password' | 'email-code'>('email')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['email', 'method', 'password', 'email-code', 'passkey']
+const stepOrder = ['email', 'method', 'password', 'email-code']
 
-const updateStep = (newStep: 'email' | 'method' | 'password' | 'email-code' | 'passkey') => {
+const updateStep = (newStep: 'email' | 'method' | 'password' | 'email-code') => {
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -319,7 +307,7 @@ const goToNextStep = async () => {
 
 // ===== 第二步：选择登录方式 =====
 
-const selectMethod = async (method: 'password' | 'email' | 'passkey') => {
+const selectMethod = async (method: 'password' | 'email') => {
   if (methodSelecting.value) return
 
   methodSelecting.value = true
@@ -330,9 +318,6 @@ const selectMethod = async (method: 'password' | 'email' | 'passkey') => {
       updateStep('password')
     } else if (method === 'email') {
       await sendCode()
-    } else if (method === 'passkey') {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      updateStep('passkey')
     }
   } finally {
     methodSelecting.value = false
@@ -542,6 +527,10 @@ const handlePasskeyLogin = async () => {
   } finally {
     passkeyLoading.value = false
   }
+}
+
+const handleUnsupportedLogin = (provider: string) => {
+  ElMessage.info(`${provider.toUpperCase()} 登录 - 暂不支持`)
 }
 
 // ===== 生命周期 =====
@@ -1121,6 +1110,71 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 14px;
   color: var(--el-text-color-regular);
+}
+
+/* 额外登录方式 */
+.extra-login {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--el-border-color-light);
+}
+
+.extra-title {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 12px;
+}
+
+.extra-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.extra-icons {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+}
+
+.icon-btn:hover {
+  opacity: 0.8;
+}
+
+.icon-btn img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.icon-btn:hover img {
+  opacity: 0.8;
+}
+
+.dark .icon-btn img {
+  opacity: 0.8;
+  filter: invert(1) brightness(1.1);
+}
+
+.extra-btn {
+  height: 40px;
+  border-radius: 10px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* 响应式设计 */

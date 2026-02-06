@@ -50,11 +50,36 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
+        <el-card class="card" shadow="never">
+          <div class="card-title">
+            <el-icon>
+              <Setting />
+            </el-icon>
+            <span>通知设置</span>
+          </div>
+          <p class="card-desc">管理邮件通知偏好</p>
+
+          <div class="toggle-list">
+            <div class="toggle-item">
+              <div class="toggle-left">
+                <span class="toggle-title">日常新闻推送邮件</span>
+                <span class="toggle-desc">定期接收精选资讯和更新</span>
+              </div>
+              <el-switch v-model="dailyNewsEmailEnabled" />
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </div>
 </template>
 
 <script setup lang="ts">
 import { useStorage } from '@vueuse/core'
+import { onMounted, ref, watch } from 'vue'
 import {
   Monitor,
   Sunny,
@@ -62,8 +87,9 @@ import {
   Setting,
   Check
 } from '@element-plus/icons-vue'
+import { getUserInfo, updateUserSetting } from '@/api/auth'
 
-const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')
+const themeMode = useStorage<string>('theme-mode', 'system')
 
 const themeOptions = [
   {
@@ -82,6 +108,33 @@ const themeOptions = [
     icon: Moon
   }
 ]
+const dailyNewsEmailEnabled = ref(false)
+const settingsReady = ref(false)
+const settingsUpdating = ref(false)
+
+onMounted(async () => {
+  try {
+    const info = await getUserInfo()
+    dailyNewsEmailEnabled.value = Boolean(info.settings?.subscribeNewsEmail)
+  } catch (error) {
+    console.error('Get user settings failed:', error)
+  } finally {
+    settingsReady.value = true
+  }
+})
+
+watch(dailyNewsEmailEnabled, async (value, prev) => {
+  if (!settingsReady.value || settingsUpdating.value) return
+  settingsUpdating.value = true
+  try {
+    await updateUserSetting({ field: 'subscribeNewsEmail', value })
+  } catch (error) {
+    console.error('Update setting failed:', error)
+    dailyNewsEmailEnabled.value = prev
+  } finally {
+    settingsUpdating.value = false
+  }
+})
 </script>
 
 <style scoped>
@@ -123,6 +176,45 @@ const themeOptions = [
 .card-desc {
   margin: 0 0 24px 0;
   font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+
+.row-gap {
+  margin-top: 16px;
+}
+
+.toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.toggle-item:last-child {
+  border-bottom: none;
+}
+
+.toggle-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toggle-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.toggle-desc {
+  font-size: 12px;
   color: var(--el-text-color-secondary);
 }
 
