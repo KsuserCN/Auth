@@ -46,6 +46,39 @@ CREATE TABLE users (
   COMMENT='用户表';
 
 
+
+DROP TABLE IF EXISTS user_settings;
+CREATE TABLE user_settings (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '关联 users.id',
+
+  mfa_enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'MFA 开关（0=关闭 1=开启）',
+  detect_unusual_login TINYINT(1) NOT NULL DEFAULT 1 COMMENT '异地/异常登录检测开关（0=关闭 1=开启）',
+
+  notify_sensitive_action_email TINYINT(1) NOT NULL DEFAULT 1 COMMENT '敏感操作提醒邮件（0=不发 1=发送）',
+  subscribe_news_email TINYINT(1) NOT NULL DEFAULT 0 COMMENT '新闻/运营邮件订阅（0=不订阅 1=订阅）',
+
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+
+  UNIQUE KEY uk_user_settings_user (user_id),
+
+  CONSTRAINT fk_user_settings_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户设置（安全/通知偏好）';
+
+
+INSERT INTO user_settings (user_id)
+SELECT id FROM users
+ON DUPLICATE KEY UPDATE user_id = user_id;
+
+
 -- ---------------------------
 -- user_sessions：刷新令牌会话表（极简，仅登录态）
 -- ---------------------------

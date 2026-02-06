@@ -55,6 +55,11 @@
 
 获取当前登录用户的信息。需要认证。
 
+### 6.1 更新用户设置
+[POST /auth/update/setting](auth-info.md)
+
+更新用户设置项（字段名 + bool）。需要认证。
+
 ### 7. 查询密码强度要求
 [GET /info/password-requirement](info-password-requirement.md)
 

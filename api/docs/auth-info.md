@@ -40,7 +40,13 @@ curl -X GET \
     "uuid": "550e8400-e29b-41d4-a716-446655440000",
     "username": "john_doe",
     "email": "john@example.com",
-    "avatarUrl": null
+    "avatarUrl": null,
+    "settings": {
+      "mfaEnabled": false,
+      "detectUnusualLogin": true,
+      "notifySensitiveActionEmail": true,
+      "subscribeNewsEmail": false
+    }
   }
 }
 ```
@@ -60,7 +66,13 @@ curl -X GET \
     "birthDate": "1999-01-01",
     "region": "Beijing",
     "bio": "这里是个人简介",
-    "updatedAt": "2026-02-03T12:00:00"
+    "updatedAt": "2026-02-03T12:00:00",
+    "settings": {
+      "mfaEnabled": false,
+      "detectUnusualLogin": true,
+      "notifySensitiveActionEmail": true,
+      "subscribeNewsEmail": false
+    }
   }
 }
 ```
@@ -73,5 +85,103 @@ curl -X GET \
 {
   "code": 401,
   "msg": "未登录"
+}
+```
+
+---
+
+# 更新用户设置接口
+
+## 基本信息
+- 方法：POST
+- 路径：/auth/update/setting
+- 需要认证：是（AccessToken）
+- 请求类型：application/json
+
+## 用途
+用于更新用户的设置项（字段名 + bool）。
+
+## 请求头
+```
+Authorization: Bearer <accessToken>
+```
+
+## 请求体
+```json
+{
+  "field": "mfa_enabled",
+  "value": true
+}
+```
+
+## 字段说明
+- field: 设置字段名（支持 snake_case 或 camelCase）
+  - mfa_enabled / mfaEnabled
+  - detect_unusual_login / detectUnusualLogin
+  - notify_sensitive_action_email / notifySensitiveActionEmail
+  - subscribe_news_email / subscribeNewsEmail
+- value: 布尔值（true/false）
+
+## 成功响应
+- HTTP Status：200
+
+```json
+{
+  "code": 200,
+  "msg": "更新成功",
+  "data": {
+    "mfaEnabled": true,
+    "detectUnusualLogin": true,
+    "notifySensitiveActionEmail": true,
+    "subscribeNewsEmail": false
+  }
+}
+```
+
+## 失败响应
+### 1) 未登录
+- HTTP Status：401
+
+```json
+{
+  "code": 401,
+  "msg": "未登录"
+}
+```
+
+### 2) 用户不存在
+- HTTP Status：401
+
+```json
+{
+  "code": 401,
+  "msg": "用户不存在"
+}
+```
+
+### 3) 字段名或字段值为空
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "字段名不能为空"
+}
+```
+
+```json
+{
+  "code": 400,
+  "msg": "字段值不能为空"
+}
+```
+
+### 4) 字段名不支持
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "不支持的字段名"
 }
 ```

@@ -30,7 +30,7 @@ public class CorsConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         
-        // 允许的源（明确指定）
+        // 根据环境设置允许的源
         if (appProperties.isDebug()) {
             // 本地开发环境
             config.addAllowedOrigin("http://localhost:5173");

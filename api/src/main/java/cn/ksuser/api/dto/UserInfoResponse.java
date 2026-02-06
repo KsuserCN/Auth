@@ -14,20 +14,23 @@ public class UserInfoResponse {
     private String region;
     private String bio;
     private LocalDateTime updatedAt;
+    private UserSettingsResponse settings;
 
     public UserInfoResponse() {
     }
 
-    public UserInfoResponse(String uuid, String username, String email, String avatarUrl) {
+    public UserInfoResponse(String uuid, String username, String email, String avatarUrl, UserSettingsResponse settings) {
         this.uuid = uuid;
         this.username = username;
         this.email = email;
         this.avatarUrl = avatarUrl;
+        this.settings = settings;
     }
 
     public UserInfoResponse(String uuid, String username, String email, String avatarUrl,
                            String realName, String gender, LocalDate birthDate,
-                           String region, String bio, LocalDateTime updatedAt) {
+                           String region, String bio, LocalDateTime updatedAt,
+                           UserSettingsResponse settings) {
         this.uuid = uuid;
         this.username = username;
         this.email = email;
@@ -38,6 +41,7 @@ public class UserInfoResponse {
         this.region = region;
         this.bio = bio;
         this.updatedAt = updatedAt;
+        this.settings = settings;
     }
 
     public String getUuid() {
@@ -118,5 +122,13 @@ public class UserInfoResponse {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public UserSettingsResponse getSettings() {
+        return settings;
+    }
+
+    public void setSettings(UserSettingsResponse settings) {
+        this.settings = settings;
     }
 }

@@ -4,7 +4,9 @@ import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserSession;
+import cn.ksuser.api.entity.UserSettings;
 import cn.ksuser.api.security.SecurityValidator;
+import cn.ksuser.api.repository.UserSettingsRepository;
 import cn.ksuser.api.service.TokenBlacklistService;
 import cn.ksuser.api.service.*;
 import cn.ksuser.api.util.JwtUtil;
@@ -40,6 +42,7 @@ public class AuthController {
     private final SecurityValidator securityValidator;
     private final AppProperties appProperties;
     private final PasskeyService passkeyService;
+    private final UserSettingsRepository userSettingsRepository;
     private final TotpService totpService;
     private final EncryptionUtil encryptionUtil;
 
@@ -48,7 +51,8 @@ public class AuthController {
                           RateLimitService rateLimitService, SensitiveOperationService sensitiveOperationService,
                           TokenBlacklistService tokenBlacklistService, SecurityValidator securityValidator,
                           AppProperties appProperties, PasskeyService passkeyService,
-                          TotpService totpService, EncryptionUtil encryptionUtil) {
+                          TotpService totpService, EncryptionUtil encryptionUtil,
+                          UserSettingsRepository userSettingsRepository) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -62,6 +66,7 @@ public class AuthController {
         this.passkeyService = passkeyService;
         this.totpService = totpService;
         this.encryptionUtil = encryptionUtil;
+        this.userSettingsRepository = userSettingsRepository;
     }
 
     /**
@@ -73,12 +78,15 @@ public class AuthController {
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<Void>> health(HttpServletRequest request, HttpServletResponse response) {
         // 触发 CSRF Token 生成与下发
+        // CsrfTokenRequestAttributeHandler 会自动将 token 添加到 Cookie 中
         org.springframework.security.web.csrf.CsrfToken csrf = 
             (org.springframework.security.web.csrf.CsrfToken) request.getAttribute(
                 org.springframework.security.web.csrf.CsrfToken.class.getName());
         if (csrf != null) {
-            // Token 会通过 Set-Cookie 自动下发
+            // 主动调用 getToken() 确保 token 被生成并通过 Cookie 下发
             csrf.getToken();
+            // 对于 SameSite 为非 Strict 的情况，需要确保 token 在 response 中被设置
+            response.addHeader("X-CSRF-TOKEN", csrf.getToken());
         }
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "服务正常"));
@@ -572,6 +580,8 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "用户不存在"));
         }
 
+        UserSettingsResponse settingsResponse = buildUserSettingsResponse(user.getId());
+
         UserInfoResponse userInfo;
         if ("details".equalsIgnoreCase(type)) {
             userInfo = new UserInfoResponse(
@@ -584,19 +594,116 @@ public class AuthController {
                 user.getBirthDate(),
                 user.getRegion(),
                 user.getBio(),
-                user.getUpdatedAt()
+                user.getUpdatedAt(),
+                settingsResponse
             );
         } else {
             userInfo = new UserInfoResponse(
                 user.getUuid(),
                 user.getUsername(),
                 user.getEmail(),
-                user.getAvatarUrl()
+                user.getAvatarUrl(),
+                settingsResponse
             );
         }
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "获取成功", userInfo));
+    }
+
+    /**
+     * 更新用户设置
+     * @param updateUserSettingRequest 更新请求（字段名 + bool）
+     * @param authentication 认证信息
+     * @return ApiResponse
+     */
+    @PostMapping("/update/setting")
+    public ResponseEntity<ApiResponse<UserSettingsResponse>> updateSetting(@RequestBody UpdateUserSettingRequest updateUserSettingRequest,
+                                                                            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        if (updateUserSettingRequest == null || updateUserSettingRequest.getField() == null
+            || updateUserSettingRequest.getField().trim().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "字段名不能为空"));
+        }
+
+        if (updateUserSettingRequest.getValue() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "字段值不能为空"));
+        }
+
+        String field = updateUserSettingRequest.getField().trim();
+        boolean value = updateUserSettingRequest.getValue();
+
+        UserSettings settings = getOrCreateUserSettings(user.getId());
+
+        switch (field) {
+            case "mfa_enabled":
+            case "mfaEnabled":
+                settings.setMfaEnabled(value);
+                break;
+            case "detect_unusual_login":
+            case "detectUnusualLogin":
+                settings.setDetectUnusualLogin(value);
+                break;
+            case "notify_sensitive_action_email":
+            case "notifySensitiveActionEmail":
+                settings.setNotifySensitiveActionEmail(value);
+                break;
+            case "subscribe_news_email":
+            case "subscribeNewsEmail":
+                settings.setSubscribeNewsEmail(value);
+                break;
+            default:
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "不支持的字段名"));
+        }
+
+        UserSettings saved = userSettingsRepository.save(settings);
+        UserSettingsResponse response = new UserSettingsResponse(
+            Boolean.TRUE.equals(saved.getMfaEnabled()),
+            Boolean.TRUE.equals(saved.getDetectUnusualLogin()),
+            Boolean.TRUE.equals(saved.getNotifySensitiveActionEmail()),
+            Boolean.TRUE.equals(saved.getSubscribeNewsEmail())
+        );
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "更新成功", response));
+    }
+
+    private UserSettingsResponse buildUserSettingsResponse(Long userId) {
+        return userSettingsRepository.findByUserId(userId)
+            .map(settings -> new UserSettingsResponse(
+                Boolean.TRUE.equals(settings.getMfaEnabled()),
+                Boolean.TRUE.equals(settings.getDetectUnusualLogin()),
+                Boolean.TRUE.equals(settings.getNotifySensitiveActionEmail()),
+                Boolean.TRUE.equals(settings.getSubscribeNewsEmail())
+            ))
+            .orElseGet(() -> new UserSettingsResponse(false, true, true, false));
+    }
+
+    private UserSettings getOrCreateUserSettings(Long userId) {
+        return userSettingsRepository.findByUserId(userId)
+            .orElseGet(() -> {
+                UserSettings settings = new UserSettings();
+                settings.setUserId(userId);
+                settings.setMfaEnabled(false);
+                settings.setDetectUnusualLogin(true);
+                settings.setNotifySensitiveActionEmail(true);
+                settings.setSubscribeNewsEmail(false);
+                return userSettingsRepository.save(settings);
+            });
     }
 
     /**

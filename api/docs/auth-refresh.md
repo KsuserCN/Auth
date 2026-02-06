@@ -18,7 +18,7 @@ Cookie: refreshToken=<refreshToken>
 ```
 
 ## 请求示例
-```bash
+```bash![microsoft.svg](../../auth/public/oauth-icons/microsoft.svg)
 curl -X POST \
   -b "refreshToken=<refreshToken>" \
   http://localhost:8000/auth/refresh
