@@ -118,6 +118,127 @@
       </el-col>
     </el-row>
   </div>
+
+  <!-- TOTP 管理入口 -->
+  <el-row :gutter="16" class="row-gap">
+    <el-col :xs="24" :lg="24">
+      <el-card class="card" shadow="never">
+        <div class="card-title">
+          <el-icon>
+            <Lock />
+          </el-icon>
+          <span>双因素认证 (TOTP)</span>
+        </div>
+        <div v-if="!totpStatusFetched" class="passkey-loading">
+          <el-icon class="loading-icon">
+            <Loading />
+          </el-icon>
+          <span>加载中...</span>
+        </div>
+        <div v-else class="info-list">
+          <div class="info-row">
+            <div class="row-left">
+              <el-icon class="row-icon">
+                <Lock />
+              </el-icon>
+              <span class="row-label">状态</span>
+            </div>
+            <div class="row-right">
+              <el-tag v-if="totpEnabled" type="success" size="small">已启用</el-tag>
+              <el-tag v-else type="info" size="small">未启用</el-tag>
+            </div>
+          </div>
+          <div v-if="totpEnabled" class="info-row">
+            <div class="row-left">
+              <el-icon class="row-icon">
+                <Key />
+              </el-icon>
+              <span class="row-label">剩余恢复码</span>
+            </div>
+            <div class="row-right">
+              <span class="row-value">{{ recoveryCodesCount }} 个</span>
+              <el-tag v-if="recoveryCodesCount < 3" type="warning" size="small" style="margin-left: 8px">
+                ⚠️ 即将用完
+              </el-tag>
+            </div>
+          </div>
+          <div class="passkey-empty" style="padding: 12px 0;">
+            <p v-if="!totpEnabled">使用身份验证器应用保护您的账户</p>
+            <p v-else>管理您的 TOTP 设置和恢复码</p>
+            <p class="empty-desc">敏感操作需验证身份</p>
+          </div>
+          <div class="totp-actions">
+            <el-button v-if="!totpEnabled" type="primary" @click="handleEnableTotp">
+              启用 TOTP
+            </el-button>
+            <template v-else>
+              <el-button @click="handleViewRecoveryCodes">查看恢复码</el-button>
+              <el-button type="warning" @click="handleRegenerateRecoveryCodes" :disabled="recoveryCodesCount >= 10">
+                重新生成恢复码
+              </el-button>
+              <el-button type="danger" plain @click="handleDisableTotp">禁用 TOTP</el-button>
+            </template>
+          </div>
+        </div>
+      </el-card>
+    </el-col>
+  </el-row>
+
+  <!-- 回复码列表弹窗 -->
+  <el-dialog v-model="showRecoveryCodesDialog" title="回复码列表" width="420px">
+    <div v-if="recoveryCodesLoading" class="dialog-loading">
+      <el-icon class="loading-icon" :size="32">
+        <Loading />
+      </el-icon>
+      <p>加载中...</p>
+    </div>
+    <div v-else>
+      <el-alert title="请妥善保管您的回复码，每个码只能使用一次" type="warning" :closable="false" style="margin-bottom: 16px" />
+      <div v-if="recoveryCodesList.length === 0" class="passkey-empty">
+        <p>没有可用的回复码</p>
+        <p class="empty-desc">所有回复码都已使用，请重新生成</p>
+      </div>
+      <div v-else>
+        <div class="recovery-codes-grid">
+          <div v-for="code in recoveryCodesList" :key="code" class="recovery-code-item">
+            {{ code }}
+          </div>
+        </div>
+        <div style="margin-top: 16px; display: flex; gap: 8px;">
+          <el-button size="small" @click="copyRecoveryCodes(recoveryCodesList)">复制回复码</el-button>
+          <el-button size="small" @click="downloadRecoveryCodes(recoveryCodesList)">下载回复码</el-button>
+        </div>
+      </div>
+    </div>
+    <template #footer>
+      <el-button @click="showRecoveryCodesDialog = false">关闭</el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 新回复码弹窗 -->
+  <el-dialog v-model="showRegenerateDialog" title="新的回复码" width="450px" :close-on-click-modal="false">
+    <div v-if="regenerateLoading" class="dialog-loading">
+      <el-icon class="loading-icon" :size="32">
+        <Loading />
+      </el-icon>
+      <p>正在生成...</p>
+    </div>
+    <div v-else>
+      <el-alert title="新的回复码已生成！请立即保存，关闭后将无法再次查看完整的回复码。" type="success" :closable="false" style="margin-bottom: 16px" />
+      <div class="recovery-codes-grid">
+        <div v-for="code in newRecoveryCodes" :key="code" class="recovery-code-item">
+          {{ code }}
+        </div>
+      </div>
+      <div style="margin-top: 16px; display: flex; gap: 8px;">
+        <el-button @click="copyRecoveryCodes(newRecoveryCodes)">复制回复码</el-button>
+        <el-button @click="downloadRecoveryCodes(newRecoveryCodes)">下载回复码</el-button>
+      </div>
+    </div>
+    <template #footer>
+      <el-button type="primary" @click="showRegenerateDialog = false">已保存，关闭</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -139,6 +260,10 @@ import {
   deletePasskey,
   renamePasskey,
   type PasskeyListItem,
+  getTotpStatus,
+  getRecoveryCodes,
+  regenerateRecoveryCodes,
+  disableTotp,
 } from '@/api/auth'
 import { isWebAuthnSupported } from '@/utils/webauthn'
 
@@ -155,6 +280,19 @@ const passkeyList = ref<PasskeyListItem[]>([])
 const passkeyLoading = ref(false)
 const addLoading = ref(false)
 
+// TOTP 相关状态
+const totpEnabled = ref(false)
+const recoveryCodesCount = ref(0)
+const totpStatusFetched = ref(false)
+
+const showRecoveryCodesDialog = ref(false)
+const recoveryCodesList = ref<string[]>([])
+const recoveryCodesLoading = ref(false)
+
+const showRegenerateDialog = ref(false)
+const newRecoveryCodes = ref<string[]>([])
+const regenerateLoading = ref(false)
+
 onMounted(async () => {
   await userStore.fetchUserInfo()
   isPasskeySupported.value = isWebAuthnSupported()
@@ -162,6 +300,9 @@ onMounted(async () => {
   if (isPasskeySupported.value) {
     await loadPasskeyList()
   }
+
+  await fetchTotpStatus()
+
 })
 
 const loadPasskeyList = async () => {
@@ -172,6 +313,18 @@ const loadPasskeyList = async () => {
     console.error('Load passkey list failed:', error)
   } finally {
     passkeyLoading.value = false
+  }
+}
+
+const fetchTotpStatus = async () => {
+  try {
+    const data = await getTotpStatus()
+    totpEnabled.value = data.enabled
+    recoveryCodesCount.value = data.recoveryCodesCount
+    totpStatusFetched.value = true
+  } catch (error) {
+    console.error('获取 TOTP 状态失败:', error)
+    totpStatusFetched.value = true
   }
 }
 
@@ -348,6 +501,126 @@ const handleChangePassword = async () => {
   } finally {
     passwordLoading.value = false
   }
+}
+
+const ensureSensitiveVerified = async (): Promise<boolean> => {
+  try {
+    const status = await checkSensitiveVerification()
+    if (status.verified) return true
+    ElMessage.info('需要验证身份')
+    router.push({
+      path: '/sensitive-verification',
+      query: { returnTo: router.currentRoute.value.fullPath },
+    })
+    return false
+  } catch (error) {
+    console.error('Check sensitive verification failed:', error)
+    ElMessage.info('需要验证身份')
+    router.push({
+      path: '/sensitive-verification',
+      query: { returnTo: router.currentRoute.value.fullPath },
+    })
+    return false
+  }
+}
+
+const handleEnableTotp = async () => {
+  if (!(await ensureSensitiveVerified())) return
+  router.push('/totp')
+}
+
+const handleViewRecoveryCodes = async () => {
+  if (!(await ensureSensitiveVerified())) return
+  recoveryCodesLoading.value = true
+  showRecoveryCodesDialog.value = true
+  try {
+    recoveryCodesList.value = await getRecoveryCodes()
+  } catch (error) {
+    console.error('获取回复码失败:', error)
+    ElMessage.error('获取回复码失败')
+    showRecoveryCodesDialog.value = false
+  } finally {
+    recoveryCodesLoading.value = false
+  }
+}
+
+const handleRegenerateRecoveryCodes = async () => {
+  if (!(await ensureSensitiveVerified())) return
+  try {
+    await ElMessageBox.confirm(
+      '重新生成回复码会删除所有旧的回复码。请确保您已保存新的回复码。',
+      '确认重新生成',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    regenerateLoading.value = true
+    showRegenerateDialog.value = true
+    try {
+      newRecoveryCodes.value = await regenerateRecoveryCodes()
+      ElMessage.success('回复码已重新生成')
+      await fetchTotpStatus()
+    } catch (error) {
+      console.error('重新生成回复码失败:', error)
+      ElMessage.error('重新生成失败')
+      showRegenerateDialog.value = false
+    } finally {
+      regenerateLoading.value = false
+    }
+  } catch {
+    // 用户取消
+  }
+}
+
+const handleDisableTotp = async () => {
+  if (!(await ensureSensitiveVerified())) return
+  try {
+    await ElMessageBox.confirm(
+      '禁用 TOTP 后，您将无法使用双因素认证。是否继续？',
+      '确认禁用',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    await disableTotp()
+    ElMessage.success('TOTP 已禁用')
+    await fetchTotpStatus()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('禁用 TOTP 失败:', error)
+      ElMessage.error('禁用失败')
+    }
+  }
+}
+
+const copyRecoveryCodes = (codes: string[]) => {
+  const text = codes.join('\n')
+  navigator.clipboard.writeText(text).then(() => {
+    ElMessage.success('已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败')
+  })
+}
+
+const downloadRecoveryCodes = (codes: string[]) => {
+  const text = 'TOTP 回复码\n' +
+    new Date().toLocaleString() + '\n' +
+    '每个码只能使用一次\n\n' +
+    codes.join('\n')
+
+  const blob = new Blob([text], { type: 'text/plain' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'recovery-codes.txt'
+  a.click()
+  window.URL.revokeObjectURL(url)
 }
 </script>
 
@@ -574,5 +847,44 @@ const handleChangePassword = async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* TOTP 管理样式 */
+.totp-actions {
+  padding: 12px 20px 16px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialog-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0;
+  color: var(--el-text-color-secondary);
+}
+
+.dialog-loading p {
+  margin-top: 12px;
+}
+
+.recovery-codes-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.recovery-code-item {
+  padding: 10px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 4px;
+  text-align: center;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-color-primary);
 }
 </style>

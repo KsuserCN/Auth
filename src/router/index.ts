@@ -77,6 +77,11 @@ const router = createRouter({
       component: () => import('../views/ChangeEmailView.vue'),
     },
     {
+      path: '/totp',
+      name: 'totp',
+      component: () => import('../views/TotpView.vue'),
+    },
+    {
       path: '/delete-account',
       name: 'delete-account',
       component: () => import('../views/DeleteAccountView.vue'),

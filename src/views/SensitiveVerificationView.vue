@@ -92,6 +92,24 @@
                   <Loading />
                 </el-icon>
               </div>
+
+              <!-- TOTP 验证 -->
+              <div class="method-option" @click="!methodSelecting && selectMethod('totp')"
+                :class="{ 'is-disabled': methodSelecting }">
+                <el-icon class="method-icon" :size="28">
+                  <Key />
+                </el-icon>
+                <div class="method-info">
+                  <h3>使用 TOTP 验证</h3>
+                  <p>输入身份验证器中的 6 位验证码</p>
+                </div>
+                <el-icon class="method-arrow" v-if="!methodSelecting">
+                  <ArrowRight />
+                </el-icon>
+                <el-icon class="method-arrow loading-icon" v-else>
+                  <Loading />
+                </el-icon>
+              </div>
             </div>
 
             <div class="step-actions">
@@ -163,6 +181,27 @@
               </el-button>
             </div>
           </div>
+
+          <!-- 第二步：TOTP 验证 -->
+          <div v-else-if="step === 'totp'" class="step-container" key="totp">
+            <h2 class="step-title">TOTP 验证</h2>
+            <p class="step-subtitle">请输入身份验证器应用中显示的 6 位验证码</p>
+
+            <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
+              <el-form-item prop="code">
+                <el-input v-model="totpInput.code" placeholder="输入6位验证码" maxlength="6"
+                  @input="totpInput.code = totpInput.code.replace(/[^\d]/g, '')" @keyup.enter="handleTotpVerify"
+                  autofocus />
+              </el-form-item>
+            </el-form>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMethod">返回</el-button>
+              <el-button class="next-btn" @click="handleTotpVerify" :loading="totpLoading">
+                验证
+              </el-button>
+            </div>
+          </div>
         </Transition>
       </div>
     </div>
@@ -191,14 +230,15 @@ const userStore = useUserStore()
 // 表单引用
 const passwordFormRef = ref<FormInstance>()
 const codeFormRef = ref<FormInstance>()
+const totpFormRef = ref<FormInstance>()
 
 // 流程步骤
-const step = ref<'method' | 'password' | 'email-code' | 'passkey'>('method')
+const step = ref<'method' | 'password' | 'email-code' | 'passkey' | 'totp'>('method')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['method', 'password', 'email-code', 'passkey']
+const stepOrder = ['method', 'password', 'email-code', 'passkey', 'totp']
 
-const updateStep = (newStep: 'method' | 'password' | 'email-code' | 'passkey') => {
+const updateStep = (newStep: 'method' | 'password' | 'email-code' | 'passkey' | 'totp') => {
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -236,10 +276,23 @@ const codeRules = {
   ],
 }
 
+// TOTP 验证码输入
+const totpInput = ref({
+  code: '',
+})
+
+const totpRules = {
+  code: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { len: 6, message: '验证码应为6位数字', trigger: 'blur' },
+  ],
+}
+
 // 加载状态
 const passwordLoading = ref(false)
 const codeLoading = ref(false)
 const passkeyLoading = ref(false)
+const totpLoading = ref(false)
 const methodSelecting = ref(false)
 
 // Passkey 支持检测
@@ -250,13 +303,27 @@ const codeCountdown = ref(0)
 const canResendCode = ref(false)
 let codeCountdownTimer: number | null = null
 
+const ensureAuthenticated = () => {
+  const token = sessionStorage.getItem('accessToken')
+  if (!token) {
+    ElMessage.warning('请先登录')
+    router.replace({
+      path: '/login',
+      query: { returnTo: router.currentRoute.value.fullPath },
+    })
+    return false
+  }
+  return true
+}
+
 onMounted(async () => {
+  if (!ensureAuthenticated()) return
   await userStore.fetchUserInfo()
   isPasskeySupported.value = isWebAuthnSupported()
 })
 
 // 选择验证方式
-const selectMethod = async (method: 'password' | 'email-code' | 'passkey') => {
+const selectMethod = async (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
   if (methodSelecting.value) return
 
   methodSelecting.value = true
@@ -270,6 +337,9 @@ const selectMethod = async (method: 'password' | 'email-code' | 'passkey') => {
     } else if (method === 'passkey') {
       await new Promise((resolve) => setTimeout(resolve, 200))
       updateStep('passkey')
+    } else if (method === 'totp') {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      updateStep('totp')
     }
   } finally {
     methodSelecting.value = false
@@ -279,6 +349,7 @@ const selectMethod = async (method: 'password' | 'email-code' | 'passkey') => {
 const backToMethod = () => {
   updateStep('method')
   codeInput.value.code = ''
+  totpInput.value.code = ''
   cleanupCodeCountdown()
 }
 
@@ -288,6 +359,7 @@ const handleCancel = () => {
 
 // 密码验证
 const handlePasswordVerify = async () => {
+  if (!ensureAuthenticated()) return
   try {
     await passwordFormRef.value?.validate()
     passwordLoading.value = true
@@ -311,6 +383,7 @@ const handlePasswordVerify = async () => {
 
 // 发送验证码
 const sendCode = async () => {
+  if (!ensureAuthenticated()) return
   try {
     await sendSensitiveVerificationCode()
     ElMessage.success('验证码已发送')
@@ -323,6 +396,7 @@ const sendCode = async () => {
 }
 
 const resendCode = async () => {
+  if (!ensureAuthenticated()) return
   try {
     codeLoading.value = true
     await sendSensitiveVerificationCode()
@@ -338,6 +412,7 @@ const resendCode = async () => {
 
 // 验证码验证
 const handleCodeVerify = async () => {
+  if (!ensureAuthenticated()) return
   try {
     await codeFormRef.value?.validate()
     codeLoading.value = true
@@ -356,6 +431,29 @@ const handleCodeVerify = async () => {
     console.error('Code verify failed:', error)
   } finally {
     codeLoading.value = false
+  }
+}
+
+// TOTP 验证
+const handleTotpVerify = async () => {
+  if (!ensureAuthenticated()) return
+  try {
+    await totpFormRef.value?.validate()
+    totpLoading.value = true
+
+    await verifySensitiveOperation({
+      method: 'totp',
+      code: totpInput.value.code
+    })
+
+    ElMessage.success('验证成功')
+
+    const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+    router.push(returnTo)
+  } catch (error: unknown) {
+    console.error('TOTP verify failed:', error)
+  } finally {
+    totpLoading.value = false
   }
 }
 
@@ -387,6 +485,7 @@ onBeforeUnmount(() => {
 
 // Passkey 验证
 const handlePasskeyVerify = async () => {
+  if (!ensureAuthenticated()) return
   if (passkeyLoading.value) return
   if (!isPasskeySupported.value) {
     ElMessage.error('当前浏览器不支持 Passkey')

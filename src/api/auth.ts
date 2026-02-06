@@ -314,7 +314,7 @@ export const updateUserProfile = async (data: UpdateProfileRequest): Promise<Use
  * POST /auth/verify-sensitive
  */
 export interface VerifySensitiveRequest {
-  method: 'password' | 'email-code'
+  method: 'password' | 'email-code' | 'totp'
   password?: string
   code?: string
 }
@@ -487,4 +487,96 @@ export const deleteAccount = async (data: DeleteAccountRequest): Promise<void> =
  */
 export const logout = async (): Promise<void> => {
   await request.post('/auth/logout')
+}
+
+// ========== TOTP 相关 ==========
+
+/**
+ * 获取 TOTP 状态
+ * GET /auth/totp/status
+ */
+export interface TotpStatusResponse {
+  enabled: boolean
+  recoveryCodesCount: number
+}
+
+export const getTotpStatus = async (): Promise<TotpStatusResponse> => {
+  const response = await request.get<ApiResponse<TotpStatusResponse>>('/auth/totp/status')
+  return (response as unknown as ApiResponse<TotpStatusResponse>).data
+}
+
+/**
+ * 获取 TOTP 注册选项
+ * POST /auth/totp/registration-options
+ */
+export interface TotpRegistrationOptionsResponse {
+  secret: string
+  qrCodeUrl: string
+  recoveryCodes: string[]
+}
+
+export const getTotpRegistrationOptions = async (): Promise<TotpRegistrationOptionsResponse> => {
+  const response = await request.post<ApiResponse<TotpRegistrationOptionsResponse>>(
+    '/auth/totp/registration-options',
+  )
+  return (response as unknown as ApiResponse<TotpRegistrationOptionsResponse>).data
+}
+
+/**
+ * 确认 TOTP 注册
+ * POST /auth/totp/registration-verify
+ */
+export interface TotpRegistrationVerifyRequest {
+  code: string
+}
+
+export const verifyTotpRegistration = async (
+  data: TotpRegistrationVerifyRequest,
+): Promise<void> => {
+  await request.post('/auth/totp/registration-verify', data)
+}
+
+/**
+ * TOTP 验证
+ * POST /auth/totp/verify
+ */
+export interface TotpVerifyRequest {
+  code?: string
+  recoveryCode?: string
+}
+
+export interface TotpVerifyResponse {
+  success: boolean
+  message: string
+}
+
+export const verifyTotp = async (data: TotpVerifyRequest): Promise<TotpVerifyResponse> => {
+  const response = await request.post<ApiResponse<TotpVerifyResponse>>('/auth/totp/verify', data)
+  return (response as unknown as ApiResponse<TotpVerifyResponse>).data
+}
+
+/**
+ * 获取回复码列表
+ * GET /auth/totp/recovery-codes
+ */
+export const getRecoveryCodes = async (): Promise<string[]> => {
+  const response = await request.get<ApiResponse<string[]>>('/auth/totp/recovery-codes')
+  return (response as unknown as ApiResponse<string[]>).data
+}
+
+/**
+ * 重新生成回复码
+ * POST /auth/totp/recovery-codes/regenerate
+ */
+export const regenerateRecoveryCodes = async (): Promise<string[]> => {
+  const response = await request.post<ApiResponse<string[]>>('/auth/totp/recovery-codes/regenerate')
+  return (response as unknown as ApiResponse<string[]>).data
+}
+
+/**
+ * 禁用 TOTP
+ * POST /auth/totp/disable
+ */
+export const disableTotp = async (): Promise<void> => {
+  await request.post('/auth/totp/disable')
 }
