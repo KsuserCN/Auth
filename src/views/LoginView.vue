@@ -165,9 +165,32 @@
             </div>
           </div>
 
+          <!-- 第四步：TOTP 验证 -->
+          <div v-else-if="step === 'totp'" class="step-container" key="totp">
+            <h2 class="step-title">验证身份</h2>
+            <p class="step-subtitle">请输入您的 MFA 验证码</p>
+
+            <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
+              <el-form-item prop="code">
+                <el-input v-model="totpInput.code" placeholder="输入6位验证码" maxlength="6"
+                  @input="totpInput.code = totpInput.code.replace(/[^\d]/g, '')" @keyup.enter="handleTotpVerify"
+                  autofocus />
+              </el-form-item>
+            </el-form>
+
+            <p class="step-subtitle">使用 TOTP 应用中的验证码，或输入您的回复码</p>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMFASource">返回</el-button>
+              <el-button class="next-btn" @click="handleTotpVerify" :loading="totpLoading">
+                验证
+              </el-button>
+            </div>
+          </div>
+
         </Transition>
 
-        <div class="extra-login">
+        <div v-if="step === 'email'" class="extra-login">
           <div class="extra-title">其他登录方式</div>
           <div class="extra-actions">
             <div class="extra-icons">
@@ -207,7 +230,10 @@ import {
   sendLoginCode,
   loginWithCode,
   getPasskeyAuthenticationOptions,
-  verifyPasskeyAuthentication
+  verifyPasskeyAuthentication,
+  verifyTOTPForLogin,
+  type MFAChallenge,
+  type LoginResponse
 } from '@/api/auth'
 import { isWebAuthnSupported, getPasskeyCredential, extractAuthenticationData } from '@/utils/webauthn'
 
@@ -215,17 +241,18 @@ import { isWebAuthnSupported, getPasskeyCredential, extractAuthenticationData } 
 const emailFormRef = ref<FormInstance>()
 const passwordFormRef = ref<FormInstance>()
 const codeFormRef = ref<FormInstance>()
+const totpFormRef = ref<FormInstance>()
 
 // 路由
 const router = useRouter()
 
 // 流程步骤
-const step = ref<'email' | 'method' | 'password' | 'email-code'>('email')
+const step = ref<'email' | 'method' | 'password' | 'email-code' | 'totp'>('email')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['email', 'method', 'password', 'email-code']
+const stepOrder = ['email', 'method', 'password', 'email-code', 'totp']
 
-const updateStep = (newStep: 'email' | 'method' | 'password' | 'email-code') => {
+const updateStep = (newStep: 'email' | 'method' | 'password' | 'email-code' | 'totp') => {
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -272,12 +299,29 @@ const codeRules = {
   ],
 }
 
+// TOTP 验证码输入
+const totpInput = ref({
+  code: '',
+})
+
+const totpRules = {
+  code: [
+    { required: true, message: '请输入验证码', trigger: 'blur' },
+    { len: 6, message: '验证码应为6位数字', trigger: 'blur' },
+  ],
+}
+
 // 加载状态
 const validateLoading = ref(false)
 const passwordLoading = ref(false)
 const codeLoading = ref(false)
 const passkeyLoading = ref(false)
 const methodSelecting = ref(false)
+const totpLoading = ref(false)
+
+// MFA 相关状态
+const mfaChallenge = ref<MFAChallenge | null>(null)
+const mfaSource = ref<'password' | 'email-code' | 'passkey' | null>(null)
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -343,18 +387,23 @@ const handlePasswordLogin = async () => {
       password: passwordInput.value.password
     })
 
-    // 存储 Access Token 到 sessionStorage
-    sessionStorage.setItem('accessToken', response.accessToken)
-
-    // 如果返回了用户信息，也一并存储
-    if (response.user) {
-      sessionStorage.setItem('user', JSON.stringify(response.user))
+    // 检查是否需要 MFA 验证
+    if ('challengeId' in response) {
+      // 需要 MFA 验证
+      mfaChallenge.value = response as MFAChallenge
+      mfaSource.value = 'password'
+      ElMessage.info('需要进行 MFA 验证')
+      updateStep('totp')
+    } else {
+      // 直接登录成功
+      const loginResp = response as LoginResponse
+      sessionStorage.setItem('accessToken', loginResp.accessToken)
+      if (loginResp.user) {
+        sessionStorage.setItem('user', JSON.stringify(loginResp.user))
+      }
+      ElMessage.success('登录成功')
+      router.push('/home')
     }
-
-    ElMessage.success('登录成功')
-
-    // 跳转到首页
-    router.push('/home')
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
     console.error('Password login failed:', error)
@@ -434,18 +483,23 @@ const handleEmailCodeLogin = async () => {
       code: codeInput.value.code
     })
 
-    // 存储 Access Token 到 sessionStorage
-    sessionStorage.setItem('accessToken', response.accessToken)
-
-    // 如果返回了用户信息，也一并存储
-    if (response.user) {
-      sessionStorage.setItem('user', JSON.stringify(response.user))
+    // 检查是否需要 MFA 验证
+    if ('challengeId' in response) {
+      // 需要 MFA 验证
+      mfaChallenge.value = response as MFAChallenge
+      mfaSource.value = 'email-code'
+      ElMessage.info('需要进行 MFA 验证')
+      updateStep('totp')
+    } else {
+      // 直接登录成功
+      const loginResp = response as LoginResponse
+      sessionStorage.setItem('accessToken', loginResp.accessToken)
+      if (loginResp.user) {
+        sessionStorage.setItem('user', JSON.stringify(loginResp.user))
+      }
+      ElMessage.success('登录成功')
+      router.push('/home')
     }
-
-    ElMessage.success('登录成功')
-
-    // 跳转到首页
-    router.push('/home')
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
     console.error('Email code login failed:', error)
@@ -487,18 +541,23 @@ const handlePasskeyLogin = async () => {
     // 4. 验证凭证
     const response = await verifyPasskeyAuthentication(options.challengeId, authData)
 
-    // 5. 存储 Access Token 到 sessionStorage
-    sessionStorage.setItem('accessToken', response.accessToken)
-
-    // 如果返回了用户信息，也一并存储
-    if (response.user) {
-      sessionStorage.setItem('user', JSON.stringify(response.user))
+    // 检查是否需要 MFA 验证
+    if ('challengeId' in response) {
+      // 需要 MFA 验证
+      mfaChallenge.value = response as MFAChallenge
+      mfaSource.value = 'passkey'
+      ElMessage.info('需要进行 MFA 验证')
+      updateStep('totp')
+    } else {
+      // 直接登录成功
+      const loginResp = response as LoginResponse
+      sessionStorage.setItem('accessToken', loginResp.accessToken)
+      if (loginResp.user) {
+        sessionStorage.setItem('user', JSON.stringify(loginResp.user))
+      }
+      ElMessage.success('Passkey 登录成功')
+      router.push('/home')
     }
-
-    ElMessage.success('Passkey 登录成功')
-
-    // 6. 跳转到首页
-    router.push('/home')
   } catch (error: unknown) {
     // 处理不同类型的错误
     if (error instanceof Error) {
@@ -531,6 +590,68 @@ const handlePasskeyLogin = async () => {
 
 const handleUnsupportedLogin = (provider: string) => {
   ElMessage.info(`${provider.toUpperCase()} 登录 - 暂不支持`)
+}
+
+// ===== 第四步：TOTP 验证 =====
+
+const handleTotpVerify = async () => {
+  try {
+    await totpFormRef.value?.validate()
+    totpLoading.value = true
+
+    if (!mfaChallenge.value) {
+      ElMessage.error('MFA 挑战信息丢失')
+      return
+    }
+
+    // 调用 TOTP 验证接口
+    const response = await verifyTOTPForLogin({
+      challengeId: mfaChallenge.value.challengeId,
+      code: totpInput.value.code
+    })
+
+    // 存储 Access Token 到 sessionStorage
+    sessionStorage.setItem('accessToken', response.accessToken)
+
+    // 如果返回了用户信息，也一并存储
+    if (response.user) {
+      sessionStorage.setItem('user', JSON.stringify(response.user))
+    }
+
+    ElMessage.success('MFA 验证成功，登录完成')
+
+    // 跳转到首页
+    router.push('/home')
+  } catch (error: unknown) {
+    // 错误已经在 request.ts 中处理并显示
+    console.error('TOTP verification failed:', error)
+  } finally {
+    totpLoading.value = false
+  }
+}
+
+const backToMFASource = () => {
+  const source = mfaSource.value
+  mfaChallenge.value = null
+  mfaSource.value = null
+  totpInput.value.code = ''
+
+  // 根据 MFA 来源返回到对应的页面
+  switch (source) {
+    case 'password':
+      updateStep('password')
+      break
+    case 'email-code':
+      updateStep('email-code')
+      break
+    case 'passkey':
+      // Passkey 登录没有中间步骤，直接返回到 email
+      emailInput.value.email = ''
+      updateStep('email')
+      break
+    default:
+      updateStep('email')
+  }
 }
 
 // ===== 生命周期 =====

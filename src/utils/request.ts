@@ -112,8 +112,8 @@ request.interceptors.response.use(
     const data = response.data
     const { code, msg } = data
 
-    // 成功响应 - 直接返回 ApiResponse 对象
-    if (code === 200) {
+    // 成功响应 (200) 或 MFA 需求 (201) - 直接返回 ApiResponse 对象
+    if (code === 200 || code === 201) {
       return response.data as any
     }
 

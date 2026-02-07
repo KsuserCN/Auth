@@ -34,6 +34,25 @@ export interface LoginResponse {
   user?: User
 }
 
+// MFA 验证挑战响应
+export interface MFAChallenge {
+  challengeId: string
+  method: 'totp' | 'backup_code'
+}
+
+// TOTP 验证请求
+export interface TOTPVerifyRequest {
+  challengeId: string
+  code?: string
+  recoveryCode?: string
+}
+
+// TOTP 验证响应
+export interface TOTPVerifyResponse {
+  accessToken: string
+  user?: User
+}
+
 // ========== 密码登录 ==========
 
 export interface PasswordLoginRequest {
@@ -44,10 +63,23 @@ export interface PasswordLoginRequest {
 /**
  * 密码登录
  * POST /auth/login
+ * 返回 200 表示直接登录成功，返回 201 表示需要 MFA 验证
  */
-export const passwordLogin = async (data: PasswordLoginRequest): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<LoginResponse>>('/auth/login', data)
-  return (response as unknown as ApiResponse<LoginResponse>).data
+export const passwordLogin = async (
+  data: PasswordLoginRequest,
+): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>(
+    '/auth/login',
+    data,
+  )
+  const result = (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
+
+  // 检查响应中是否包含 challengeId（MFA 场景）
+  if ('challengeId' in result) {
+    return result as MFAChallenge
+  }
+
+  return result as LoginResponse
 }
 
 // ========== 邮箱验证码登录 ==========
@@ -67,15 +99,28 @@ export const sendLoginCode = async (data: SendLoginCodeRequest): Promise<void> =
 /**
  * 邮箱验证码登录
  * POST /auth/login-with-code
+ * 返回 200 表示直接登录成功，返回 201 表示需要 MFA 验证
  */
 export interface LoginWithCodeRequest {
   email: string
   code: string
 }
 
-export const loginWithCode = async (data: LoginWithCodeRequest): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<LoginResponse>>('/auth/login-with-code', data)
-  return (response as unknown as ApiResponse<LoginResponse>).data
+export const loginWithCode = async (
+  data: LoginWithCodeRequest,
+): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>(
+    '/auth/login-with-code',
+    data,
+  )
+  const result = (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
+
+  // 检查响应中是否包含 challengeId（MFA 场景）
+  if ('challengeId' in result) {
+    return result as MFAChallenge
+  }
+
+  return result as LoginResponse
 }
 
 // ========== Passkey 登录 ==========
@@ -102,6 +147,7 @@ export const getPasskeyAuthenticationOptions = async (): Promise<PasskeyAuthenti
 /**
  * 验证 Passkey 认证（登录用）
  * POST /auth/passkey/authentication-verify
+ * 返回 200 表示直接登录成功，返回 201 表示需要 MFA 验证
  */
 export interface PasskeyAuthenticationRequest {
   credentialRawId: string
@@ -113,20 +159,22 @@ export interface PasskeyAuthenticationRequest {
 export const verifyPasskeyAuthentication = async (
   challengeId: string,
   data: PasskeyAuthenticationRequest,
-): Promise<LoginResponse> => {
-  const response = await request.post<ApiResponse<LoginResponse>>(
+): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>(
     `/auth/passkey/authentication-verify?challengeId=${challengeId}`,
     data,
   )
-  return (response as any).data
+  const result = (response as any).data
+
+  // 检查响应中是否包含 challengeId（MFA 场景）
+  if ('challengeId' in result) {
+    return result as MFAChallenge
+  }
+
+  return result as LoginResponse
 }
 
 // ========== Passkey 注册 ==========
-
-/**
- * 获取 Passkey 注册选项
- * POST /auth/passkey/registration-options
- */
 export interface PasskeyRegistrationOptionsRequest {
   passkeyName: string
 }
@@ -567,6 +615,16 @@ export const verifyTotpRegistration = async (
   data: TotpRegistrationVerifyRequest,
 ): Promise<void> => {
   await request.post('/auth/totp/registration-verify', data)
+}
+
+/**
+ * TOTP 验证（MFA 登录流程）
+ * POST /auth/totp/mfa-verify
+ * 用于在登录时完成 MFA 验证，需传入 challengeId 和 code
+ */
+export const verifyTOTPForLogin = async (data: TOTPVerifyRequest): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>('/auth/totp/mfa-verify', data)
+  return (response as unknown as ApiResponse<LoginResponse>).data
 }
 
 /**
