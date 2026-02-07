@@ -1,7 +1,7 @@
 package cn.ksuser.api.dto;
 
 /**
- * TOTP 验证请求
+ * TOTP 验证请求（用于已登录用户的 TOTP 验证或恢复码）
  */
 public class TotpVerifyRequest {
     private String code;

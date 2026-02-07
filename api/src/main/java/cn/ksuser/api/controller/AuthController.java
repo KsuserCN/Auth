@@ -26,6 +26,9 @@ import java.time.format.DateTimeParseException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import cn.ksuser.api.service.MfaService;
+import cn.ksuser.api.dto.MfaChallengeResponse;
+import cn.ksuser.api.dto.MfaTotpVerifyRequest;
 
 @RestController
 @RequestMapping("/auth")
@@ -45,6 +48,7 @@ public class AuthController {
     private final UserSettingsRepository userSettingsRepository;
     private final TotpService totpService;
     private final EncryptionUtil encryptionUtil;
+    private final MfaService mfaService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
@@ -52,7 +56,7 @@ public class AuthController {
                           TokenBlacklistService tokenBlacklistService, SecurityValidator securityValidator,
                           AppProperties appProperties, PasskeyService passkeyService,
                           TotpService totpService, EncryptionUtil encryptionUtil,
-                          UserSettingsRepository userSettingsRepository) {
+                          UserSettingsRepository userSettingsRepository, MfaService mfaService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -67,6 +71,7 @@ public class AuthController {
         this.totpService = totpService;
         this.encryptionUtil = encryptionUtil;
         this.userSettingsRepository = userSettingsRepository;
+        this.mfaService = mfaService;
     }
 
     /**
@@ -414,7 +419,7 @@ public class AuthController {
      * @return ApiResponse
      */
     @PostMapping("/login-with-code")
-    public ResponseEntity<ApiResponse<TokenResponse>> loginWithCode(@RequestBody LoginCodeRequest loginCodeRequest,
+    public ResponseEntity<ApiResponse<Object>> loginWithCode(@RequestBody LoginCodeRequest loginCodeRequest,
                                                                      HttpServletRequest request,
                                                                      HttpServletResponse response) {
         String email = loginCodeRequest.getEmail();
@@ -481,6 +486,16 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "邮箱未注册或验证码错误"));
         }
+        // 如果用户启用了 MFA 并且存在 TOTP，则先进入 MFA 流程（不下发 token）
+        UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+        boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
+        if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+            String userAgent = request.getHeader("User-Agent");
+            String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent);
+            // 不创建会话、不返回 token，告知前端需要 TOTP 验证
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(201, "需要 TOTP 验证", new MfaChallengeResponse(challengeId, "totp")));
+        }
 
         // 生成 Token
         String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
@@ -507,7 +522,7 @@ public class AuthController {
      * @return ApiResponse
      */
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<TokenResponse>> login(@RequestBody LoginRequest loginRequest, 
+    public ResponseEntity<ApiResponse<Object>> login(@RequestBody LoginRequest loginRequest, 
                                                             HttpServletRequest request,
                                                             HttpServletResponse response) {
         String email = loginRequest.getEmail();
@@ -543,6 +558,15 @@ public class AuthController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "邮箱或密码错误"));
+        }
+        // 如果用户启用了 MFA 并且存在 TOTP，则先进入 MFA 流程（不下发 token）
+        UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+        boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
+        if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+            String userAgent = request.getHeader("User-Agent");
+            String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(201, "需要 TOTP 验证", new MfaChallengeResponse(challengeId, "totp")));
         }
 
         // 生成 Token
@@ -785,6 +809,60 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "刷新成功", new RefreshResponse(newAccessToken)));
+    }
+
+    /**
+     * 验证 TOTP（用于 MFA 登录完成）
+     * 前端在收到 201 并带有 challengeId 后，调用此接口完成 TOTP 校验并下发 token
+     */
+    @PostMapping("/totp/mfa-verify")
+    public ResponseEntity<ApiResponse<Object>> verifyTotpForLogin(
+            @RequestBody MfaTotpVerifyRequest requestBody,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) {
+        if (requestBody == null || requestBody.getChallengeId() == null || requestBody.getCode() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 和 code 不能为空"));
+        }
+
+        String clientIp = rateLimitService.getClientIp(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        Long userId = mfaService.consumeChallenge(requestBody.getChallengeId(), clientIp, userAgent);
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 无效或已过期"));
+        }
+
+        // 查找用户
+        User user = userService.findById(userId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            byte[] masterKey = encryptionUtil.getMasterKey();
+            boolean ok = totpService.verifyTotpCode(user.getId(), requestBody.getCode(), masterKey);
+            if (!ok) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "TOTP 校验失败"));
+            }
+
+            // 验证通过后，正常创建会话并下发 token
+            String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
+            UserSession session = userSessionService.createSession(user, refreshToken);
+            int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+            String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
+
+            setRefreshTokenCookie(response, refreshToken);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "TOTP 验证处理失败"));
+        }
     }
 
     /**
@@ -1530,9 +1608,10 @@ public class AuthController {
      * @return ApiResponse
      */
     @PostMapping("/passkey/authentication-verify")
-    public ResponseEntity<ApiResponse<TokenResponse>> verifyPasskeyAuthentication(
+    public ResponseEntity<ApiResponse<Object>> verifyPasskeyAuthentication(
             @RequestBody PasskeyAuthenticationVerifyRequest request,
             @RequestParam(required = false) String challengeId,
+            HttpServletRequest httpRequest,
             HttpServletResponse response) {
         try {
             // 检查 challengeId 是否传递
@@ -1549,6 +1628,17 @@ public class AuthController {
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(401, "Passkey 验证失败"));
+            }
+
+            // 如果用户启用了 MFA 并且存在 TOTP，则先进入 MFA 流程（不下发 token）
+            UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+            boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
+            String clientIp = rateLimitService.getClientIp(httpRequest);
+            if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+                String userAgent = httpRequest.getHeader("User-Agent");
+                String challenge = mfaService.createChallenge(user.getId(), clientIp, userAgent);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new ApiResponse<>(201, "需要 TOTP 验证", new MfaChallengeResponse(challenge, "totp")));
             }
 
             // 生成 Token

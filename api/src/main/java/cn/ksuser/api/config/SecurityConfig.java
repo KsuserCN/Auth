@@ -41,6 +41,7 @@ public class SecurityConfig {
                     "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/",
                     "/auth/passkey/authentication-options", "/auth/passkey/authentication-options/",
                     "/auth/passkey/authentication-verify", "/auth/passkey/authentication-verify/",
+                    "/auth/totp/mfa-verify", "/auth/totp/mfa-verify/",
                     "/info/password-requirement", "/info/password-requirement/")
                 .permitAll()
                 .anyRequest().authenticated()
