@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@fortawesome/fontawesome-free": "^7.1.0",
     "@vueuse/core": "^14.2.0",
     "axios": "^1.13.4",
     "element-plus": "^2.13.1",

@@ -195,16 +195,16 @@
           <div class="extra-actions">
             <div class="extra-icons">
               <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
-                <img src="/oauth-icons/wechat.svg" alt="WeChat" />
+                <i class="fa-brands fa-weixin" aria-hidden="true"></i>
               </button>
               <button class="icon-btn" @click="handleUnsupportedLogin('qq')" aria-label="QQ 登录" type="button">
-                <img src="/oauth-icons/qq.svg" alt="QQ" />
+                <i class="fa-brands fa-qq" aria-hidden="true"></i>
               </button>
               <button class="icon-btn" @click="handleUnsupportedLogin('Github')" aria-label="Github 登录" type="button">
-                <img src="/oauth-icons/github.svg" alt="Github" />
+                <i class="fa-brands fa-github" aria-hidden="true"></i>
               </button>
               <button class="icon-btn" @click="handleUnsupportedLogin('微软')" aria-label="微软登录" type="button">
-                <img src="/oauth-icons/microsoft.svg" alt="Microsoft" />
+                <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
               </button>
             </div>
             <el-button class="extra-btn" :loading="passkeyLoading" :disabled="!isPasskeySupported"
@@ -1274,21 +1274,20 @@ onBeforeUnmount(() => {
   opacity: 0.8;
 }
 
-.icon-btn img {
-  width: 32px;
-  height: 32px;
-  object-fit: contain;
-  opacity: 0.6;
-  transition: opacity 0.3s ease;
+.icon-btn i {
+  font-size: 28px;
+  color: var(--el-text-color-secondary);
+  opacity: 0.7;
+  transition: opacity 0.3s ease, color 0.3s ease;
 }
 
-.icon-btn:hover img {
-  opacity: 0.8;
+.icon-btn:hover i {
+  opacity: 0.9;
+  color: var(--el-color-primary);
 }
 
-.dark .icon-btn img {
-  opacity: 0.8;
-  filter: invert(1) brightness(1.1);
+.dark .icon-btn i {
+  opacity: 0.85;
 }
 
 .extra-btn {

@@ -145,6 +145,84 @@
 
     <el-row :gutter="16" class="row-gap">
       <el-col :xs="24">
+        <el-card class="card" shadow="never">
+          <div class="card-title card-title-between">
+            <div class="title-left">
+              <el-icon>
+                <Document />
+              </el-icon>
+              <span>近期敏感操作</span>
+            </div>
+            <div class="title-actions">
+              <el-tag v-if="sensitiveLogsTotal" type="info" effect="plain">
+                共 {{ sensitiveLogsTotal }} 条
+              </el-tag>
+              <el-button text size="small" :loading="sensitiveLogsLoading" @click="loadSensitiveLogs">
+                刷新
+              </el-button>
+            </div>
+          </div>
+          <el-table :data="sensitiveLogs" class="modern-table" size="small"
+            :empty-text="sensitiveLogsLoading ? '加载中...' : '暂无记录'">
+            <el-table-column label="操作" min-width="180">
+              <template #default="{ row }">
+                <div class="log-primary">
+                  <span class="log-title">{{ operationTypeLabels[row.operationType] || row.operationType }}</span>
+                  <el-tag v-if="row.loginMethod" size="small" effect="plain">
+                    {{ loginMethodLabels[row.loginMethod] || row.loginMethod }}
+                  </el-tag>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="结果" min-width="120">
+              <template #default="{ row }">
+                <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
+                  {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
+                </el-tag>
+                <span v-if="row.failureReason" class="log-sub">{{ row.failureReason }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="位置 / IP" min-width="160">
+              <template #default="{ row }">
+                <div class="log-secondary">
+                  <span>{{ row.ipLocation || '未知位置' }}</span>
+                  <span class="log-sub">{{ row.ipAddress }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="设备" min-width="160">
+              <template #default="{ row }">
+                <div class="log-secondary">
+                  <span class="log-device">
+                    <i :class="getDeviceIconClass(row.deviceType)" class="log-device-icon" aria-hidden="true"></i>
+                    {{ row.deviceType || '未知设备' }}
+                  </span>
+                  <span class="log-sub log-browser">
+                    <i :class="getBrowserIconClass(row.browser)" class="log-browser-icon" aria-hidden="true"></i>
+                    {{ row.browser || '未知浏览器' }}
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="风险" min-width="100" align="center">
+              <template #default="{ row }">
+                <el-tag :type="getRiskTagType(row.riskScore)" size="small" effect="plain">
+                  {{ row.riskScore }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="时间" min-width="160">
+              <template #default="{ row }">
+                {{ formatSensitiveTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
         <el-card class="card card-danger" shadow="never">
           <div class="card-title danger-title">
             <el-icon>
@@ -180,8 +258,19 @@ import {
   Lock,
   Monitor,
   Delete,
+  Document,
 } from '@element-plus/icons-vue'
-import { checkSensitiveVerification, getPasskeyList, getTotpStatus, getUserInfo, updateUserSetting } from '@/api/auth'
+import {
+  checkSensitiveVerification,
+  getPasskeyList,
+  getSensitiveLogs,
+  getTotpStatus,
+  getUserInfo,
+  updateUserSetting,
+  type SensitiveLogItem,
+  type SensitiveLoginMethod,
+  type SensitiveOperationType,
+} from '@/api/auth'
 
 const router = useRouter()
 
@@ -200,6 +289,97 @@ const geoLoginEnabled = ref(false)
 const sensitiveEmailEnabled = ref(false)
 const settingsReady = ref(false)
 const settingsUpdating = ref(false)
+const sensitiveLogs = ref<SensitiveLogItem[]>([])
+const sensitiveLogsLoading = ref(false)
+const sensitiveLogsTotal = ref(0)
+
+const operationTypeLabels: Record<SensitiveOperationType, string> = {
+  REGISTER: '注册',
+  LOGIN: '登录',
+  SENSITIVE_VERIFY: '敏感验证',
+  CHANGE_PASSWORD: '修改密码',
+  CHANGE_EMAIL: '修改邮箱',
+  ADD_PASSKEY: '新增 Passkey',
+  DELETE_PASSKEY: '删除 Passkey',
+  ENABLE_TOTP: '启用 TOTP',
+  DISABLE_TOTP: '禁用 TOTP',
+}
+
+const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
+  PASSWORD: '密码',
+  EMAIL_CODE: '邮箱验证码',
+  PASSKEY: 'Passkey',
+  PASSKEY_MFA: 'Passkey + MFA',
+}
+
+const formatSensitiveTime = (value?: string | null) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+const getRiskTagType = (score: number) => {
+  if (score >= 70) return 'danger'
+  if (score >= 40) return 'warning'
+  return 'success'
+}
+
+const getDeviceIconClass = (deviceType?: string | null) => {
+  const device = (deviceType || '').toLowerCase()
+  if (device.includes('bot') || device.includes('spider') || device.includes('crawler')) {
+    return 'fa-solid fa-robot'
+  }
+  if (device.includes('windows')) {
+    return 'fa-brands fa-windows'
+  }
+  if (device.includes('mac')) {
+    return 'fa-brands fa-apple'
+  }
+  if (device.includes('android')) {
+    return 'fa-brands fa-android'
+  }
+  if (device.includes('ios') || device.includes('iphone') || device.includes('ipad')) {
+    return 'fa-brands fa-apple'
+  }
+  if (device.includes('linux') || device.includes('x11')) {
+    return 'fa-brands fa-linux'
+  }
+  if (device.includes('chromeos') || device.includes('cros')) {
+    return 'fa-brands fa-chrome'
+  }
+  return 'fa-solid fa-desktop'
+}
+
+const getBrowserIconClass = (browser?: string | null) => {
+  const value = (browser || '').toLowerCase()
+  if (value.includes('edge') || value.includes('edg')) return 'fa-brands fa-edge'
+  if (value.includes('chrome')) return 'fa-brands fa-chrome'
+  if (value.includes('safari')) return 'fa-brands fa-safari'
+  if (value.includes('firefox')) return 'fa-brands fa-firefox'
+  if (value.includes('opera') || value.includes('opr')) return 'fa-brands fa-opera'
+  if (value.includes('ie') || value.includes('trident')) return 'fa-brands fa-internet-explorer'
+  return 'fa-solid fa-globe'
+}
+
+const loadSensitiveLogs = async () => {
+  sensitiveLogsLoading.value = true
+  try {
+    const result = await getSensitiveLogs({ page: 1, pageSize: 6 })
+    sensitiveLogs.value = result.data
+    sensitiveLogsTotal.value = result.total
+  } catch (error) {
+    console.error('Get sensitive logs failed:', error)
+  } finally {
+    sensitiveLogsLoading.value = false
+  }
+}
 
 onMounted(async () => {
   try {
@@ -232,6 +412,8 @@ onMounted(async () => {
   } finally {
     settingsReady.value = true
   }
+
+  await loadSensitiveLogs()
 })
 
 const updateSetting = async (field: 'mfaEnabled' | 'detectUnusualLogin' | 'notifySensitiveActionEmail', value: boolean, rollback: () => void) => {
@@ -336,6 +518,22 @@ const handleDeleteAccount = async () => {
   color: var(--el-text-color-primary);
   margin-bottom: 16px;
   font-size: 16px;
+}
+
+.card-title-between {
+  justify-content: space-between;
+}
+
+.title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .card-title.danger-title {
@@ -481,6 +679,51 @@ const handleDeleteAccount = async () => {
 .device-icon {
   color: var(--el-color-primary);
   font-size: 16px;
+}
+
+.log-primary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.log-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.log-title {
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.log-device {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-device-icon {
+  color: var(--el-color-primary);
+  font-size: 14px;
+}
+
+.log-browser {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-browser-icon {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.log-sub {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 :deep(.el-divider--horizontal) {

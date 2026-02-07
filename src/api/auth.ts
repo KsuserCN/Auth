@@ -426,6 +426,65 @@ export const checkSensitiveVerification = async (): Promise<SensitiveVerificatio
   return response.data as SensitiveVerificationStatus
 }
 
+// ========== 敏感操作日志 ==========
+
+export type SensitiveOperationType =
+  | 'REGISTER'
+  | 'LOGIN'
+  | 'SENSITIVE_VERIFY'
+  | 'CHANGE_PASSWORD'
+  | 'CHANGE_EMAIL'
+  | 'ADD_PASSKEY'
+  | 'DELETE_PASSKEY'
+  | 'ENABLE_TOTP'
+  | 'DISABLE_TOTP'
+
+export type SensitiveLoginMethod = 'PASSWORD' | 'EMAIL_CODE' | 'PASSKEY' | 'PASSKEY_MFA'
+
+export interface SensitiveLogItem {
+  id: number
+  operationType: SensitiveOperationType
+  loginMethod: SensitiveLoginMethod | null
+  ipAddress: string
+  ipLocation: string | null
+  browser: string | null
+  deviceType: 'Desktop' | 'Mobile' | 'Tablet' | 'Bot' | string
+  result: 'SUCCESS' | 'FAILURE'
+  failureReason: string | null
+  riskScore: number
+  actionTaken: 'ALLOW' | 'BLOCK' | 'FREEZE'
+  triggeredMultiErrorLock: boolean
+  triggeredRateLimitLock: boolean
+  durationMs: number
+  createdAt: string
+}
+
+export interface SensitiveLogsResponse {
+  data: SensitiveLogItem[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+export interface SensitiveLogsQuery {
+  page?: number
+  pageSize?: number
+  startDate?: string
+  endDate?: string
+  operationType?: SensitiveOperationType
+  result?: 'SUCCESS' | 'FAILURE'
+}
+
+export const getSensitiveLogs = async (
+  params: SensitiveLogsQuery = {},
+): Promise<SensitiveLogsResponse> => {
+  const response = await request.get<ApiResponse<SensitiveLogsResponse>>('/auth/sensitive-logs', {
+    params,
+  })
+  return (response as unknown as ApiResponse<SensitiveLogsResponse>).data
+}
+
 // ========== 更改邮箱 ==========
 
 /**
