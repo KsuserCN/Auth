@@ -197,4 +197,49 @@ public class IpUtil {
 
         return false;
     }
+
+    /**
+     * 获取客户端真实IP地址
+     * 考虑代理和负载均衡的情况
+     * @param request HTTP请求对象
+     * @return 客户端IP地址
+     */
+    public static String getClientIp(jakarta.servlet.http.HttpServletRequest request) {
+        if (request == null) {
+            return "unknown";
+        }
+
+        // 按优先级检查各种可能包含真实IP的请求头
+        String[] headers = {
+            "X-Forwarded-For",
+            "X-Real-IP",
+            "Proxy-Client-IP",
+            "WL-Proxy-Client-IP",
+            "HTTP_X_FORWARDED_FOR",
+            "HTTP_X_FORWARDED",
+            "HTTP_X_CLUSTER_CLIENT_IP",
+            "HTTP_CLIENT_IP",
+            "HTTP_FORWARDED_FOR",
+            "HTTP_FORWARDED",
+            "HTTP_VIA",
+            "REMOTE_ADDR"
+        };
+
+        for (String header : headers) {
+            String ip = request.getHeader(header);
+            if (ip != null && !ip.isEmpty() && !"unknown".equalsIgnoreCase(ip)) {
+                // X-Forwarded-For可能包含多个IP，取第一个
+                if (ip.contains(",")) {
+                    ip = ip.split(",")[0].trim();
+                }
+                if (isValidIp(ip)) {
+                    return ip;
+                }
+            }
+        }
+
+        // 如果所有头部都没有，使用remoteAddr
+        String ip = request.getRemoteAddr();
+        return (ip != null && !ip.isEmpty()) ? ip : "unknown";
+    }
 }

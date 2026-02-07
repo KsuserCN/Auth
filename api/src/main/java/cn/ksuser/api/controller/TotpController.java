@@ -10,6 +10,7 @@ import cn.ksuser.api.service.SensitiveOperationService;
 import cn.ksuser.api.service.RateLimitService;
 import cn.ksuser.api.util.EncryptionUtil;
 import cn.ksuser.api.util.JwtUtil;
+import cn.ksuser.api.util.SensitiveLogUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -36,13 +37,15 @@ public class TotpController {
     private final EncryptionUtil encryptionUtil;
     private final SensitiveOperationService sensitiveOperationService;
     private final RateLimitService rateLimitService;
+    private final SensitiveLogUtil sensitiveLogUtil;
 
     public TotpController(TotpService totpService, UserService userService,
                           UserTotpRepository userTotpRepository,
                           PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
                           EncryptionUtil encryptionUtil,
                           SensitiveOperationService sensitiveOperationService,
-                          RateLimitService rateLimitService) {
+                          RateLimitService rateLimitService,
+                          SensitiveLogUtil sensitiveLogUtil) {
         this.totpService = totpService;
         this.userService = userService;
         this.userTotpRepository = userTotpRepository;
@@ -50,6 +53,7 @@ public class TotpController {
         this.encryptionUtil = encryptionUtil;
         this.sensitiveOperationService = sensitiveOperationService;
         this.rateLimitService = rateLimitService;
+        this.sensitiveLogUtil = sensitiveLogUtil;
     }
 
     /**
@@ -137,14 +141,18 @@ public class TotpController {
     @PostMapping("/registration-verify")
     public ResponseEntity<ApiResponse<String>> confirmTotpRegistration(
             Authentication authentication,
-            @RequestBody TotpRegistrationConfirmRequest request) {
+            @RequestBody TotpRegistrationConfirmRequest request,
+            HttpServletRequest httpRequest) {
+        long startTime = System.currentTimeMillis();
         
         if (authentication == null) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "未认证"));
         }
 
         if (request.getCode() == null || request.getCode().isEmpty()) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "empty_verification_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "验证码不能为空"));
         }
@@ -153,6 +161,7 @@ public class TotpController {
         Optional<User> userOpt = userService.findByUuid(userUuid);
         
         if (userOpt.isEmpty()) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, "用户不存在"));
         }
@@ -161,6 +170,7 @@ public class TotpController {
         
         // 检查用户是否已启用 TOTP
         if (totpService.isTotpEnabled(user.getId())) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "totp_already_enabled", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "用户已启用 TOTP"));
         }
@@ -171,6 +181,7 @@ public class TotpController {
             // 从数据库获取待确认的秘钥和恢复码列表
             Optional<UserTotp> userTotpOpt = userTotpRepository.findByUserId(user.getId());
             if (userTotpOpt.isEmpty()) {
+                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "totp_not_initialized", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "TOTP 未初始化，请先调用 registration-options"));
             }
@@ -180,6 +191,7 @@ public class TotpController {
             // 检查是否过期
             if (userTotp.isPendingSecretExpired()) {
                 userTotpRepository.delete(userTotp);
+                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "pending_secret_expired", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "待确认秘钥已过期，请重新生成"));
             }
@@ -209,13 +221,16 @@ public class TotpController {
             );
 
             if (success) {
+                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), true, null, startTime);
                 return ResponseEntity.status(HttpStatus.OK)
                     .body(new ApiResponse<>(200, "TOTP 注册成功"));
             } else {
+                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "invalid_or_expired_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "验证码无效或已过期"));
             }
         } catch (Exception e) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "TOTP 注册失败：" + e.getMessage()));
         }
@@ -316,8 +331,10 @@ public class TotpController {
     public ResponseEntity<ApiResponse<Void>> disableTotp(
             Authentication authentication,
             HttpServletRequest request) {
+        long startTime = System.currentTimeMillis();
         
         if (authentication == null) {
+            sensitiveLogUtil.logDisableTotp(request, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "未认证"));
         }
@@ -326,6 +343,7 @@ public class TotpController {
         Optional<User> userOpt = userService.findByUuid(userUuid);
         
         if (userOpt.isEmpty()) {
+            sensitiveLogUtil.logDisableTotp(request, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, "用户不存在"));
         }
@@ -335,6 +353,7 @@ public class TotpController {
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+            sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
         }
@@ -342,9 +361,11 @@ public class TotpController {
         boolean success = totpService.disableTotp(user.getId());
         
         if (success) {
+            sensitiveLogUtil.logDisableTotp(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "TOTP 禁用成功"));
         } else {
+            sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "totp_not_enabled", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new ApiResponse<>(404, "用户未启用 TOTP"));
         }

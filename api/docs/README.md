@@ -1,6 +1,176 @@
 # 身份认证 API 文档
 
-## 概述
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- API使用说明？→ [sensitive-logs.md](sensitive-logs.md)- 需要代码示例？→ [SENSITIVE_LOG_EXAMPLES.md](SENSITIVE_LOG_EXAMPLES.md)- 集成方法不清楚？→ [SENSITIVE_LOG_INTEGRATION.md](SENSITIVE_LOG_INTEGRATION.md)查看以下文档：## 需要帮助？```}  }    "totalPages": 3    "total": 45,    "pageSize": 20,    "page": 1,    ],      }        "createdAt": "2026-02-07T14:30:00"        "durationMs": 245,        "actionTaken": "ALLOW",        "riskScore": 10,        "result": "SUCCESS",        "deviceType": "Desktop",        "browser": "Chrome 120",        "ipLocation": "广东省深圳市",        "ipAddress": "203.208.60.1",        "loginMethod": "PASSWORD",        "operationType": "LOGIN",        "id": 123,      {    "data": [  "data": {  "message": "Sensitive logs retrieved successfully",  "status": "success",{```json## 示例响应使用Postman导入 `docs/postman/08-敏感操作日志.json` 进行测试。## 测试5. ⚠️ 注册时userId可能为null（注册失败时）4. ⚠️ 不要在失败原因中包含密码等敏感信息3. ✅ User-Agent自动解析浏览器和设备信息2. ✅ IP属地自动从第三方API获取1. ✅ 日志记录是异步的，不影响业务性能## 注意事项- [Postman集合](postman/08-敏感操作日志.json) - API测试集合- [代码示例](SENSITIVE_LOG_EXAMPLES.md) - 各种场景的完整示例- [集成指南](SENSITIVE_LOG_INTEGRATION.md) - 详细的集成方法- [API文档](sensitive-logs.md) - 查询接口详细说明## 完整文档```mysql -u root -p your_database < sql/init.sql```bash运行 `sql/init.sql` 创建 `user_sensitive_logs` 表：## 数据库准备```GET /auth/sensitive-logs?operationType=LOGIN&result=FAILURE&startDate=2026-02-01# 带过滤条件Authorization: Bearer <token>GET /auth/sensitive-logs# 查询所有日志```bash用户可以通过API查询自己的操作日志：## 查询日志API```sensitiveLogUtil.logDisableTotp(httpRequest, userId, success, failureReason, startTime);// 禁用TOTPsensitiveLogUtil.logEnableTotp(httpRequest, userId, success, failureReason, startTime);// 启用TOTPsensitiveLogUtil.logDeletePasskey(httpRequest, userId, success, failureReason, startTime);// 删除PasskeysensitiveLogUtil.logAddPasskey(httpRequest, userId, success, failureReason, startTime);// 新增PasskeysensitiveLogUtil.logChangeEmail(httpRequest, userId, success, failureReason, startTime);// 修改邮箱sensitiveLogUtil.logChangePassword(httpRequest, userId, success, failureReason, startTime);// 修改密码sensitiveLogUtil.logSensitiveVerify(httpRequest, userId, success, failureReason, startTime);// 敏感操作认证sensitiveLogUtil.logLogin(httpRequest, userId, loginMethod, success, failureReason, startTime);// 登录（需指定登录方式：PASSWORD, EMAIL_CODE, PASSKEY, PASSKEY_MFA）sensitiveLogUtil.logRegister(httpRequest, userId, success, failureReason, startTime);// 注册```java## 可用的日志方法```}    }        throw e;                                 false, e.getMessage(), startTime);        sensitiveLogUtil.logLogin(httpRequest, null, "PASSWORD",         // ✅ 记录失败日志    } catch (Exception e) {        return ResponseEntity.ok(response);                                         "PASSWORD", true, null, startTime);        sensitiveLogUtil.logLogin(httpRequest, response.getUserId(),         // ✅ 记录成功日志                LoginResponse response = authService.login(request);    try {        long startTime = System.currentTimeMillis();                              HttpServletRequest httpRequest) {public ResponseEntity<?> login(@RequestBody LoginRequest request, @PostMapping("/login")```java在需要记录的操作中添加日志记录代码：### 步骤3：记录日志```private SensitiveLogUtil sensitiveLogUtil;@Autowired```java### 步骤2：在Controller中注入工具类```implementation 'com.github.ua-parser:uap-java:1.6.1'```gradle确保 `build.gradle` 包含User-Agent解析库：### 步骤1：添加依赖## 快速集成- 安全信息（风险评分、锁定状态、耗时）- 设备信息（浏览器、设备类型）- IP信息（地址、属地）- 操作详情（类型、时间、结果、失败原因）每条日志记录包含：- ✅ TOTP管理（启用/禁用）- ✅ Passkey管理（新增/删除）- ✅ 修改邮箱- ✅ 修改密码- ✅ 敏感操作认证- ✅ 各种方式的登录（密码、验证码、Passkey、Passkey+MFA）- ✅ 用户注册敏感操作日志功能自动记录用户的所有重要操作，包括：## 功能简介## 概述
 本文档描述了完整的身份认证系统 API，包括：
 - 用户注册（邮箱验证）
 - 密码登录
@@ -12,6 +182,9 @@
 - [验证码系统设计约束](VERIFICATION_CODE_DESIGN.md) - 验证码系统的核心功能和设计原则
 - [请求类型处理指南](REQUEST_TYPE_HANDLING.md) - Content-Type 验证和错误处理说明
 - [Passkey (WebAuthn) 支持](passkey.md) - 现代身份验证方式，支持登录和敏感操作验证
+- [敏感操作日志](sensitive-logs.md) - 查询用户的敏感操作记录（登录、修改密码、Passkey管理等）
+- [敏感日志集成指南](SENSITIVE_LOG_INTEGRATION.md) - 在代码中集成敏感日志记录的方法
+- [敏感日志集成示例](SENSITIVE_LOG_EXAMPLES.md) - 具体的代码集成示例
 
 ## API 端点
 

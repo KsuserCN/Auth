@@ -266,4 +266,65 @@ CREATE TABLE totp_recovery_codes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 COMMENT='TOTP回复码表（一次性使用，哈希存储，used_at为NULL表示未使用）';
 
+
+-- ==========================================================
+-- 敏感操作日志表：记录用户的所有敏感操作
+-- 说明：
+--   - 记录所有敏感操作（注册、登录、修改密码、修改邮箱、Passkey管理、TOTP管理等）
+--   - 支持风险评估、安全审计、异常检测
+--   - IP属地通过第三方API获取
+--   - 浏览器和设备类型从User-Agent解析
+-- ==========================================================
+
+DROP TABLE IF EXISTS user_sensitive_logs;
+CREATE TABLE user_sensitive_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '日志主键ID',
+
+  user_id BIGINT UNSIGNED DEFAULT NULL COMMENT '关联用户ID（users.id），注册时可能为NULL',
+
+  operation_type VARCHAR(50) NOT NULL COMMENT '操作类型：REGISTER, LOGIN, SENSITIVE_VERIFY, CHANGE_PASSWORD, CHANGE_EMAIL, ADD_PASSKEY, DELETE_PASSKEY, ENABLE_TOTP, DISABLE_TOTP等',
+
+  login_method VARCHAR(50) DEFAULT NULL COMMENT '登录方式（仅登录操作）：PASSWORD, EMAIL_CODE, PASSKEY, PASSKEY_MFA等',
+
+  ip_address VARCHAR(45) NOT NULL COMMENT '客户端IP地址（支持IPv4和IPv6）',
+
+  ip_location VARCHAR(255) DEFAULT NULL COMMENT 'IP属地（如：广东省深圳市）',
+
+  user_agent TEXT DEFAULT NULL COMMENT '客户端User-Agent',
+
+  browser VARCHAR(50) DEFAULT NULL COMMENT '浏览器名称（从UA解析）',
+
+  device_type VARCHAR(50) DEFAULT NULL COMMENT '设备类型（从UA解析）：Desktop, Mobile, Tablet, Bot等',
+
+  result ENUM('SUCCESS', 'FAILURE') NOT NULL COMMENT '操作结果',
+
+  failure_reason VARCHAR(255) DEFAULT NULL COMMENT '失败原因（成功时为NULL）',
+
+  risk_score INT DEFAULT 0 COMMENT '风险评分（0-100，0为最低风险）',
+
+  action_taken VARCHAR(50) NOT NULL DEFAULT 'ALLOW' COMMENT '处置动作：ALLOW（放行）, BLOCK（阻止）, FREEZE（冻结账户）',
+
+  triggered_multi_error_lock TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否触发多次错误锁定（0=否 1=是）',
+
+  triggered_rate_limit_lock TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否触发限速锁定（0=否 1=是）',
+
+  duration_ms INT DEFAULT NULL COMMENT '操作耗时（毫秒）',
+
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+
+  PRIMARY KEY (id),
+
+  CONSTRAINT fk_user_sensitive_logs_user
+    FOREIGN KEY (user_id)
+    REFERENCES users(id)
+    ON DELETE SET NULL,
+
+  KEY idx_sensitive_logs_user_time (user_id, created_at),
+  KEY idx_sensitive_logs_operation (operation_type, created_at),
+  KEY idx_sensitive_logs_ip (ip_address, created_at),
+  KEY idx_sensitive_logs_result (result, created_at)
+
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+COMMENT='用户敏感操作日志表（支持安全审计、风险分析、异常检测）';
+
 SET FOREIGN_KEY_CHECKS = 1;
