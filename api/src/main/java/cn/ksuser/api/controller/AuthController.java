@@ -27,6 +27,9 @@ import java.time.format.DateTimeParseException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.stream.Collectors;
 import cn.ksuser.api.service.MfaService;
 import cn.ksuser.api.dto.MfaChallengeResponse;
 import cn.ksuser.api.dto.MfaTotpVerifyRequest;
@@ -426,7 +429,7 @@ public class AuthController {
         String refreshToken = jwtUtil.generateRefreshToken(result.getUser().getUuid());
 
         // 保存会话到数据库
-        UserSession session = userSessionService.createSession(result.getUser(), refreshToken);
+        UserSession session = userSessionService.createSession(result.getUser(), refreshToken, clientIp, userAgent);
         int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
         String accessToken = jwtUtil.generateAccessToken(result.getUser().getUuid(), session.getId(), sessionVersion);
 
@@ -548,7 +551,8 @@ public class AuthController {
         String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
 
         // 保存会话到数据库
-        UserSession session = userSessionService.createSession(user, refreshToken);
+        String userAgent = request.getHeader("User-Agent");
+        UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
         int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
         String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
@@ -631,7 +635,8 @@ public class AuthController {
         String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
 
         // 保存会话到数据库
-        UserSession session = userSessionService.createSession(user, refreshToken);
+        String userAgent = request.getHeader("User-Agent");
+        UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
         int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
         String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
@@ -849,6 +854,10 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
         }
 
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = request.getHeader("User-Agent");
+        userSessionService.updateSessionActivity(session, clientIp, userAgent);
+
         // 生成新的 RefreshToken
         String newRefreshToken = jwtUtil.generateRefreshToken(uuid);
 
@@ -873,6 +882,93 @@ public class AuthController {
     }
 
     /**
+     * 获取当前登录设备/在线会话列表
+     * @param authentication 认证信息（AccessToken）
+     * @param request HttpServletRequest
+     * @return ApiResponse
+     */
+    @GetMapping("/sessions")
+    public ResponseEntity<ApiResponse<List<SessionInfoResponse>>> getSessions(
+            Authentication authentication,
+            HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        Long currentSessionId = getCurrentSessionId(request);
+        LocalDateTime onlineThreshold = LocalDateTime.now().minusMinutes(10);
+
+        List<SessionInfoResponse> responses = userSessionService.listActiveSessions(user).stream()
+            .sorted(Comparator.comparing(UserSession::getLastSeenAt, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(UserSession::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+            .map(session -> new SessionInfoResponse(
+                session,
+                session.getLastSeenAt() != null && session.getLastSeenAt().isAfter(onlineThreshold),
+                currentSessionId != null && currentSessionId.equals(session.getId())
+            ))
+            .collect(Collectors.toList());
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "查询成功", responses));
+    }
+
+    /**
+     * 取消指定会话（踢下线）
+     * @param sessionId 会话ID
+     * @param authentication 认证信息（AccessToken）
+     * @param request HttpServletRequest
+     * @param response HttpServletResponse
+     * @return ApiResponse
+     */
+    @PostMapping("/sessions/{sessionId}/revoke")
+    public ResponseEntity<ApiResponse<Void>> revokeSession(
+            @PathVariable Long sessionId,
+            Authentication authentication,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        UserSession session = userSessionService.findSessionByIdForUser(sessionId, user).orElse(null);
+        if (session == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, "会话不存在"));
+        }
+
+        if (session.getRevokedAt() != null || session.getExpiresAt().isBefore(LocalDateTime.now())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "会话已失效"));
+        }
+
+        userSessionService.revokeSession(session);
+
+        Long currentSessionId = getCurrentSessionId(request);
+        if (currentSessionId != null && currentSessionId.equals(sessionId)) {
+            setRefreshTokenCookie(response, "");
+        }
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "会话已取消"));
+    }
+
+    /**
      * 验证 TOTP（用于 MFA 登录完成）
      * 前端在收到 201 并带有 challengeId 后，调用此接口完成 TOTP 校验并下发 token
      */
@@ -889,7 +985,8 @@ public class AuthController {
         String clientIp = rateLimitService.getClientIp(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
 
-        Long userId = mfaService.consumeChallenge(requestBody.getChallengeId(), clientIp, userAgent);
+        // ✅ 先验证challenge（不删除）
+        Long userId = mfaService.verifyChallenge(requestBody.getChallengeId(), clientIp, userAgent);
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "challengeId 无效或已过期"));
@@ -907,16 +1004,27 @@ public class AuthController {
             byte[] masterKey = encryptionUtil.getMasterKey();
             boolean ok = totpService.verifyTotpCode(user.getId(), requestBody.getCode(), masterKey);
             if (!ok) {
-                // MFA验证失败
+                // ✅ MFA验证失败，记录失败次数
+                mfaService.recordFailedAttempt(requestBody.getChallengeId());
+                int remaining = mfaService.getRemainingAttempts(requestBody.getChallengeId());
                 String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
                 sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, false, "TOTP 校验失败", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "TOTP 校验失败"));
+                
+                if (remaining > 0) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "TOTP 校验失败，剩余尝试次数：" + remaining));
+                } else {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "TOTP 校验失败次数过多，请重新登录"));
+                }
             }
 
-            // 验证通过后，正常创建会话并下发 token
+            // ✅ 验证通过后，消费并删除challenge
+            mfaService.consumeChallenge(requestBody.getChallengeId());
+
+            // 正常创建会话并下发 token
             String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
-            UserSession session = userSessionService.createSession(user, refreshToken);
+            UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
             int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
             String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
@@ -1632,6 +1740,22 @@ public class AuthController {
         response.addHeader("Set-Cookie", setCookieHeader);
     }
 
+    private String getAccessToken(HttpServletRequest request) {
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        return null;
+    }
+
+    private Long getCurrentSessionId(HttpServletRequest request) {
+        String accessToken = getAccessToken(request);
+        if (accessToken == null) {
+            return null;
+        }
+        return jwtUtil.getSessionId(accessToken);
+    }
+
     // ==================== Passkey (WebAuthn) 端点 ====================
 
     /**
@@ -1770,8 +1894,8 @@ public class AuthController {
             UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
             boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
             String clientIp = rateLimitService.getClientIp(httpRequest);
+            String userAgent = httpRequest.getHeader("User-Agent");
             if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
-                String userAgent = httpRequest.getHeader("User-Agent");
                 String challenge = mfaService.createChallenge(user.getId(), clientIp, userAgent);
                 sensitiveLogUtil.logLogin(httpRequest, user.getId(), "PASSKEY_MFA", true, null, startTime);
                 return ResponseEntity.status(HttpStatus.CREATED)
@@ -1780,7 +1904,7 @@ public class AuthController {
 
             // 生成 Token
             String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
-            UserSession session = userSessionService.createSession(user, refreshToken);
+            UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
             int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
             String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
