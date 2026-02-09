@@ -4,6 +4,8 @@ import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserSession;
 import cn.ksuser.api.repository.UserSessionRepository;
 import cn.ksuser.api.util.JwtUtil;
+import cn.ksuser.api.service.IpLocationService;
+import cn.ksuser.api.service.UserAgentParserService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -19,14 +21,25 @@ public class UserSessionService {
     private final UserSessionRepository userSessionRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final IpLocationService ipLocationService;
+    private final UserAgentParserService userAgentParserService;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public UserSessionService(UserSessionRepository userSessionRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
+    public UserSessionService(UserSessionRepository userSessionRepository,
+                              PasswordEncoder passwordEncoder,
+                              JwtUtil jwtUtil,
+                              IpLocationService ipLocationService,
+                              UserAgentParserService userAgentParserService,
+                              TokenBlacklistService tokenBlacklistService) {
         this.userSessionRepository = userSessionRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.ipLocationService = ipLocationService;
+        this.userAgentParserService = userAgentParserService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
-    public UserSession createSession(User user, String refreshToken) {
+    public UserSession createSession(User user, String refreshToken, String ipAddress, String userAgent) {
         String hashedToken = passwordEncoder.encode(refreshToken);
         byte[] tokenVerifier = hashedToken.getBytes(StandardCharsets.UTF_8);
 
@@ -35,11 +48,31 @@ public class UserSessionService {
 
         UserSession session = new UserSession(user, tokenVerifier, "argon2id", expiresAt);
         session.setSessionVersion(0);
+        session.setIpAddress(ipAddress);
+        session.setUserAgent(userAgent);
+        session.setLastSeenAt(LocalDateTime.now());
+
+        if (ipAddress != null) {
+            String location = ipLocationService.getIpLocation(ipAddress);
+            session.setIpLocation(location);
+        }
+
+        if (userAgent != null) {
+            UserAgentParserService.UserAgentInfo uaInfo = userAgentParserService.parse(userAgent);
+            session.setBrowser(uaInfo.getBrowser());
+            session.setDeviceType(uaInfo.getDeviceType());
+        }
+
         return userSessionRepository.save(session);
     }
 
     public Optional<UserSession> verifyRefreshToken(User user, String refreshToken) {
         if (!jwtUtil.isTokenValid(refreshToken)) {
+            return Optional.empty();
+        }
+
+        // ✅ 安全修复：检查Token是否在黑名单中
+        if (tokenBlacklistService.isBlacklisted(refreshToken)) {
             return Optional.empty();
         }
 
@@ -61,6 +94,14 @@ public class UserSessionService {
 
     public Optional<UserSession> findActiveSessionById(Long sessionId) {
         return userSessionRepository.findActiveSessionById(sessionId, LocalDateTime.now());
+    }
+
+    public Optional<UserSession> findSessionByIdForUser(Long sessionId, User user) {
+        return userSessionRepository.findByIdAndUser(sessionId, user);
+    }
+
+    public List<UserSession> listActiveSessions(User user) {
+        return userSessionRepository.findActiveSessions(user, LocalDateTime.now());
     }
 
     public UserSession bumpSessionVersion(UserSession session) {
@@ -88,6 +129,25 @@ public class UserSessionService {
         LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(expirationMs));
         session.setExpiresAt(expiresAt);
         
+        return userSessionRepository.save(session);
+    }
+
+    public UserSession updateSessionActivity(UserSession session, String ipAddress, String userAgent) {
+        session.setLastSeenAt(LocalDateTime.now());
+
+        if (ipAddress != null && (session.getIpAddress() == null || !ipAddress.equals(session.getIpAddress()))) {
+            session.setIpAddress(ipAddress);
+            String location = ipLocationService.getIpLocation(ipAddress);
+            session.setIpLocation(location);
+        }
+
+        if (userAgent != null && (session.getUserAgent() == null || !userAgent.equals(session.getUserAgent()))) {
+            session.setUserAgent(userAgent);
+            UserAgentParserService.UserAgentInfo uaInfo = userAgentParserService.parse(userAgent);
+            session.setBrowser(uaInfo.getBrowser());
+            session.setDeviceType(uaInfo.getDeviceType());
+        }
+
         return userSessionRepository.save(session);
     }
 
