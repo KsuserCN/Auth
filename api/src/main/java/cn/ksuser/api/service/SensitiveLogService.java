@@ -33,16 +33,26 @@ public class SensitiveLogService {
     @Autowired
     private UserAgentParserService userAgentParserService;
 
+    @Autowired
+    private RiskScoringService riskScoringService;
+
+    @Autowired
+    private UserService userService;
+
     /**
      * 异步记录敏感操作日志
      */
     @Async
     public void logAsync(UserSensitiveLog log) {
         try {
+            logger.debug("logAsync called: userId={}, operation={}, result={}", 
+                        log.getUserId(), log.getOperationType(), log.getResult());
+
             // 异步获取IP属地
             if (log.getIpLocation() == null && log.getIpAddress() != null) {
                 String location = ipLocationService.getIpLocation(log.getIpAddress());
                 log.setIpLocation(location);
+                logger.debug("IP location resolved: ip={}, location={}", log.getIpAddress(), location);
             }
 
             // 解析User-Agent
@@ -50,6 +60,30 @@ public class SensitiveLogService {
                 UserAgentParserService.UserAgentInfo uaInfo = userAgentParserService.parse(log.getUserAgent());
                 log.setBrowser(uaInfo.getBrowser());
                 log.setDeviceType(uaInfo.getDeviceType());
+                logger.debug("User-Agent parsed: browser={}, device={}, ua={}", 
+                            uaInfo.getBrowser(), uaInfo.getDeviceType(), log.getUserAgent());
+            }
+
+            // 确保创建时间存在
+            if (log.getCreatedAt() == null) {
+                log.setCreatedAt(LocalDateTime.now());
+            }
+
+            // 计算风险评分（在补全IP/设备/浏览器后）
+            try {
+                if (log.getUserId() != null) {
+                    var user = userService.findById(log.getUserId()).orElse(null);
+                    Integer riskScore = riskScoringService.calculateRiskScore(log, user);
+                    log.setRiskScore(riskScore);
+                    logger.debug("Risk score calculated: userId={}, score={}", log.getUserId(), riskScore);
+                } else if (log.getRiskScore() == null) {
+                    log.setRiskScore(0);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to calculate risk score", e);
+                if (log.getRiskScore() == null) {
+                    log.setRiskScore(0);
+                }
             }
 
             logRepository.save(log);
@@ -65,10 +99,14 @@ public class SensitiveLogService {
      */
     public void logSync(UserSensitiveLog log) {
         try {
+            logger.debug("logSync called: userId={}, operation={}, result={}", 
+                        log.getUserId(), log.getOperationType(), log.getResult());
+
             // 同步获取IP属地
             if (log.getIpLocation() == null && log.getIpAddress() != null) {
                 String location = ipLocationService.getIpLocation(log.getIpAddress());
                 log.setIpLocation(location);
+                logger.debug("IP location resolved: ip={}, location={}", log.getIpAddress(), location);
             }
 
             // 解析User-Agent
@@ -76,6 +114,30 @@ public class SensitiveLogService {
                 UserAgentParserService.UserAgentInfo uaInfo = userAgentParserService.parse(log.getUserAgent());
                 log.setBrowser(uaInfo.getBrowser());
                 log.setDeviceType(uaInfo.getDeviceType());
+                logger.debug("User-Agent parsed: browser={}, device={}, ua={}", 
+                            uaInfo.getBrowser(), uaInfo.getDeviceType(), log.getUserAgent());
+            }
+
+            // 确保创建时间存在
+            if (log.getCreatedAt() == null) {
+                log.setCreatedAt(LocalDateTime.now());
+            }
+
+            // 计算风险评分（在补全IP/设备/浏览器后）
+            try {
+                if (log.getUserId() != null) {
+                    var user = userService.findById(log.getUserId()).orElse(null);
+                    Integer riskScore = riskScoringService.calculateRiskScore(log, user);
+                    log.setRiskScore(riskScore);
+                    logger.debug("Risk score calculated: userId={}, score={}", log.getUserId(), riskScore);
+                } else if (log.getRiskScore() == null) {
+                    log.setRiskScore(0);
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to calculate risk score", e);
+                if (log.getRiskScore() == null) {
+                    log.setRiskScore(0);
+                }
             }
 
             logRepository.save(log);

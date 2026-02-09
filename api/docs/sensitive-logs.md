@@ -18,14 +18,83 @@
 - `ENABLE_TOTP` - 启用TOTP
 - `DISABLE_TOTP` - 禁用TOTP
 
-## 登录方式
+## 登录方式 (login_method)
 
 当操作类型为 `LOGIN` 时，会记录具体的登录方式：
 
-- `PASSWORD` - 密码登录
-- `EMAIL_CODE` - 邮箱验证码登录
-- `PASSKEY` - Passkey登录
-- `PASSKEY_MFA` - Passkey + MFA登录
+### 基础登录方式（无MFA）
+- `PASSWORD` - 密码登录（无MFA）
+- `EMAIL_CODE` - 邮箱验证码登录（无MFA）
+- `PASSKEY` - Passkey登录（无MFA）
+
+### MFA登录方式（需要或已完成二步验证）
+- `PASSWORD_MFA` - 密码 + TOTP二步验证登录
+- `EMAIL_CODE_MFA` - 邮箱验证码 + TOTP二步验证登录
+- `PASSKEY_MFA` - Passkey + TOTP二步验证登录
+
+### MFA登录流程说明
+
+当用户启用了MFA（TOTP二步验证）后，登录流程会分为两个阶段：
+
+**阶段1：第一因素验证** - 记录 `_MFA` 后缀的登录方式
+- 用户完成密码/验证码/Passkey验证
+- 系统记录日志：`PASSWORD_MFA`、`EMAIL_CODE_MFA` 或 `PASSKEY_MFA`
+- 状态：`SUCCESS`（表示第一因素验证通过，等待TOTP验证）
+
+**阶段2：TOTP验证** - 再次记录 `_MFA` 后缀的登录方式
+- 用户输入TOTP验证码
+- 系统记录日志：相同的 `_MFA` 登录方式
+- 状态：`SUCCESS`（TOTP验证通过）或 `FAILURE`（TOTP验证失败）
+
+**示例：密码+MFA完整登录**
+```json
+[
+  {
+    "id": 124,
+    "operationType": "LOGIN",
+    "loginMethod": "PASSWORD_MFA",
+    "result": "SUCCESS",
+    "failureReason": null,
+    "createdAt": "2026-02-09T10:00:00",
+    "riskScore": 5
+  },
+  {
+    "id": 125,
+    "operationType": "LOGIN",
+    "loginMethod": "PASSWORD_MFA",
+    "result": "SUCCESS",
+    "failureReason": null,
+    "createdAt": "2026-02-09T10:00:05",
+    "riskScore": 0
+  }
+]
+```
+
+### 前端展示建议
+
+**登录方式显示文案：**
+```javascript
+const LOGIN_METHOD_TEXT = {
+  'PASSWORD': '密码登录',
+  'PASSWORD_MFA': '密码 + 二步验证',
+  'EMAIL_CODE': '验证码登录',
+  'EMAIL_CODE_MFA': '验证码 + 二步验证',
+  'PASSKEY': 'Passkey登录',
+  'PASSKEY_MFA': 'Passkey + 二步验证'
+};
+```
+
+**登录方式图标：**
+```javascript
+const LOGIN_METHOD_ICON = {
+  'PASSWORD': '🔑',
+  'PASSWORD_MFA': '🔑🛡️',
+  'EMAIL_CODE': '📧',
+  'EMAIL_CODE_MFA': '📧🛡️',
+  'PASSKEY': '🔐',
+  'PASSKEY_MFA': '🔐🛡️'
+};
+```
 
 ## 查询敏感操作日志
 
@@ -169,7 +238,7 @@ curl -X GET "https://api.example.com/auth/sensitive-logs?operationType=LOGIN&res
 | ipAddress | String | 客户端IP地址 |
 | ipLocation | String | IP属地（如：广东省深圳市） |
 | browser | String | 浏览器信息 |
-| deviceType | String | 设备类型：Desktop/Mobile/Tablet/Bot |
+| deviceType | String | 设备类型/操作系统：Windows/Mac/Linux/Android/iOS/ChromeOS/Bot/Unknown |
 | result | String | 操作结果：SUCCESS/FAILURE |
 | failureReason | String | 失败原因（成功时为null） |
 | riskScore | Integer | 风险评分（0-100，0为最低风险） |

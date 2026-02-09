@@ -537,8 +537,8 @@ public class AuthController {
         if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
             String userAgent = request.getHeader("User-Agent");
             String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent);
-            // 记录登录成功但需要MFA
-            sensitiveLogUtil.logLogin(request, user.getId(), "EMAIL_CODE", true, null, startTime);
+            // 记录为 EMAIL_CODE_MFA，表示需要MFA验证
+            sensitiveLogUtil.logLogin(request, user.getId(), "EMAIL_CODE_MFA", true, null, startTime);
             // 不创建会话、不返回 token，告知前端需要 TOTP 验证
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(201, "需要 TOTP 验证", new MfaChallengeResponse(challengeId, "totp")));
@@ -621,8 +621,8 @@ public class AuthController {
         if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
             String userAgent = request.getHeader("User-Agent");
             String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent);
-            // 需要MFA验证，记录为SUCCESS但注记需要MFA
-            sensitiveLogUtil.logLogin(request, user.getId(), "PASSWORD", true, null, startTime);
+            // 记录为需要MFA验证
+            sensitiveLogUtil.logLogin(request, user.getId(), "PASSWORD_MFA", true, null, startTime);
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(201, "需要 TOTP 验证", new MfaChallengeResponse(challengeId, "totp")));
         }
@@ -902,10 +902,14 @@ public class AuthController {
                 .body(new ApiResponse<>(401, "用户不存在"));
         }
 
+        long startTime = System.currentTimeMillis();
         try {
             byte[] masterKey = encryptionUtil.getMasterKey();
             boolean ok = totpService.verifyTotpCode(user.getId(), requestBody.getCode(), masterKey);
             if (!ok) {
+                // MFA验证失败
+                String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
+                sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, false, "TOTP 校验失败", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "TOTP 校验失败"));
             }
@@ -918,9 +922,15 @@ public class AuthController {
 
             setRefreshTokenCookie(response, refreshToken);
 
+            // MFA验证成功
+            String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
+            sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, true, null, startTime);
+
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
         } catch (Exception e) {
+            String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
+            sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "TOTP 验证处理失败"));
         }
