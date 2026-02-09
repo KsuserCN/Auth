@@ -439,7 +439,13 @@ export type SensitiveOperationType =
   | 'ENABLE_TOTP'
   | 'DISABLE_TOTP'
 
-export type SensitiveLoginMethod = 'PASSWORD' | 'EMAIL_CODE' | 'PASSKEY' | 'PASSKEY_MFA'
+export type SensitiveLoginMethod =
+  | 'PASSWORD'
+  | 'PASSWORD_MFA'
+  | 'EMAIL_CODE'
+  | 'EMAIL_CODE_MFA'
+  | 'PASSKEY'
+  | 'PASSKEY_MFA'
 
 export interface SensitiveLogItem {
   id: number

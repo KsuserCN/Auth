@@ -306,10 +306,12 @@ const operationTypeLabels: Record<SensitiveOperationType, string> = {
 }
 
 const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
-  PASSWORD: '密码',
-  EMAIL_CODE: '邮箱验证码',
-  PASSKEY: 'Passkey',
-  PASSKEY_MFA: 'Passkey + MFA',
+  PASSWORD: '密码登录',
+  PASSWORD_MFA: '密码+二步验证',
+  EMAIL_CODE: '验证码登录',
+  EMAIL_CODE_MFA: '验证码+二步验证',
+  PASSKEY: 'Passkey登录',
+  PASSKEY_MFA: 'Passkey+二步验证',
 }
 
 const formatSensitiveTime = (value?: string | null) => {
