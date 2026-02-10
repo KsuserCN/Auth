@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>敏感操作提醒 - Ksuser CAS</title>
+    <style>
+      /* 基于验证码卡片样式，略微调整 */
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .card-container {
+        width: 100%;
+        max-width: 600px;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 16px 40px rgba(0, 0, 0, 0.08);
+        animation: slideIn 0.6s ease-out;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        overflow: hidden;
+      }
+      @keyframes slideIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .card-header {
+        background: linear-gradient(135deg, #ffb90f 0%, #ffd700 100%);
+        padding: 24px 40px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .logo { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+      .logo img { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; display: block; }
+      .header-text { flex: 1; }
+      .header-title { font-size: 24px; font-weight: 700; color: white; margin: 0 0 4px 0; letter-spacing: -0.3px; }
+      .header-subtitle { font-size: 14px; color: rgba(255, 255, 255, 0.9); margin: 0; }
+      .card-body { padding: 40px; }
+      .greeting { font-size: 18px; font-weight: 500; color: #202124; margin: 0 0 8px 0; }
+      .message { font-size: 15px; color: #5f6368; margin: 0 0 32px 0; line-height: 1.6; }
+      .operation-info { background: #fff8f0; border: 2px dashed #ffb90f; border-radius: 16px; padding: 24px; margin-bottom: 32px; box-shadow: 0 4px 12px rgba(255, 185, 15, 0.1); }
+      .operation-label { font-size: 14px; color: #5f6368; margin: 0 0 12px 0; font-weight: 500; }
+      .operation-value { font-size: 20px; font-weight: 700; color: #ffb90f; margin: 0 0 12px 0; }
+      .operation-detail { font-size: 13px; color: #9aa0a6; margin: 0; }
+      .info-box { background: #f8f9fa; border-left: 4px solid #ffb90f; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px; }
+      .info-title { font-size: 14px; font-weight: 600; color: #202124; margin: 0 0 8px 0; display: flex; align-items: center; gap: 8px; }
+      .info-icon { display: inline-block; width: 20px; height: 20px; background: #ffb90f; border-radius: 50%; color: white; text-align: center; line-height: 20px; font-size: 12px; font-weight: 700; }
+      .info-list { list-style: none; padding: 0; margin: 0; }
+      .info-list li { font-size: 13px; color: #5f6368; line-height: 1.8; padding-left: 20px; position: relative; }
+      .info-list li::before { content: '•'; position: absolute; left: 8px; color: #ffb90f; font-weight: 700; }
+      .card-footer { background: #f8f9fa; padding: 20px 40px; border-top: 1px solid #e8eaed; text-align: center; }
+      .footer-text { font-size: 13px; color: #9aa0a6; margin: 0 0 8px 0; line-height: 1.6; }
+      .company-name { font-size: 14px; font-weight: 600; color: #5f6368; margin: 0; }
+      .company-link { color: #ffb90f; text-decoration: none; transition: color 0.2s; }
+      .company-link:hover { color: #ffd700; text-decoration: underline; }
+      .security-badge { display: inline-flex; align-items: center; gap: 6px; background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: 500; padding: 6px 12px; border-radius: 20px; margin-top: 12px; }
+      .security-icon { display: inline-block; width: 14px; height: 14px; background: #4caf50; border-radius: 50%; position: relative; }
+      .security-icon::after { content: '✓'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 10px; font-weight: 700; }
+      @media (max-width: 768px) { .card-container { border-radius: 12px; } .card-header { padding: 20px 24px; } .header-title { font-size: 20px; } .logo { width: 40px; height: 40px; font-size: 20px; } .card-body { padding: 24px; } .operation-value { font-size: 16px; } .card-footer { padding: 16px 24px; } }
+      @media (prefers-color-scheme: dark) {
+        body { background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); }
+        .card-container { background: #202124; border-color: #5f6368; }
+        .greeting { color: #e8eaed; }
+        .message { color: #9aa0a6; }
+        .operation-info { background: linear-gradient(135deg, #2a2520 0%, #2d2925 100%); border-color: #ffb90f; }
+        .operation-value { color: #ffd700; }
+        .info-box { background: #292a2d; border-left-color: #ffd700; }
+        .info-title { color: #e8eaed; }
+        .info-list li { color: #9aa0a6; }
+        .card-footer { background: #292a2d; border-top-color: #5f6368; }
+        .company-name { color: #9aa0a6; }
+        .company-link { color: #ffd700; }
+        .company-link:hover { color: #ffed4e; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card-container">
+      <div class="card-header">
+        <div class="logo">
+          <img src="https://static.ksuser.cn/favicon.png" alt="Ksuser Logo" />
+        </div>
+        <div class="header-text">
+          <h1 class="header-title">Ksuser CAS</h1>
+          <p class="header-subtitle">敏感操作安全提醒</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <h2 class="greeting">您好！</h2>
+        <p class="message">我们在<span th:text="${time}"></span>检测到您的账户发生了<span th:text="${operation}"></span>操作。</p>
+        <div class="operation-info">
+          <p class="operation-label">操作类型</p>
+          <div class="operation-value" th:text="${operation}"></div>
+          <p class="operation-detail">操作时间：<span th:text="${time}"></span></p>
+          <p class="operation-detail">IP地址：<span th:text="${ip}"></span>（<span th:text="${ipLocation}"></span>）</p>
+          <p class="operation-detail">设备：<span th:text="${deviceType}"></span>，浏览器：<span th:text="${browser}"></span></p>
+        </div>
+        <div class="info-box">
+          <div class="info-title">
+            <span class="info-icon">!</span>
+            安全提示
+          </div>
+          <ul class="info-list">
+            <li>如非本人操作，请及时修改密码并开启多因素认证</li>
+            <li>如发现异常，请联系官方客服或冻结账户</li>
+            <li>本邮件为系统自动发送，请勿回复</li>
+          </ul>
+        </div>
+        <div style="text-align: center">
+          <span class="security-badge">
+            <span class="security-icon"></span>
+            安全加密连接
+          </span>
+        </div>
+      </div>
+      <div class="card-footer">
+        <p class="footer-text">
+          此邮件由系统自动发送，请勿直接回复。<br />
+          如有疑问，请访问我们的帮助中心或联系客服。
+        </p>
+        <p class="company-name">
+          © 2026 <a href="https://ksuser.cn" class="company-link">Ksuser</a> - 保留所有权利
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -13,6 +13,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import cn.ksuser.api.repository.UserSettingsRepository;
+import cn.ksuser.api.repository.UserRepository;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -38,6 +40,15 @@ public class SensitiveLogService {
 
     @Autowired
     private UserService userService;
+    
+        @Autowired
+        private EmailService emailService;
+    
+        @Autowired
+        private UserSettingsRepository userSettingsRepository;
+    
+        @Autowired
+        private cn.ksuser.api.repository.UserRepository userRepository;
 
     /**
      * 异步记录敏感操作日志
@@ -89,6 +100,30 @@ public class SensitiveLogService {
             logRepository.save(log);
             logger.debug("Sensitive operation log saved: userId={}, operation={}", 
                          log.getUserId(), log.getOperationType());
+
+                // 敏感操作邮件通知（跳过以 _MFA 结尾的中间步骤，避免重复通知）
+                if (log.getUserId() != null) {
+                    String op = log.getOperationType();
+                    if (op != null && op.endsWith("_MFA")) {
+                        logger.debug("Skipping email for MFA intermediate step: userId={}, operation={}", log.getUserId(), op);
+                    } else {
+                        userSettingsRepository.findByUserId(log.getUserId()).ifPresent(settings -> {
+                            if (Boolean.TRUE.equals(settings.getNotifySensitiveActionEmail())) {
+                                userRepository.findById(log.getUserId()).ifPresent(user -> {
+                                    String email = user.getEmail();
+                                    if (email != null && !email.isEmpty()) {
+                                        try {
+                                            emailService.sendSensitiveActionReminder(email, log.getOperationType(), log);
+                                            logger.debug("Sensitive action reminder email sent: userId={}, email={}", log.getUserId(), email);
+                                        } catch (Exception e) {
+                                            logger.warn("Failed to send sensitive action reminder email", e);
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
         } catch (Exception e) {
             logger.error("Failed to save sensitive operation log", e);
         }
@@ -141,6 +176,30 @@ public class SensitiveLogService {
             }
 
             logRepository.save(log);
+
+                // 敏感操作邮件通知（跳过以 _MFA 结尾的中间步骤，避免重复通知）
+                if (log.getUserId() != null) {
+                    String op = log.getOperationType();
+                    if (op != null && op.endsWith("_MFA")) {
+                        logger.debug("Skipping email for MFA intermediate step: userId={}, operation={}", log.getUserId(), op);
+                    } else {
+                        userSettingsRepository.findByUserId(log.getUserId()).ifPresent(settings -> {
+                            if (Boolean.TRUE.equals(settings.getNotifySensitiveActionEmail())) {
+                                userRepository.findById(log.getUserId()).ifPresent(user -> {
+                                    String email = user.getEmail();
+                                    if (email != null && !email.isEmpty()) {
+                                        try {
+                                            emailService.sendSensitiveActionReminder(email, log.getOperationType(), log);
+                                            logger.debug("Sensitive action reminder email sent: userId={}, email={}", log.getUserId(), email);
+                                        } catch (Exception e) {
+                                            logger.warn("Failed to send sensitive action reminder email", e);
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
         } catch (Exception e) {
             logger.error("Failed to save sensitive operation log", e);
             throw e;
