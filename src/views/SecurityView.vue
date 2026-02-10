@@ -167,9 +167,9 @@
             <el-table-column label="操作" min-width="180">
               <template #default="{ row }">
                 <div class="log-primary">
-                  <span class="log-title">{{ operationTypeLabels[row.operationType] || row.operationType }}</span>
+                  <span class="log-title">{{ getOperationLabel(row.operationType) }}</span>
                   <el-tag v-if="row.loginMethod" size="small" effect="plain">
-                    {{ loginMethodLabels[row.loginMethod] || row.loginMethod }}
+                    {{ getLoginMethodLabel(row.loginMethod) }}
                   </el-tag>
                 </div>
               </template>
@@ -325,6 +325,14 @@ const formatSensitiveTime = (value?: string | null) => {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+const getOperationLabel = (op: unknown) => {
+  return operationTypeLabels[(op as SensitiveOperationType)] || String(op ?? '-')
+}
+
+const getLoginMethodLabel = (m: unknown) => {
+  return loginMethodLabels[(m as SensitiveLoginMethod)] || String(m ?? '-')
 }
 
 const getRiskTagType = (score: number) => {

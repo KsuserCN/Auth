@@ -82,11 +82,11 @@
           <!-- 第二步：验证码确认 -->
           <div v-else-if="step === 'verify'" class="step-container" key="verify">
             <h2 class="step-title">验证码确认</h2>
-            <p class="step-subtitle">请输入您的身份验证器应用中显示的 6 位验证码</p>
+            <p class="step-subtitle">请输入身份验证器应用中显示的 6 位验证码，或输入 8 位恢复码</p>
 
             <el-form ref="verifyFormRef" :model="verifyInput" :rules="verifyRules" label-position="top">
               <el-form-item prop="verificationCode">
-                <el-input v-model="verifyInput.verificationCode" placeholder="输入 6 位验证码" maxlength="6"
+                <el-input v-model="verifyInput.verificationCode" placeholder="输入6位验证码或8位恢复码" maxlength="8"
                   @keydown.enter.prevent="goToRecoveryStep" autofocus />
               </el-form-item>
             </el-form>
@@ -184,8 +184,18 @@ const verifyInput = ref({
 
 const verifyRules: FormRules = {
   verificationCode: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码必须是 6 位数字', trigger: 'blur' }
+    { required: true, message: '请输入验证码或恢复码', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
+        const v = (value || '').trim()
+        if (!/^[0-9]{6}$/.test(v) && !/^[0-9]{8}$/.test(v)) {
+          callback(new Error('请输入6位 TOTP 或 8位恢复码'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 

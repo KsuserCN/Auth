@@ -172,13 +172,13 @@
 
             <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
               <el-form-item prop="code">
-                <el-input v-model="totpInput.code" placeholder="输入6位验证码" maxlength="6"
-                  @input="totpInput.code = totpInput.code.replace(/[^\d]/g, '')" @keyup.enter="handleTotpVerify"
-                  autofocus />
+                <el-input v-model="totpInput.code" placeholder="输入6位验证码或8位恢复码" maxlength="8"
+                  @input="totpInput.code = totpInput.code.replace(/[^\d]/g, '').slice(0, 8)"
+                  @keyup.enter="handleTotpVerify" autofocus />
               </el-form-item>
             </el-form>
 
-            <p class="step-subtitle">使用 TOTP 应用中的验证码，或输入您的回复码</p>
+            <p class="step-subtitle">使用 TOTP 应用中的验证码，或输入您的恢复码</p>
 
             <div class="step-actions">
               <el-button class="back-btn" @click="backToMFASource">返回</el-button>
@@ -306,8 +306,18 @@ const totpInput = ref({
 
 const totpRules = {
   code: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码应为6位数字', trigger: 'blur' },
+    { required: true, message: '请输入验证码或恢复码', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
+        const v = (value || '').trim()
+        if (!/^[0-9]{6}$/.test(v) && !/^[0-9]{8}$/.test(v)) {
+          callback(new Error('请输入 6 位 TOTP 或 8 位 恢复码'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur',
+    },
   ],
 }
 
