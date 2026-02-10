@@ -33,6 +33,24 @@ public class UserSession {
     @Column(name = "session_version", nullable = false)
     private Integer sessionVersion = 0;
 
+    @Column(name = "ip_address", length = 45)
+    private String ipAddress;
+
+    @Column(name = "ip_location", length = 255)
+    private String ipLocation;
+
+    @Column(name = "user_agent", columnDefinition = "TEXT")
+    private String userAgent;
+
+    @Column(name = "browser", length = 64)
+    private String browser;
+
+    @Column(name = "device_type", length = 32)
+    private String deviceType;
+
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
+
     public UserSession() {
     }
 
@@ -108,5 +126,53 @@ public class UserSession {
 
     public void setSessionVersion(Integer sessionVersion) {
         this.sessionVersion = sessionVersion;
+    }
+
+    public String getIpAddress() {
+        return ipAddress;
+    }
+
+    public void setIpAddress(String ipAddress) {
+        this.ipAddress = ipAddress;
+    }
+
+    public String getIpLocation() {
+        return ipLocation;
+    }
+
+    public void setIpLocation(String ipLocation) {
+        this.ipLocation = ipLocation;
+    }
+
+    public String getUserAgent() {
+        return userAgent;
+    }
+
+    public void setUserAgent(String userAgent) {
+        this.userAgent = userAgent;
+    }
+
+    public String getBrowser() {
+        return browser;
+    }
+
+    public void setBrowser(String browser) {
+        this.browser = browser;
+    }
+
+    public String getDeviceType() {
+        return deviceType;
+    }
+
+    public void setDeviceType(String deviceType) {
+        this.deviceType = deviceType;
+    }
+
+    public LocalDateTime getLastSeenAt() {
+        return lastSeenAt;
+    }
+
+    public void setLastSeenAt(LocalDateTime lastSeenAt) {
+        this.lastSeenAt = lastSeenAt;
     }
 }

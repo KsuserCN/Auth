@@ -104,6 +104,27 @@ CREATE TABLE user_sessions (
   revoked_at DATETIME NULL
     COMMENT '会话主动失效时间（登出/踢下线时设置，NULL 表示仍有效）',
 
+  session_version INT NOT NULL DEFAULT 0
+    COMMENT '会话令牌版本（用于使旧AccessToken失效）',
+
+  ip_address VARCHAR(45) DEFAULT NULL
+    COMMENT '会话创建IP',
+
+  ip_location VARCHAR(255) DEFAULT NULL
+    COMMENT 'IP属地',
+
+  user_agent TEXT DEFAULT NULL
+    COMMENT 'User-Agent',
+
+  browser VARCHAR(64) DEFAULT NULL
+    COMMENT '浏览器信息',
+
+  device_type VARCHAR(32) DEFAULT NULL
+    COMMENT '设备类型/系统',
+
+  last_seen_at DATETIME DEFAULT NULL
+    COMMENT '最后活跃时间',
+
   PRIMARY KEY (id),
 
   CONSTRAINT fk_user_sessions_user
