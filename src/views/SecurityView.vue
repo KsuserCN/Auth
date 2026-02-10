@@ -8,7 +8,7 @@
     </div>
 
     <el-row :gutter="16">
-      <el-col :xs="24" :lg="16">
+      <el-col :xs="24" :lg="24">
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon>
@@ -105,43 +105,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" class="row-gap">
-      <el-col :xs="24">
-        <el-card class="card" shadow="never">
-          <div class="card-title">
-            <el-icon>
-              <Monitor />
-            </el-icon>
-            <span>活跃会话</span>
-          </div>
-          <el-table :data="sessions" class="modern-table" size="small"
-            :default-sort="{ prop: 'lastActive', order: 'descending' }">
-            <el-table-column prop="device" label="设备" min-width="200">
-              <template #default="{ row }">
-                <div class="device-info">
-                  <el-icon class="device-icon">
-                    <Monitor />
-                  </el-icon>
-                  <span>{{ row.device }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="location" label="位置" min-width="100" />
-            <el-table-column prop="lastActive" label="最后活动" min-width="120" sortable />
-            <el-table-column label="操作" width="100" align="right">
-              <template #default="{ row }">
-                <el-popconfirm title="确认退出此会话？" confirm-button-text="确认" cancel-button-text="取消"
-                  @confirm="handleSessionLogout(row)">
-                  <template #reference>
-                    <el-button text type="danger" size="small">退出</el-button>
-                  </template>
-                </el-popconfirm>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 活跃会话卡片已移除按需求 -->
 
     <el-row :gutter="16" class="row-gap">
       <el-col :xs="24">
@@ -162,8 +126,27 @@
               </el-button>
             </div>
           </div>
+
+          <!-- 查询表单 -->
+          <div style="margin-bottom: 12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+            <el-select v-model="query.operationType" placeholder="操作类型" clearable style="width:180px">
+              <el-option v-for="(label, key) in operationTypeLabels" :key="key" :label="label" :value="key" />
+            </el-select>
+
+            <el-select v-model="query.result" placeholder="结果" clearable style="width:140px">
+              <el-option label="成功" value="SUCCESS" />
+              <el-option label="失败" value="FAILURE" />
+            </el-select>
+
+            <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期"
+              end-placeholder="结束日期" value-format="yyyy-MM-dd" unlink-panels style="width:320px" />
+
+            <el-button type="primary" @click="applyQuery">查询</el-button>
+            <el-button @click="resetQuery">重置</el-button>
+          </div>
+
           <el-table :data="sensitiveLogs" class="modern-table" size="small"
-            :empty-text="sensitiveLogsLoading ? '加载中...' : '暂无记录'">
+            :empty-text="sensitiveLogsLoading ? '加载中...' : '暂无记录'" @sort-change="handleSortChange">
             <el-table-column label="操作" min-width="180">
               <template #default="{ row }">
                 <div class="log-primary">
@@ -217,6 +200,12 @@
               </template>
             </el-table-column>
           </el-table>
+
+          <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+            <el-pagination background :page-size="query.pageSize" :current-page="query.page" :total="sensitiveLogsTotal"
+              layout="total, sizes, prev, pager, next, jumper" :page-sizes="[6, 12, 24, 48]"
+              @current-change="handlePageChange" @size-change="handlePageSizeChange" />
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -292,6 +281,20 @@ const settingsUpdating = ref(false)
 const sensitiveLogs = ref<SensitiveLogItem[]>([])
 const sensitiveLogsLoading = ref(false)
 const sensitiveLogsTotal = ref(0)
+
+// 查询与分页/排序状态
+const query = ref<{ page: number; pageSize: number; startDate?: string; endDate?: string; operationType?: string | null; result?: string | null; sortBy?: string | null; sortOrder?: 'asc' | 'desc' | null }>({
+  page: 1,
+  pageSize: 6,
+  startDate: undefined,
+  endDate: undefined,
+  operationType: undefined,
+  result: undefined,
+  sortBy: undefined,
+  sortOrder: undefined,
+})
+
+const dateRange = ref<string[] | null>(null)
 
 const operationTypeLabels: Record<SensitiveOperationType, string> = {
   REGISTER: '注册',
@@ -381,7 +384,18 @@ const getBrowserIconClass = (browser?: string | null) => {
 const loadSensitiveLogs = async () => {
   sensitiveLogsLoading.value = true
   try {
-    const result = await getSensitiveLogs({ page: 1, pageSize: 6 })
+    const params: any = {
+      page: query.value.page,
+      pageSize: query.value.pageSize,
+    }
+    if (query.value.startDate) params.startDate = query.value.startDate
+    if (query.value.endDate) params.endDate = query.value.endDate
+    if (query.value.operationType) params.operationType = query.value.operationType
+    if (query.value.result) params.result = query.value.result
+    if (query.value.sortBy) params.sortBy = query.value.sortBy
+    if (query.value.sortOrder) params.sortOrder = query.value.sortOrder
+
+    const result = await getSensitiveLogs(params)
     sensitiveLogs.value = result.data
     sensitiveLogsTotal.value = result.total
   } catch (error) {
@@ -425,6 +439,43 @@ onMounted(async () => {
 
   await loadSensitiveLogs()
 })
+
+const applyQuery = () => {
+  if (dateRange.value && dateRange.value.length === 2) {
+    query.value.startDate = dateRange.value[0]
+    query.value.endDate = dateRange.value[1]
+  } else {
+    query.value.startDate = undefined
+    query.value.endDate = undefined
+  }
+  query.value.page = 1
+  loadSensitiveLogs()
+}
+
+const resetQuery = () => {
+  query.value = { page: 1, pageSize: 6, startDate: undefined, endDate: undefined, operationType: undefined, result: undefined, sortBy: undefined, sortOrder: undefined }
+  dateRange.value = null
+  loadSensitiveLogs()
+}
+
+const handlePageChange = (page: number) => {
+  query.value.page = page
+  loadSensitiveLogs()
+}
+
+const handlePageSizeChange = (size: number) => {
+  query.value.pageSize = size
+  query.value.page = 1
+  loadSensitiveLogs()
+}
+
+const handleSortChange = (payload: { prop: string; order: string }) => {
+  if (!payload || !payload.prop) return
+  query.value.sortBy = payload.prop
+  query.value.sortOrder = payload.order === 'ascending' ? 'asc' : payload.order === 'descending' ? 'desc' : undefined
+  query.value.page = 1
+  loadSensitiveLogs()
+}
 
 const updateSetting = async (field: 'mfaEnabled' | 'detectUnusualLogin' | 'notifySensitiveActionEmail', value: boolean, rollback: () => void) => {
   if (!settingsReady.value || settingsUpdating.value) return
