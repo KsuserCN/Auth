@@ -736,3 +736,48 @@ export const regenerateRecoveryCodes = async (): Promise<string[]> => {
 export const disableTotp = async (): Promise<void> => {
   await request.post('/auth/totp/disable')
 }
+
+// ========== 会话管理 ==========
+
+/**
+ * 会话信息
+ */
+export interface SessionItem {
+  id: number
+  ipAddress: string
+  ipLocation: string | null
+  userAgent: string | null
+  browser: string | null
+  deviceType: string | null
+  createdAt: string
+  lastSeenAt: string
+  expiresAt: string
+  revokedAt: string | null
+  online: boolean
+  current: boolean
+}
+
+/**
+ * 获取在线会话列表
+ * GET /auth/sessions
+ */
+export const getSessions = async (): Promise<SessionItem[]> => {
+  const response = await request.get<ApiResponse<SessionItem[]>>('/auth/sessions')
+  return (response as unknown as ApiResponse<SessionItem[]>).data
+}
+
+/**
+ * 撤销指定会话
+ * POST /auth/sessions/{sessionId}/revoke
+ */
+export const revokeSession = async (sessionId: number): Promise<void> => {
+  await request.post(`/auth/sessions/${sessionId}/revoke`)
+}
+
+/**
+ * 从所有设备退出登录
+ * POST /auth/logout/all
+ */
+export const logoutAll = async (): Promise<void> => {
+  await request.post('/auth/logout/all')
+}
