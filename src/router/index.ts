@@ -91,6 +91,11 @@ const router = createRouter({
       name: 'add-passkey',
       component: () => import('../views/AddPasskeyView.vue'),
     },
+    {
+      path: '/oauth/qq/callback',
+      name: 'qq-callback',
+      component: () => import('../views/OAuthQQCallbackView.vue'),
+    },
   ],
 })
 

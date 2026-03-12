@@ -781,3 +781,167 @@ export const revokeSession = async (sessionId: number): Promise<void> => {
 export const logoutAll = async (): Promise<void> => {
   await request.post('/auth/logout/all')
 }
+
+// ========== OAuth QQ 登录 ==========
+
+export type QQOAuthOperation = 'login' | 'bind' | 'unbind'
+
+/**
+ * 构建 QQ 授权 URL
+ * 用于生成 QQ OAuth 授权链接
+ */
+export const buildQQAuthorizationUrl = (state: string): string => {
+  const clientId = import.meta.env.VITE_OAUTH_QQ_APPID
+  const redirectUri = 'https://auth.ksuser.cn/oauth/qq/callback'
+
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state: state,
+  })
+
+  return `https://graph.qq.com/oauth2.0/authorize?${params.toString()}`
+}
+
+/**
+ * QQ OAuth 回调请求参数
+ */
+export interface QQCallbackRequest {
+  code: string
+  redirectUri: string
+  state: string
+}
+
+export interface QQLoginCallbackResponse {
+  // 已绑定用户，直接登录成功 (HTTP 200)
+  accessToken?: string
+  user?: {
+    id: string
+    username: string
+    email: string
+    [key: string]: any
+  }
+  // 未绑定用户 (HTTP 202)
+  needBind?: boolean
+  openid?: string
+  message?: string
+  // MFA 场景 (HTTP 201)
+  challengeId?: string
+  method?: string
+}
+
+export interface QQBindCallbackResponse {
+  bound?: boolean
+  provider?: string
+  openid?: string
+  unionid?: string
+  message?: string
+}
+
+export interface QQUnbindCallbackResponse {
+  canUnbind?: boolean
+  reason?: string
+  message?: string
+}
+
+export type QQCallbackResponse =
+  | QQLoginCallbackResponse
+  | QQBindCallbackResponse
+  | QQUnbindCallbackResponse
+
+/**
+ * QQ OAuth 登录回调处理
+ * POST /oauth/qq/callback/login
+ */
+export const handleQQLoginCallback = async (
+  data: QQCallbackRequest,
+): Promise<QQLoginCallbackResponse> => {
+  const response = await request.post<ApiResponse<QQLoginCallbackResponse>>(
+    '/oauth/qq/callback/login',
+    data,
+  )
+  return (response as unknown as ApiResponse<QQLoginCallbackResponse>).data
+}
+
+/**
+ * QQ OAuth 绑定回调处理
+ * POST /oauth/qq/callback/bind
+ */
+export const handleQQBindCallback = async (
+  data: QQCallbackRequest,
+): Promise<QQBindCallbackResponse> => {
+  const response = await request.post<ApiResponse<QQBindCallbackResponse>>(
+    '/oauth/qq/callback/bind',
+    data,
+  )
+  return (response as unknown as ApiResponse<QQBindCallbackResponse>).data
+}
+
+/**
+ * QQ OAuth 解绑回调处理
+ * POST /oauth/qq/callback/unbind
+ */
+export const handleQQUnbindCallback = async (
+  data: QQCallbackRequest,
+): Promise<QQUnbindCallbackResponse> => {
+  const response = await request.post<ApiResponse<QQUnbindCallbackResponse>>(
+    '/oauth/qq/callback/unbind',
+    data,
+  )
+  return (response as unknown as ApiResponse<QQUnbindCallbackResponse>).data
+}
+
+/**
+ * 按 state 中的 operation 将回调请求路由到对应端点
+ */
+export const handleQQCallbackByOperation = async (
+  operation: QQOAuthOperation,
+  data: QQCallbackRequest,
+): Promise<QQCallbackResponse> => {
+  if (operation === 'login') {
+    return handleQQLoginCallback(data)
+  }
+
+  if (operation === 'bind') {
+    return handleQQBindCallback(data)
+  }
+
+  if (operation === 'unbind') {
+    return handleQQUnbindCallback(data)
+  }
+
+  throw new Error('不支持的 QQ 回调操作类型')
+}
+
+// 兼容旧调用（默认按登录回调处理）
+export const handleQQCallback = async (
+  data: QQCallbackRequest,
+): Promise<QQLoginCallbackResponse> => {
+  const response = await request.post<ApiResponse<QQLoginCallbackResponse>>(
+    '/oauth/qq/callback/login',
+    data,
+  )
+  return (response as unknown as ApiResponse<QQLoginCallbackResponse>).data
+}
+
+/**
+ * 获取 QQ 绑定状态
+ * GET /oauth/qq/bind-status
+ */
+export interface QQBindStatusResponse {
+  bound: boolean
+}
+
+export const getQQBindStatus = async (): Promise<QQBindStatusResponse> => {
+  const response = await request.get<ApiResponse<QQBindStatusResponse>>('/oauth/qq/bind-status')
+  return (response as unknown as ApiResponse<QQBindStatusResponse>).data
+}
+
+/**
+ * 解绑 QQ 账号
+ * POST /oauth/qq/unbind
+ */
+export const unbindQQ = async (): Promise<void> => {
+  await request.post('/oauth/qq/unbind')
+}

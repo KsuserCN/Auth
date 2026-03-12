@@ -59,6 +59,36 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24" :lg="24">
+        <el-card class="card" shadow="never">
+          <div class="card-title">
+            <el-icon>
+              <Share />
+            </el-icon>
+            <span>第三方账号登录绑定</span>
+          </div>
+          <div class="oauth-list">
+            <div v-for="provider in oauthProviders" :key="provider.key" class="oauth-item">
+              <div class="oauth-left">
+                <i class="oauth-icon" :class="provider.iconClass" aria-hidden="true"></i>
+                <span class="oauth-name">{{ provider.label }}</span>
+              </div>
+              <div class="oauth-right">
+                <el-tag v-if="!provider.supported" size="small" class="oauth-status">暂不支持</el-tag>
+                <el-tag v-else-if="provider.bound" type="success" size="small" class="oauth-status">已绑定</el-tag>
+                <el-tag v-else type="info" size="small" class="oauth-status">未绑定</el-tag>
+                <el-button v-if="provider.supported" text :type="provider.bound ? 'danger' : 'primary'" size="small"
+                  :loading="provider.loading" @click="handleProviderAction(provider)">
+                  {{ provider.bound ? '解绑' : '绑定' }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16" class="row-gap" v-if="isPasskeySupported">
       <el-col :xs="24" :lg="24">
         <el-card class="card" shadow="never">
@@ -255,6 +285,7 @@ import {
   ArrowRight,
   Loading,
   Cpu,
+  Share,
 } from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
@@ -266,6 +297,8 @@ import {
   getRecoveryCodes,
   regenerateRecoveryCodes,
   disableTotp,
+  buildQQAuthorizationUrl,
+  getQQBindStatus,
 } from '@/api/auth'
 import { isWebAuthnSupported } from '@/utils/webauthn'
 
@@ -275,6 +308,21 @@ const userStore = useUserStore()
 const userEmail = computed(() => userStore.user?.email || '—')
 const emailLoading = ref(false)
 const passwordLoading = ref(false)
+type OAuthProviderItem = {
+  key: 'wechat' | 'qq' | 'github' | 'microsoft'
+  label: string
+  iconClass: string
+  supported: boolean
+  bound: boolean
+  loading: boolean
+}
+
+const oauthProviders = ref<OAuthProviderItem[]>([
+  { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, loading: false },
+  { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, loading: false },
+  { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: false, bound: false, loading: false },
+  { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: false, bound: false, loading: false },
+])
 
 // Passkey 相关状态
 const isPasskeySupported = ref(false)
@@ -297,6 +345,7 @@ const regenerateLoading = ref(false)
 
 onMounted(async () => {
   await userStore.fetchUserInfo()
+  await loadOAuthStatus()
   isPasskeySupported.value = isWebAuthnSupported()
 
   if (isPasskeySupported.value) {
@@ -306,6 +355,50 @@ onMounted(async () => {
   await fetchTotpStatus()
 
 })
+
+const resolveQQBoundFromUserInfo = (): boolean | null => {
+  const user = userStore.user as Record<string, unknown> | null
+  if (!user) return null
+
+  if (typeof user.qqBound === 'boolean') return user.qqBound
+  if (typeof user.qq_bound === 'boolean') return user.qq_bound
+
+  const oauthAccounts = user.oauthAccounts
+  if (Array.isArray(oauthAccounts)) {
+    const account = oauthAccounts.find((item: unknown) => {
+      if (!item || typeof item !== 'object') return false
+      const provider = (item as Record<string, unknown>).provider
+      return provider === 'qq'
+    }) as Record<string, unknown> | undefined
+
+    if (account) {
+      const bound = account.bound
+      if (typeof bound === 'boolean') return bound
+      return true
+    }
+  }
+
+  return null
+}
+
+const loadOAuthStatus = async () => {
+  const qqProvider = oauthProviders.value.find(p => p.key === 'qq')
+  if (!qqProvider) return
+
+  const boundFromUser = resolveQQBoundFromUserInfo()
+  if (boundFromUser !== null) {
+    qqProvider.bound = boundFromUser
+    return
+  }
+
+  try {
+    const data = await getQQBindStatus()
+    qqProvider.bound = data.bound
+  } catch (error) {
+    console.warn('Load QQ bind status failed:', error)
+    qqProvider.bound = false
+  }
+}
 
 const loadPasskeyList = async () => {
   try {
@@ -624,6 +717,75 @@ const downloadRecoveryCodes = (codes: string[]) => {
   a.click()
   window.URL.revokeObjectURL(url)
 }
+
+const generateRandomString = (): string => {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+const handleQQBind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+
+  provider.loading = true
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};bind;${debugState}`
+
+    sessionStorage.setItem('qq_oauth_state', state)
+    window.location.href = buildQQAuthorizationUrl(state)
+  } catch (error) {
+    console.error('QQ bind failed:', error)
+    ElMessage.error('QQ 绑定跳转失败，请重试')
+    provider.loading = false
+  }
+}
+
+const handleQQUnbind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+  if (!(await ensureSensitiveVerified())) return
+
+  try {
+    await ElMessageBox.confirm('解绑后您将无法使用 QQ 快速登录，是否继续？', '确认解绑', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+
+  provider.loading = true
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};unbind;${debugState}`
+
+    sessionStorage.setItem('qq_oauth_state', state)
+    window.location.href = buildQQAuthorizationUrl(state)
+  } catch (error) {
+    console.error('QQ unbind failed:', error)
+    ElMessage.error('QQ 解绑跳转失败，请稍后重试')
+  } finally {
+    provider.loading = false
+  }
+}
+
+const handleProviderAction = async (provider: OAuthProviderItem) => {
+  if (!provider.supported || provider.loading) return
+
+  if (provider.key === 'qq') {
+    if (provider.bound) {
+      await handleQQUnbind(provider)
+    } else {
+      await handleQQBind(provider)
+    }
+    return
+  }
+
+  ElMessage.info(`${provider.label} 暂不支持`)
+}
 </script>
 
 <style scoped>
@@ -689,6 +851,14 @@ const downloadRecoveryCodes = (codes: string[]) => {
 
 .info-row:hover {
   background-color: var(--el-fill-color-light);
+}
+
+.info-row.is-static {
+  cursor: default;
+}
+
+.info-row.is-static:hover {
+  background-color: transparent;
 }
 
 .row-left {
@@ -888,5 +1058,68 @@ const downloadRecoveryCodes = (codes: string[]) => {
   font-size: 14px;
   font-weight: 600;
   color: var(--el-color-primary);
+}
+
+.oauth-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oauth-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+}
+
+.oauth-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.oauth-name {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  font-weight: 500;
+}
+
+.oauth-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.oauth-status {
+  min-width: 56px;
+  text-align: center;
+}
+
+.oauth-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 18px;
+  color: var(--el-text-color-secondary);
+  opacity: 0.85;
+}
+
+:global(html.dark) .oauth-icon {
+  opacity: 0.95;
+}
+
+@media (max-width: 768px) {
+  .oauth-item {
+    padding: 10px;
+  }
+
+  .oauth-right {
+    gap: 4px;
+  }
 }
 </style>

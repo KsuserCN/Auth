@@ -197,7 +197,7 @@
               <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
                 <i class="fa-brands fa-weixin" aria-hidden="true"></i>
               </button>
-              <button class="icon-btn" @click="handleUnsupportedLogin('qq')" aria-label="QQ 登录" type="button">
+              <button class="icon-btn" @click="handleQQLogin" aria-label="QQ 登录" type="button">
                 <i class="fa-brands fa-qq" aria-hidden="true"></i>
               </button>
               <button class="icon-btn" @click="handleUnsupportedLogin('Github')" aria-label="Github 登录" type="button">
@@ -232,6 +232,7 @@ import {
   getPasskeyAuthenticationOptions,
   verifyPasskeyAuthentication,
   verifyTOTPForLogin,
+  buildQQAuthorizationUrl,
   type MFAChallenge,
   type LoginResponse
 } from '@/api/auth'
@@ -600,6 +601,39 @@ const handlePasskeyLogin = async () => {
 
 const handleUnsupportedLogin = (provider: string) => {
   ElMessage.info(`${provider.toUpperCase()} 登录 - 暂不支持`)
+}
+
+// ===== QQ 登录 =====
+
+const generateRandomString = (): string => {
+  const array = new Uint8Array(16)
+  crypto.getRandomValues(array)
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+const handleQQLogin = async () => {
+  try {
+    // 生成随机字符串
+    const randomString = generateRandomString()
+
+    // 获取 VITE_DEBUG_STATE
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+
+    // 组合 state 参数：校验参数;操作类型;环境
+    const state = `${randomString};login;${debugState}`
+
+    // 存储到 sessionStorage
+    sessionStorage.setItem('qq_oauth_state', state)
+
+    // 构建 QQ 授权 URL
+    const authUrl = buildQQAuthorizationUrl(state)
+
+    // 跳转到 QQ 授权页
+    window.location.href = authUrl
+  } catch (error: unknown) {
+    console.error('QQ login failed:', error)
+    ElMessage.error('QQ 登录失败，请重试')
+  }
 }
 
 // ===== 第四步：TOTP 验证 =====
