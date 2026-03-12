@@ -42,6 +42,9 @@ public class SecurityConfig {
                     "/auth/passkey/authentication-options", "/auth/passkey/authentication-options/",
                     "/auth/passkey/authentication-verify", "/auth/passkey/authentication-verify/",
                     "/auth/totp/mfa-verify", "/auth/totp/mfa-verify/",
+                    "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
+                    "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
+                    "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
                     "/info/password-requirement", "/info/password-requirement/")
                 .permitAll()
                 .anyRequest().authenticated()
@@ -80,7 +83,12 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
                 // 只为查询接口排除 CSRF 检查
                 .ignoringRequestMatchers(
-                    "/auth/check-username", "/auth/check-username/"
+                    "/auth/check-username", "/auth/check-username/",
+                    "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
+                    "/oauth/qq/callback/bind", "/oauth/qq/callback/bind/",
+                    "/oauth/qq/callback/unbind", "/oauth/qq/callback/unbind/",
+                    "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
+                    "/oauth/qq/register-bind", "/oauth/qq/register-bind/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

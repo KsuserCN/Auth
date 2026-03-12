@@ -45,6 +45,49 @@ CREATE TABLE users (
   COLLATE=utf8mb4_unicode_ci
   COMMENT='用户表';
 
+DROP TABLE IF EXISTS user_oauth_accounts;
+CREATE TABLE user_oauth_accounts (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'OAuth账号绑定记录主键ID',
+
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '关联 users.id',
+
+  provider ENUM(
+    'wechat',
+    'qq',
+    'microsoft',
+    'github'
+  ) NOT NULL COMMENT 'OAuth提供方',
+
+  provider_user_id VARCHAR(128) NOT NULL COMMENT '提供方用户强调唯一ID（openid / sub / github id）',
+
+  union_id VARCHAR(128) DEFAULT NULL COMMENT '跨应用唯一ID（如 wechat / qq unionid）',
+
+  is_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用该第三方账号绑定',
+
+  linked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '绑定时间',
+  last_login_at TIMESTAMP NULL COMMENT '通过该第三方账号最后登录时间',
+
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+
+  UNIQUE KEY uk_oauth_provider_user (provider, provider_user_id),
+  UNIQUE KEY uk_oauth_provider_union (provider, union_id),
+
+  KEY idx_oauth_user (user_id),
+  KEY idx_oauth_provider (provider),
+
+  CONSTRAINT fk_oauth_user
+    FOREIGN KEY (user_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户第三方OAuth账号绑定表（最小身份映射版）';
+
 
 
 DROP TABLE IF EXISTS user_settings;

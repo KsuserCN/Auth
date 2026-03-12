@@ -17,6 +17,8 @@ public class AppProperties {
     private final RateLimit rateLimit = new RateLimit();
     private final SensitiveOperation sensitiveOperation = new SensitiveOperation();
     private final Passkey passkey = new Passkey();
+    private final Oauth oauth = new Oauth();
+    private final Qq qq = new Qq();
 
     public boolean isDebug() {
         return debug;
@@ -44,6 +46,23 @@ public class AppProperties {
 
     public Passkey getPasskey() {
         return passkey;
+    }
+
+    public Oauth getOauth() { return oauth; }
+
+    public Qq getQq() { return qq; }
+
+    public static class Qq {
+        private final QqOauth oauth = new QqOauth();
+
+        public QqOauth getOauth() { return oauth; }
+
+        public static class QqOauth {
+            private java.util.List<String> redirectUris = new java.util.ArrayList<>();
+
+            public java.util.List<String> getRedirectUris() { return redirectUris; }
+            public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
+        }
     }
 
     /**
@@ -104,6 +123,16 @@ public class AppProperties {
         public void setRequireSpecialChars(boolean requireSpecialChars) {
             this.requireSpecialChars = requireSpecialChars;
         }
+    }
+
+    public static class Oauth {
+        /**
+         * 支持的重定向白名单（逗号分隔或在配置文件中使用 list）
+         */
+        private java.util.List<String> redirectUris = new java.util.ArrayList<>();
+
+        public java.util.List<String> getRedirectUris() { return redirectUris; }
+        public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
     }
 
     /**
