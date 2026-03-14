@@ -925,17 +925,20 @@ export const handleQQCallback = async (
   return (response as unknown as ApiResponse<QQLoginCallbackResponse>).data
 }
 
-/**
- * 获取 QQ 绑定状态
- * GET /oauth/qq/bind-status
- */
-export interface QQBindStatusResponse {
+export interface OAuthAccountStatusItem {
+  provider: 'wechat' | 'qq' | 'microsoft' | 'github'
   bound: boolean
+  lastLoginAt: string | null
 }
 
-export const getQQBindStatus = async (): Promise<QQBindStatusResponse> => {
-  const response = await request.get<ApiResponse<QQBindStatusResponse>>('/oauth/qq/bind-status')
-  return (response as unknown as ApiResponse<QQBindStatusResponse>).data
+/**
+ * 获取当前用户第三方账号绑定状态
+ * GET /oauth/accounts/status
+ */
+export const getOAuthAccountsStatus = async (): Promise<OAuthAccountStatusItem[]> => {
+  const response =
+    await request.get<ApiResponse<OAuthAccountStatusItem[]>>('/oauth/accounts/status')
+  return (response as unknown as ApiResponse<OAuthAccountStatusItem[]>).data
 }
 
 /**

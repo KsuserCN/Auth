@@ -72,12 +72,17 @@
             <div v-for="provider in oauthProviders" :key="provider.key" class="oauth-item">
               <div class="oauth-left">
                 <i class="oauth-icon" :class="provider.iconClass" aria-hidden="true"></i>
-                <span class="oauth-name">{{ provider.label }}</span>
+                <div class="oauth-meta">
+                  <span class="oauth-name">{{ provider.label }}</span>
+                  <span class="oauth-last-login">
+                    {{ provider.lastLoginAt ? `最近登录：${formatDateTime(provider.lastLoginAt)}` : '暂无登录记录' }}
+                  </span>
+                </div>
               </div>
               <div class="oauth-right">
-                <el-tag v-if="!provider.supported" size="small" class="oauth-status">暂不支持</el-tag>
-                <el-tag v-else-if="provider.bound" type="success" size="small" class="oauth-status">已绑定</el-tag>
+                <el-tag v-if="provider.bound" type="success" size="small" class="oauth-status">已绑定</el-tag>
                 <el-tag v-else type="info" size="small" class="oauth-status">未绑定</el-tag>
+                <el-tag v-if="!provider.supported" size="small" class="oauth-status">暂不支持</el-tag>
                 <el-button v-if="provider.supported" text :type="provider.bound ? 'danger' : 'primary'" size="small"
                   :loading="provider.loading" @click="handleProviderAction(provider)">
                   {{ provider.bound ? '解绑' : '绑定' }}
@@ -298,7 +303,9 @@ import {
   regenerateRecoveryCodes,
   disableTotp,
   buildQQAuthorizationUrl,
-  getQQBindStatus,
+  unbindQQ,
+  getOAuthAccountsStatus,
+  type OAuthAccountStatusItem,
 } from '@/api/auth'
 import { isWebAuthnSupported } from '@/utils/webauthn'
 
@@ -314,14 +321,15 @@ type OAuthProviderItem = {
   iconClass: string
   supported: boolean
   bound: boolean
+  lastLoginAt: string | null
   loading: boolean
 }
 
 const oauthProviders = ref<OAuthProviderItem[]>([
-  { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, loading: false },
-  { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, loading: false },
-  { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: false, bound: false, loading: false },
-  { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: false, bound: false, loading: false },
+  { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, lastLoginAt: null, loading: false },
+  { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, lastLoginAt: null, loading: false },
+  { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: false, bound: false, lastLoginAt: null, loading: false },
+  { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: false, bound: false, lastLoginAt: null, loading: false },
 ])
 
 // Passkey 相关状态
@@ -356,47 +364,31 @@ onMounted(async () => {
 
 })
 
-const resolveQQBoundFromUserInfo = (): boolean | null => {
-  const user = userStore.user as Record<string, unknown> | null
-  if (!user) return null
-
-  if (typeof user.qqBound === 'boolean') return user.qqBound
-  if (typeof user.qq_bound === 'boolean') return user.qq_bound
-
-  const oauthAccounts = user.oauthAccounts
-  if (Array.isArray(oauthAccounts)) {
-    const account = oauthAccounts.find((item: unknown) => {
-      if (!item || typeof item !== 'object') return false
-      const provider = (item as Record<string, unknown>).provider
-      return provider === 'qq'
-    }) as Record<string, unknown> | undefined
-
-    if (account) {
-      const bound = account.bound
-      if (typeof bound === 'boolean') return bound
-      return true
-    }
-  }
-
-  return null
-}
-
 const loadOAuthStatus = async () => {
-  const qqProvider = oauthProviders.value.find(p => p.key === 'qq')
-  if (!qqProvider) return
-
-  const boundFromUser = resolveQQBoundFromUserInfo()
-  if (boundFromUser !== null) {
-    qqProvider.bound = boundFromUser
-    return
-  }
-
   try {
-    const data = await getQQBindStatus()
-    qqProvider.bound = data.bound
+    const accounts = await getOAuthAccountsStatus()
+    const statusMap = new Map<OAuthAccountStatusItem['provider'], OAuthAccountStatusItem>(
+      accounts.map((item) => [item.provider, item]),
+    )
+
+    oauthProviders.value = oauthProviders.value.map((provider) => {
+      const status = statusMap.get(provider.key)
+      if (!status) {
+        return {
+          ...provider,
+          bound: false,
+          lastLoginAt: null,
+        }
+      }
+
+      return {
+        ...provider,
+        bound: status.bound,
+        lastLoginAt: status.lastLoginAt,
+      }
+    })
   } catch (error) {
-    console.warn('Load QQ bind status failed:', error)
-    qqProvider.bound = false
+    console.warn('Load OAuth accounts status failed:', error)
   }
 }
 
@@ -442,6 +434,22 @@ const formatDate = (dateStr: string) => {
   } else {
     return `${Math.floor(days / 365)} 年前`
   }
+}
+
+const formatDateTime = (dateStr: string) => {
+  const date = new Date(dateStr)
+
+  if (Number.isNaN(date.getTime())) {
+    return '时间未知'
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 const getTransportTags = (transports: string) => {
@@ -758,15 +766,16 @@ const handleQQUnbind = async (provider: OAuthProviderItem) => {
 
   provider.loading = true
   try {
-    const randomString = generateRandomString()
-    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
-    const state = `${randomString};unbind;${debugState}`
+    await unbindQQ()
+    provider.bound = false
+    provider.lastLoginAt = null
+    ElMessage.success('QQ 解绑成功')
 
-    sessionStorage.setItem('qq_oauth_state', state)
-    window.location.href = buildQQAuthorizationUrl(state)
+    // 与服务端状态对齐
+    await loadOAuthStatus()
   } catch (error) {
     console.error('QQ unbind failed:', error)
-    ElMessage.error('QQ 解绑跳转失败，请稍后重试')
+    ElMessage.error('QQ 解绑失败，请稍后重试')
   } finally {
     provider.loading = false
   }
@@ -1084,10 +1093,22 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
   min-width: 0;
 }
 
+.oauth-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .oauth-name {
   font-size: 14px;
   color: var(--el-text-color-primary);
   font-weight: 500;
+}
+
+.oauth-last-login {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .oauth-right {
