@@ -4,6 +4,7 @@ import cn.ksuser.api.entity.UserOauthAccount;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -11,4 +12,5 @@ public interface UserOauthAccountRepository extends JpaRepository<UserOauthAccou
     Optional<UserOauthAccount> findByProviderAndProviderUserId(String provider, String providerUserId);
     Optional<UserOauthAccount> findByProviderAndUnionId(String provider, String unionId);
     Optional<UserOauthAccount> findByProviderAndUserId(String provider, Long userId);
+    List<UserOauthAccount> findByUserId(Long userId);
 }

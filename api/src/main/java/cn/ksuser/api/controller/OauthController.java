@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
 import cn.ksuser.api.entity.UserSettings;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -32,6 +33,10 @@ import org.springframework.web.client.RestTemplate;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 
@@ -185,14 +190,55 @@ public class OauthController {
     }
 
     /**
-     * QQ OAuth 解绑回调（需要登录态）
+     * QQ OAuth 解绑（兼容回调路径，不再要求 QQ 授权参数）
      */
     @PostMapping("/qq/callback/unbind")
-    public ResponseEntity<ApiResponse<Object>> qqUnbindCallback(@RequestBody OauthCallbackRequest req,
-                                                                HttpServletRequest request,
-                                                                HttpServletResponse response,
+    public ResponseEntity<ApiResponse<Object>> qqUnbindCallback(HttpServletRequest request,
                                                                 Authentication authentication) {
-        return handleQqCallback(req, request, response, "unbind", authentication);
+        return unbindQQ(authentication, request);
+    }
+
+    /**
+     * 获取当前用户的第三方登录绑定状态
+     */
+    @GetMapping("/accounts/status")
+    public ResponseEntity<ApiResponse<Object>> getOauthAccountsStatus(Authentication authentication) {
+        if (authentication == null
+            || authentication.getPrincipal() == null
+            || authentication instanceof AnonymousAuthenticationToken
+            || "anonymousUser".equals(authentication.getPrincipal().toString())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        var userOpt = userService.findByUuid(uuid);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        User user = userOpt.get();
+        List<UserOauthAccount> accounts = oauthRepo.findByUserId(user.getId());
+        Map<String, UserOauthAccount> accountByProvider = new HashMap<>();
+        for (UserOauthAccount account : accounts) {
+            if (account.getProvider() == null) {
+                continue;
+            }
+            accountByProvider.put(account.getProvider().toLowerCase(), account);
+        }
+
+        List<String> providers = Arrays.asList("wechat", "qq", "microsoft", "github");
+        List<Map<String, Object>> data = new java.util.ArrayList<>();
+        for (String provider : providers) {
+            UserOauthAccount account = accountByProvider.get(provider);
+            Map<String, Object> item = new HashMap<>();
+            item.put("provider", provider);
+            item.put("bound", account != null && Boolean.TRUE.equals(account.getIsEnabled()));
+            item.put("lastLoginAt", account != null ? account.getLastLoginAt() : null);
+            data.add(item);
+        }
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "查询成功", data));
     }
 
     private ResponseEntity<ApiResponse<Object>> handleQqCallback(OauthCallbackRequest req,
