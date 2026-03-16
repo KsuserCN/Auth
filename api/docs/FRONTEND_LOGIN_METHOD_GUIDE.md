@@ -18,9 +18,9 @@
 
 | login_method | 说明 | 推荐展示文案 | 图标建议 |
 |--------------|------|--------------|----------|
-| `PASSWORD_MFA` | 密码+TOTP二步验证 | 密码+二步验证 | 🔑🛡️ |
-| `EMAIL_CODE_MFA` | 验证码+TOTP二步验证 | 验证码+二步验证 | 📧🛡️ |
-| `PASSKEY_MFA` | Passkey+TOTP二步验证 | Passkey+二步验证 | 🔐🛡️ |
+| `["password", "mfa"]` | 密码+TOTP二步验证 | 密码+二步验证 | 🔑🛡️ |
+| `["email", "mfa"]` | 验证码+TOTP二步验证 | 验证码+二步验证 | 📧🛡️ |
+| `["passkey", "mfa"]` | Passkey+TOTP二步验证 | Passkey+二步验证 | 🔐🛡️ |
 
 ## MFA登录的双记录特性
 

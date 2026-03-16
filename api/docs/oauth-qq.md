@@ -24,6 +24,13 @@
 - `操作类型` 仅支持：`login`、`bind`、`unbind`
 - 登录/绑定接口会校验 `state` 中的操作类型必须与当前接口匹配
 
+## redirectUri 选择规则
+- 登录/绑定回调接口不再依赖前端传入 `redirectUri`
+- 后端根据 `state` 第三段环境标识自动选择：
+- `dev`：优先使用包含 `localhost` 或 `127.0.0.1` 的配置项
+- `prd`：优先使用非本地地址配置项
+- 配置来源：`app.qq.oauth.redirect-uris[]`
+
 ## 其他 QQ 相关接口
 - 解绑（非 OAuth 回调方式）：`POST /oauth/qq/unbind`
 - 绑定已有账号：`POST /oauth/qq/bind-existing`

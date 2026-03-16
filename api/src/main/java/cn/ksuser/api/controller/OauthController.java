@@ -247,14 +247,11 @@ public class OauthController {
                                                                  String expectedOperation,
                                                                  Authentication authentication) {
         String code = req.getCode();
-        String redirectUri = req.getRedirectUri();
+        String redirectUriFromRequest = req.getRedirectUri();
         String state = req.getState();
 
         if (code == null || code.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "code 不能为空"));
-        }
-        if (redirectUri == null || redirectUri.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "redirectUri 不能为空"));
         }
         if (state == null || state.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
@@ -280,6 +277,16 @@ public class OauthController {
         if (!("prd".equals(env) || "dev".equals(env))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+        }
+
+        String redirectUri = resolveRedirectUriByEnv(env);
+        if (redirectUri == null) {
+            logger.error("No qq redirectUri configured for env={}", env);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "QQ redirectUri 未配置"));
+        }
+        if (redirectUriFromRequest != null && !redirectUriFromRequest.isBlank() && !redirectUri.equals(redirectUriFromRequest)) {
+            logger.warn("Ignore redirectUri from request: {}, use configured: {}", redirectUriFromRequest, redirectUri);
         }
 
         User currentUser = null;
@@ -316,12 +323,6 @@ public class OauthController {
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(codeProcessingKey, "1", Duration.ofSeconds(30));
         if (!Boolean.TRUE.equals(locked)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "登录处理中，请勿重复提交"));
-        }
-
-        // 检查 redirectUri 白名单
-        if (!appProperties.getQq().getOauth().getRedirectUris().contains(redirectUri)) {
-            logger.warn("Unallowed redirectUri: {}", redirectUri);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "不允许的 redirectUri"));
         }
 
         // 速率限制（按 IP）
@@ -560,6 +561,36 @@ public class OauthController {
         } finally {
             redisTemplate.delete(codeProcessingKey);
         }
+    }
+
+    private String resolveRedirectUriByEnv(String env) {
+        List<String> configuredUris = appProperties.getQq().getOauth().getRedirectUris();
+        if (configuredUris == null || configuredUris.isEmpty()) {
+            return null;
+        }
+
+        if ("dev".equals(env)) {
+            for (String uri : configuredUris) {
+                if (uri != null && (uri.contains("localhost") || uri.contains("127.0.0.1"))) {
+                    return uri;
+                }
+            }
+        }
+
+        if ("prd".equals(env)) {
+            for (String uri : configuredUris) {
+                if (uri != null && !uri.contains("localhost") && !uri.contains("127.0.0.1")) {
+                    return uri;
+                }
+            }
+        }
+
+        for (String uri : configuredUris) {
+            if (uri != null && !uri.isBlank()) {
+                return uri;
+            }
+        }
+        return null;
     }
 
     /**

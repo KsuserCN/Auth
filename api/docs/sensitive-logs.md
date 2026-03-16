@@ -28,9 +28,9 @@
 - `PASSKEY` - Passkey登录（无MFA）
 
 ### MFA登录方式（需要或已完成二步验证）
-- `PASSWORD_MFA` - 密码 + TOTP二步验证登录
-- `EMAIL_CODE_MFA` - 邮箱验证码 + TOTP二步验证登录
-- `PASSKEY_MFA` - Passkey + TOTP二步验证登录
+- `["password", "mfa"]` - 密码 + TOTP二步验证登录
+- `["email", "mfa"]` - 邮箱验证码 + TOTP二步验证登录
+- `["passkey", "mfa"]` - Passkey + TOTP二步验证登录
 
 ### MFA登录流程说明
 
@@ -52,20 +52,11 @@
   {
     "id": 124,
     "operationType": "LOGIN",
-    "loginMethod": "PASSWORD_MFA",
+    "loginMethod": ["password", "mfa"],
     "result": "SUCCESS",
     "failureReason": null,
     "createdAt": "2026-02-09T10:00:00",
     "riskScore": 5
-  },
-  {
-    "id": 125,
-    "operationType": "LOGIN",
-    "loginMethod": "PASSWORD_MFA",
-    "result": "SUCCESS",
-    "failureReason": null,
-    "createdAt": "2026-02-09T10:00:05",
-    "riskScore": 0
   }
 ]
 ```

@@ -13,6 +13,7 @@ Authorization: Bearer <accessToken>
 
 ## 用途
 用于已登录用户绑定 QQ 账号。后端会先向 QQ 获取 `openid/unionid`，再写入 `user_oauth_accounts`。
+后端会根据 `state` 中的环境标识（`prd/dev`）自动从配置 `app.qq.oauth.redirect-uris` 选择 `redirectUri`，不依赖前端传入。
 
 ## state 规范
 - 格式：`校验参数;操作类型;prd/dev`
@@ -30,14 +31,12 @@ Authorization: Bearer <accessToken>
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | code | string | 是 | QQ 返回的一次性授权码 |
-| redirectUri | string | 是 | 前端回调地址，必须在白名单中 |
 | state | string | 是 | 状态参数，操作类型必须是 bind |
 
 ## 请求示例
 ```json
 {
   "code": "AUTH_CODE_FROM_QQ",
-  "redirectUri": "https://auth.ksuser.cn/oauth/qq/callback",
   "state": "5501171622cef638d3851ad5a2e8ebc1;bind;prd"
 }
 ```

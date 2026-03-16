@@ -34,6 +34,8 @@ import cn.ksuser.api.service.MfaService;
 import cn.ksuser.api.dto.MfaChallengeResponse;
 import cn.ksuser.api.dto.MfaTotpVerifyRequest;
 
+import java.util.Arrays;
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -1007,7 +1009,8 @@ public class AuthController {
                 // ✅ MFA验证失败，记录失败次数
                 mfaService.recordFailedAttempt(requestBody.getChallengeId());
                 int remaining = mfaService.getRemainingAttempts(requestBody.getChallengeId());
-                String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
+                String loginMethod = requestBody.getChallengeId().contains("EMAIL") ?
+                    Arrays.asList("email", "mfa").toString() : Arrays.asList("password", "mfa").toString();
                 sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, false, "TOTP 校验失败", startTime);
                 
                 if (remaining > 0) {
@@ -1031,13 +1034,15 @@ public class AuthController {
             setRefreshTokenCookie(response, refreshToken);
 
             // MFA验证成功
-            String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
+            String loginMethod = requestBody.getChallengeId().contains("EMAIL") ?
+                Arrays.asList("email", "mfa").toString() : Arrays.asList("password", "mfa").toString();
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, true, null, startTime);
 
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
         } catch (Exception e) {
-            String loginMethod = requestBody.getChallengeId().contains("EMAIL") ? "EMAIL_CODE_MFA" : "PASSWORD_MFA";
+            String loginMethod = requestBody.getChallengeId().contains("EMAIL") ?
+                Arrays.asList("email", "mfa").toString() : Arrays.asList("password", "mfa").toString();
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), loginMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "TOTP 验证处理失败"));

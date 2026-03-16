@@ -7,7 +7,8 @@
 - 请求类型：`application/json`
 
 ## 用途
-用于 QQ 登录流程。前端从 QQ 回调页拿到 `code` 后，将 `code/redirectUri/state` 发送到本接口。
+用于 QQ 登录流程。前端从 QQ 回调页拿到 `code` 后，将 `code/state` 发送到本接口。
+后端会根据 `state` 中的环境标识（`prd/dev`）自动从配置 `app.qq.oauth.redirect-uris` 选择 `redirectUri`，不依赖前端传入。
 
 ## state 规范
 - 格式：`校验参数;操作类型;prd/dev`
@@ -18,14 +19,12 @@
 | 字段 | 类型 | 必填 | 说明 |
 |---|---|---|---|
 | code | string | 是 | QQ 返回的一次性授权码 |
-| redirectUri | string | 是 | 前端回调地址，必须在后端白名单中 |
 | state | string | 是 | 状态参数，必须符合上面的格式 |
 
 ## 请求示例
 ```json
 {
   "code": "AUTH_CODE_FROM_QQ",
-  "redirectUri": "https://auth.ksuser.cn/oauth/qq/callback",
   "state": "5501171622cef638d3851ad5a2e8ebc1;login;prd"
 }
 ```
@@ -77,12 +76,10 @@
 ## 失败响应
 ### 1) 参数错误（HTTP 400）
 - `code 不能为空`
-- `redirectUri 不能为空`
 - `state 不能为空`
 - `state 格式不正确，需为: 校验参数;操作类型;prd/dev`
 - `state 操作类型与当前接口不匹配`
 - `state 环境标识不支持，仅支持 prd/dev`
-- `不允许的 redirectUri`
 - `QQ token 错误: ...`
 - `QQ me 错误: ...`
 
@@ -98,3 +95,4 @@
 
 ### 4) 服务异常（HTTP 500）
 - `内部错误`
+- `QQ redirectUri 未配置`
