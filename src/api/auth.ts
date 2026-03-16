@@ -881,9 +881,9 @@ export const handleQQBindCallback = async (
  * QQ OAuth 解绑回调处理
  * POST /oauth/qq/callback/unbind
  */
-export const handleQQUnbindCallback = async (
-  data?: { state?: string },
-): Promise<QQUnbindCallbackResponse> => {
+export const handleQQUnbindCallback = async (data?: {
+  state?: string
+}): Promise<QQUnbindCallbackResponse> => {
   const response = await request.post<ApiResponse<QQUnbindCallbackResponse>>(
     '/oauth/qq/callback/unbind',
     data,
