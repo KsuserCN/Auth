@@ -101,8 +101,11 @@ public class TotpController {
                 userTotpRepository.delete(existing);
             }
             
-            // 生成新的秘钥和恢复码
-            Map<String, Object> secretData = totpService.generateTotpSecret(user.getId(), masterKey);
+            // 生成新的秘钥和恢复码（优先显示绑定邮箱）
+            String accountName = user.getEmail() != null && !user.getEmail().isBlank()
+                ? user.getEmail()
+                : user.getUsername();
+            Map<String, Object> secretData = totpService.generateTotpSecret(user.getId(), accountName, masterKey);
             
             // 创建新的 UserTotp 记录，临时存储待确认密钥
             byte[] encryptedSecret = java.util.Base64.getDecoder()

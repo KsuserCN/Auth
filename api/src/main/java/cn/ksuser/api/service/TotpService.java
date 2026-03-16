@@ -12,6 +12,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -39,6 +41,7 @@ public class TotpService {
     private static final int TIME_INTERVAL = 30; // 时间步长（秒）
     private static final int RECOVERY_CODES_COUNT = 10; // 恢复码数量
     private static final int RECOVERY_CODE_LENGTH = 8; // 恢复码长度
+    private static final String TOTP_ISSUER = "Ksuser CAS";
 
     // AES-GCM 配置
     private static final String CIPHER_ALGORITHM = "AES/GCM/NoPadding";
@@ -137,7 +140,7 @@ public class TotpService {
      * @return 包含密钥、二维码 URL 和恢复码的数据
      */
     @Transactional
-    public Map<String, Object> generateTotpSecret(Long userId, byte[] masterEncryptionKey) {
+    public Map<String, Object> generateTotpSecret(Long userId, String accountName, byte[] masterEncryptionKey) {
         try {
             // 生成随机密钥
             byte[] randomBytes = new byte[SECRET_LENGTH];
@@ -153,7 +156,7 @@ public class TotpService {
             String[] recoveryCodes = generateRecoveryCodes(RECOVERY_CODES_COUNT);
             
             // 生成二维码 URL
-            String qrCodeUrl = generateQrCodeUrl(userId, secretKey);
+            String qrCodeUrl = generateQrCodeUrl(accountName, secretKey);
             
             Map<String, Object> result = new HashMap<>();
             result.put("secret", secretKey); // Base32 编码版本，用于二维码和手动输入
@@ -245,14 +248,17 @@ public class TotpService {
     /**
      * 生成二维码 URL（Google Authenticator 格式）
      */
-    private String generateQrCodeUrl(Long userId, String secretKey) {
-        String label = String.format("KSUser:user%d", userId);
-        String issuer = "KSUser";
-        
+    private String generateQrCodeUrl(String accountName, String secretKey) {
+        String label = String.format("%s:%s", TOTP_ISSUER, accountName);
+
         return String.format(
             "otpauth://totp/%s?secret=%s&issuer=%s",
-            label, secretKey, issuer
+            urlEncode(label), secretKey, urlEncode(TOTP_ISSUER)
         );
+    }
+
+    private String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     /**
