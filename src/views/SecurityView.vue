@@ -335,7 +335,43 @@ const getOperationLabel = (op: unknown) => {
 }
 
 const getLoginMethodLabel = (m: unknown) => {
-  return loginMethodLabels[(m as SensitiveLoginMethod)] || String(m ?? '-')
+  if (typeof m !== 'string') {
+    return loginMethodLabels[(m as SensitiveLoginMethod)] || String(m ?? '-')
+  }
+
+  const raw = m.trim()
+  const normalized = raw.toUpperCase()
+
+  if (normalized in loginMethodLabels) {
+    return loginMethodLabels[normalized as SensitiveLoginMethod]
+  }
+
+  // New backend format: "[password, mfa]" (string containing a list)
+  if (raw.startsWith('[') && raw.endsWith(']')) {
+    const methods = raw
+      .slice(1, -1)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+
+    if (methods.length > 0) {
+      return methods
+        .map((item) => {
+          const key = item.toUpperCase()
+          if (key in loginMethodLabels) {
+            return loginMethodLabels[key as SensitiveLoginMethod]
+          }
+          if (key === 'MFA') return '二步验证'
+          if (key === 'PASSWORD') return '密码登录'
+          if (key === 'EMAIL_CODE') return '验证码登录'
+          if (key === 'PASSKEY') return 'Passkey登录'
+          return item
+        })
+        .join(' + ')
+    }
+  }
+
+  return raw || '-'
 }
 
 const getRiskTagType = (score: number) => {

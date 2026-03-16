@@ -450,7 +450,7 @@ export type SensitiveLoginMethod =
 export interface SensitiveLogItem {
   id: number
   operationType: SensitiveOperationType
-  loginMethod: SensitiveLoginMethod | null
+  loginMethod: SensitiveLoginMethod | string | null
   ipAddress: string
   ipLocation: string | null
   browser: string | null
@@ -809,7 +809,6 @@ export const buildQQAuthorizationUrl = (state: string): string => {
  */
 export interface QQCallbackRequest {
   code: string
-  redirectUri: string
   state: string
 }
 
@@ -883,7 +882,7 @@ export const handleQQBindCallback = async (
  * POST /oauth/qq/callback/unbind
  */
 export const handleQQUnbindCallback = async (
-  data: QQCallbackRequest,
+  data?: { state?: string },
 ): Promise<QQUnbindCallbackResponse> => {
   const response = await request.post<ApiResponse<QQUnbindCallbackResponse>>(
     '/oauth/qq/callback/unbind',
@@ -908,7 +907,7 @@ export const handleQQCallbackByOperation = async (
   }
 
   if (operation === 'unbind') {
-    return handleQQUnbindCallback(data)
+    return handleQQUnbindCallback({ state: data.state })
   }
 
   throw new Error('不支持的 QQ 回调操作类型')

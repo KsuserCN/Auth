@@ -79,7 +79,8 @@ import {
   Loading,
   RefreshRight,
 } from '@element-plus/icons-vue'
-import { handleQQCallback } from '@/api/auth'
+import { handleQQCallbackByOperation } from '@/api/auth'
+import type { QQBindCallbackResponse, QQLoginCallbackResponse, QQUnbindCallbackResponse } from '@/api/auth'
 
 const router = useRouter()
 
@@ -128,10 +129,6 @@ const parseQQState = (rawState: string): ParsedQQState => {
   }
 }
 
-const getRedirectUri = (): string => {
-  return 'https://auth.ksuser.cn/oauth/qq/callback'
-}
-
 const handleCallback = async () => {
   try {
     // 从 URL 中读取 code 和 state
@@ -175,71 +172,87 @@ const handleCallback = async () => {
       throw new Error('状态操作类型不匹配，请重新发起操作')
     }
 
-    // 获取 redirect_uri
-    const redirectUri = getRedirectUri()
-
-    // 调用后端接口处理 OAuth 回调
-    const response = await handleQQCallback({
+    // 按 state 中的操作类型调用拆分后的回调接口
+    const response = await handleQQCallbackByOperation(returnedParsedState.operation, {
       code: code,
-      redirectUri: redirectUri,
       state: returnedState,
     })
 
     // 清理 OAuth state（无论什么情况都清理）
     sessionStorage.removeItem('qq_oauth_state')
 
-    // 情况 1: 需要绑定账号 (HTTP 202，needBind=true)
-    if (response.needBind === true) {
-      const warningMsg = response.message || '该 QQ 账号尚未绑定，请先绑定或注册账号'
-      ElMessage.warning(warningMsg)
-      // 保存 openid 供后续绑定使用
-      if (response.openid) {
-        sessionStorage.setItem('qq_openid_pending', response.openid)
-      }
-      // 跳转到登录页面（后续可扩展为专门的绑定页面）
-      setTimeout(() => {
-        router.push('/login')
-      }, 1500)
-      return
-    }
+    if (returnedParsedState.operation === 'login') {
+      const loginResponse = response as QQLoginCallbackResponse
 
-    // 情况 2: 需要 MFA 验证 (HTTP 201，challengeId 存在)
-    if (response.challengeId) {
-      ElMessage.info('需要进行二步验证')
-      // 跳转到 MFA 验证页面
-      router.push({
-        path: '/sensitive-verification',
-        query: {
-          challengeId: response.challengeId,
-          method: response.method || 'totp',
-        },
-      })
-      return
-    }
-
-    // 情况 3: 直接登录成功 (HTTP 200，accessToken 存在)
-    if (response.accessToken) {
-      // 存储 Access Token 到 sessionStorage
-      sessionStorage.setItem('accessToken', response.accessToken)
-
-      // 如果返回了用户信息，也一并存储
-      if (response.user) {
-        sessionStorage.setItem('user', JSON.stringify(response.user))
+      // 情况 1: 需要绑定账号 (HTTP 202，needBind=true)
+      if (loginResponse.needBind === true) {
+        const warningMsg = loginResponse.message || '该 QQ 账号尚未绑定，请先绑定或注册账号'
+        ElMessage.warning(warningMsg)
+        if (loginResponse.openid) {
+          sessionStorage.setItem('qq_openid_pending', loginResponse.openid)
+        }
+        setTimeout(() => {
+          router.push('/login')
+        }, 1500)
+        return
       }
 
-      // 显示成功消息
+      // 情况 2: 需要 MFA 验证 (HTTP 201，challengeId 存在)
+      if (loginResponse.challengeId) {
+        ElMessage.info('需要进行二步验证')
+        router.push({
+          path: '/login',
+          query: {
+            challengeId: loginResponse.challengeId,
+            method: loginResponse.method || 'totp',
+            mfaFrom: 'qq',
+          },
+        })
+        return
+      }
+
+      // 情况 3: 直接登录成功 (HTTP 200，accessToken 存在)
+      if (loginResponse.accessToken) {
+        sessionStorage.setItem('accessToken', loginResponse.accessToken)
+        if (loginResponse.user) {
+          sessionStorage.setItem('user', JSON.stringify(loginResponse.user))
+        }
+        state.value = 'success'
+        ElMessage.success('QQ 登录成功')
+        setTimeout(() => {
+          router.push('/home')
+        }, 1000)
+        return
+      }
+
+      throw new Error('QQ 登录响应数据异常，请重试')
+    }
+
+    if (returnedParsedState.operation === 'bind') {
+      const bindResponse = response as QQBindCallbackResponse
+      if (bindResponse.bound === true) {
+        state.value = 'success'
+        ElMessage.success(bindResponse.message || 'QQ 绑定成功')
+        setTimeout(() => {
+          router.push('/home/security')
+        }, 1000)
+        return
+      }
+
+      throw new Error(bindResponse.message || 'QQ 绑定失败，请重试')
+    }
+
+    const unbindResponse = response as QQUnbindCallbackResponse
+    if (unbindResponse.canUnbind !== false) {
       state.value = 'success'
-      ElMessage.success('QQ 登录成功')
-
-      // 延迟后跳转到首页
+      ElMessage.success(unbindResponse.message || 'QQ 解绑校验完成')
       setTimeout(() => {
-        router.push('/home')
+        router.push('/home/security')
       }, 1000)
       return
     }
 
-    // 如果以上情况都不满足，说明返回数据异常
-    throw new Error('登录响应数据异常，请重试')
+    throw new Error(unbindResponse.reason || unbindResponse.message || 'QQ 解绑失败，请重试')
   } catch (error: unknown) {
     state.value = 'error'
 

@@ -224,7 +224,7 @@ import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { ArrowRight, Lock, Lightning, Key, Message, Loading } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   passwordLogin,
   sendLoginCode,
@@ -246,6 +246,7 @@ const totpFormRef = ref<FormInstance>()
 
 // 路由
 const router = useRouter()
+const route = useRoute()
 
 // 流程步骤
 const step = ref<'email' | 'method' | 'password' | 'email-code' | 'totp'>('email')
@@ -332,7 +333,7 @@ const totpLoading = ref(false)
 
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
-const mfaSource = ref<'password' | 'email-code' | 'passkey' | null>(null)
+const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | null>(null)
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -344,6 +345,22 @@ const isPasskeySupported = ref(false)
 
 onMounted(() => {
   isPasskeySupported.value = isWebAuthnSupported()
+
+  const challengeId = route.query.challengeId
+  const method = route.query.method
+  const mfaFrom = route.query.mfaFrom
+
+  if (typeof challengeId === 'string' && challengeId.trim()) {
+    const normalizedMethod = method === 'backup_code' ? 'backup_code' : 'totp'
+    mfaChallenge.value = {
+      challengeId: challengeId.trim(),
+      method: normalizedMethod,
+    }
+
+    mfaSource.value = mfaFrom === 'qq' ? 'qq' : null
+    updateStep('totp')
+    ElMessage.info('请完成 MFA 验证')
+  }
 })
 
 // ===== 第一步：邮箱验证 =====
