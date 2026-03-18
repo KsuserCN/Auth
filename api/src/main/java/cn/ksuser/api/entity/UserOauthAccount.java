@@ -26,16 +26,16 @@ public class UserOauthAccount {
     @Column(name = "is_enabled", nullable = false)
     private Boolean isEnabled = true;
 
-    @Column(name = "linked_at")
+    @Column(name = "linked_at", nullable = false)
     private LocalDateTime linkedAt;
 
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     public UserOauthAccount() {
