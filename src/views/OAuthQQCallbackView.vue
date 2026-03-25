@@ -398,7 +398,7 @@ onMounted(() => {
 }
 
 .state-shell {
-  width: 100%;
+  /* width: 100%; */
   border-radius: 18px;
   border: 1px solid var(--cb-border);
   background: color-mix(in srgb, var(--el-bg-color) 88%, var(--el-fill-color-light) 12%);
