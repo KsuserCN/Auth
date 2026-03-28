@@ -52,6 +52,23 @@ public class AppProperties {
 
     public Qq getQq() { return qq; }
 
+    public Github getGithub() { return github; }
+
+    private final Github github = new Github();
+
+    public static class Github {
+        private final GithubOauth oauth = new GithubOauth();
+
+        public GithubOauth getOauth() { return oauth; }
+
+        public static class GithubOauth {
+            private java.util.List<String> redirectUris = new java.util.ArrayList<>();
+
+            public java.util.List<String> getRedirectUris() { return redirectUris; }
+            public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
+        }
+    }
+
     public static class Qq {
         private final QqOauth oauth = new QqOauth();
 

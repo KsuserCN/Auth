@@ -45,6 +45,7 @@ public class SecurityConfig {
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
                     "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
+                    "/oauth/github/callback/login", "/oauth/github/callback/login/",
                     "/info/password-requirement", "/info/password-requirement/")
                 .permitAll()
                 .anyRequest().authenticated()
@@ -88,7 +89,10 @@ public class SecurityConfig {
                     "/oauth/qq/callback/bind", "/oauth/qq/callback/bind/",
                     "/oauth/qq/callback/unbind", "/oauth/qq/callback/unbind/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
-                    "/oauth/qq/register-bind", "/oauth/qq/register-bind/"
+                    "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
+                    "/oauth/github/callback/login", "/oauth/github/callback/login/",
+                    "/oauth/github/callback/bind", "/oauth/github/callback/bind/",
+                    "/oauth/github/callback/unbind", "/oauth/github/callback/unbind/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
