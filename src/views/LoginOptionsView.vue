@@ -302,7 +302,9 @@ import {
   getRecoveryCodes,
   regenerateRecoveryCodes,
   disableTotp,
+  buildGithubAuthorizationUrl,
   buildQQAuthorizationUrl,
+  unbindGithub,
   unbindQQ,
   getOAuthAccountsStatus,
   type OAuthAccountStatusItem,
@@ -328,7 +330,7 @@ type OAuthProviderItem = {
 const oauthProviders = ref<OAuthProviderItem[]>([
   { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, lastLoginAt: null, loading: false },
   { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, lastLoginAt: null, loading: false },
-  { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: false, bound: false, lastLoginAt: null, loading: false },
+  { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: true, bound: false, lastLoginAt: null, loading: false },
   { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: false, bound: false, lastLoginAt: null, loading: false },
 ])
 
@@ -781,6 +783,54 @@ const handleQQUnbind = async (provider: OAuthProviderItem) => {
   }
 }
 
+const handleGithubBind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+
+  provider.loading = true
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};bind;${debugState}`
+
+    sessionStorage.setItem('github_oauth_state', state)
+    window.location.href = buildGithubAuthorizationUrl(state)
+  } catch (error) {
+    console.error('GitHub bind failed:', error)
+    ElMessage.error('GitHub 绑定跳转失败，请重试')
+    provider.loading = false
+  }
+}
+
+const handleGithubUnbind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+  if (!(await ensureSensitiveVerified())) return
+
+  try {
+    await ElMessageBox.confirm('解绑后您将无法使用 GitHub 快速登录，是否继续？', '确认解绑', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+
+  provider.loading = true
+  try {
+    await unbindGithub()
+    provider.bound = false
+    provider.lastLoginAt = null
+    ElMessage.success('GitHub 解绑成功')
+
+    await loadOAuthStatus()
+  } catch (error) {
+    console.error('GitHub unbind failed:', error)
+    ElMessage.error('GitHub 解绑失败，请稍后重试')
+  } finally {
+    provider.loading = false
+  }
+}
+
 const handleProviderAction = async (provider: OAuthProviderItem) => {
   if (!provider.supported || provider.loading) return
 
@@ -789,6 +839,15 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
       await handleQQUnbind(provider)
     } else {
       await handleQQBind(provider)
+    }
+    return
+  }
+
+  if (provider.key === 'github') {
+    if (provider.bound) {
+      await handleGithubUnbind(provider)
+    } else {
+      await handleGithubBind(provider)
     }
     return
   }

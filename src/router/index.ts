@@ -94,6 +94,13 @@ const router = createRouter({
     {
       path: '/oauth/qq/callback',
       name: 'qq-callback',
+      meta: { provider: 'qq' },
+      component: () => import('../views/OAuthQQCallbackView.vue'),
+    },
+    {
+      path: '/oauth/github/callback',
+      name: 'github-callback',
+      meta: { provider: 'github' },
       component: () => import('../views/OAuthQQCallbackView.vue'),
     },
   ],

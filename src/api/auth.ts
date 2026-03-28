@@ -785,6 +785,7 @@ export const logoutAll = async (): Promise<void> => {
 // ========== OAuth QQ 登录 ==========
 
 export type QQOAuthOperation = 'login' | 'bind' | 'unbind'
+export type GithubOAuthOperation = 'login' | 'bind' | 'unbind'
 
 /**
  * 构建 QQ 授权 URL
@@ -812,14 +813,14 @@ export interface QQCallbackRequest {
   state: string
 }
 
-export interface QQLoginCallbackResponse {
+export interface OAuthLoginCallbackResponse {
   // 已绑定用户，直接登录成功 (HTTP 200)
   accessToken?: string
   user?: {
     id: string
     username: string
     email: string
-    [key: string]: any
+    [key: string]: unknown
   }
   // 未绑定用户 (HTTP 202)
   needBind?: boolean
@@ -830,7 +831,7 @@ export interface QQLoginCallbackResponse {
   method?: string
 }
 
-export interface QQBindCallbackResponse {
+export interface OAuthBindCallbackResponse {
   bound?: boolean
   provider?: string
   openid?: string
@@ -838,16 +839,30 @@ export interface QQBindCallbackResponse {
   message?: string
 }
 
-export interface QQUnbindCallbackResponse {
+export interface OAuthUnbindCallbackResponse {
   canUnbind?: boolean
   reason?: string
   message?: string
 }
 
+export type QQLoginCallbackResponse = OAuthLoginCallbackResponse
+export type QQBindCallbackResponse = OAuthBindCallbackResponse
+export type QQUnbindCallbackResponse = OAuthUnbindCallbackResponse
+
 export type QQCallbackResponse =
   | QQLoginCallbackResponse
   | QQBindCallbackResponse
   | QQUnbindCallbackResponse
+
+export type GithubCallbackRequest = QQCallbackRequest
+export type GithubLoginCallbackResponse = OAuthLoginCallbackResponse
+export type GithubBindCallbackResponse = OAuthBindCallbackResponse
+export type GithubUnbindCallbackResponse = OAuthUnbindCallbackResponse
+
+export type GithubCallbackResponse =
+  | GithubLoginCallbackResponse
+  | GithubBindCallbackResponse
+  | GithubUnbindCallbackResponse
 
 /**
  * QQ OAuth 登录回调处理
@@ -913,6 +928,88 @@ export const handleQQCallbackByOperation = async (
   throw new Error('不支持的 QQ 回调操作类型')
 }
 
+/**
+ * 构建 GitHub 授权 URL
+ * 用于生成 GitHub OAuth 授权链接
+ */
+export const buildGithubAuthorizationUrl = (state: string): string => {
+  const clientId = import.meta.env.VITE_OAUTH_GITHUB_CLIENT_ID
+  const redirectUri = 'https://auth.ksuser.cn/oauth/github/callback'
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state,
+    scope: 'read:user user:email',
+  })
+
+  return `https://github.com/login/oauth/authorize?${params.toString()}`
+}
+
+/**
+ * GitHub OAuth 登录回调处理
+ * POST /oauth/github/callback/login
+ */
+export const handleGithubLoginCallback = async (
+  data: GithubCallbackRequest,
+): Promise<GithubLoginCallbackResponse> => {
+  const response = await request.post<ApiResponse<GithubLoginCallbackResponse>>(
+    '/oauth/github/callback/login',
+    data,
+  )
+  return (response as unknown as ApiResponse<GithubLoginCallbackResponse>).data
+}
+
+/**
+ * GitHub OAuth 绑定回调处理
+ * POST /oauth/github/callback/bind
+ */
+export const handleGithubBindCallback = async (
+  data: GithubCallbackRequest,
+): Promise<GithubBindCallbackResponse> => {
+  const response = await request.post<ApiResponse<GithubBindCallbackResponse>>(
+    '/oauth/github/callback/bind',
+    data,
+  )
+  return (response as unknown as ApiResponse<GithubBindCallbackResponse>).data
+}
+
+/**
+ * GitHub OAuth 解绑回调处理
+ * POST /oauth/github/callback/unbind
+ */
+export const handleGithubUnbindCallback = async (data?: {
+  state?: string
+}): Promise<GithubUnbindCallbackResponse> => {
+  const response = await request.post<ApiResponse<GithubUnbindCallbackResponse>>(
+    '/oauth/github/callback/unbind',
+    data,
+  )
+  return (response as unknown as ApiResponse<GithubUnbindCallbackResponse>).data
+}
+
+/**
+ * 按 state 中的 operation 将 GitHub 回调请求路由到对应端点
+ */
+export const handleGithubCallbackByOperation = async (
+  operation: GithubOAuthOperation,
+  data: GithubCallbackRequest,
+): Promise<GithubCallbackResponse> => {
+  if (operation === 'login') {
+    return handleGithubLoginCallback(data)
+  }
+
+  if (operation === 'bind') {
+    return handleGithubBindCallback(data)
+  }
+
+  if (operation === 'unbind') {
+    return handleGithubUnbindCallback({ state: data.state })
+  }
+
+  throw new Error('不支持的 GitHub 回调操作类型')
+}
+
 // 兼容旧调用（默认按登录回调处理）
 export const handleQQCallback = async (
   data: QQCallbackRequest,
@@ -946,4 +1043,12 @@ export const getOAuthAccountsStatus = async (): Promise<OAuthAccountStatusItem[]
  */
 export const unbindQQ = async (): Promise<void> => {
   await request.post('/oauth/qq/unbind')
+}
+
+/**
+ * 解绑 GitHub 账号
+ * POST /oauth/github/unbind
+ */
+export const unbindGithub = async (): Promise<void> => {
+  await request.post('/oauth/github/unbind')
 }

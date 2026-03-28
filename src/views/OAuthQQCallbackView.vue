@@ -10,7 +10,7 @@
       </div>
 
       <div class="title-area">
-        <h1 class="title">QQ 登录授权结果</h1>
+        <h1 class="title">{{ providerLabel }} 登录授权结果</h1>
         <p class="subtitle">正在完成身份校验与安全检查，请稍候。</p>
       </div>
 
@@ -61,15 +61,15 @@
       </div>
 
       <div class="tip-line">
-        登录异常时请确认浏览器未禁用 Cookie，且授权流程未在多个窗口同时进行。
+        登录异常时请确认浏览器未禁用 Cookie，且 {{ providerLabel }} 授权流程未在多个窗口同时进行。
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useDark, useStorage } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import {
@@ -79,10 +79,16 @@ import {
   Loading,
   RefreshRight,
 } from '@element-plus/icons-vue'
-import { handleQQCallbackByOperation } from '@/api/auth'
-import type { QQBindCallbackResponse, QQLoginCallbackResponse, QQUnbindCallbackResponse } from '@/api/auth'
+import { handleGithubCallbackByOperation, handleQQCallbackByOperation } from '@/api/auth'
+import type {
+  OAuthBindCallbackResponse,
+  OAuthLoginCallbackResponse,
+  OAuthUnbindCallbackResponse,
+  QQOAuthOperation,
+} from '@/api/auth'
 
 const router = useRouter()
+const route = useRoute()
 
 const state = ref<'processing' | 'success' | 'error'>('processing')
 const errorMessage = ref<string>('')
@@ -93,13 +99,33 @@ const isDark = useDark({
   valueLight: 'light',
 })
 
-interface ParsedQQState {
+type OAuthProvider = 'qq' | 'github'
+
+interface ParsedOAuthState {
   verifyToken: string
-  operation: 'login' | 'bind' | 'unbind'
+  operation: QQOAuthOperation
   env: 'dev' | 'prd'
 }
 
-const parseQQState = (rawState: string): ParsedQQState => {
+const provider = computed<OAuthProvider>(() => {
+  const metaProvider = route.meta.provider
+  if (metaProvider === 'github') {
+    return 'github'
+  }
+
+  if (route.path.includes('/oauth/github/')) {
+    return 'github'
+  }
+
+  return 'qq'
+})
+
+const providerLabel = computed(() => (provider.value === 'github' ? 'GitHub' : 'QQ'))
+
+const stateStorageKey = computed(() => `${provider.value}_oauth_state`)
+const openIdStorageKey = computed(() => `${provider.value}_openid_pending`)
+
+const parseOAuthState = (rawState: string): ParsedOAuthState => {
   const parts = rawState.split(';')
 
   if (parts.length !== 3) {
@@ -129,6 +155,16 @@ const parseQQState = (rawState: string): ParsedQQState => {
   }
 }
 
+const handleOAuthCallbackByOperation = async (
+  operation: QQOAuthOperation,
+  payload: { code: string; state: string },
+) => {
+  if (provider.value === 'github') {
+    return handleGithubCallbackByOperation(operation, payload)
+  }
+  return handleQQCallbackByOperation(operation, payload)
+}
+
 const handleCallback = async () => {
   try {
     // 从 URL 中读取 code 和 state
@@ -146,23 +182,23 @@ const handleCallback = async () => {
       throw new Error('未获取到状态参数，请重试')
     }
 
-    const returnedParsedState = parseQQState(returnedState)
+    const returnedParsedState = parseOAuthState(returnedState)
 
     // 开发环境回调先跳转到本地地址，由本地页面继续处理回调
     if (returnedParsedState.env === 'dev' && window.location.origin !== 'http://localhost:5173') {
-      window.location.replace(`http://localhost:5173/oauth/qq/callback${window.location.search}`)
+      window.location.replace(`http://localhost:5173/oauth/${provider.value}/callback${window.location.search}`)
       return
     }
 
     // 从 sessionStorage 中读取本地存储的 state
-    const storedState = sessionStorage.getItem('qq_oauth_state')
+    const storedState = sessionStorage.getItem(stateStorageKey.value)
 
     // 校验 state 是否一致
     if (!storedState) {
       throw new Error('本地状态信息丢失，请重新登录')
     }
 
-    const storedParsedState = parseQQState(storedState)
+    const storedParsedState = parseOAuthState(storedState)
 
     if (storedParsedState.verifyToken !== returnedParsedState.verifyToken) {
       throw new Error('状态验证失败，可能存在安全风险，请重新登录')
@@ -173,23 +209,23 @@ const handleCallback = async () => {
     }
 
     // 按 state 中的操作类型调用拆分后的回调接口
-    const response = await handleQQCallbackByOperation(returnedParsedState.operation, {
+    const response = await handleOAuthCallbackByOperation(returnedParsedState.operation, {
       code: code,
       state: returnedState,
     })
 
     // 清理 OAuth state（无论什么情况都清理）
-    sessionStorage.removeItem('qq_oauth_state')
+    sessionStorage.removeItem(stateStorageKey.value)
 
     if (returnedParsedState.operation === 'login') {
-      const loginResponse = response as QQLoginCallbackResponse
+      const loginResponse = response as OAuthLoginCallbackResponse
 
       // 情况 1: 需要绑定账号 (HTTP 202，needBind=true)
       if (loginResponse.needBind === true) {
-        const warningMsg = loginResponse.message || '该 QQ 账号尚未绑定，请先绑定或注册账号'
+        const warningMsg = loginResponse.message || `该 ${providerLabel.value} 账号尚未绑定，请先绑定或注册账号`
         ElMessage.warning(warningMsg)
         if (loginResponse.openid) {
-          sessionStorage.setItem('qq_openid_pending', loginResponse.openid)
+          sessionStorage.setItem(openIdStorageKey.value, loginResponse.openid)
         }
         setTimeout(() => {
           router.push('/login')
@@ -205,7 +241,7 @@ const handleCallback = async () => {
           query: {
             challengeId: loginResponse.challengeId,
             method: loginResponse.method || 'totp',
-            mfaFrom: 'qq',
+            mfaFrom: provider.value,
           },
         })
         return
@@ -218,50 +254,52 @@ const handleCallback = async () => {
           sessionStorage.setItem('user', JSON.stringify(loginResponse.user))
         }
         state.value = 'success'
-        ElMessage.success('QQ 登录成功')
+        ElMessage.success(`${providerLabel.value} 登录成功`)
         setTimeout(() => {
           router.push('/home')
         }, 1000)
         return
       }
 
-      throw new Error('QQ 登录响应数据异常，请重试')
+      throw new Error(`${providerLabel.value} 登录响应数据异常，请重试`)
     }
 
     if (returnedParsedState.operation === 'bind') {
-      const bindResponse = response as QQBindCallbackResponse
+      const bindResponse = response as OAuthBindCallbackResponse
       if (bindResponse.bound === true) {
         state.value = 'success'
-        ElMessage.success(bindResponse.message || 'QQ 绑定成功')
+        ElMessage.success(bindResponse.message || `${providerLabel.value} 绑定成功`)
         setTimeout(() => {
           router.push('/home/security')
         }, 1000)
         return
       }
 
-      throw new Error(bindResponse.message || 'QQ 绑定失败，请重试')
+      throw new Error(bindResponse.message || `${providerLabel.value} 绑定失败，请重试`)
     }
 
-    const unbindResponse = response as QQUnbindCallbackResponse
+    const unbindResponse = response as OAuthUnbindCallbackResponse
     if (unbindResponse.canUnbind !== false) {
       state.value = 'success'
-      ElMessage.success(unbindResponse.message || 'QQ 解绑校验完成')
+      ElMessage.success(unbindResponse.message || `${providerLabel.value} 解绑校验完成`)
       setTimeout(() => {
         router.push('/home/security')
       }, 1000)
       return
     }
 
-    throw new Error(unbindResponse.reason || unbindResponse.message || 'QQ 解绑失败，请重试')
+    throw new Error(
+      unbindResponse.reason || unbindResponse.message || `${providerLabel.value} 解绑失败，请重试`,
+    )
   } catch (error: unknown) {
     state.value = 'error'
 
     if (error instanceof Error) {
       errorMessage.value = error.message
-      console.error('OAuth QQ callback failed:', error)
+      console.error(`OAuth ${providerLabel.value} callback failed:`, error)
     } else {
       errorMessage.value = '登录失败，请重试'
-      console.error('OAuth QQ callback failed:', error)
+      console.error(`OAuth ${providerLabel.value} callback failed:`, error)
     }
 
     ElMessage.error(errorMessage.value)
@@ -270,7 +308,7 @@ const handleCallback = async () => {
 
 const goBackToLogin = () => {
   // 清理 OAuth state
-  sessionStorage.removeItem('qq_oauth_state')
+  sessionStorage.removeItem(stateStorageKey.value)
   router.push('/login')
 }
 

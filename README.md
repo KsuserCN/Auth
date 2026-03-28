@@ -23,6 +23,11 @@ TypeScript cannot handle type information for `.vue` imports by default, so we r
 
 See [Vite Configuration Reference](https://vite.dev/config/).
 
+## OAuth 文档
+
+- [QQ OAuth 适配说明](./QQ_LOGIN_LATEST_ADAPTATION.md)
+- [GitHub OAuth 适配说明](./GITHUB_OAUTH_ADAPTATION.md)
+
 ## Project Setup
 
 ```sh

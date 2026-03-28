@@ -200,7 +200,7 @@
               <button class="icon-btn" @click="handleQQLogin" aria-label="QQ 登录" type="button">
                 <i class="fa-brands fa-qq" aria-hidden="true"></i>
               </button>
-              <button class="icon-btn" @click="handleUnsupportedLogin('Github')" aria-label="Github 登录" type="button">
+              <button class="icon-btn" @click="handleGithubLogin" aria-label="Github 登录" type="button">
                 <i class="fa-brands fa-github" aria-hidden="true"></i>
               </button>
               <button class="icon-btn" @click="handleUnsupportedLogin('微软')" aria-label="微软登录" type="button">
@@ -232,6 +232,7 @@ import {
   getPasskeyAuthenticationOptions,
   verifyPasskeyAuthentication,
   verifyTOTPForLogin,
+  buildGithubAuthorizationUrl,
   buildQQAuthorizationUrl,
   type MFAChallenge,
   type LoginResponse
@@ -333,7 +334,7 @@ const totpLoading = ref(false)
 
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
-const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | null>(null)
+const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | null>(null)
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -357,7 +358,7 @@ onMounted(() => {
       method: normalizedMethod,
     }
 
-    mfaSource.value = mfaFrom === 'qq' ? 'qq' : null
+    mfaSource.value = mfaFrom === 'qq' || mfaFrom === 'github' ? mfaFrom : null
     updateStep('totp')
     ElMessage.info('请完成 MFA 验证')
   }
@@ -650,6 +651,22 @@ const handleQQLogin = async () => {
   } catch (error: unknown) {
     console.error('QQ login failed:', error)
     ElMessage.error('QQ 登录失败，请重试')
+  }
+}
+
+const handleGithubLogin = async () => {
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};login;${debugState}`
+
+    sessionStorage.setItem('github_oauth_state', state)
+
+    const authUrl = buildGithubAuthorizationUrl(state)
+    window.location.href = authUrl
+  } catch (error: unknown) {
+    console.error('GitHub login failed:', error)
+    ElMessage.error('GitHub 登录失败，请重试')
   }
 }
 
