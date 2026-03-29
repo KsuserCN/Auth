@@ -37,7 +37,8 @@ export interface LoginResponse {
 // MFA 验证挑战响应
 export interface MFAChallenge {
   challengeId: string
-  method: 'totp' | 'backup_code'
+  method: 'totp' | 'passkey'
+  methods?: Array<'totp' | 'passkey'>
 }
 
 // TOTP 验证请求
@@ -157,6 +158,11 @@ export interface PasskeyAuthenticationRequest {
   signature: string
 }
 
+export interface PasskeyMFAVerifyRequest extends PasskeyAuthenticationRequest {
+  mfaChallengeId: string
+  passkeyChallengeId: string
+}
+
 export const verifyPasskeyAuthentication = async (
   challengeId: string,
   data: PasskeyAuthenticationRequest,
@@ -173,6 +179,17 @@ export const verifyPasskeyAuthentication = async (
   }
 
   return result as LoginResponse
+}
+
+/**
+ * Passkey 验证（MFA 登录流程）
+ * POST /auth/passkey/mfa-verify
+ */
+export const verifyPasskeyForLoginMFA = async (
+  data: PasskeyMFAVerifyRequest,
+): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>('/auth/passkey/mfa-verify', data)
+  return (response as unknown as ApiResponse<LoginResponse>).data
 }
 
 // ========== Passkey 注册 ==========
@@ -833,7 +850,8 @@ export interface OAuthLoginCallbackResponse {
   message?: string
   // MFA 场景 (HTTP 201)
   challengeId?: string
-  method?: string
+  method?: 'totp' | 'passkey'
+  methods?: Array<'totp' | 'passkey'>
 }
 
 export interface OAuthBindCallbackResponse {

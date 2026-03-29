@@ -165,6 +165,66 @@
             </div>
           </div>
 
+          <!-- 第四步：选择 MFA 验证方式 -->
+          <div v-else-if="step === 'mfa-method'" class="step-container" key="mfa-method">
+            <h2 class="step-title">选择二次验证方式</h2>
+            <p class="step-subtitle">请选择 TOTP 或 Passkey 完成 MFA 验证</p>
+
+            <div class="method-list">
+              <div class="method-option" @click="!methodSelecting && selectMfaMethod('totp')"
+                :class="{ 'is-disabled': methodSelecting }">
+                <el-icon class="method-icon" :size="28">
+                  <Lock />
+                </el-icon>
+                <div class="method-info">
+                  <h3>使用 TOTP 验证</h3>
+                  <p>输入身份验证器中的 6 位验证码或恢复码</p>
+                </div>
+                <el-icon class="method-arrow" v-if="!methodSelecting">
+                  <ArrowRight />
+                </el-icon>
+                <el-icon class="method-arrow loading-icon" v-else>
+                  <Loading />
+                </el-icon>
+              </div>
+
+              <div class="method-option" @click="!methodSelecting && selectMfaMethod('passkey')"
+                :class="{ 'is-disabled': methodSelecting || !isPasskeySupported }">
+                <el-icon class="method-icon" :size="28">
+                  <Key />
+                </el-icon>
+                <div class="method-info">
+                  <h3>使用 Passkey 验证</h3>
+                  <p>使用生物识别或安全密钥完成二次验证</p>
+                </div>
+                <el-icon class="method-arrow" v-if="!methodSelecting && isPasskeySupported">
+                  <ArrowRight />
+                </el-icon>
+              </div>
+            </div>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMFASource">返回</el-button>
+            </div>
+          </div>
+
+          <!-- 第四步：Passkey MFA 验证 -->
+          <div v-else-if="step === 'mfa-passkey'" class="step-container" key="mfa-passkey">
+            <h2 class="step-title">Passkey 二次验证</h2>
+            <p class="step-subtitle">点击验证后，按浏览器提示完成验证</p>
+
+            <div class="passkey-hint">
+              <p>支持本机生物识别及实体安全密钥（USB/NFC/蓝牙）。</p>
+            </div>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
+              <el-button class="next-btn" @click="handlePasskeyMfaVerify" :loading="passkeyLoading">
+                {{ passkeyLoading ? '验证中...' : '验证身份' }}
+              </el-button>
+            </div>
+          </div>
+
           <!-- 第四步：TOTP 验证 -->
           <div v-else-if="step === 'totp'" class="step-container" key="totp">
             <h2 class="step-title">验证身份</h2>
@@ -181,7 +241,7 @@
             <p class="step-subtitle">使用 TOTP 应用中的验证码，或输入您的恢复码</p>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToMFASource">返回</el-button>
+              <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
               <el-button class="next-btn" @click="handleTotpVerify" :loading="totpLoading">
                 验证
               </el-button>
@@ -234,6 +294,7 @@ import {
   loginWithCode,
   getPasskeyAuthenticationOptions,
   verifyPasskeyAuthentication,
+  verifyPasskeyForLoginMFA,
   verifyTOTPForLogin,
   buildGoogleAuthorizationUrl,
   buildGithubAuthorizationUrl,
@@ -255,12 +316,14 @@ const router = useRouter()
 const route = useRoute()
 
 // 流程步骤
-const step = ref<'email' | 'method' | 'password' | 'email-code' | 'totp'>('email')
+const step = ref<'email' | 'method' | 'password' | 'email-code' | 'mfa-method' | 'mfa-passkey' | 'totp'>('email')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['email', 'method', 'password', 'email-code', 'totp']
+const stepOrder = ['email', 'method', 'password', 'email-code', 'mfa-method', 'mfa-passkey', 'totp']
 
-const updateStep = (newStep: 'email' | 'method' | 'password' | 'email-code' | 'totp') => {
+const updateStep = (
+  newStep: 'email' | 'method' | 'password' | 'email-code' | 'mfa-method' | 'mfa-passkey' | 'totp',
+) => {
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -340,6 +403,7 @@ const totpLoading = ref(false)
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
 const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null>(null)
+const mfaMethods = ref<Array<'totp' | 'passkey'>>([])
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -349,26 +413,78 @@ let codeCountdownTimer: number | null = null
 // Passkey 支持检测
 const isPasskeySupported = ref(false)
 
+const normalizeMfaMethods = (
+  methods: MFAChallenge['methods'],
+  fallbackMethod: MFAChallenge['method'],
+): Array<'totp' | 'passkey'> => {
+  const normalized = (methods ?? [])
+    .filter((item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey')
+
+  if (normalized.length > 0) {
+    return [...new Set(normalized)]
+  }
+
+  return fallbackMethod === 'passkey' ? ['passkey'] : ['totp']
+}
+
+const canChooseMfaMethod = () => {
+  return mfaMethods.value.includes('totp') && mfaMethods.value.includes('passkey') && isPasskeySupported.value
+}
+
+const startMfaFlow = (
+  challenge: MFAChallenge,
+  source: 'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null,
+) => {
+  mfaChallenge.value = challenge
+  mfaSource.value = source
+  mfaMethods.value = normalizeMfaMethods(challenge.methods, challenge.method)
+
+  ElMessage.info('需要进行 MFA 验证')
+
+  if (canChooseMfaMethod()) {
+    updateStep('mfa-method')
+    return
+  }
+
+  if (mfaMethods.value.includes('passkey') && isPasskeySupported.value) {
+    updateStep('mfa-passkey')
+    return
+  }
+
+  if (mfaMethods.value.includes('passkey') && !mfaMethods.value.includes('totp')) {
+    ElMessage.error('当前浏览器不支持 Passkey，无法完成 MFA 验证')
+    updateStep('email')
+    return
+  }
+
+  updateStep('totp')
+}
+
 onMounted(() => {
   isPasskeySupported.value = isWebAuthnSupported()
 
   const challengeId = route.query.challengeId
   const method = route.query.method
+  const methods = route.query.methods
   const mfaFrom = route.query.mfaFrom
 
   if (typeof challengeId === 'string' && challengeId.trim()) {
-    const normalizedMethod = method === 'backup_code' ? 'backup_code' : 'totp'
-    mfaChallenge.value = {
+    const normalizedMethod: 'totp' | 'passkey' = method === 'passkey' ? 'passkey' : 'totp'
+    const queryMethods = typeof methods === 'string' ? methods.split(',') : []
+    const challenge: MFAChallenge = {
       challengeId: challengeId.trim(),
       method: normalizedMethod,
+      methods: queryMethods.length > 0
+        ? queryMethods.filter((item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey')
+        : undefined,
     }
 
-    mfaSource.value =
+    const source =
       mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' || mfaFrom === 'google'
         ? mfaFrom
         : null
-    updateStep('totp')
-    ElMessage.info('请完成 MFA 验证')
+
+    startMfaFlow(challenge, source)
   }
 })
 
@@ -426,11 +542,7 @@ const handlePasswordLogin = async () => {
 
     // 检查是否需要 MFA 验证
     if ('challengeId' in response) {
-      // 需要 MFA 验证
-      mfaChallenge.value = response as MFAChallenge
-      mfaSource.value = 'password'
-      ElMessage.info('需要进行 MFA 验证')
-      updateStep('totp')
+      startMfaFlow(response as MFAChallenge, 'password')
     } else {
       // 直接登录成功
       const loginResp = response as LoginResponse
@@ -522,11 +634,7 @@ const handleEmailCodeLogin = async () => {
 
     // 检查是否需要 MFA 验证
     if ('challengeId' in response) {
-      // 需要 MFA 验证
-      mfaChallenge.value = response as MFAChallenge
-      mfaSource.value = 'email-code'
-      ElMessage.info('需要进行 MFA 验证')
-      updateStep('totp')
+      startMfaFlow(response as MFAChallenge, 'email-code')
     } else {
       // 直接登录成功
       const loginResp = response as LoginResponse
@@ -581,11 +689,7 @@ const handlePasskeyLogin = async () => {
 
     // 检查是否需要 MFA 验证
     if ('challengeId' in response) {
-      // 需要 MFA 验证
-      mfaChallenge.value = response as MFAChallenge
-      mfaSource.value = 'passkey'
-      ElMessage.info('需要进行 MFA 验证')
-      updateStep('totp')
+      startMfaFlow(response as MFAChallenge, 'passkey')
     } else {
       // 直接登录成功
       const loginResp = response as LoginResponse
@@ -731,6 +835,98 @@ const handleGoogleLogin = async () => {
 
 // ===== 第四步：TOTP 验证 =====
 
+const selectMfaMethod = async (method: 'totp' | 'passkey') => {
+  if (methodSelecting.value) return
+
+  methodSelecting.value = true
+
+  try {
+    if (method === 'passkey') {
+      if (!isPasskeySupported.value) {
+        ElMessage.error('当前浏览器不支持 Passkey')
+        return
+      }
+      updateStep('mfa-passkey')
+      return
+    }
+
+    updateStep('totp')
+  } finally {
+    methodSelecting.value = false
+  }
+}
+
+const handlePasskeyMfaVerify = async () => {
+  if (passkeyLoading.value) return
+
+  if (!mfaChallenge.value) {
+    ElMessage.error('MFA 挑战信息丢失')
+    return
+  }
+
+  if (!isPasskeySupported.value) {
+    ElMessage.error('当前浏览器不支持 Passkey')
+    return
+  }
+
+  try {
+    passkeyLoading.value = true
+
+    const options = await getPasskeyAuthenticationOptions()
+    const credential = await getPasskeyCredential({
+      challenge: options.challenge,
+      timeout: options.timeout,
+      rpId: options.rpId,
+      userVerification: options.userVerification,
+      allowCredentials: options.allowCredentials,
+    })
+
+    if (!credential) {
+      throw new Error('未获取到凭证')
+    }
+
+    const authData = extractAuthenticationData(credential)
+    const response = await verifyPasskeyForLoginMFA({
+      mfaChallengeId: mfaChallenge.value.challengeId,
+      passkeyChallengeId: options.challengeId,
+      ...authData,
+    })
+
+    sessionStorage.setItem('accessToken', response.accessToken)
+
+    if (response.user) {
+      sessionStorage.setItem('user', JSON.stringify(response.user))
+    }
+
+    ElMessage.success('MFA 验证成功，登录完成')
+    router.push('/home')
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      if (error.name === 'NotAllowedError') {
+        ElMessage.error('用户取消了认证')
+        return
+      }
+      if (error.name === 'NotSupportedError') {
+        ElMessage.error('浏览器不支持该操作')
+        return
+      }
+      if (error.name === 'SecurityError') {
+        ElMessage.error('安全错误，请检查网络连接')
+        return
+      }
+      if (error.name === 'InvalidStateError') {
+        ElMessage.error('当前账号没有可用的 Passkey')
+        return
+      }
+      console.error('Passkey MFA verification failed:', error)
+    } else {
+      console.error('Passkey MFA verification failed:', error)
+    }
+  } finally {
+    passkeyLoading.value = false
+  }
+}
+
 const handleTotpVerify = async () => {
   try {
     await totpFormRef.value?.validate()
@@ -771,6 +967,7 @@ const backToMFASource = () => {
   const source = mfaSource.value
   mfaChallenge.value = null
   mfaSource.value = null
+  mfaMethods.value = []
   totpInput.value.code = ''
 
   // 根据 MFA 来源返回到对应的页面
@@ -789,6 +986,15 @@ const backToMFASource = () => {
     default:
       updateStep('email')
   }
+}
+
+const backToMfaMethodOrSource = () => {
+  if (canChooseMfaMethod()) {
+    updateStep('mfa-method')
+    return
+  }
+
+  backToMFASource()
 }
 
 // ===== 生命周期 =====

@@ -303,6 +303,9 @@ const handleCallback = async () => {
           query: {
             challengeId: loginResponse.challengeId,
             method: loginResponse.method || 'totp',
+            methods: Array.isArray(loginResponse.methods)
+              ? loginResponse.methods.join(',')
+              : undefined,
             mfaFrom: provider.value,
           },
         })
