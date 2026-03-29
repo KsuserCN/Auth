@@ -4,6 +4,7 @@ public class OauthCallbackRequest {
     private String code;
     private String redirectUri;
     private String state;
+    private String codeVerifier;
 
     public OauthCallbackRequest() {}
 
@@ -15,4 +16,8 @@ public class OauthCallbackRequest {
 
     public String getState() { return state; }
     public void setState(String state) { this.state = state; }
+
+    public String getCodeVerifier() { return codeVerifier; }
+    public void setCodeVerifier(String codeVerifier) { this.codeVerifier = codeVerifier; }
 }
+    

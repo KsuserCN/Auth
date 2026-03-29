@@ -76,6 +76,15 @@ public class OauthController {
     @Value("${app.github.oauth.app-key:}")
     private String githubClientSecret;
 
+    @Value("${app.microsoft.oauth.app-id:}")
+    private String microsoftClientId;
+
+    @Value("${app.microsoft.oauth.app-key:}")
+    private String microsoftClientSecret;
+
+    @Value("${app.microsoft.oauth.tenant-id:common}")
+    private String microsoftTenantId;
+
     public OauthController(AppProperties appProperties,
                            UserOauthAccountRepository oauthRepo,
                            UserRepository userRepository,
@@ -233,6 +242,47 @@ public class OauthController {
                                                                     HttpServletRequest request,
                                                                     Authentication authentication) {
         return handleGithubUnbind(req, request, authentication);
+    }
+
+    /**
+     * Microsoft OAuth 登录回调（无需登录态）
+     */
+    @PostMapping("/microsoft/callback/login")
+    public ResponseEntity<ApiResponse<Object>> microsoftLoginCallback(@RequestBody OauthCallbackRequest req,
+                                                                      HttpServletRequest request,
+                                                                      HttpServletResponse response) {
+        return handleMicrosoftCallback(req, request, response, "login", null);
+    }
+
+    /**
+     * Microsoft OAuth 绑定回调（需要登录态）
+     */
+    @PostMapping("/microsoft/callback/bind")
+    public ResponseEntity<ApiResponse<Object>> microsoftBindCallback(@RequestBody OauthCallbackRequest req,
+                                                                     HttpServletRequest request,
+                                                                     HttpServletResponse response,
+                                                                     Authentication authentication) {
+        return handleMicrosoftCallback(req, request, response, "bind", authentication);
+    }
+
+    /**
+     * Microsoft OAuth 解绑回调（需要登录态）
+     */
+    @PostMapping("/microsoft/callback/unbind")
+    public ResponseEntity<ApiResponse<Object>> microsoftUnbindCallback(@RequestBody OauthCallbackRequest req,
+                                                                       HttpServletRequest request,
+                                                                       HttpServletResponse response,
+                                                                       Authentication authentication) {
+        return handleMicrosoftCallback(req, request, response, "unbind", authentication);
+    }
+
+    /**
+     * 解绑 Microsoft（当前已登录用户）
+     */
+    @PostMapping("/microsoft/unbind")
+    public ResponseEntity<ApiResponse<Object>> unbindMicrosoft(Authentication authentication,
+                                                               HttpServletRequest request) {
+        return handleMicrosoftUnbind(request, authentication);
     }
 
     /**
@@ -1038,6 +1088,477 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
         } finally {
             redisTemplate.delete(codeProcessingKey);
+        }
+    }
+
+    /**
+     * Microsoft OAuth 回调处理（登录、绑定、解绑）
+     */
+    private ResponseEntity<ApiResponse<Object>> handleMicrosoftCallback(OauthCallbackRequest req,
+                                                                        HttpServletRequest request,
+                                                                        HttpServletResponse response,
+                                                                        String expectedOperation,
+                                                                        Authentication authentication) {
+        String code = req.getCode();
+        String state = req.getState();
+        String codeVerifier = req.getCodeVerifier();
+
+        if (code == null || code.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "code 不能为空"));
+        }
+        if (state == null || state.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
+        }
+        if (codeVerifier == null || codeVerifier.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "codeVerifier 不能为空"));
+        }
+
+        // state 格式：verifyToken;operation;env
+        String[] stateParts = state.split(";", -1);
+        if (stateParts.length != 3 || stateParts[0].isBlank() || stateParts[1].isBlank() || stateParts[2].isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "state 格式不正确，需为: verifyToken;operation;env"));
+        }
+        String verifyToken = stateParts[0].trim();
+        String operationType = stateParts[1].trim().toLowerCase();
+        String env = stateParts[2].trim().toLowerCase();
+
+        if (!("login".equals(operationType) || "bind".equals(operationType) || "unbind".equals(operationType))) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "state 操作类型不支持，仅支持 login/bind/unbind"));
+        }
+        if (!expectedOperation.equals(operationType)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "state 操作类型与当前接口不匹配"));
+        }
+        if (!("prd".equals(env) || "dev".equals(env))) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+        }
+
+        String redirectUri = resolveMicrosoftRedirectUriByEnv(env);
+        if (redirectUri == null) {
+            logger.error("No microsoft redirectUri configured for env={}", env);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "Microsoft redirectUri 未配置"));
+        }
+
+        String tenantId = (microsoftTenantId == null || microsoftTenantId.isBlank()) ? "common" : microsoftTenantId.trim();
+        if (microsoftClientId == null || microsoftClientId.isBlank()) {
+            logger.error("Microsoft OAuth client_id not configured");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "Microsoft OAuth client_id 未配置"));
+        }
+
+        User currentUser = null;
+        if (!"login".equals(expectedOperation)) {
+            if (authentication == null
+                || authentication.getPrincipal() == null
+                || authentication instanceof AnonymousAuthenticationToken
+                || "anonymousUser".equals(authentication.getPrincipal().toString())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+            }
+            String uuid = authentication.getPrincipal().toString();
+            var userOpt = userService.findByUuid(uuid);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "当前登录态对应用户不存在"));
+            }
+            currentUser = userOpt.get();
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+        String composite = code + ":" + verifyToken + ":" + operationType + ":" + env + ":" + clientIp;
+        String codeUsedKey = "oauth:microsoft:used-code:" + composite;
+        String codeProcessingKey = "oauth:microsoft:processing-code:" + composite;
+        String rawCodeUsedKey = "oauth:microsoft:raw-used-code:" + code;
+
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(codeUsedKey))) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 Microsoft 登录"));
+        }
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(rawCodeUsedKey))) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 Microsoft 登录"));
+        }
+        Boolean locked = redisTemplate.opsForValue().setIfAbsent(codeProcessingKey, "1", Duration.ofSeconds(30));
+        if (!Boolean.TRUE.equals(locked)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "登录处理中，请勿重复提交"));
+        }
+
+        // 速率限制（按 IP）
+        if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+        }
+        rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
+
+        long startTime = System.currentTimeMillis();
+        try {
+            String tokenUrl = String.format(
+                "https://login.microsoftonline.com/%s/oauth2/v2.0/token",
+                URLEncoder.encode(tenantId, StandardCharsets.UTF_8)
+            );
+
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
+            headers.set("Accept", "application/json");
+
+            org.springframework.util.MultiValueMap<String, String> form = new org.springframework.util.LinkedMultiValueMap<>();
+            form.add("client_id", microsoftClientId);
+            form.add("grant_type", "authorization_code");
+            form.add("code", code);
+            form.add("redirect_uri", redirectUri);
+            form.add("code_verifier", codeVerifier);
+            if (microsoftClientSecret != null && !microsoftClientSecret.isBlank()) {
+                form.add("client_secret", microsoftClientSecret);
+            }
+
+            org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, String>> tokenReqEntity =
+                new org.springframework.http.HttpEntity<>(form, headers);
+            org.springframework.http.ResponseEntity<String> tokenRespEntity = restTemplate.exchange(
+                tokenUrl,
+                org.springframework.http.HttpMethod.POST,
+                tokenReqEntity,
+                String.class
+            );
+            String tokenResp = tokenRespEntity.getBody();
+            if (tokenResp == null || tokenResp.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "Microsoft token 接口无响应"));
+            }
+
+            JsonNode tokenJson = objectMapper.readTree(tokenResp);
+            if (tokenJson.has("error")) {
+                String err = tokenJson.path("error_description").asText(tokenJson.path("error").asText());
+                if (err != null && err.toLowerCase().contains("already redeemed")) {
+                    redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
+                    redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
+                }
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "Microsoft token 错误: " + err));
+            }
+
+            String accessToken = tokenJson.path("access_token").asText(null);
+            String idToken = tokenJson.path("id_token").asText(null);
+            if (accessToken == null || accessToken.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 Microsoft 返回 access_token"));
+            }
+            redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
+            redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
+
+            String openid = extractMicrosoftOpenidFromIdToken(idToken);
+            if (openid == null || openid.isBlank()) {
+                openid = fetchMicrosoftOpenidFromUserInfo(accessToken);
+            }
+            if (openid == null || openid.isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 Microsoft 返回用户标识"));
+            }
+
+            // bind 操作：为当前登录用户直接写入 Microsoft 绑定关系
+            if ("bind".equals(operationType)) {
+                User user = currentUser;
+                if (user == null) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "bind 操作需要有效登录态"));
+                }
+
+                if (oauthRepo.findByProviderAndUserId("microsoft", user.getId()).isPresent()) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 Microsoft"));
+                }
+
+                java.util.Optional<UserOauthAccount> existingBinding = oauthRepo.findByProviderAndProviderUserId("microsoft", openid);
+                if (existingBinding.isPresent()) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 Microsoft 账号已被绑定"));
+                }
+
+                UserOauthAccount acct = new UserOauthAccount();
+                acct.setProvider("microsoft");
+                acct.setProviderUserId(openid);
+                acct.setUnionId(null);
+                acct.setUserId(user.getId());
+                acct.setIsEnabled(true);
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                acct.setLinkedAt(now);
+                acct.setCreatedAt(now);
+                oauthRepo.save(acct);
+
+                sensitiveLogUtil.log(request, user.getId(), "BIND_OAUTH", "microsoft",
+                    cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, startTime);
+
+                java.util.Map<String, Object> data = new java.util.HashMap<>();
+                data.put("bound", true);
+                data.put("provider", "microsoft");
+                data.put("openid", openid);
+                data.put("message", "Microsoft 绑定成功");
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Microsoft 绑定成功", data));
+            }
+
+            if ("unbind".equals(operationType)) {
+                User user = currentUser;
+                if (user == null) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "unbind 操作需要有效登录态"));
+                }
+
+                String callbackIdentity = openid;
+                String uuid = user.getUuid();
+                String clientIpReq = rateLimitService.getClientIp(request);
+                if (!sensitiveOperationService.isVerified(uuid, clientIpReq)) {
+                    java.util.Map<String, Object> data = new java.util.HashMap<>();
+                    data.put("needVerification", true);
+                    data.put("message", "解绑 Microsoft 帐号属于敏感操作，需要先完成身份验证");
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+                }
+
+                var acctOpt = oauthRepo.findByProviderAndUserId("microsoft", user.getId());
+                if (acctOpt.isEmpty()) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 Microsoft 帐号"));
+                }
+                var acct = acctOpt.get();
+
+                String boundIdentity = acct.getProviderUserId();
+                if (!callbackIdentity.equals(boundIdentity)) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前授权的 Microsoft 账号与已绑定账号不一致"));
+                }
+
+                boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isEmpty();
+                boolean hasPasskey = !userPasskeyRepository.findByUserId(user.getId()).isEmpty();
+                if (!hasPassword && !hasPasskey) {
+                    java.util.Map<String, Object> data = new java.util.HashMap<>();
+                    data.put("canUnbind", false);
+                    data.put("reason", "last_login_method");
+                    data.put("message", "无法解绑，这是您的最后一种登录方式");
+                    data.put("suggestions", java.util.Arrays.asList(
+                        "请先设置密码或绑定 Passkey",
+                        "设置密码后可以使用邮箱+密码登录",
+                        "绑定 Passkey 后可以使用无密码登录"
+                    ));
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+                }
+
+                oauthRepo.delete(acct);
+                sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "microsoft",
+                    cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
+
+                java.util.Map<String, Object> data = new java.util.HashMap<>();
+                data.put("canUnbind", true);
+                data.put("message", "Microsoft 解绑校验完成");
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Microsoft 解绑成功", data));
+            }
+
+            // login 操作：查询是否已绑定
+            var bound = oauthRepo.findByProviderAndProviderUserId("microsoft", openid);
+            if (bound.isPresent() && Boolean.TRUE.equals(bound.get().getIsEnabled())) {
+                UserOauthAccount acct = bound.get();
+                var userOpt = userRepository.findById(acct.getUserId());
+                if (userOpt.isPresent()) {
+                    User user = userOpt.get();
+
+                    UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+                    boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
+                    if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+                        String userAgentReq = rateLimitService.getClientUserAgent(request);
+                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq);
+                        sensitiveLogUtil.logLogin(request, user.getId(), "MICROSOFT_MFA", true, null, startTime);
+                        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                        resp.put("challengeId", challengeId);
+                        resp.put("method", "totp");
+                        resp.put("operationType", operationType);
+                        resp.put("env", env);
+                        return ResponseEntity.status(HttpStatus.CREATED)
+                            .body(new ApiResponse<>(201, "需要 TOTP 验证", resp));
+                    }
+
+                    String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
+                    String userAgent = rateLimitService.getClientUserAgent(request);
+                    UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
+                    int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+                    String accessTokenLocal = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
+
+                    jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("refreshToken", refreshToken);
+                    cookie.setHttpOnly(true);
+                    cookie.setSecure(!appProperties.isDebug());
+                    cookie.setPath("/");
+                    cookie.setMaxAge(604800);
+                    response.addCookie(cookie);
+                    String sameSiteValue = "SameSite=Strict";
+                    String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
+                        refreshToken != null ? refreshToken : "",
+                        cookie.getSecure() ? "Secure; " : "",
+                        sameSiteValue,
+                        cookie.getMaxAge()
+                    );
+                    response.addHeader("Set-Cookie", setCookieHeader);
+
+                    acct.setLastLoginAt(java.time.LocalDateTime.now());
+                    oauthRepo.save(acct);
+
+                    sensitiveLogUtil.logLogin(request, user.getId(), "MICROSOFT", true, null, startTime);
+
+                    java.util.Map<String, Object> data = new java.util.HashMap<>();
+                    data.put("accessToken", accessTokenLocal);
+                    data.put("user", user);
+                    data.put("operationType", operationType);
+                    data.put("env", env);
+                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "登录成功", data));
+                }
+            }
+
+            sensitiveLogUtil.logLogin(request, null, "MICROSOFT", false, "Not bound", startTime);
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("needBind", true);
+            data.put("openid", openid);
+            data.put("operationType", operationType);
+            data.put("env", env);
+            data.put("message", "该 Microsoft 账号尚未绑定，请先绑定或注册账号");
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+
+        } catch (Exception e) {
+            logger.error("Microsoft oauth callback failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+        } finally {
+            redisTemplate.delete(codeProcessingKey);
+        }
+    }
+
+    /**
+     * 解绑 Microsoft（前端独立解绑入口）
+     */
+    private ResponseEntity<ApiResponse<Object>> handleMicrosoftUnbind(HttpServletRequest request,
+                                                                      Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+        }
+
+        String userUuid = authentication.getPrincipal().toString();
+        var userOpt = userService.findByUuid(userUuid);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        User user = userOpt.get();
+        String clientIp = rateLimitService.getClientIp(request);
+
+        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("needVerification", true);
+            data.put("message", "解绑 Microsoft 帐号属于敏感操作，需要先完成身份验证");
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+        }
+
+        var acctOpt = oauthRepo.findByProviderAndUserId("microsoft", user.getId());
+        if (acctOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 Microsoft 帐号"));
+        }
+
+        var acct = acctOpt.get();
+        boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isEmpty();
+        boolean hasPasskey = !userPasskeyRepository.findByUserId(user.getId()).isEmpty();
+        if (!hasPassword && !hasPasskey) {
+            java.util.Map<String, Object> data = new java.util.HashMap<>();
+            data.put("canUnbind", false);
+            data.put("reason", "last_login_method");
+            data.put("message", "无法解绑，这是您的最后一种登录方式");
+            data.put("suggestions", java.util.Arrays.asList(
+                "请先设置密码或绑定 Passkey",
+                "设置密码后可以使用邮箱+密码登录",
+                "绑定 Passkey 后可以使用无密码登录"
+            ));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+        }
+
+        oauthRepo.delete(acct);
+        sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "microsoft",
+            cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
+
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Microsoft 解绑成功"));
+    }
+
+    private String resolveMicrosoftRedirectUriByEnv(String env) {
+        List<String> configuredUris = appProperties.getMicrosoft().getOauth().getRedirectUris();
+        if (configuredUris == null || configuredUris.isEmpty()) {
+            return null;
+        }
+
+        if ("dev".equals(env)) {
+            for (String uri : configuredUris) {
+                if (uri != null && (uri.contains("localhost") || uri.contains("127.0.0.1"))) {
+                    return uri;
+                }
+            }
+        }
+
+        if ("prd".equals(env)) {
+            for (String uri : configuredUris) {
+                if (uri != null && !uri.contains("localhost") && !uri.contains("127.0.0.1")) {
+                    return uri;
+                }
+            }
+        }
+
+        for (String uri : configuredUris) {
+            if (uri != null && !uri.isBlank()) {
+                return uri;
+            }
+        }
+        return null;
+    }
+
+    private String extractMicrosoftOpenidFromIdToken(String idToken) {
+        if (idToken == null || idToken.isBlank()) {
+            return null;
+        }
+        try {
+            String[] parts = idToken.split("\\.");
+            if (parts.length < 2) {
+                return null;
+            }
+            byte[] payloadBytes = java.util.Base64.getUrlDecoder().decode(parts[1]);
+            String payload = new String(payloadBytes, StandardCharsets.UTF_8);
+            JsonNode payloadJson = objectMapper.readTree(payload);
+
+            String oid = payloadJson.path("oid").asText(null);
+            if (oid != null && !oid.isBlank()) {
+                return oid;
+            }
+            String sub = payloadJson.path("sub").asText(null);
+            if (sub != null && !sub.isBlank()) {
+                return sub;
+            }
+            return null;
+        } catch (Exception e) {
+            logger.warn("Failed to parse microsoft id_token", e);
+            return null;
+        }
+    }
+
+    private String fetchMicrosoftOpenidFromUserInfo(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            return null;
+        }
+        try {
+            String userInfoUrl = "https://graph.microsoft.com/oidc/userinfo";
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.set("Authorization", "Bearer " + accessToken);
+            headers.set("Accept", "application/json");
+            org.springframework.http.HttpEntity<String> reqEntity = new org.springframework.http.HttpEntity<>(headers);
+
+            org.springframework.http.ResponseEntity<String> resp = restTemplate.exchange(
+                userInfoUrl,
+                org.springframework.http.HttpMethod.GET,
+                reqEntity,
+                String.class
+            );
+            String body = resp.getBody();
+            if (body == null || body.isBlank()) {
+                return null;
+            }
+            JsonNode userInfoJson = objectMapper.readTree(body);
+            String oid = userInfoJson.path("oid").asText(null);
+            if (oid != null && !oid.isBlank()) {
+                return oid;
+            }
+            String sub = userInfoJson.path("sub").asText(null);
+            if (sub != null && !sub.isBlank()) {
+                return sub;
+            }
+            return null;
+        } catch (Exception e) {
+            logger.warn("Failed to fetch microsoft userinfo", e);
+            return null;
         }
     }
 

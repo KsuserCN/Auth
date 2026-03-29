@@ -19,6 +19,7 @@ public class AppProperties {
     private final Passkey passkey = new Passkey();
     private final Oauth oauth = new Oauth();
     private final Qq qq = new Qq();
+    private final Microsoft microsoft = new Microsoft();
 
     public boolean isDebug() {
         return debug;
@@ -52,6 +53,8 @@ public class AppProperties {
 
     public Qq getQq() { return qq; }
 
+    public Microsoft getMicrosoft() { return microsoft; }
+
     public Github getGithub() { return github; }
 
     private final Github github = new Github();
@@ -75,6 +78,19 @@ public class AppProperties {
         public QqOauth getOauth() { return oauth; }
 
         public static class QqOauth {
+            private java.util.List<String> redirectUris = new java.util.ArrayList<>();
+
+            public java.util.List<String> getRedirectUris() { return redirectUris; }
+            public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
+        }
+    }
+
+    public static class Microsoft {
+        private final MicrosoftOauth oauth = new MicrosoftOauth();
+
+        public MicrosoftOauth getOauth() { return oauth; }
+
+        public static class MicrosoftOauth {
             private java.util.List<String> redirectUris = new java.util.ArrayList<>();
 
             public java.util.List<String> getRedirectUris() { return redirectUris; }
