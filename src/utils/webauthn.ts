@@ -120,6 +120,15 @@ export async function createPasskeyCredential(options: {
         ? JSON.parse(options.authenticatorSelection)
         : options.authenticatorSelection
 
+    // 前端强制 auto 策略：不向浏览器传递 authenticatorAttachment，
+    // 避免后端配置导致固定为 platform/cross-platform。
+    const normalizedAuthenticatorSelection = authenticatorSelectionData
+      ? (() => {
+          const { authenticatorAttachment: _ignored, ...rest } = authenticatorSelectionData
+          return rest
+        })()
+      : undefined
+
     // 构建创建凭证的选项
     const credentialCreationOptions: CredentialCreationOptions = {
       publicKey: {
@@ -133,7 +142,7 @@ export async function createPasskeyCredential(options: {
         pubKeyCredParams: pubKeyParamsData,
         timeout: parseInt(options.timeout),
         attestation: options.attestation as AttestationConveyancePreference,
-        authenticatorSelection: authenticatorSelectionData,
+        authenticatorSelection: normalizedAuthenticatorSelection,
       },
     }
 
@@ -157,6 +166,13 @@ export async function getPasskeyCredential(options: {
   timeout: string | number
   rpId: string
   userVerification: string
+  allowCredentials?:
+    | string
+    | Array<{
+        id: string
+        type?: PublicKeyCredentialType
+        transports?: AuthenticatorTransport[]
+      }>
 }): Promise<PublicKeyCredential | null> {
   try {
     // 验证必事字段
@@ -167,6 +183,21 @@ export async function getPasskeyCredential(options: {
       throw new Error('rpId 不能为空')
     }
 
+    const allowCredentialsData =
+      typeof options.allowCredentials === 'string'
+        ? JSON.parse(options.allowCredentials)
+        : options.allowCredentials
+
+    const allowCredentials = Array.isArray(allowCredentialsData)
+      ? allowCredentialsData
+          .filter((item) => item && item.id)
+          .map((item) => ({
+            id: base64UrlToArrayBuffer(item.id),
+            type: item.type ?? 'public-key',
+            transports: item.transports,
+          }))
+      : undefined
+
     // 构建获取凭证的选项
     const credentialRequestOptions: CredentialRequestOptions = {
       publicKey: {
@@ -174,6 +205,7 @@ export async function getPasskeyCredential(options: {
         timeout: typeof options.timeout === 'string' ? parseInt(options.timeout) : options.timeout,
         rpId: options.rpId,
         userVerification: options.userVerification as UserVerificationRequirement,
+        allowCredentials,
       },
     }
 

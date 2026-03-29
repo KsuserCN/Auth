@@ -566,6 +566,7 @@ const handlePasskeyLogin = async () => {
       timeout: options.timeout,
       rpId: options.rpId,
       userVerification: options.userVerification,
+      allowCredentials: options.allowCredentials,
     })
 
     if (!credential) {

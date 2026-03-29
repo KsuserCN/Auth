@@ -135,6 +135,7 @@ export interface PasskeyAuthenticationOptions {
   timeout: string
   rpId: string
   userVerification: string
+  allowCredentials?: string
 }
 
 export const getPasskeyAuthenticationOptions = async (): Promise<PasskeyAuthenticationOptions> => {
@@ -177,6 +178,7 @@ export const verifyPasskeyAuthentication = async (
 // ========== Passkey 注册 ==========
 export interface PasskeyRegistrationOptionsRequest {
   passkeyName: string
+  authenticatorType?: 'auto'
 }
 
 export interface PasskeyRegistrationOptions {
@@ -239,6 +241,7 @@ export interface PasskeySensitiveVerificationOptions {
   timeout: string
   rpId: string
   userVerification: string
+  allowCredentials?: string
 }
 
 export const getPasskeySensitiveVerificationOptions =
