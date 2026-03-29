@@ -302,9 +302,11 @@ import {
   getRecoveryCodes,
   regenerateRecoveryCodes,
   disableTotp,
+  buildGoogleAuthorizationUrl,
   buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
+  unbindGoogle,
   unbindGithub,
   unbindMicrosoft,
   unbindQQ,
@@ -320,7 +322,7 @@ const userEmail = computed(() => userStore.user?.email || '—')
 const emailLoading = ref(false)
 const passwordLoading = ref(false)
 type OAuthProviderItem = {
-  key: 'wechat' | 'qq' | 'github' | 'microsoft'
+  key: 'wechat' | 'qq' | 'github' | 'microsoft' | 'google'
   label: string
   iconClass: string
   supported: boolean
@@ -334,6 +336,7 @@ const oauthProviders = ref<OAuthProviderItem[]>([
   { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, lastLoginAt: null, loading: false },
   { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: true, bound: false, lastLoginAt: null, loading: false },
   { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: true, bound: false, lastLoginAt: null, loading: false },
+  { key: 'google', label: 'Google', iconClass: 'fa-brands fa-google', supported: true, bound: false, lastLoginAt: null, loading: false },
 ])
 
 // Passkey 相关状态
@@ -899,6 +902,54 @@ const handleMicrosoftUnbind = async (provider: OAuthProviderItem) => {
   }
 }
 
+const handleGoogleBind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+
+  provider.loading = true
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};bind;${debugState}`
+
+    sessionStorage.setItem('google_oauth_state', state)
+    window.location.href = buildGoogleAuthorizationUrl(state)
+  } catch (error) {
+    console.error('Google bind failed:', error)
+    ElMessage.error('Google 绑定跳转失败，请重试')
+    provider.loading = false
+  }
+}
+
+const handleGoogleUnbind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+  if (!(await ensureSensitiveVerified())) return
+
+  try {
+    await ElMessageBox.confirm('解绑后您将无法使用 Google 快速登录，是否继续？', '确认解绑', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+
+  provider.loading = true
+  try {
+    await unbindGoogle()
+    provider.bound = false
+    provider.lastLoginAt = null
+    ElMessage.success('Google 解绑成功')
+
+    await loadOAuthStatus()
+  } catch (error) {
+    console.error('Google unbind failed:', error)
+    ElMessage.error('Google 解绑失败，请稍后重试')
+  } finally {
+    provider.loading = false
+  }
+}
+
 const handleProviderAction = async (provider: OAuthProviderItem) => {
   if (!provider.supported || provider.loading) return
 
@@ -925,6 +976,15 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
       await handleMicrosoftUnbind(provider)
     } else {
       await handleMicrosoftBind(provider)
+    }
+    return
+  }
+
+  if (provider.key === 'google') {
+    if (provider.bound) {
+      await handleGoogleUnbind(provider)
+    } else {
+      await handleGoogleBind(provider)
     }
     return
   }

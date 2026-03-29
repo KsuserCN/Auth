@@ -28,6 +28,7 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 - [QQ OAuth 适配说明](./QQ_LOGIN_LATEST_ADAPTATION.md)
 - [GitHub OAuth 适配说明](./GITHUB_OAUTH_ADAPTATION.md)
 - [Microsoft OAuth 适配说明](./MICROSOFT_OAUTH_ADAPTATION.md)
+- [Google OAuth 适配说明](./GOOGLE_OAUTH_ADAPTATION.md)
 
 ## Project Setup
 

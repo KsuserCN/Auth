@@ -80,6 +80,7 @@ import {
   RefreshRight,
 } from '@element-plus/icons-vue'
 import {
+  handleGoogleCallbackByOperation,
   handleGithubCallbackByOperation,
   handleMicrosoftCallbackByOperation,
   handleQQCallbackByOperation,
@@ -103,7 +104,7 @@ const isDark = useDark({
   valueLight: 'light',
 })
 
-type OAuthProvider = 'qq' | 'github' | 'microsoft'
+type OAuthProvider = 'qq' | 'github' | 'microsoft' | 'google'
 
 interface ParsedOAuthState {
   verifyToken: string
@@ -121,12 +122,20 @@ const provider = computed<OAuthProvider>(() => {
     return 'microsoft'
   }
 
+  if (metaProvider === 'google') {
+    return 'google'
+  }
+
   if (route.path.includes('/oauth/github/')) {
     return 'github'
   }
 
   if (route.path.includes('/oauth/microsoft/')) {
     return 'microsoft'
+  }
+
+  if (route.path.includes('/oauth/google/')) {
+    return 'google'
   }
 
   return 'qq'
@@ -139,6 +148,10 @@ const providerLabel = computed(() => {
 
   if (provider.value === 'microsoft') {
     return 'Microsoft'
+  }
+
+  if (provider.value === 'google') {
+    return 'Google'
   }
 
   return 'QQ'
@@ -188,6 +201,10 @@ const handleOAuthCallbackByOperation = async (
 
   if (provider.value === 'microsoft') {
     return handleMicrosoftCallbackByOperation(operation, payload)
+  }
+
+  if (provider.value === 'google') {
+    return handleGoogleCallbackByOperation(operation, payload)
   }
 
   return handleQQCallbackByOperation(operation, payload)

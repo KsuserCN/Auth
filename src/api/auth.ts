@@ -787,6 +787,7 @@ export const logoutAll = async (): Promise<void> => {
 export type QQOAuthOperation = 'login' | 'bind' | 'unbind'
 export type GithubOAuthOperation = 'login' | 'bind' | 'unbind'
 export type MicrosoftOAuthOperation = 'login' | 'bind' | 'unbind'
+export type GoogleOAuthOperation = 'login' | 'bind' | 'unbind'
 
 /**
  * 构建 QQ 授权 URL
@@ -864,6 +865,16 @@ export type GithubCallbackResponse =
   | GithubLoginCallbackResponse
   | GithubBindCallbackResponse
   | GithubUnbindCallbackResponse
+
+export type GoogleCallbackRequest = QQCallbackRequest
+export type GoogleLoginCallbackResponse = OAuthLoginCallbackResponse
+export type GoogleBindCallbackResponse = OAuthBindCallbackResponse
+export type GoogleUnbindCallbackResponse = OAuthUnbindCallbackResponse
+
+export type GoogleCallbackResponse =
+  | GoogleLoginCallbackResponse
+  | GoogleBindCallbackResponse
+  | GoogleUnbindCallbackResponse
 
 export interface MicrosoftCallbackRequest {
   code: string
@@ -1026,6 +1037,91 @@ export const handleGithubCallbackByOperation = async (
 }
 
 /**
+ * 构建 Google 授权 URL
+ * 用于生成 Google OAuth 授权链接
+ */
+export const buildGoogleAuthorizationUrl = (state: string): string => {
+  const clientId = import.meta.env.VITE_OAUTH_GOOGLE_CLIENT_ID
+  const redirectUri = 'https://auth.ksuser.cn/oauth/google/callback'
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'offline',
+    prompt: 'consent',
+  })
+
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`
+}
+
+/**
+ * Google OAuth 登录回调处理
+ * POST /oauth/google/callback/login
+ */
+export const handleGoogleLoginCallback = async (
+  data: GoogleCallbackRequest,
+): Promise<GoogleLoginCallbackResponse> => {
+  const response = await request.post<ApiResponse<GoogleLoginCallbackResponse>>(
+    '/oauth/google/callback/login',
+    data,
+  )
+  return (response as unknown as ApiResponse<GoogleLoginCallbackResponse>).data
+}
+
+/**
+ * Google OAuth 绑定回调处理
+ * POST /oauth/google/callback/bind
+ */
+export const handleGoogleBindCallback = async (
+  data: GoogleCallbackRequest,
+): Promise<GoogleBindCallbackResponse> => {
+  const response = await request.post<ApiResponse<GoogleBindCallbackResponse>>(
+    '/oauth/google/callback/bind',
+    data,
+  )
+  return (response as unknown as ApiResponse<GoogleBindCallbackResponse>).data
+}
+
+/**
+ * Google OAuth 解绑回调处理
+ * POST /oauth/google/callback/unbind
+ */
+export const handleGoogleUnbindCallback = async (data?: {
+  state?: string
+}): Promise<GoogleUnbindCallbackResponse> => {
+  const response = await request.post<ApiResponse<GoogleUnbindCallbackResponse>>(
+    '/oauth/google/callback/unbind',
+    data,
+  )
+  return (response as unknown as ApiResponse<GoogleUnbindCallbackResponse>).data
+}
+
+/**
+ * 按 state 中的 operation 将 Google 回调请求路由到对应端点
+ */
+export const handleGoogleCallbackByOperation = async (
+  operation: GoogleOAuthOperation,
+  data: GoogleCallbackRequest,
+): Promise<GoogleCallbackResponse> => {
+  if (operation === 'login') {
+    return handleGoogleLoginCallback(data)
+  }
+
+  if (operation === 'bind') {
+    return handleGoogleBindCallback(data)
+  }
+
+  if (operation === 'unbind') {
+    return handleGoogleUnbindCallback({ state: data.state })
+  }
+
+  throw new Error('不支持的 Google 回调操作类型')
+}
+
+/**
  * 构建 Microsoft 授权 URL
  * 用于生成 Microsoft OAuth 授权链接
  */
@@ -1131,7 +1227,7 @@ export const handleQQCallback = async (
 }
 
 export interface OAuthAccountStatusItem {
-  provider: 'wechat' | 'qq' | 'microsoft' | 'github'
+  provider: 'wechat' | 'qq' | 'microsoft' | 'github' | 'google'
   bound: boolean
   lastLoginAt: string | null
 }
@@ -1168,4 +1264,12 @@ export const unbindGithub = async (): Promise<void> => {
  */
 export const unbindMicrosoft = async (): Promise<void> => {
   await request.post('/oauth/microsoft/unbind')
+}
+
+/**
+ * 解绑 Google 账号
+ * POST /oauth/google/unbind
+ */
+export const unbindGoogle = async (): Promise<void> => {
+  await request.post('/oauth/google/unbind')
 }

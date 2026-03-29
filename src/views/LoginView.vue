@@ -206,6 +206,9 @@
               <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
                 <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
               </button>
+              <button class="icon-btn" @click="handleGoogleLogin" aria-label="Google 登录" type="button">
+                <i class="fa-brands fa-google" aria-hidden="true"></i>
+              </button>
             </div>
             <el-button class="extra-btn" :loading="passkeyLoading" :disabled="!isPasskeySupported"
               @click="handlePasskeyLogin">
@@ -232,6 +235,7 @@ import {
   getPasskeyAuthenticationOptions,
   verifyPasskeyAuthentication,
   verifyTOTPForLogin,
+  buildGoogleAuthorizationUrl,
   buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
@@ -335,7 +339,7 @@ const totpLoading = ref(false)
 
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
-const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | null>(null)
+const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null>(null)
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -360,7 +364,9 @@ onMounted(() => {
     }
 
     mfaSource.value =
-      mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' ? mfaFrom : null
+      mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' || mfaFrom === 'google'
+        ? mfaFrom
+        : null
     updateStep('totp')
     ElMessage.info('请完成 MFA 验证')
   }
@@ -703,6 +709,22 @@ const handleMicrosoftLogin = async () => {
   } catch (error: unknown) {
     console.error('Microsoft login failed:', error)
     ElMessage.error('Microsoft 登录失败，请重试')
+  }
+}
+
+const handleGoogleLogin = async () => {
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};login;${debugState}`
+
+    sessionStorage.setItem('google_oauth_state', state)
+
+    const authUrl = buildGoogleAuthorizationUrl(state)
+    window.location.href = authUrl
+  } catch (error: unknown) {
+    console.error('Google login failed:', error)
+    ElMessage.error('Google 登录失败，请重试')
   }
 }
 
