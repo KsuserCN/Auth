@@ -3,7 +3,10 @@ package cn.ksuser.api.service;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -14,13 +17,18 @@ public class MfaService {
         public final Long userId;
         public final String clientIp;
         public final String userAgent;
+        public final String loginMethod;
+        public final Set<String> allowedMethods;
         public final long expiresAt;
         public int failedAttempts; // ✅ 添加失败次数记录
 
-        public Challenge(Long userId, String clientIp, String userAgent, long expiresAt) {
+        public Challenge(Long userId, String clientIp, String userAgent, String loginMethod,
+                         Set<String> allowedMethods, long expiresAt) {
             this.userId = userId;
             this.clientIp = clientIp;
             this.userAgent = userAgent;
+            this.loginMethod = loginMethod;
+            this.allowedMethods = allowedMethods;
             this.expiresAt = expiresAt;
             this.failedAttempts = 0;
         }
@@ -33,10 +41,36 @@ public class MfaService {
     private static final int MAX_FAILED_ATTEMPTS = 5; // ✅ 最大失败次数
 
     public String createChallenge(Long userId, String clientIp, String userAgent) {
+        return createChallenge(userId, clientIp, userAgent, "password", Set.of("totp"));
+    }
+
+    public String createChallenge(Long userId, String clientIp, String userAgent,
+                                  String loginMethod, Set<String> allowedMethods) {
         String id = UUID.randomUUID().toString();
         long expiresAt = Instant.now().getEpochSecond() + DEFAULT_TTL_SECONDS;
-        store.put(id, new Challenge(userId, clientIp, userAgent, expiresAt));
+        Set<String> normalized = normalizeMethods(allowedMethods);
+        store.put(id, new Challenge(userId, clientIp, userAgent, loginMethod, normalized, expiresAt));
         return id;
+    }
+
+    private Set<String> normalizeMethods(Set<String> allowedMethods) {
+        if (allowedMethods == null || allowedMethods.isEmpty()) {
+            return Set.of("totp");
+        }
+        Set<String> normalized = new HashSet<>();
+        for (String method : allowedMethods) {
+            if (method == null || method.isBlank()) {
+                continue;
+            }
+            String value = method.trim().toLowerCase();
+            if ("totp".equals(value) || "passkey".equals(value)) {
+                normalized.add(value);
+            }
+        }
+        if (normalized.isEmpty()) {
+            normalized.add("totp");
+        }
+        return Collections.unmodifiableSet(normalized);
     }
 
     /**
@@ -58,6 +92,33 @@ public class MfaService {
             return null;
         }
         return chal.userId;
+    }
+
+    public boolean isMethodAllowed(String challengeId, String method) {
+        if (challengeId == null || method == null || method.isBlank()) {
+            return false;
+        }
+        Challenge chal = store.get(challengeId);
+        if (chal == null) {
+            return false;
+        }
+        return chal.allowedMethods.contains(method.trim().toLowerCase());
+    }
+
+    public Set<String> getAllowedMethods(String challengeId) {
+        Challenge chal = store.get(challengeId);
+        if (chal == null) {
+            return Set.of();
+        }
+        return chal.allowedMethods;
+    }
+
+    public String getLoginMethod(String challengeId) {
+        Challenge chal = store.get(challengeId);
+        if (chal == null || chal.loginMethod == null || chal.loginMethod.isBlank()) {
+            return "password";
+        }
+        return chal.loginMethod;
     }
 
     /**

@@ -34,6 +34,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -623,19 +624,26 @@ public class OauthController {
                     User userEntity = user;
                     UserSettings settings = userSettingsRepository.findByUserId(userEntity.getId()).orElse(null);
                     boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
-                    if (mfaEnabled && totpService.isTotpEnabled(userEntity.getId())) {
+                    if (mfaEnabled) {
+                        List<String> mfaMethods = resolveOauthMfaMethods(userEntity.getId());
+                        if (mfaMethods.isEmpty()) {
+                            // do nothing
+                        } else {
                         String clientIpReq = rateLimitService.getClientIp(request);
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
-                        String challengeId = mfaService.createChallenge(userEntity.getId(), clientIpReq, userAgentReq);
+                        String challengeId = mfaService.createChallenge(userEntity.getId(), clientIpReq, userAgentReq,
+                            "qq", new HashSet<>(mfaMethods));
                         // 记录为 QQ_MFA，表示需要 MFA 验证
                         sensitiveLogUtil.logLogin(request, userEntity.getId(), "QQ_MFA", true, null, startTime);
                         java.util.Map<String,Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
-                        resp.put("method", "totp");
+                        resp.put("method", mfaMethods.get(0));
+                        resp.put("methods", mfaMethods);
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 TOTP 验证", resp));
+                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                        }
                     }
 
                     // 签发系统 token + session（与现有登录流程一致）
@@ -1067,17 +1075,24 @@ public class OauthController {
                     // 检查是否需要 MFA
                     UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
                     boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
-                    if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+                    if (mfaEnabled) {
+                        List<String> mfaMethods = resolveOauthMfaMethods(user.getId());
+                        if (mfaMethods.isEmpty()) {
+                            // do nothing
+                        } else {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
-                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq);
+                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
+                            "github", new HashSet<>(mfaMethods));
                         sensitiveLogUtil.logLogin(request, user.getId(), "GITHUB_MFA", true, null, startTime);
                         java.util.Map<String,Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
-                        resp.put("method", "totp");
+                        resp.put("method", mfaMethods.get(0));
+                        resp.put("methods", mfaMethods);
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 TOTP 验证", resp));
+                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                        }
                     }
 
                     // 签发系统 token + session
@@ -1344,17 +1359,24 @@ public class OauthController {
 
                     UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
                     boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
-                    if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+                    if (mfaEnabled) {
+                        List<String> mfaMethods = resolveOauthMfaMethods(user.getId());
+                        if (mfaMethods.isEmpty()) {
+                            // do nothing
+                        } else {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
-                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq);
+                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
+                            "google", new HashSet<>(mfaMethods));
                         sensitiveLogUtil.logLogin(request, user.getId(), "GOOGLE_MFA", true, null, startTime);
                         java.util.Map<String, Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
-                        resp.put("method", "totp");
+                        resp.put("method", mfaMethods.get(0));
+                        resp.put("methods", mfaMethods);
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 TOTP 验证", resp));
+                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                        }
                     }
 
                     String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
@@ -1849,17 +1871,24 @@ public class OauthController {
 
                     UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
                     boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
-                    if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
+                    if (mfaEnabled) {
+                        List<String> mfaMethods = resolveOauthMfaMethods(user.getId());
+                        if (mfaMethods.isEmpty()) {
+                            // do nothing
+                        } else {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
-                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq);
+                        String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
+                            "microsoft", new HashSet<>(mfaMethods));
                         sensitiveLogUtil.logLogin(request, user.getId(), "MICROSOFT_MFA", true, null, startTime);
                         java.util.Map<String, Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
-                        resp.put("method", "totp");
+                        resp.put("method", mfaMethods.get(0));
+                        resp.put("methods", mfaMethods);
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 TOTP 验证", resp));
+                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                        }
                     }
 
                     String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
@@ -2156,5 +2185,16 @@ public class OauthController {
             }
         }
         return null;
+    }
+
+    private List<String> resolveOauthMfaMethods(Long userId) {
+        List<String> methods = new java.util.ArrayList<>();
+        if (totpService.isTotpEnabled(userId)) {
+            methods.add("totp");
+        }
+        if (!userPasskeyRepository.findByUserId(userId).isEmpty()) {
+            methods.add("passkey");
+        }
+        return methods;
     }
 }

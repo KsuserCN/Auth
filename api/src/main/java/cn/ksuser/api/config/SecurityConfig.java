@@ -41,6 +41,7 @@ public class SecurityConfig {
                     "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/",
                     "/auth/passkey/authentication-options", "/auth/passkey/authentication-options/",
                     "/auth/passkey/authentication-verify", "/auth/passkey/authentication-verify/",
+                    "/auth/passkey/mfa-verify", "/auth/passkey/mfa-verify/",
                     "/auth/totp/mfa-verify", "/auth/totp/mfa-verify/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",

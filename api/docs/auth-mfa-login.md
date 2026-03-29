@@ -1,46 +1,47 @@
-````markdown
-# MFA 登录（TOTP）适配说明
+# MFA 登录适配说明（TOTP + Passkey）
 
 ## 概述
-- 当用户启用了 MFA（TOTP）并存在已配置的 TOTP 密钥时，首次通过密码 / 验证码 / Passkey 完成第一因素认证后，服务不会立即下发最终的登录 token（Access/Refresh）。
-  - 服务会返回 HTTP 201 表示进入 MFA 流（需要进行 TOTP 验证），前端应引导用户输入一次性 TOTP 码并调用 `/auth/totp/mfa-verify` 完成登录。
+- 当用户启用 MFA 后，第一因子登录成功时不会立即签发最终 token，而是返回 `201` 并下发 `challengeId`。
+- 当前支持的二次验证方式：`totp`、`passkey`。
+- 新增约束：如果第一因子本身就是 Passkey（`/auth/passkey/authentication-verify`），则二次验证只允许 `totp`。
 
-## 流程图（简要）
-1. 客户端 POST `/auth/login` 或 `/auth/login-with-code` 或 `/auth/passkey/authentication-verify`（完成第一因素）
-2. 如果用户启用 MFA 且有 TOTP，服务返回 201，响应包含 `challengeId` 与 `method: "totp"`
-3. 客户端展示 TOTP 输入界面，用户输入 TOTP 验证码
-4. 客户端 POST `/auth/totp/mfa-verify`，携带 `challengeId` 和 `code`
-5. 服务验证通过后，创建会话、设置 `refreshToken` Cookie（HttpOnly），并返回 200 + `accessToken`
-
-## 第一步：可能返回 201 的接口
+## 一因子接口返回 201 的场景
 - `POST /auth/login`
 - `POST /auth/login-with-code`
 - `POST /auth/passkey/authentication-verify`
+- 各 OAuth 登录回调接口（QQ/GitHub/Google/Microsoft）
 
-### 201 响应（进入 MFA）
-- HTTP Status: 201
-
+### 201 响应示例（密码/验证码/OAuth 一因子）
 ```json
 {
   "code": 201,
-  "msg": "需要 TOTP 验证",
+  "msg": "需要 MFA 验证",
   "data": {
     "challengeId": "0a1b2c3d-...",
-    "method": "totp"
+    "method": "totp",
+    "methods": ["totp", "passkey"]
   }
 }
 ```
 
-前端收到该响应后，应保存 `challengeId`（通常在内存或短期 localStorage），并引导用户输入 TOTP。
+### 201 响应示例（Passkey 一因子）
+```json
+{
+  "code": 201,
+  "msg": "需要 MFA 验证",
+  "data": {
+    "challengeId": "0a1b2c3d-...",
+    "method": "totp",
+    "methods": ["totp"]
+  }
+}
+```
 
-## 第二步：完成 TOTP 验证并下发 token
+## 二次验证方式 1：TOTP
 
 ### 请求
-- 方法：POST
+- 方法：`POST`
 - 路径：`/auth/totp/mfa-verify`
-- Content-Type：`application/json`
-
-请求体：
 
 ```json
 {
@@ -50,11 +51,6 @@
 ```
 
 ### 成功响应
-- HTTP Status: 200
-- Set-Cookie: `refreshToken`（HttpOnly），由服务设置以便后续刷新
-
-响应体示例：
-
 ```json
 {
   "code": 200,
@@ -65,36 +61,38 @@
 }
 ```
 
-说明：
-- `accessToken` 用于后续带 `Authorization: Bearer <accessToken>` 调用需要认证的接口
-- `refreshToken` 自动写入 HttpOnly Cookie（同域/Secure 等属性由后端及 nginx 配置控制）
+## 二次验证方式 2：Passkey
 
-### 失败场景
-- challengeId 无效或已过期 -> HTTP 400
+前端需要先获取 WebAuthn 认证选项：
+- `POST /auth/passkey/authentication-options`
 
-```json
-{
-  "code": 400,
-  "msg": "challengeId 无效或已过期"
-}
-```
-
-- TOTP 校验失败 -> HTTP 400
+然后提交 MFA Passkey 验证：
+- `POST /auth/passkey/mfa-verify`
 
 ```json
 {
-  "code": 400,
-  "msg": "TOTP 校验失败"
+  "mfaChallengeId": "0a1b2c3d-...",
+  "passkeyChallengeId": "webauthn-challenge-id",
+  "credentialRawId": "base64url...",
+  "clientDataJSON": "base64url...",
+  "authenticatorData": "base64url...",
+  "signature": "base64url..."
 }
 ```
 
-## 前端实现要点
-- 在收到 201 后，不要将任何 token 存储或标记为登录成功；必须先完成 `/auth/totp/verify`。
-- `challengeId` 的有效期为短时（默认 5 分钟），请在 UI 中提示用户尽快输入。
-- 建议在 `challengeId` 生命周期内绑定客户端信息（例如当前 IP 或 User-Agent），防止被滥用；后端已做部分校验。
-- 当 TOTP 验证成功并拿到 `accessToken` 后，使用 `Authorization` 头发送后续请求，并依赖浏览器自动包含的 HttpOnly `refreshToken` Cookie 做刷新。
+### 成功响应
+```json
+{
+  "code": 200,
+  "msg": "登录成功",
+  "data": {
+    "accessToken": "eyJ..."
+  }
+}
+```
 
-## 兼容与回退
-- 对于未启用 MFA 的用户，登录接口仍然会返回 HTTP 200 并立即下发 token，流程不变。
-
-````
+## 约束与注意事项
+- `challengeId` 默认有效期 5 分钟，成功后会被消费（删除）。
+- MFA 验证失败会累计尝试次数，超过阈值后需要重新走登录流程。
+- `methods` 字段用于前端动态渲染可选 MFA 方式。
+- 若 `methods` 不包含 `passkey`，前端不得调用 `/auth/passkey/mfa-verify`。
