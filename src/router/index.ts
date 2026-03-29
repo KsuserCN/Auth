@@ -103,6 +103,12 @@ const router = createRouter({
       meta: { provider: 'github' },
       component: () => import('../views/OAuthQQCallbackView.vue'),
     },
+    {
+      path: '/oauth/microsoft/callback',
+      name: 'microsoft-callback',
+      meta: { provider: 'microsoft' },
+      component: () => import('../views/OAuthQQCallbackView.vue'),
+    },
   ],
 })
 

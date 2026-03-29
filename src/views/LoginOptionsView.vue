@@ -303,8 +303,10 @@ import {
   regenerateRecoveryCodes,
   disableTotp,
   buildGithubAuthorizationUrl,
+  buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
   unbindGithub,
+  unbindMicrosoft,
   unbindQQ,
   getOAuthAccountsStatus,
   type OAuthAccountStatusItem,
@@ -331,7 +333,7 @@ const oauthProviders = ref<OAuthProviderItem[]>([
   { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, lastLoginAt: null, loading: false },
   { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, lastLoginAt: null, loading: false },
   { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: true, bound: false, lastLoginAt: null, loading: false },
-  { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: false, bound: false, lastLoginAt: null, loading: false },
+  { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: true, bound: false, lastLoginAt: null, loading: false },
 ])
 
 // Passkey 相关状态
@@ -734,6 +736,22 @@ const generateRandomString = (): string => {
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+const toBase64Url = (bytes: Uint8Array): string => {
+  const base64 = btoa(String.fromCharCode(...bytes))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+const generatePkcePair = async (): Promise<{ codeVerifier: string; codeChallenge: string }> => {
+  const verifierBytes = new Uint8Array(32)
+  crypto.getRandomValues(verifierBytes)
+  const codeVerifier = toBase64Url(verifierBytes)
+
+  const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier))
+  const codeChallenge = toBase64Url(new Uint8Array(hashed))
+
+  return { codeVerifier, codeChallenge }
+}
+
 const handleQQBind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
 
@@ -831,6 +849,56 @@ const handleGithubUnbind = async (provider: OAuthProviderItem) => {
   }
 }
 
+const handleMicrosoftBind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+
+  provider.loading = true
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};bind;${debugState}`
+    const { codeVerifier, codeChallenge } = await generatePkcePair()
+
+    sessionStorage.setItem('microsoft_oauth_state', state)
+    sessionStorage.setItem('microsoft_oauth_code_verifier', codeVerifier)
+    window.location.href = buildMicrosoftAuthorizationUrl(state, codeChallenge)
+  } catch (error) {
+    console.error('Microsoft bind failed:', error)
+    ElMessage.error('Microsoft 绑定跳转失败，请重试')
+    provider.loading = false
+  }
+}
+
+const handleMicrosoftUnbind = async (provider: OAuthProviderItem) => {
+  if (provider.loading) return
+  if (!(await ensureSensitiveVerified())) return
+
+  try {
+    await ElMessageBox.confirm('解绑后您将无法使用 Microsoft 快速登录，是否继续？', '确认解绑', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+
+  provider.loading = true
+  try {
+    await unbindMicrosoft()
+    provider.bound = false
+    provider.lastLoginAt = null
+    ElMessage.success('Microsoft 解绑成功')
+
+    await loadOAuthStatus()
+  } catch (error) {
+    console.error('Microsoft unbind failed:', error)
+    ElMessage.error('Microsoft 解绑失败，请稍后重试')
+  } finally {
+    provider.loading = false
+  }
+}
+
 const handleProviderAction = async (provider: OAuthProviderItem) => {
   if (!provider.supported || provider.loading) return
 
@@ -848,6 +916,15 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
       await handleGithubUnbind(provider)
     } else {
       await handleGithubBind(provider)
+    }
+    return
+  }
+
+  if (provider.key === 'microsoft') {
+    if (provider.bound) {
+      await handleMicrosoftUnbind(provider)
+    } else {
+      await handleMicrosoftBind(provider)
     }
     return
   }

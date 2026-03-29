@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_DEBUG_STATE: 'dev' | 'prd'
   readonly VITE_OAUTH_QQ_APPID: string
   readonly VITE_OAUTH_GITHUB_CLIENT_ID: string
+  readonly VITE_OAUTH_MICROSOFT_CLIENT_ID: string
+  readonly VITE_OAUTH_MICROSOFT_TENANT_ID?: string
 }
 
 interface ImportMeta {

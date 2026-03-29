@@ -79,12 +79,16 @@ import {
   Loading,
   RefreshRight,
 } from '@element-plus/icons-vue'
-import { handleGithubCallbackByOperation, handleQQCallbackByOperation } from '@/api/auth'
+import {
+  handleGithubCallbackByOperation,
+  handleMicrosoftCallbackByOperation,
+  handleQQCallbackByOperation,
+} from '@/api/auth'
 import type {
   OAuthBindCallbackResponse,
   OAuthLoginCallbackResponse,
+  MicrosoftOAuthOperation,
   OAuthUnbindCallbackResponse,
-  QQOAuthOperation,
 } from '@/api/auth'
 
 const router = useRouter()
@@ -99,11 +103,11 @@ const isDark = useDark({
   valueLight: 'light',
 })
 
-type OAuthProvider = 'qq' | 'github'
+type OAuthProvider = 'qq' | 'github' | 'microsoft'
 
 interface ParsedOAuthState {
   verifyToken: string
-  operation: QQOAuthOperation
+  operation: MicrosoftOAuthOperation
   env: 'dev' | 'prd'
 }
 
@@ -113,17 +117,36 @@ const provider = computed<OAuthProvider>(() => {
     return 'github'
   }
 
+  if (metaProvider === 'microsoft') {
+    return 'microsoft'
+  }
+
   if (route.path.includes('/oauth/github/')) {
     return 'github'
+  }
+
+  if (route.path.includes('/oauth/microsoft/')) {
+    return 'microsoft'
   }
 
   return 'qq'
 })
 
-const providerLabel = computed(() => (provider.value === 'github' ? 'GitHub' : 'QQ'))
+const providerLabel = computed(() => {
+  if (provider.value === 'github') {
+    return 'GitHub'
+  }
+
+  if (provider.value === 'microsoft') {
+    return 'Microsoft'
+  }
+
+  return 'QQ'
+})
 
 const stateStorageKey = computed(() => `${provider.value}_oauth_state`)
 const openIdStorageKey = computed(() => `${provider.value}_openid_pending`)
+const pkceVerifierStorageKey = computed(() => `${provider.value}_oauth_code_verifier`)
 
 const parseOAuthState = (rawState: string): ParsedOAuthState => {
   const parts = rawState.split(';')
@@ -156,42 +179,62 @@ const parseOAuthState = (rawState: string): ParsedOAuthState => {
 }
 
 const handleOAuthCallbackByOperation = async (
-  operation: QQOAuthOperation,
-  payload: { code: string; state: string },
+  operation: MicrosoftOAuthOperation,
+  payload: { code: string; state: string; codeVerifier?: string },
 ) => {
   if (provider.value === 'github') {
     return handleGithubCallbackByOperation(operation, payload)
   }
+
+  if (provider.value === 'microsoft') {
+    return handleMicrosoftCallbackByOperation(operation, payload)
+  }
+
   return handleQQCallbackByOperation(operation, payload)
 }
 
 const handleCallback = async () => {
   try {
-    // 从 URL 中读取 code 和 state
+    // 从 URL 中读取 code、state 和可能的 error
     const params = new URLSearchParams(window.location.search)
     const code = params.get('code')
     const returnedState = params.get('state')
+    const oauthError = params.get('error')
+    const oauthErrorDescription = params.get('error_description')
+
+    // 检查是否获取到 state（无论是否有error都需要）
+    if (!returnedState) {
+      throw new Error('未获取到状态参数，请重试')
+    }
+
+    // 解析 state 以检查环境
+    const returnedParsedState = parseOAuthState(returnedState)
+
+    // 【关键】开发环境回调先跳转到本地地址 - 需要在所有错误检查之前执行
+    // 这样即使有error也能重定向到localhost让本地环境处理
+    if (returnedParsedState.env === 'dev' && window.location.origin !== 'http://localhost:5173') {
+      window.location.replace(`http://localhost:5173/oauth/${provider.value}/callback${window.location.search}`)
+      return
+    }
+
+    // OAuth 提供商直接返回错误时，展示原始错误详情
+    if (oauthError) {
+      const decoded = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription) : ''
+      throw new Error(decoded || `${providerLabel.value} 授权失败：${oauthError}`)
+    }
 
     // 检查是否获取到 code
     if (!code) {
       throw new Error('未获取到授权码，请重试')
     }
 
-    // 检查是否获取到 state
-    if (!returnedState) {
-      throw new Error('未获取到状态参数，请重试')
-    }
-
-    const returnedParsedState = parseOAuthState(returnedState)
-
-    // 开发环境回调先跳转到本地地址，由本地页面继续处理回调
-    if (returnedParsedState.env === 'dev' && window.location.origin !== 'http://localhost:5173') {
-      window.location.replace(`http://localhost:5173/oauth/${provider.value}/callback${window.location.search}`)
-      return
-    }
-
     // 从 sessionStorage 中读取本地存储的 state
     const storedState = sessionStorage.getItem(stateStorageKey.value)
+    const pkceCodeVerifier = sessionStorage.getItem(pkceVerifierStorageKey.value) || undefined
+
+    if (provider.value === 'microsoft' && !pkceCodeVerifier) {
+      throw new Error('Microsoft PKCE 校验信息缺失，请返回登录页后重试')
+    }
 
     // 校验 state 是否一致
     if (!storedState) {
@@ -212,10 +255,12 @@ const handleCallback = async () => {
     const response = await handleOAuthCallbackByOperation(returnedParsedState.operation, {
       code: code,
       state: returnedState,
+      codeVerifier: provider.value === 'microsoft' ? pkceCodeVerifier : undefined,
     })
 
     // 清理 OAuth state（无论什么情况都清理）
     sessionStorage.removeItem(stateStorageKey.value)
+    sessionStorage.removeItem(pkceVerifierStorageKey.value)
 
     if (returnedParsedState.operation === 'login') {
       const loginResponse = response as OAuthLoginCallbackResponse
@@ -309,6 +354,7 @@ const handleCallback = async () => {
 const goBackToLogin = () => {
   // 清理 OAuth state
   sessionStorage.removeItem(stateStorageKey.value)
+  sessionStorage.removeItem(pkceVerifierStorageKey.value)
   router.push('/login')
 }
 

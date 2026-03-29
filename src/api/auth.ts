@@ -786,6 +786,7 @@ export const logoutAll = async (): Promise<void> => {
 
 export type QQOAuthOperation = 'login' | 'bind' | 'unbind'
 export type GithubOAuthOperation = 'login' | 'bind' | 'unbind'
+export type MicrosoftOAuthOperation = 'login' | 'bind' | 'unbind'
 
 /**
  * 构建 QQ 授权 URL
@@ -863,6 +864,20 @@ export type GithubCallbackResponse =
   | GithubLoginCallbackResponse
   | GithubBindCallbackResponse
   | GithubUnbindCallbackResponse
+
+export interface MicrosoftCallbackRequest {
+  code: string
+  state: string
+  codeVerifier?: string
+}
+export type MicrosoftLoginCallbackResponse = OAuthLoginCallbackResponse
+export type MicrosoftBindCallbackResponse = OAuthBindCallbackResponse
+export type MicrosoftUnbindCallbackResponse = OAuthUnbindCallbackResponse
+
+export type MicrosoftCallbackResponse =
+  | MicrosoftLoginCallbackResponse
+  | MicrosoftBindCallbackResponse
+  | MicrosoftUnbindCallbackResponse
 
 /**
  * QQ OAuth 登录回调处理
@@ -1010,6 +1025,100 @@ export const handleGithubCallbackByOperation = async (
   throw new Error('不支持的 GitHub 回调操作类型')
 }
 
+/**
+ * 构建 Microsoft 授权 URL
+ * 用于生成 Microsoft OAuth 授权链接
+ */
+export const buildMicrosoftAuthorizationUrl = (state: string, codeChallenge: string): string => {
+  const clientId = import.meta.env.VITE_OAUTH_MICROSOFT_CLIENT_ID
+  const tenantId = import.meta.env.VITE_OAUTH_MICROSOFT_TENANT_ID || 'common'
+  const redirectUri = 'https://auth.ksuser.cn/oauth/microsoft/callback'
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'code',
+    redirect_uri: redirectUri,
+    response_mode: 'query',
+    scope: 'openid profile email',
+    state,
+  })
+
+  params.set('code_challenge', codeChallenge)
+  params.set('code_challenge_method', 'S256')
+
+  return `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize?${params.toString()}`
+}
+
+/**
+ * Microsoft OAuth 登录回调处理
+ * POST /oauth/microsoft/callback/login
+ */
+export const handleMicrosoftLoginCallback = async (
+  data: MicrosoftCallbackRequest,
+): Promise<MicrosoftLoginCallbackResponse> => {
+  const response = await request.post<ApiResponse<MicrosoftLoginCallbackResponse>>(
+    '/oauth/microsoft/callback/login',
+    data,
+  )
+  return (response as unknown as ApiResponse<MicrosoftLoginCallbackResponse>).data
+}
+
+/**
+ * Microsoft OAuth 绑定回调处理
+ * POST /oauth/microsoft/callback/bind
+ */
+export const handleMicrosoftBindCallback = async (
+  data: MicrosoftCallbackRequest,
+): Promise<MicrosoftBindCallbackResponse> => {
+  const response = await request.post<ApiResponse<MicrosoftBindCallbackResponse>>(
+    '/oauth/microsoft/callback/bind',
+    data,
+  )
+  return (response as unknown as ApiResponse<MicrosoftBindCallbackResponse>).data
+}
+
+/**
+ * Microsoft OAuth 解绑回调处理
+ * POST /oauth/microsoft/callback/unbind
+ */
+export const handleMicrosoftUnbindCallback = async (data?: {
+  code?: string
+  state?: string
+  codeVerifier?: string
+}): Promise<MicrosoftUnbindCallbackResponse> => {
+  const response = await request.post<ApiResponse<MicrosoftUnbindCallbackResponse>>(
+    '/oauth/microsoft/callback/unbind',
+    data,
+  )
+  return (response as unknown as ApiResponse<MicrosoftUnbindCallbackResponse>).data
+}
+
+/**
+ * 按 state 中的 operation 将 Microsoft 回调请求路由到对应端点
+ */
+export const handleMicrosoftCallbackByOperation = async (
+  operation: MicrosoftOAuthOperation,
+  data: MicrosoftCallbackRequest,
+): Promise<MicrosoftCallbackResponse> => {
+  if (operation === 'login') {
+    return handleMicrosoftLoginCallback(data)
+  }
+
+  if (operation === 'bind') {
+    return handleMicrosoftBindCallback(data)
+  }
+
+  if (operation === 'unbind') {
+    return handleMicrosoftUnbindCallback({
+      code: data.code,
+      state: data.state,
+      codeVerifier: data.codeVerifier,
+    })
+  }
+
+  throw new Error('不支持的 Microsoft 回调操作类型')
+}
+
 // 兼容旧调用（默认按登录回调处理）
 export const handleQQCallback = async (
   data: QQCallbackRequest,
@@ -1051,4 +1160,12 @@ export const unbindQQ = async (): Promise<void> => {
  */
 export const unbindGithub = async (): Promise<void> => {
   await request.post('/oauth/github/unbind')
+}
+
+/**
+ * 解绑 Microsoft 账号
+ * POST /oauth/microsoft/unbind
+ */
+export const unbindMicrosoft = async (): Promise<void> => {
+  await request.post('/oauth/microsoft/unbind')
 }

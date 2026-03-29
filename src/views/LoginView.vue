@@ -203,7 +203,7 @@
               <button class="icon-btn" @click="handleGithubLogin" aria-label="Github 登录" type="button">
                 <i class="fa-brands fa-github" aria-hidden="true"></i>
               </button>
-              <button class="icon-btn" @click="handleUnsupportedLogin('微软')" aria-label="微软登录" type="button">
+              <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
                 <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
               </button>
             </div>
@@ -233,6 +233,7 @@ import {
   verifyPasskeyAuthentication,
   verifyTOTPForLogin,
   buildGithubAuthorizationUrl,
+  buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
   type MFAChallenge,
   type LoginResponse
@@ -334,7 +335,7 @@ const totpLoading = ref(false)
 
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
-const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | null>(null)
+const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | null>(null)
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -358,7 +359,8 @@ onMounted(() => {
       method: normalizedMethod,
     }
 
-    mfaSource.value = mfaFrom === 'qq' || mfaFrom === 'github' ? mfaFrom : null
+    mfaSource.value =
+      mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' ? mfaFrom : null
     updateStep('totp')
     ElMessage.info('请完成 MFA 验证')
   }
@@ -629,6 +631,22 @@ const generateRandomString = (): string => {
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
+const toBase64Url = (bytes: Uint8Array): string => {
+  const base64 = btoa(String.fromCharCode(...bytes))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+const generatePkcePair = async (): Promise<{ codeVerifier: string; codeChallenge: string }> => {
+  const verifierBytes = new Uint8Array(32)
+  crypto.getRandomValues(verifierBytes)
+  const codeVerifier = toBase64Url(verifierBytes)
+
+  const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier))
+  const codeChallenge = toBase64Url(new Uint8Array(hashed))
+
+  return { codeVerifier, codeChallenge }
+}
+
 const handleQQLogin = async () => {
   try {
     // 生成随机字符串
@@ -667,6 +685,24 @@ const handleGithubLogin = async () => {
   } catch (error: unknown) {
     console.error('GitHub login failed:', error)
     ElMessage.error('GitHub 登录失败，请重试')
+  }
+}
+
+const handleMicrosoftLogin = async () => {
+  try {
+    const randomString = generateRandomString()
+    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
+    const state = `${randomString};login;${debugState}`
+    const { codeVerifier, codeChallenge } = await generatePkcePair()
+
+    sessionStorage.setItem('microsoft_oauth_state', state)
+    sessionStorage.setItem('microsoft_oauth_code_verifier', codeVerifier)
+
+    const authUrl = buildMicrosoftAuthorizationUrl(state, codeChallenge)
+    window.location.href = authUrl
+  } catch (error: unknown) {
+    console.error('Microsoft login failed:', error)
+    ElMessage.error('Microsoft 登录失败，请重试')
   }
 }
 
