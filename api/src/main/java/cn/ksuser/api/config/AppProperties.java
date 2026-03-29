@@ -19,6 +19,7 @@ public class AppProperties {
     private final Passkey passkey = new Passkey();
     private final Oauth oauth = new Oauth();
     private final Qq qq = new Qq();
+    private final Google google = new Google();
     private final Microsoft microsoft = new Microsoft();
 
     public boolean isDebug() {
@@ -52,6 +53,8 @@ public class AppProperties {
     public Oauth getOauth() { return oauth; }
 
     public Qq getQq() { return qq; }
+
+    public Google getGoogle() { return google; }
 
     public Microsoft getMicrosoft() { return microsoft; }
 
@@ -91,6 +94,19 @@ public class AppProperties {
         public MicrosoftOauth getOauth() { return oauth; }
 
         public static class MicrosoftOauth {
+            private java.util.List<String> redirectUris = new java.util.ArrayList<>();
+
+            public java.util.List<String> getRedirectUris() { return redirectUris; }
+            public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
+        }
+    }
+
+    public static class Google {
+        private final GoogleOauth oauth = new GoogleOauth();
+
+        public GoogleOauth getOauth() { return oauth; }
+
+        public static class GoogleOauth {
             private java.util.List<String> redirectUris = new java.util.ArrayList<>();
 
             public java.util.List<String> getRedirectUris() { return redirectUris; }

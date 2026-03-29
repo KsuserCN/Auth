@@ -55,7 +55,8 @@ CREATE TABLE user_oauth_accounts (
     'wechat',
     'qq',
     'microsoft',
-    'github'
+    'github',
+    'google'
   ) NOT NULL COMMENT 'OAuth提供方',
 
   provider_user_id VARCHAR(128) NOT NULL COMMENT '提供方用户强调唯一ID（openid / sub / github id）',
