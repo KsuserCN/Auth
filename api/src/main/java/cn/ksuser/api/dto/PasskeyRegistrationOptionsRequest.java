@@ -12,4 +12,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PasskeyRegistrationOptionsRequest {
     private String passkeyName; // Passkey 名称/标签
+    private String authenticatorType; // 认证器类型: auto | platform | cross-platform
 }

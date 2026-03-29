@@ -36,7 +36,8 @@ Authorization: Bearer {accessToken}
 Content-Type: application/json
 
 {
-  "passkeyName": "My Security Key"
+  "passkeyName": "My Security Key",
+  "authenticatorType": "cross-platform"
 }
 ```
 
@@ -52,10 +53,12 @@ Content-Type: application/json
     "pubKeyCredParams": "[{\"type\":\"public-key\",\"alg\":-7}]",
     "timeout": "300000",
     "attestation": "none",
-    "authenticatorSelection": "{\"authenticatorAttachment\":\"platform\",\"residentKey\":\"preferred\",\"userVerification\":\"preferred\"}"
+    "authenticatorSelection": "{\"authenticatorAttachment\":\"cross-platform\",\"residentKey\":\"preferred\",\"userVerification\":\"preferred\"}"
   }
 }
 ```
+
+`authenticatorType` 可选值：`auto` | `platform` | `cross-platform`。当传 `auto` 或不传时，后端不会强制设置 `authenticatorAttachment`，由浏览器自动选择认证器。
 
 ### 2. 完成 Passkey 注册
 **请求：**

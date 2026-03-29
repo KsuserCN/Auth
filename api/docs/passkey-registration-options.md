@@ -24,19 +24,21 @@ Authorization: Bearer <accessToken>
 ## 请求体
 ```json
 {
-  "passkeyName": "My Security Key"
+  "passkeyName": "My Security Key",
+  "authenticatorType": "cross-platform"
 }
 ```
 
 ## 字段说明
 - passkeyName: Passkey 名称，用于用户识别，建议使用设备名称（如"iPhone"、"MacBook Pro"、"YubiKey"等）
+- authenticatorType: 认证器类型，可选值为 `auto`、`platform`、`cross-platform`；不传或传 `auto` 时由浏览器自动选择
 
 ## 请求示例
 ```bash
 curl -X POST \
   -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
-  -d '{"passkeyName":"My Security Key"}' \
+  -d '{"passkeyName":"My Security Key","authenticatorType":"cross-platform"}' \
   http://localhost:8000/auth/passkey/registration-options
 ```
 
@@ -54,7 +56,7 @@ curl -X POST \
     "pubKeyCredParams": "[{\"type\":\"public-key\",\"alg\":-7}]",
     "timeout": "300000",
     "attestation": "none",
-    "authenticatorSelection": "{\"authenticatorAttachment\":\"platform\",\"residentKey\":\"preferred\",\"userVerification\":\"preferred\"}"
+    "authenticatorSelection": "{\"authenticatorAttachment\":\"cross-platform\",\"residentKey\":\"preferred\",\"userVerification\":\"preferred\"}"
   }
 }
 ```
@@ -67,6 +69,7 @@ curl -X POST \
 - timeout: 用户交互超时时间（毫秒）
 - attestation: 证明等级（none/indirect/direct）
 - authenticatorSelection: 认证器选择条件
+- authenticatorSelection.authenticatorAttachment: 当 `authenticatorType` 为 `platform` 或 `cross-platform` 时会明确返回；`auto`（或不传）时不设置此字段，由浏览器选择
 
 ## 失败响应
 

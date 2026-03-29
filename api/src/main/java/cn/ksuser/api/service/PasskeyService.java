@@ -73,7 +73,7 @@ public class PasskeyService {
     /**
      * 生成注册选项
      */
-    public PasskeyRegistrationOptionsResponse generateRegistrationOptions(User user) throws Exception {
+    public PasskeyRegistrationOptionsResponse generateRegistrationOptions(User user, String authenticatorType) throws Exception {
         // 生成 challenge
         String challenge = generateChallenge();
 
@@ -104,7 +104,10 @@ public class PasskeyService {
 
         // 构建 authenticatorSelection 对象
         ObjectNode authSelNode = objectMapper.createObjectNode();
-        authSelNode.put("authenticatorAttachment", "platform");
+        String authenticatorAttachment = resolveAuthenticatorAttachment(authenticatorType);
+        if (authenticatorAttachment != null) {
+            authSelNode.put("authenticatorAttachment", authenticatorAttachment);
+        }
         authSelNode.put("residentKey", appProperties.getPasskey().getResidentKey());
         authSelNode.put("userVerification", appProperties.getPasskey().getUserVerification());
 
@@ -119,6 +122,19 @@ public class PasskeyService {
         response.setAttestation(appProperties.getPasskey().getAttestation());
 
         return response;
+    }
+
+    private String resolveAuthenticatorAttachment(String authenticatorType) {
+        if (authenticatorType == null || authenticatorType.isBlank()) {
+            return null;
+        }
+
+        return switch (authenticatorType.trim().toLowerCase(Locale.ROOT)) {
+            case "platform" -> "platform";
+            case "cross-platform" -> "cross-platform";
+            case "auto" -> null;
+            default -> null;
+        };
     }
 
     /**

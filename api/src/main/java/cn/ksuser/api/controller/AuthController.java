@@ -1795,7 +1795,10 @@ public class AuthController {
 
         // ========== 生成注册选项 ==========
         try {
-            PasskeyRegistrationOptionsResponse options = passkeyService.generateRegistrationOptions(user);
+            PasskeyRegistrationOptionsResponse options = passkeyService.generateRegistrationOptions(
+                    user,
+                    request != null ? request.getAuthenticatorType() : null
+            );
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "生成注册选项成功", options));
         } catch (Exception e) {
