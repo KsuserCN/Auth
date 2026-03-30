@@ -172,7 +172,7 @@
 
             <div class="method-list">
               <div class="method-option" @click="!methodSelecting && selectMfaMethod('totp')"
-                :class="{ 'is-disabled': methodSelecting }">
+                :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('totp') }">
                 <el-icon class="method-icon" :size="28">
                   <Lock />
                 </el-icon>
@@ -189,7 +189,7 @@
               </div>
 
               <div class="method-option" @click="!methodSelecting && selectMfaMethod('passkey')"
-                :class="{ 'is-disabled': methodSelecting || !isPasskeySupported }">
+                :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('passkey') || !isPasskeySupported }">
                 <el-icon class="method-icon" :size="28">
                   <Key />
                 </el-icon>
@@ -217,6 +217,13 @@
               <p>支持本机生物识别及实体安全密钥（USB/NFC/蓝牙）。</p>
             </div>
 
+            <div v-if="canChooseMfaMethod()" class="switch-method-section" @click="updateStep('mfa-method')">
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
+
             <div class="step-actions">
               <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
               <el-button class="next-btn" @click="handlePasskeyMfaVerify" :loading="passkeyLoading">
@@ -239,6 +246,13 @@
             </el-form>
 
             <p class="step-subtitle">使用 TOTP 应用中的验证码，或输入您的恢复码</p>
+
+            <div v-if="canChooseMfaMethod()" class="switch-method-section" @click="updateStep('mfa-method')">
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
 
             <div class="step-actions">
               <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
@@ -285,7 +299,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Lock, Lightning, Key, Message, Loading } from '@element-plus/icons-vue'
+import { ArrowRight, Lock, Lightning, Key, Message, Loading, Refresh } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -441,13 +455,26 @@ const startMfaFlow = (
 
   ElMessage.info('需要进行 MFA 验证')
 
-  if (canChooseMfaMethod()) {
-    updateStep('mfa-method')
+  const passkeyAvailable = mfaMethods.value.includes('passkey') && isPasskeySupported.value
+  const totpAvailable = mfaMethods.value.includes('totp')
+
+  if (challenge.method === 'passkey' && passkeyAvailable) {
+    updateStep('mfa-passkey')
     return
   }
 
-  if (mfaMethods.value.includes('passkey') && isPasskeySupported.value) {
+  if (challenge.method === 'totp' && totpAvailable) {
+    updateStep('totp')
+    return
+  }
+
+  if (passkeyAvailable) {
     updateStep('mfa-passkey')
+    return
+  }
+
+  if (totpAvailable) {
+    updateStep('totp')
     return
   }
 
@@ -457,7 +484,8 @@ const startMfaFlow = (
     return
   }
 
-  updateStep('totp')
+  ElMessage.error('当前账户暂无可用的 MFA 验证方式')
+  updateStep('email')
 }
 
 onMounted(() => {
@@ -841,7 +869,16 @@ const selectMfaMethod = async (method: 'totp' | 'passkey') => {
   methodSelecting.value = true
 
   try {
+    if (method === 'totp' && !mfaMethods.value.includes('totp')) {
+      ElMessage.error('当前不可使用 TOTP 验证')
+      return
+    }
+
     if (method === 'passkey') {
+      if (!mfaMethods.value.includes('passkey')) {
+        ElMessage.error('当前不可使用 Passkey 验证')
+        return
+      }
       if (!isPasskeySupported.value) {
         ElMessage.error('当前浏览器不支持 Passkey')
         return
@@ -1566,6 +1603,7 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
+
   text-align: center;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
@@ -1574,6 +1612,50 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 14px;
   color: var(--el-text-color-regular);
+}
+
+/* 选择其他验证方式容器 */
+.switch-method-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin: 12px 0 24px 0;
+  background: linear-gradient(135deg, rgba(255, 185, 15, 0.05) 0%, rgba(255, 185, 15, 0.02) 100%);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.switch-method-section:hover {
+  background: linear-gradient(135deg, rgba(255, 185, 15, 0.08) 0%, rgba(255, 185, 15, 0.04) 100%);
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 4px 12px rgba(255, 185, 15, 0.12);
+}
+
+.switch-method-section:active {
+  transform: scale(0.99);
+}
+
+.switch-method-icon {
+  color: var(--el-color-primary);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.switch-method-btn {
+  margin: 0;
+  padding: 0;
+  color: var(--el-color-primary);
+  font-size: 14px;
+  font-weight: 500;
+  height: auto;
+  line-height: 1.5;
+}
+
+.switch-method-btn:hover {
+  color: var(--el-color-primary);
 }
 
 /* 额外登录方式 */

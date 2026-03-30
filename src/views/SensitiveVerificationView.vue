@@ -41,7 +41,7 @@
             <div class="method-list">
               <!-- 密码验证 -->
               <div class="method-option" @click="!methodSelecting && selectMethod('password')"
-                :class="{ 'is-disabled': methodSelecting }">
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('password') }">
                 <el-icon class="method-icon" :size="28">
                   <Lock />
                 </el-icon>
@@ -59,7 +59,7 @@
 
               <!-- 邮箱验证码验证 -->
               <div class="method-option" @click="!methodSelecting && selectMethod('email-code')"
-                :class="{ 'is-disabled': methodSelecting }">
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('email-code') }">
                 <el-icon class="method-icon" :size="28">
                   <Message />
                 </el-icon>
@@ -76,8 +76,9 @@
               </div>
 
               <!-- Passkey 验证 -->
-              <div v-if="isPasskeySupported" class="method-option" @click="!methodSelecting && selectMethod('passkey')"
-                :class="{ 'is-disabled': methodSelecting }">
+              <div v-if="isMethodAvailable('passkey')" class="method-option"
+                @click="!methodSelecting && selectMethod('passkey')"
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('passkey') }">
                 <el-icon class="method-icon" :size="28">
                   <Key />
                 </el-icon>
@@ -95,7 +96,7 @@
 
               <!-- TOTP 验证 -->
               <div class="method-option" @click="!methodSelecting && selectMethod('totp')"
-                :class="{ 'is-disabled': methodSelecting }">
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('totp') }">
                 <el-icon class="method-icon" :size="28">
                   <Key />
                 </el-icon>
@@ -122,6 +123,13 @@
             <h2 class="step-title">输入密码</h2>
             <p class="step-subtitle">请输入您的登录密码以验证身份</p>
 
+            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
+
             <el-form ref="passwordFormRef" :model="passwordInput" :rules="passwordRules" label-position="top">
               <el-form-item prop="password">
                 <el-input v-model="passwordInput.password" type="password" placeholder="密码" show-password
@@ -141,6 +149,13 @@
           <div v-else-if="step === 'email-code'" class="step-container" key="email-code">
             <h2 class="step-title">输入验证码</h2>
             <p class="step-subtitle">验证码已发送至 {{ userEmail }}</p>
+
+            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
 
             <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
               <el-form-item prop="code">
@@ -170,6 +185,13 @@
             <h2 class="step-title">Passkey 验证</h2>
             <p class="step-subtitle">使用生物识别或安全密钥进行身份验证</p>
 
+            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
+
             <div class="passkey-hint">
               <p>点击"验证身份"按钮，然后按照浏览器提示完成验证</p>
             </div>
@@ -186,6 +208,13 @@
           <div v-else-if="step === 'totp'" class="step-container" key="totp">
             <h2 class="step-title">TOTP 验证</h2>
             <p class="step-subtitle">请输入身份验证器应用中显示的 6 位验证码</p>
+
+            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
 
             <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
               <el-form-item prop="code">
@@ -212,11 +241,12 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Lock, Lightning, Key, Message, Loading } from '@element-plus/icons-vue'
+import { ArrowRight, Lock, Lightning, Key, Message, Loading, Refresh } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import {
+  checkSensitiveVerification,
   verifySensitiveOperation,
   sendSensitiveVerificationCode,
   getPasskeySensitiveVerificationOptions,
@@ -305,6 +335,13 @@ const passkeyLoading = ref(false)
 const totpLoading = ref(false)
 const methodSelecting = ref(false)
 
+const availableMethods = ref<Array<'password' | 'email-code' | 'passkey' | 'totp'>>([
+  'password',
+  'email-code',
+  'passkey',
+  'totp',
+])
+
 // Passkey 支持检测
 const isPasskeySupported = ref(false)
 
@@ -330,11 +367,60 @@ onMounted(async () => {
   if (!ensureAuthenticated()) return
   await userStore.fetchUserInfo()
   isPasskeySupported.value = isWebAuthnSupported()
+
+  try {
+    const status = await checkSensitiveVerification()
+
+    if (status.verified && status.remainingSeconds > 0) {
+      const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+      router.push(returnTo)
+      return
+    }
+
+    const methods = status.methods ?? ['password', 'email-code', 'passkey', 'totp']
+    availableMethods.value = methods.filter(
+      (item): item is 'password' | 'email-code' | 'passkey' | 'totp' =>
+        item === 'password' || item === 'email-code' || item === 'passkey' || item === 'totp',
+    )
+
+    const preferredMethod = status.preferredMethod
+    const defaultMethod = [preferredMethod, ...availableMethods.value].find((item) =>
+      item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp'),
+    ) as 'password' | 'email-code' | 'passkey' | 'totp' | undefined
+
+    if (defaultMethod) {
+      await selectMethod(defaultMethod)
+    }
+  } catch (error) {
+    console.error('Load sensitive verification preference failed:', error)
+  }
 })
+
+const isMethodAvailable = (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
+  return availableMethods.value.includes(method)
+}
+
+const isMethodSelectable = (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
+  if (!isMethodAvailable(method)) return false
+  if (method === 'passkey' && !isPasskeySupported.value) return false
+  return true
+}
+
+const canChooseSensitiveMethod = () => {
+  const selectableCount = ['password', 'email-code', 'passkey', 'totp'].filter((item) =>
+    isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp'),
+  ).length
+
+  return selectableCount > 1
+}
 
 // 选择验证方式
 const selectMethod = async (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
   if (methodSelecting.value) return
+  if (!isMethodSelectable(method)) {
+    ElMessage.error('当前不可使用该验证方式')
+    return
+  }
 
   methodSelecting.value = true
 
@@ -973,6 +1059,50 @@ const handlePasskeyVerify = async () => {
   font-size: 14px;
   color: var(--el-text-color-secondary);
   line-height: 1.6;
+}
+
+/* 选择其他验证方式容器 */
+.switch-method-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin: 12px 0 24px 0;
+  background: linear-gradient(135deg, rgba(255, 185, 15, 0.05) 0%, rgba(255, 185, 15, 0.02) 100%);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.switch-method-section:hover {
+  background: linear-gradient(135deg, rgba(255, 185, 15, 0.08) 0%, rgba(255, 185, 15, 0.04) 100%);
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 4px 12px rgba(255, 185, 15, 0.12);
+}
+
+.switch-method-section:active {
+  transform: scale(0.99);
+}
+
+.switch-method-icon {
+  color: var(--el-color-primary);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.switch-method-btn {
+  margin: 0;
+  padding: 0;
+  color: var(--el-color-primary);
+  font-size: 14px;
+  font-weight: 500;
+  height: auto;
+  line-height: 1.5;
+}
+
+.switch-method-btn:hover {
+  color: var(--el-color-primary);
 }
 
 /* 响应式设计 */

@@ -101,6 +101,35 @@
               <el-switch v-model="sensitiveEmailEnabled" />
             </div>
           </div>
+
+          <div class="preference-list">
+            <div class="preference-item">
+              <div class="toggle-left">
+                <span class="toggle-title">登录 MFA 偏好</span>
+                <span class="toggle-desc">仅在开启 MFA 时生效，默认优先跳转该方式</span>
+              </div>
+              <el-select v-model="preferredMfaMethod" placeholder="选择登录 MFA 偏好"
+                :disabled="!mfaEnabled || settingsUpdating" class="preference-select"
+                @change="handlePreferredMfaMethodChange">
+                <el-option label="Passkey" value="passkey" :disabled="!passkeyEnabled" />
+                <el-option label="TOTP" value="totp" :disabled="!totpEnabled" />
+              </el-select>
+            </div>
+
+            <div class="preference-item">
+              <div class="toggle-left">
+                <span class="toggle-title">敏感操作验证偏好</span>
+                <span class="toggle-desc">仅影响默认验证入口，仍可手动切换其他方式</span>
+              </div>
+              <el-select v-model="preferredSensitiveMethod" placeholder="选择敏感验证偏好" :disabled="settingsUpdating"
+                class="preference-select" @change="handlePreferredSensitiveMethodChange">
+                <el-option label="密码" value="password" />
+                <el-option label="邮箱验证码" value="email-code" />
+                <el-option label="Passkey" value="passkey" :disabled="!passkeyEnabled" />
+                <el-option label="TOTP" value="totp" :disabled="!totpEnabled" />
+              </el-select>
+            </div>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -274,6 +303,10 @@ const totpEnabled = ref(false)
 const passkeyLoading = ref(true)
 const totpLoading = ref(true)
 const mfaEnabled = ref(false)
+const preferredMfaMethod = ref<'totp' | 'passkey'>('totp')
+const preferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp'>('password')
+const committedPreferredMfaMethod = ref<'totp' | 'passkey'>('totp')
+const committedPreferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp'>('password')
 const geoLoginEnabled = ref(false)
 const sensitiveEmailEnabled = ref(false)
 const settingsReady = ref(false)
@@ -465,6 +498,10 @@ onMounted(async () => {
   try {
     const info = await getUserInfo()
     mfaEnabled.value = Boolean(info.settings?.mfaEnabled)
+    preferredMfaMethod.value = info.settings?.preferredMfaMethod || 'totp'
+    preferredSensitiveMethod.value = info.settings?.preferredSensitiveMethod || 'password'
+    committedPreferredMfaMethod.value = preferredMfaMethod.value
+    committedPreferredSensitiveMethod.value = preferredSensitiveMethod.value
     geoLoginEnabled.value = Boolean(info.settings?.detectUnusualLogin)
     sensitiveEmailEnabled.value = Boolean(info.settings?.notifySensitiveActionEmail)
   } catch (error) {
@@ -523,6 +560,53 @@ const updateSetting = async (field: 'mfaEnabled' | 'detectUnusualLogin' | 'notif
     rollback()
   } finally {
     settingsUpdating.value = false
+  }
+}
+
+const updateStringSetting = async (
+  field: 'preferred_mfa_method' | 'preferred_sensitive_method',
+  stringValue: string,
+  rollback: () => void,
+) => {
+  if (!settingsReady.value || settingsUpdating.value) return false
+  settingsUpdating.value = true
+  try {
+    await updateUserSetting({ field, stringValue })
+    ElMessage.success('偏好设置已更新')
+    return true
+  } catch (error) {
+    console.error('Update preference failed:', error)
+    rollback()
+    return false
+  } finally {
+    settingsUpdating.value = false
+  }
+}
+
+const handlePreferredMfaMethodChange = async (value: 'totp' | 'passkey') => {
+  if (!mfaEnabled.value) {
+    ElMessage.warning('请先开启 MFA')
+    return
+  }
+
+  const prev = committedPreferredMfaMethod.value
+  const success = await updateStringSetting('preferred_mfa_method', value, () => {
+    preferredMfaMethod.value = prev
+  })
+  if (success) {
+    committedPreferredMfaMethod.value = preferredMfaMethod.value
+  }
+}
+
+const handlePreferredSensitiveMethodChange = async (
+  value: 'password' | 'email-code' | 'passkey' | 'totp',
+) => {
+  const prev = committedPreferredSensitiveMethod.value
+  const success = await updateStringSetting('preferred_sensitive_method', value, () => {
+    preferredSensitiveMethod.value = prev
+  })
+  if (success) {
+    committedPreferredSensitiveMethod.value = preferredSensitiveMethod.value
   }
 }
 
@@ -706,19 +790,44 @@ const handleDeleteAccount = async () => {
 .toggle-list {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.preference-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.preference-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  background: var(--el-fill-color-lighter);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .toggle-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--el-border-color-light);
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  background: var(--el-fill-color-lighter);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-.toggle-item:last-child {
-  border-bottom: none;
+.toggle-item:hover,
+.preference-item:hover {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-fill-color-light);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 .toggle-left {
@@ -736,6 +845,11 @@ const handleDeleteAccount = async () => {
 .toggle-desc {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.preference-select {
+  width: 220px;
+  flex-shrink: 0;
 }
 
 .info-item {
@@ -842,5 +956,38 @@ const handleDeleteAccount = async () => {
 
 :deep(.el-button) {
   transition: all 0.2s ease;
+}
+
+:deep(.toggle-item .el-switch),
+:deep(.preference-item .el-switch) {
+  --el-switch-on-color: var(--el-color-primary);
+  --el-switch-off-color: var(--el-border-color-darker);
+}
+
+:deep(.preference-select .el-select__wrapper) {
+  min-height: 38px;
+  border-radius: 10px;
+  background: var(--el-bg-color);
+  box-shadow: none;
+  border: 1px solid var(--el-border-color-light);
+}
+
+:deep(.preference-select .el-select__wrapper.is-focused) {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 3px rgba(255, 185, 15, 0.14);
+}
+
+@media (max-width: 768px) {
+
+  .toggle-item,
+  .preference-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .preference-select {
+    width: 100%;
+  }
 }
 </style>

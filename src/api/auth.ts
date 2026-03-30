@@ -26,6 +26,8 @@ export interface UserSettings {
   detectUnusualLogin: boolean
   notifySensitiveActionEmail: boolean
   subscribeNewsEmail: boolean
+  preferredMfaMethod?: 'totp' | 'passkey'
+  preferredSensitiveMethod?: 'password' | 'email-code' | 'passkey' | 'totp'
 }
 
 // 登录响应类型
@@ -368,13 +370,18 @@ export interface UpdateUserSettingRequest {
   field:
     | 'mfa_enabled'
     | 'mfaEnabled'
+    | 'preferred_mfa_method'
+    | 'preferredMfaMethod'
+    | 'preferred_sensitive_method'
+    | 'preferredSensitiveMethod'
     | 'detect_unusual_login'
     | 'detectUnusualLogin'
     | 'notify_sensitive_action_email'
     | 'notifySensitiveActionEmail'
     | 'subscribe_news_email'
     | 'subscribeNewsEmail'
-  value: boolean
+  value?: boolean
+  stringValue?: string
 }
 
 export const updateUserSetting = async (data: UpdateUserSettingRequest): Promise<UserSettings> => {
@@ -439,6 +446,8 @@ export const sendSensitiveVerificationCode = async (): Promise<void> => {
 export interface SensitiveVerificationStatus {
   verified: boolean
   remainingSeconds: number
+  preferredMethod?: 'password' | 'email-code' | 'passkey' | 'totp'
+  methods?: Array<'password' | 'email-code' | 'passkey' | 'totp'>
 }
 
 export const checkSensitiveVerification = async (): Promise<SensitiveVerificationStatus> => {
