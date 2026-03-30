@@ -41,9 +41,10 @@ Authorization: Bearer <accessToken>
 ```
 
 ## 字段说明
-- method: 验证方式，只能是 "password"、"email-code" 或 "totp"
+- method: 验证方式，只能是 "password"、"email-code"、"passkey" 或 "totp"
   - password: 使用密码验证
   - email-code: 使用当前邮箱的验证码验证
+  - passkey: 使用 Passkey 验证（需走 Passkey 专用接口）
   - totp: 使用 TOTP 动态验证码验证
 - password: 用户密码（当 method=password 时必填）
 - code: 验证码（当 method=email-code 或 totp 时必填）
@@ -98,6 +99,12 @@ curl -X POST \
   http://localhost:8000/auth/verify-sensitive
 ```
 
+### 4. Passkey 验证
+当 `method=passkey` 时，`/auth/verify-sensitive` 不直接处理 WebAuthn 断言，接口会返回引导信息。前端应改用下面两个专用接口：
+
+1) `POST /auth/passkey/sensitive-verification-options` 获取 challenge/options  
+2) `POST /auth/passkey/sensitive-verification-verify` 提交 Passkey 断言完成验证
+
 ## 成功响应
 - HTTP Status：200
 
@@ -146,7 +153,17 @@ curl -X POST \
 ```json
 {
   "code": 400,
-  "msg": "验证方式只能是 password、email-code 或 totp"
+  "msg": "验证方式只能是 password、email-code、passkey 或 totp"
+}
+```
+
+### 5) method=passkey 但调用了通用接口
+- HTTP Status：400
+
+```json
+{
+  "code": 400,
+  "msg": "Passkey 验证请使用 /auth/passkey/sensitive-verification-options 与 /auth/passkey/sensitive-verification-verify"
 }
 ```
 

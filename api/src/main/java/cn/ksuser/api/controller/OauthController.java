@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
@@ -2195,6 +2196,30 @@ public class OauthController {
         if (!userPasskeyRepository.findByUserId(userId).isEmpty()) {
             methods.add("passkey");
         }
+
+        String preferredMfaMethod = userSettingsRepository.findByUserId(userId)
+            .map(UserSettings::getPreferredMfaMethod)
+            .orElse("totp");
+        String normalizedPreferred = normalizeMfaPreference(preferredMfaMethod);
+        methods.sort((a, b) -> Integer.compare(methodPriority(a, normalizedPreferred), methodPriority(b, normalizedPreferred)));
         return methods;
+    }
+
+    private String normalizeMfaPreference(String raw) {
+        if (raw == null) {
+            return "totp";
+        }
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        return ("totp".equals(normalized) || "passkey".equals(normalized)) ? normalized : "totp";
+    }
+
+    private int methodPriority(String method, String preferred) {
+        if (method == null) {
+            return Integer.MAX_VALUE;
+        }
+        if (preferred != null && method.equals(preferred)) {
+            return 0;
+        }
+        return "totp".equals(method) ? 1 : 2;
     }
 }

@@ -26,6 +26,12 @@ public class UserSettings {
     @Column(name = "subscribe_news_email", nullable = false)
     private Boolean subscribeNewsEmail;
 
+    @Column(name = "preferred_mfa_method", length = 20)
+    private String preferredMfaMethod;
+
+    @Column(name = "preferred_sensitive_method", length = 20)
+    private String preferredSensitiveMethod;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -81,6 +87,22 @@ public class UserSettings {
 
     public void setSubscribeNewsEmail(Boolean subscribeNewsEmail) {
         this.subscribeNewsEmail = subscribeNewsEmail;
+    }
+
+    public String getPreferredMfaMethod() {
+        return preferredMfaMethod;
+    }
+
+    public void setPreferredMfaMethod(String preferredMfaMethod) {
+        this.preferredMfaMethod = preferredMfaMethod;
+    }
+
+    public String getPreferredSensitiveMethod() {
+        return preferredSensitiveMethod;
+    }
+
+    public void setPreferredSensitiveMethod(String preferredSensitiveMethod) {
+        this.preferredSensitiveMethod = preferredSensitiveMethod;
     }
 
     public LocalDateTime getCreatedAt() {

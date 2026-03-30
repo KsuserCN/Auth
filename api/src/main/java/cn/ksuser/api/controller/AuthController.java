@@ -30,7 +30,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.util.Comparator;
-import java.util.Set;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import cn.ksuser.api.service.MfaService;
 import cn.ksuser.api.dto.MfaChallengeResponse;
@@ -713,7 +713,7 @@ public class AuthController {
 
     /**
      * 更新用户设置
-     * @param updateUserSettingRequest 更新请求（字段名 + bool）
+    * @param updateUserSettingRequest 更新请求（支持 bool 与字符串偏好）
      * @param authentication 认证信息
      * @return ApiResponse
      */
@@ -738,33 +738,84 @@ public class AuthController {
                 .body(new ApiResponse<>(400, "字段名不能为空"));
         }
 
-        if (updateUserSettingRequest.getValue() == null) {
+        String field = updateUserSettingRequest.getField().trim();
+
+        boolean isBooleanField = "mfa_enabled".equals(field) || "mfaEnabled".equals(field)
+                || "detect_unusual_login".equals(field) || "detectUnusualLogin".equals(field)
+                || "notify_sensitive_action_email".equals(field) || "notifySensitiveActionEmail".equals(field)
+                || "subscribe_news_email".equals(field) || "subscribeNewsEmail".equals(field);
+        boolean isPreferenceField = "preferred_mfa_method".equals(field) || "preferredMfaMethod".equals(field)
+                || "preferred_sensitive_method".equals(field) || "preferredSensitiveMethod".equals(field);
+
+        if (!isBooleanField && !isPreferenceField) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "字段值不能为空"));
+                .body(new ApiResponse<>(400, "不支持的字段名"));
         }
 
-        String field = updateUserSettingRequest.getField().trim();
-        boolean value = updateUserSettingRequest.getValue();
+        if (isBooleanField && updateUserSettingRequest.getValue() == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "布尔字段 value 不能为空"));
+        }
+
+        if (isPreferenceField && (updateUserSettingRequest.getStringValue() == null
+                || updateUserSettingRequest.getStringValue().trim().isEmpty())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "偏好字段 stringValue 不能为空"));
+        }
 
         UserSettings settings = getOrCreateUserSettings(user.getId());
 
         switch (field) {
             case "mfa_enabled":
             case "mfaEnabled":
-                settings.setMfaEnabled(value);
+                settings.setMfaEnabled(updateUserSettingRequest.getValue());
                 break;
             case "detect_unusual_login":
             case "detectUnusualLogin":
-                settings.setDetectUnusualLogin(value);
+                settings.setDetectUnusualLogin(updateUserSettingRequest.getValue());
                 break;
             case "notify_sensitive_action_email":
             case "notifySensitiveActionEmail":
-                settings.setNotifySensitiveActionEmail(value);
+                settings.setNotifySensitiveActionEmail(updateUserSettingRequest.getValue());
                 break;
             case "subscribe_news_email":
             case "subscribeNewsEmail":
-                settings.setSubscribeNewsEmail(value);
+                settings.setSubscribeNewsEmail(updateUserSettingRequest.getValue());
                 break;
+            case "preferred_mfa_method":
+            case "preferredMfaMethod": {
+                if (!Boolean.TRUE.equals(settings.getMfaEnabled())) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "请先启用 MFA 再设置登录MFA优先方式"));
+                }
+                String preferredMfaMethod = updateUserSettingRequest.getStringValue().trim().toLowerCase(Locale.ROOT);
+                if (!("totp".equals(preferredMfaMethod) || "passkey".equals(preferredMfaMethod))) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "登录MFA优先方式只能是 totp 或 passkey"));
+                }
+                List<String> availableMfaMethods = resolveMfaMethods(user, true);
+                if (!availableMfaMethods.contains(preferredMfaMethod)) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "当前用户未启用所选 MFA 方式"));
+                }
+                settings.setPreferredMfaMethod(preferredMfaMethod);
+                break;
+            }
+            case "preferred_sensitive_method":
+            case "preferredSensitiveMethod": {
+                String preferredSensitiveMethod = normalizeSensitiveMethod(updateUserSettingRequest.getStringValue());
+                if (preferredSensitiveMethod == null) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "敏感验证优先方式只能是 password、email-code、passkey 或 totp"));
+                }
+                List<String> availableSensitiveMethods = resolveSensitiveMethods(user);
+                if (!availableSensitiveMethods.contains(preferredSensitiveMethod)) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "当前用户不可用所选敏感验证方式"));
+                }
+                settings.setPreferredSensitiveMethod(preferredSensitiveMethod);
+                break;
+            }
             default:
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, "不支持的字段名"));
@@ -775,7 +826,9 @@ public class AuthController {
             Boolean.TRUE.equals(saved.getMfaEnabled()),
             Boolean.TRUE.equals(saved.getDetectUnusualLogin()),
             Boolean.TRUE.equals(saved.getNotifySensitiveActionEmail()),
-            Boolean.TRUE.equals(saved.getSubscribeNewsEmail())
+            Boolean.TRUE.equals(saved.getSubscribeNewsEmail()),
+            normalizeMfaPreference(saved.getPreferredMfaMethod()),
+            normalizeSensitiveMethod(saved.getPreferredSensitiveMethod())
         );
 
         return ResponseEntity.status(HttpStatus.OK)
@@ -788,9 +841,11 @@ public class AuthController {
                 Boolean.TRUE.equals(settings.getMfaEnabled()),
                 Boolean.TRUE.equals(settings.getDetectUnusualLogin()),
                 Boolean.TRUE.equals(settings.getNotifySensitiveActionEmail()),
-                Boolean.TRUE.equals(settings.getSubscribeNewsEmail())
+                Boolean.TRUE.equals(settings.getSubscribeNewsEmail()),
+                normalizeMfaPreference(settings.getPreferredMfaMethod()),
+                normalizeSensitiveMethod(settings.getPreferredSensitiveMethod())
             ))
-            .orElseGet(() -> new UserSettingsResponse(false, true, true, false));
+            .orElseGet(() -> new UserSettingsResponse(false, true, true, false, "totp", "password"));
     }
 
     private UserSettings getOrCreateUserSettings(Long userId) {
@@ -802,6 +857,8 @@ public class AuthController {
                 settings.setDetectUnusualLogin(true);
                 settings.setNotifySensitiveActionEmail(true);
                 settings.setSubscribeNewsEmail(false);
+                settings.setPreferredMfaMethod("totp");
+                settings.setPreferredSensitiveMethod("password");
                 return userSettingsRepository.save(settings);
             });
     }
@@ -1365,10 +1422,10 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "验证方式不能为空"));
         }
-        if (!("password".equals(method) || "email-code".equals(method) || "totp".equals(method))) {
+        if (!("password".equals(method) || "email-code".equals(method) || "totp".equals(method) || "passkey".equals(method))) {
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "invalid_verification_method", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(new ApiResponse<>(400, "验证方式只能是 password、email-code 或 totp"));
+            .body(new ApiResponse<>(400, "验证方式只能是 password、email-code、passkey 或 totp"));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -1495,6 +1552,12 @@ public class AuthController {
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+        }
+
+        if ("passkey".equals(method)) {
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "passkey_requires_webauthn_challenge", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "Passkey 验证请使用 /auth/passkey/sensitive-verification-options 与 /auth/passkey/sensitive-verification-verify"));
         }
 
         sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "unknown_verification_method", startTime);
@@ -1648,9 +1711,14 @@ public class AuthController {
         // 获取剩余时间
         long remainingSeconds = sensitiveOperationService.getRemainingTime(uuid);
         
+        List<String> sensitiveMethods = resolveSensitiveMethods(user);
+        String preferredSensitiveMethod = resolvePreferredSensitiveMethod(user, sensitiveMethods);
+
         SensitiveVerificationStatusResponse response = new SensitiveVerificationStatusResponse(
-            isVerified, 
-            remainingSeconds > 0 ? remainingSeconds : 0
+            isVerified,
+            remainingSeconds > 0 ? remainingSeconds : 0,
+            preferredSensitiveMethod,
+            sensitiveMethods
         );
 
         return ResponseEntity.status(HttpStatus.OK)
@@ -2236,6 +2304,93 @@ public class AuthController {
         if (passkeyAllowed && !passkeyService.getUserPasskeys(user.getId()).isEmpty()) {
             methods.add("passkey");
         }
+        String preferredMfaMethod = userSettingsRepository.findByUserId(user.getId())
+            .map(UserSettings::getPreferredMfaMethod)
+            .orElse("totp");
+        methods.sort((a, b) -> Integer.compare(
+            methodPriority(a, normalizeMfaPreference(preferredMfaMethod)),
+            methodPriority(b, normalizeMfaPreference(preferredMfaMethod))
+        ));
         return methods;
+    }
+
+    private List<String> resolveSensitiveMethods(User user) {
+        List<String> methods = new ArrayList<>();
+        if (user.getPasswordHash() != null && !user.getPasswordHash().isBlank()) {
+            methods.add("password");
+        }
+        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+            methods.add("email-code");
+        }
+        if (!passkeyService.getUserPasskeys(user.getId()).isEmpty()) {
+            methods.add("passkey");
+        }
+        if (totpService.isTotpEnabled(user.getId())) {
+            methods.add("totp");
+        }
+
+        String preferredSensitiveMethod = userSettingsRepository.findByUserId(user.getId())
+            .map(UserSettings::getPreferredSensitiveMethod)
+            .orElse("password");
+        methods.sort((a, b) -> Integer.compare(
+            methodPriority(a, normalizeSensitiveMethod(preferredSensitiveMethod)),
+            methodPriority(b, normalizeSensitiveMethod(preferredSensitiveMethod))
+        ));
+        return methods;
+    }
+
+    private String resolvePreferredSensitiveMethod(User user, List<String> methods) {
+        if (methods == null || methods.isEmpty()) {
+            return null;
+        }
+        String preferredSensitiveMethod = userSettingsRepository.findByUserId(user.getId())
+            .map(UserSettings::getPreferredSensitiveMethod)
+            .orElse("password");
+        String normalized = normalizeSensitiveMethod(preferredSensitiveMethod);
+        if (normalized != null && methods.contains(normalized)) {
+            return normalized;
+        }
+        return methods.get(0);
+    }
+
+    private String normalizeMfaPreference(String raw) {
+        if (raw == null) {
+            return "totp";
+        }
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        return ("totp".equals(normalized) || "passkey".equals(normalized)) ? normalized : "totp";
+    }
+
+    private String normalizeSensitiveMethod(String raw) {
+        if (raw == null) {
+            return "password";
+        }
+        String normalized = raw.trim().toLowerCase(Locale.ROOT);
+        if ("email_code".equals(normalized) || "emailcode".equals(normalized) || "emailcode".equals(normalized.replace("-", ""))) {
+            return "email-code";
+        }
+        if ("password".equals(normalized)
+                || "email-code".equals(normalized)
+                || "passkey".equals(normalized)
+                || "totp".equals(normalized)) {
+            return normalized;
+        }
+        return null;
+    }
+
+    private int methodPriority(String method, String preferred) {
+        if (method == null) {
+            return Integer.MAX_VALUE;
+        }
+        if (preferred != null && method.equals(preferred)) {
+            return 0;
+        }
+        return switch (method) {
+            case "totp" -> 1;
+            case "passkey" -> 2;
+            case "password" -> 3;
+            case "email-code" -> 4;
+            default -> 10;
+        };
     }
 }

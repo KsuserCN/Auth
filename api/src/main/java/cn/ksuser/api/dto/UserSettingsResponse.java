@@ -5,6 +5,8 @@ public class UserSettingsResponse {
     private boolean detectUnusualLogin;
     private boolean notifySensitiveActionEmail;
     private boolean subscribeNewsEmail;
+    private String preferredMfaMethod;
+    private String preferredSensitiveMethod;
 
     public UserSettingsResponse() {
     }
@@ -15,6 +17,19 @@ public class UserSettingsResponse {
         this.detectUnusualLogin = detectUnusualLogin;
         this.notifySensitiveActionEmail = notifySensitiveActionEmail;
         this.subscribeNewsEmail = subscribeNewsEmail;
+        this.preferredMfaMethod = "totp";
+        this.preferredSensitiveMethod = "password";
+    }
+
+    public UserSettingsResponse(boolean mfaEnabled, boolean detectUnusualLogin,
+                                boolean notifySensitiveActionEmail, boolean subscribeNewsEmail,
+                                String preferredMfaMethod, String preferredSensitiveMethod) {
+        this.mfaEnabled = mfaEnabled;
+        this.detectUnusualLogin = detectUnusualLogin;
+        this.notifySensitiveActionEmail = notifySensitiveActionEmail;
+        this.subscribeNewsEmail = subscribeNewsEmail;
+        this.preferredMfaMethod = preferredMfaMethod;
+        this.preferredSensitiveMethod = preferredSensitiveMethod;
     }
 
     public boolean isMfaEnabled() {
@@ -47,5 +62,21 @@ public class UserSettingsResponse {
 
     public void setSubscribeNewsEmail(boolean subscribeNewsEmail) {
         this.subscribeNewsEmail = subscribeNewsEmail;
+    }
+
+    public String getPreferredMfaMethod() {
+        return preferredMfaMethod;
+    }
+
+    public void setPreferredMfaMethod(String preferredMfaMethod) {
+        this.preferredMfaMethod = preferredMfaMethod;
+    }
+
+    public String getPreferredSensitiveMethod() {
+        return preferredSensitiveMethod;
+    }
+
+    public void setPreferredSensitiveMethod(String preferredSensitiveMethod) {
+        this.preferredSensitiveMethod = preferredSensitiveMethod;
     }
 }

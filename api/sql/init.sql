@@ -101,6 +101,8 @@ CREATE TABLE user_settings (
 
   notify_sensitive_action_email TINYINT(1) NOT NULL DEFAULT 1 COMMENT '敏感操作提醒邮件（0=不发 1=发送）',
   subscribe_news_email TINYINT(1) NOT NULL DEFAULT 0 COMMENT '新闻/运营邮件订阅（0=不订阅 1=订阅）',
+  preferred_mfa_method VARCHAR(20) DEFAULT 'totp' COMMENT '登录 MFA 优先方式（totp/passkey，仅影响默认跳转）',
+  preferred_sensitive_method VARCHAR(20) DEFAULT 'password' COMMENT '敏感验证优先方式（password/email-code/passkey/totp，仅影响默认跳转）',
 
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

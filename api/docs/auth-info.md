@@ -15,19 +15,6 @@
 Authorization: Bearer <accessToken>
 ```
 
-## 请求示例
-```bash
-curl -X GET \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  http://localhost:8000/auth/info
-```
-
-```bash
-curl -X GET \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
-  "http://localhost:8000/auth/info?type=details"
-```
-
 ## 成功响应
 - HTTP Status：200
 
@@ -45,7 +32,9 @@ curl -X GET \
       "mfaEnabled": false,
       "detectUnusualLogin": true,
       "notifySensitiveActionEmail": true,
-      "subscribeNewsEmail": false
+      "subscribeNewsEmail": false,
+      "preferredMfaMethod": "totp",
+      "preferredSensitiveMethod": "password"
     }
   }
 }
@@ -71,20 +60,11 @@ curl -X GET \
       "mfaEnabled": false,
       "detectUnusualLogin": true,
       "notifySensitiveActionEmail": true,
-      "subscribeNewsEmail": false
+      "subscribeNewsEmail": false,
+      "preferredMfaMethod": "totp",
+      "preferredSensitiveMethod": "password"
     }
   }
-}
-```
-
-## 失败响应
-### 1) 未登录或 Token 无效
-- HTTP Status：401
-
-```json
-{
-  "code": 401,
-  "msg": "未登录"
 }
 ```
 
@@ -99,7 +79,7 @@ curl -X GET \
 - 请求类型：application/json
 
 ## 用途
-用于更新用户的设置项（字段名 + bool）。
+用于更新用户设置项（支持布尔开关与枚举偏好）。
 
 ## 请求头
 ```
@@ -107,6 +87,7 @@ Authorization: Bearer <accessToken>
 ```
 
 ## 请求体
+### 布尔字段更新
 ```json
 {
   "field": "mfa_enabled",
@@ -114,13 +95,31 @@ Authorization: Bearer <accessToken>
 }
 ```
 
+### 偏好字段更新
+```json
+{
+  "field": "preferred_mfa_method",
+  "stringValue": "passkey"
+}
+```
+
 ## 字段说明
-- field: 设置字段名（支持 snake_case 或 camelCase）
+- field：设置字段名（支持 snake_case 或 camelCase）
   - mfa_enabled / mfaEnabled
   - detect_unusual_login / detectUnusualLogin
   - notify_sensitive_action_email / notifySensitiveActionEmail
   - subscribe_news_email / subscribeNewsEmail
-- value: 布尔值（true/false）
+  - preferred_mfa_method / preferredMfaMethod
+  - preferred_sensitive_method / preferredSensitiveMethod
+- value：布尔值（仅布尔字段使用）
+- stringValue：字符串（仅偏好字段使用）
+  - preferred_mfa_method：totp / passkey
+  - preferred_sensitive_method：password / email-code / passkey / totp
+
+## 规则说明
+- 设置 preferred_mfa_method 前，必须先开启 mfaEnabled=true。
+- 偏好只是“默认跳转方式”，不是强制限制；前端仍可让用户点击“选择其他验证方式”。
+- 选择偏好时会校验当前用户是否具备该验证能力（例如未绑定 Passkey 时不能设为 passkey）。
 
 ## 成功响应
 - HTTP Status：200
@@ -133,55 +132,20 @@ Authorization: Bearer <accessToken>
     "mfaEnabled": true,
     "detectUnusualLogin": true,
     "notifySensitiveActionEmail": true,
-    "subscribeNewsEmail": false
+    "subscribeNewsEmail": false,
+    "preferredMfaMethod": "passkey",
+    "preferredSensitiveMethod": "password"
   }
 }
 ```
 
-## 失败响应
-### 1) 未登录
-- HTTP Status：401
-
-```json
-{
-  "code": 401,
-  "msg": "未登录"
-}
-```
-
-### 2) 用户不存在
-- HTTP Status：401
-
-```json
-{
-  "code": 401,
-  "msg": "用户不存在"
-}
-```
-
-### 3) 字段名或字段值为空
-- HTTP Status：400
-
-```json
-{
-  "code": 400,
-  "msg": "字段名不能为空"
-}
-```
-
-```json
-{
-  "code": 400,
-  "msg": "字段值不能为空"
-}
-```
-
-### 4) 字段名不支持
-- HTTP Status：400
-
-```json
-{
-  "code": 400,
-  "msg": "不支持的字段名"
-}
-```
+## 常见失败响应
+- `400 字段名不能为空`
+- `400 布尔字段 value 不能为空`
+- `400 偏好字段 stringValue 不能为空`
+- `400 不支持的字段名`
+- `400 请先启用 MFA 再设置登录MFA优先方式`
+- `400 当前用户未启用所选 MFA 方式`
+- `400 当前用户不可用所选敏感验证方式`
+- `401 未登录`
+- `401 用户不存在`
