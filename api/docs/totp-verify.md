@@ -44,7 +44,7 @@ Content-Type: application/json
 | 字段 | 类型 | 必需 | 说明 |
 |------|------|------|------|
 | code | string | 否 | 6 位 TOTP 码 |
-| recoveryCode | string | 否 | 8 位回复码 |
+| recoveryCode | string | 否 | 8 位恢复码（大写字母 A-Z） |
 
 ### 示例 cURL
 

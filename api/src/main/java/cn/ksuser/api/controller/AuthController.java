@@ -1036,17 +1036,18 @@ public class AuthController {
     }
 
     /**
-     * 验证 TOTP（用于 MFA 登录完成）
-     * 前端在收到 201 并带有 challengeId 后，调用此接口完成 TOTP 校验并下发 token
+     * 验证 TOTP 或恢复码（用于 MFA 登录完成）
+     * 前端在收到 201 并带有 challengeId 后，调用此接口完成 TOTP/恢复码校验并下发 token
      */
     @PostMapping("/totp/mfa-verify")
     public ResponseEntity<ApiResponse<Object>> verifyTotpForLogin(
             @RequestBody MfaTotpVerifyRequest requestBody,
             HttpServletRequest httpRequest,
             HttpServletResponse response) {
-        if (requestBody == null || requestBody.getChallengeId() == null || requestBody.getCode() == null) {
+        if (requestBody == null || requestBody.getChallengeId() == null || 
+            (requestBody.getCode() == null && requestBody.getRecoveryCode() == null)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 和 code 不能为空"));
+                .body(new ApiResponse<>(400, "challengeId 和 code 或 recoveryCode 不能为空"));
         }
 
         String clientIp = rateLimitService.getClientIp(httpRequest);
@@ -1076,19 +1077,39 @@ public class AuthController {
             String loginMethod = mfaService.getLoginMethod(requestBody.getChallengeId());
             String logMethod = Arrays.asList(loginMethod, "mfa").toString();
             byte[] masterKey = encryptionUtil.getMasterKey();
-            boolean ok = totpService.verifyTotpCode(user.getId(), requestBody.getCode(), masterKey);
+            boolean ok = false;
+            String verifyMethod = "unknown";
+            String codeValue = requestBody.getCode() == null ? null : requestBody.getCode().trim();
+            String recoveryCodeValue = requestBody.getRecoveryCode() == null ? null : requestBody.getRecoveryCode().trim();
+
+            // 优先尝试 TOTP 码验证
+            if (codeValue != null && !codeValue.isEmpty()) {
+                ok = totpService.verifyTotpCode(user.getId(), codeValue, masterKey);
+                if (ok) {
+                    verifyMethod = "totp_code";
+                }
+            }
+
+            // 如果 TOTP 码验证失败，尝试恢复码验证
+            if (!ok && recoveryCodeValue != null && !recoveryCodeValue.isEmpty()) {
+                ok = totpService.verifyRecoveryCode(user.getId(), recoveryCodeValue);
+                if (ok) {
+                    verifyMethod = "recovery_code";
+                }
+            }
+
             if (!ok) {
                 // ✅ MFA验证失败，记录失败次数
                 mfaService.recordFailedAttempt(requestBody.getChallengeId());
                 int remaining = mfaService.getRemainingAttempts(requestBody.getChallengeId());
-                sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, "TOTP 校验失败", startTime);
+                sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, "TOTP/恢复码校验失败", startTime);
                 
                 if (remaining > 0) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "TOTP 校验失败，剩余尝试次数：" + remaining));
+                        .body(new ApiResponse<>(400, "TOTP/恢复码校验失败，剩余尝试次数：" + remaining));
                 } else {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "TOTP 校验失败次数过多，请重新登录"));
+                        .body(new ApiResponse<>(400, "TOTP/恢复码校验失败次数过多，请重新登录"));
                 }
             }
 
@@ -1104,7 +1125,7 @@ public class AuthController {
             setRefreshTokenCookie(response, refreshToken);
 
             // MFA验证成功
-            sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, true, null, startTime);
+            sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, true, verifyMethod, startTime);
 
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));

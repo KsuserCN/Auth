@@ -160,6 +160,12 @@ public class TotpController {
                 .body(new ApiResponse<>(400, "验证码不能为空"));
         }
 
+        if (request.getRecoveryCodes() == null || request.getRecoveryCodes().length == 0) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "empty_recovery_codes", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "恢复码不能为空，请使用 registration-options 返回的 recoveryCodes"));
+        }
+
         String userUuid = (String) authentication.getPrincipal();
         Optional<User> userOpt = userService.findByUuid(userUuid);
         
@@ -199,27 +205,13 @@ public class TotpController {
                     .body(new ApiResponse<>(400, "待确认秘钥已过期，请重新生成"));
             }
 
-            // 需要恢复码列表用于确认
-            // 注：恢复码应该在 registration-options 时已返回给客户端
-            // 这里简化处理，假设客户端已保存
-            // 实际应该通过 Redis 临时存储恢复码
-            
-            // 临时生成恢复码（生产环境应从 Redis 或请求中获取）
-            java.security.SecureRandom random = new java.security.SecureRandom();
-            String[] recoveryCodes = new String[10];
-            for (int i = 0; i < 10; i++) {
-                StringBuilder code = new StringBuilder();
-                for (int j = 0; j < 8; j++) {
-                    code.append(random.nextInt(10));
-                }
-                recoveryCodes[i] = code.toString();
-            }
+            // 使用 registration-options 返回给客户端的同一组恢复码进行确认保存
             
             // 确认注册
             boolean success = totpService.confirmTotpRegistration(
                 user.getId(), 
                 request.getCode(), 
-                recoveryCodes,
+                request.getRecoveryCodes(),
                 masterKey
             );
 

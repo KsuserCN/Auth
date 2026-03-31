@@ -262,16 +262,17 @@ public class TotpService {
     }
 
     /**
-     * 生成恢复码
+     * 生成恢复码 - 8位随机字母（A-Z）
      */
     private String[] generateRecoveryCodes(int count) {
         String[] codes = new String[count];
         SecureRandom random = new SecureRandom();
+        String letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         
         for (int i = 0; i < count; i++) {
             StringBuilder code = new StringBuilder();
             for (int j = 0; j < RECOVERY_CODE_LENGTH; j++) {
-                code.append(random.nextInt(10));
+                code.append(letters.charAt(random.nextInt(letters.length())));
             }
             codes[i] = code.toString();
         }
@@ -292,8 +293,13 @@ public class TotpService {
                 return false;
             }
 
+            String normalizedRecoveryCode = recoveryCode.trim().toUpperCase(Locale.ROOT);
+            if (!normalizedRecoveryCode.matches("^[A-Z]{8}$")) {
+                return false;
+            }
+
             // SHA-256 哈希恢复码
-            byte[] codeHash = sha256Hash(recoveryCode.getBytes());
+            byte[] codeHash = sha256Hash(normalizedRecoveryCode.getBytes(StandardCharsets.UTF_8));
             
             Optional<TotpRecoveryCode> codeOpt = 
                 recoveryCodeRepository.findByUserIdAndCodeHash(userId, codeHash);
@@ -311,6 +317,13 @@ public class TotpService {
             code.markAsUsed();
             recoveryCodeRepository.save(code);
             
+            // 检查是否所有恢复码都已使用
+            long remainingCount = recoveryCodeRepository.countByUserIdAndUnused(userId);
+            if (remainingCount == 0) {
+                // 所有恢复码都已消耗，自动删除该用户的 TOTP 配置
+                disableTotp(userId);
+            }
+            
             return true;
         } catch (Exception e) {
             return false;
@@ -321,16 +334,18 @@ public class TotpService {
      * 确认 TOTP 注册（注册流程的第二步）
      * @param userId 用户 ID
      * @param code TOTP 码
-     * @param recoveryCodes 恢复码列表
      * @param masterEncryptionKey 主加密密钥
      * @return 注册是否成功
      */
     @Transactional
-    public boolean confirmTotpRegistration(Long userId, String code, String[] recoveryCodes, 
-                                          byte[] masterEncryptionKey) {
+    public boolean confirmTotpRegistration(Long userId, String code, String[] recoveryCodes, byte[] masterEncryptionKey) {
         try {
             Optional<UserTotp> existingOpt = userTotpRepository.findByUserId(userId);
             if (existingOpt.isEmpty()) {
+                return false;
+            }
+
+            if (recoveryCodes == null || recoveryCodes.length == 0) {
                 return false;
             }
 
@@ -380,12 +395,26 @@ public class TotpService {
             // 删除旧的恢复码
             recoveryCodeRepository.deleteByUserId(userId);
 
-            // 保存新的恢复码（SHA-256 哈希 + AES-GCM 密文）
+            // 保存恢复码（SHA-256 哈希 + AES-GCM 密文）
             for (String recoveryCode : recoveryCodes) {
-                byte[] codeHash = sha256Hash(recoveryCode.getBytes());
-                byte[] codeCiphertext = encryptAesGcm(recoveryCode.getBytes(), masterEncryptionKey);
+                if (recoveryCode == null) {
+                    continue;
+                }
+                String normalizedRecoveryCode = recoveryCode.trim().toUpperCase(Locale.ROOT);
+                if (!normalizedRecoveryCode.matches("^[A-Z]{8}$")) {
+                    continue;
+                }
+
+                byte[] recoveryCodeBytes = normalizedRecoveryCode.getBytes(StandardCharsets.UTF_8);
+                byte[] codeHash = sha256Hash(recoveryCodeBytes);
+                byte[] codeCiphertext = encryptAesGcm(recoveryCodeBytes, masterEncryptionKey);
                 TotpRecoveryCode codeEntity = new TotpRecoveryCode(userId, codeHash, codeCiphertext);
                 recoveryCodeRepository.save(codeEntity);
+            }
+
+            long savedCount = recoveryCodeRepository.countByUserIdAndUnused(userId);
+            if (savedCount == 0) {
+                return false;
             }
 
             return true;

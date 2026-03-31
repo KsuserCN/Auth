@@ -26,7 +26,8 @@ Content-Type: application/json
 ### Body
 ```json
 {
-  "code": "123456"
+  "code": "123456",
+  "recoveryCodes": ["ABCDEFGH", "IJKLMNOP", "QRSTUVWX", "YZABCDEF", "GHIJKLMN", "OPQRSTUV", "WXYZABCD", "EFGHIJKL", "MNOPQRST", "UVWXYZAB"]
 }
 ```
 
@@ -35,13 +36,14 @@ Content-Type: application/json
 | 字段 | 类型 | 必需 | 说明 |
 |------|------|------|------|
 | code | string | 是 | 身份验证器应用中显示的 6 位数字码 |
+| recoveryCodes | string[] | 是 | 调用 registration-options 时返回的恢复码原样回传（每项为 8 位大写字母） |
 
 ### 示例 cURL
 ```bash
 curl -X POST http://localhost:8080/auth/totp/registration-verify \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..." \
   -H "Content-Type: application/json" \
-  -d '{"code": "123456"}'
+  -d '{"code": "123456", "recoveryCodes": ["ABCDEFGH", "IJKLMNOP", "QRSTUVWX", "YZABCDEF", "GHIJKLMN", "OPQRSTUV", "WXYZABCD", "EFGHIJKL", "MNOPQRST", "UVWXYZAB"]}'
 ```
 
 ## 响应
