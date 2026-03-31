@@ -44,11 +44,15 @@ export interface MFAChallenge {
 }
 
 // TOTP 验证请求
-export interface TOTPVerifyRequest {
-  challengeId: string
-  code?: string
-  recoveryCode?: string
-}
+export type TOTPVerifyRequest =
+  | {
+    challengeId: string
+    code: string
+  }
+  | {
+    challengeId: string
+    recoveryCode: string
+  }
 
 // TOTP 验证响应
 export interface TOTPVerifyResponse {
@@ -421,11 +425,31 @@ export const updateUserProfile = async (data: UpdateProfileRequest): Promise<Use
  * 敏感操作验证
  * POST /auth/verify-sensitive
  */
-export interface VerifySensitiveRequest {
-  method: 'password' | 'email-code' | 'totp'
-  password?: string
-  code?: string
+export interface VerifySensitivePasswordRequest {
+  method: 'password'
+  password: string
 }
+
+export interface VerifySensitiveEmailCodeRequest {
+  method: 'email-code'
+  code: string
+}
+
+export interface VerifySensitiveTotpCodeRequest {
+  method: 'totp'
+  code: string
+}
+
+export interface VerifySensitiveRecoveryCodeRequest {
+  method: 'totp'
+  recoveryCode: string
+}
+
+export type VerifySensitiveRequest =
+  | VerifySensitivePasswordRequest
+  | VerifySensitiveEmailCodeRequest
+  | VerifySensitiveTotpCodeRequest
+  | VerifySensitiveRecoveryCodeRequest
 
 export const verifySensitiveOperation = async (data: VerifySensitiveRequest): Promise<void> => {
   await request.post('/auth/verify-sensitive', data)
@@ -700,9 +724,11 @@ export const getTotpRegistrationOptions = async (): Promise<TotpRegistrationOpti
 /**
  * 确认 TOTP 注册
  * POST /auth/totp/registration-verify
+ * 必须提交 6 位动态码 + registration-options 返回的 recoveryCodes
  */
 export interface TotpRegistrationVerifyRequest {
   code: string
+  recoveryCodes: string[]
 }
 
 export const verifyTotpRegistration = async (
@@ -714,7 +740,9 @@ export const verifyTotpRegistration = async (
 /**
  * TOTP 验证（MFA 登录流程）
  * POST /auth/totp/mfa-verify
- * 用于在登录时完成 MFA 验证，需传入 challengeId 和 code
+ * 用于在登录时完成 MFA 验证：
+ * - 动态码模式：challengeId + code(6位数字)
+ * - 恢复码模式：challengeId + recoveryCode(8位大写字母)
  */
 export const verifyTOTPForLogin = async (data: TOTPVerifyRequest): Promise<LoginResponse> => {
   const response = await request.post<ApiResponse<LoginResponse>>('/auth/totp/mfa-verify', data)
@@ -726,16 +754,21 @@ export const verifyTOTPForLogin = async (data: TOTPVerifyRequest): Promise<Login
  * POST /auth/totp/verify
  */
 export interface TotpVerifyRequest {
-  code?: string
-  recoveryCode?: string
+  code: string
 }
+
+export interface TotpRecoveryCodeVerifyRequest {
+  recoveryCode: string
+}
+
+export type TotpVerifyRequestPayload = TotpVerifyRequest | TotpRecoveryCodeVerifyRequest
 
 export interface TotpVerifyResponse {
   success: boolean
   message: string
 }
 
-export const verifyTotp = async (data: TotpVerifyRequest): Promise<TotpVerifyResponse> => {
+export const verifyTotp = async (data: TotpVerifyRequestPayload): Promise<TotpVerifyResponse> => {
   const response = await request.post<ApiResponse<TotpVerifyResponse>>('/auth/totp/verify', data)
   return (response as unknown as ApiResponse<TotpVerifyResponse>).data
 }

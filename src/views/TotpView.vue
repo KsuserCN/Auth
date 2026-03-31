@@ -82,11 +82,12 @@
           <!-- 第二步：验证码确认 -->
           <div v-else-if="step === 'verify'" class="step-container" key="verify">
             <h2 class="step-title">验证码确认</h2>
-            <p class="step-subtitle">请输入身份验证器应用中显示的 6 位验证码，或输入 8 位恢复码</p>
+            <p class="step-subtitle">请输入身份验证器应用中显示的 6 位动态码</p>
 
             <el-form ref="verifyFormRef" :model="verifyInput" :rules="verifyRules" label-position="top">
               <el-form-item prop="verificationCode">
-                <el-input v-model="verifyInput.verificationCode" placeholder="输入6位验证码或8位恢复码" maxlength="8"
+                <el-input v-model="verifyInput.verificationCode" placeholder="输入6位动态码" maxlength="6"
+                  @input="verifyInput.verificationCode = verifyInput.verificationCode.replace(/[^\d]/g, '').slice(0, 6)"
                   @keydown.enter.prevent="goToRecoveryStep" autofocus />
               </el-form-item>
             </el-form>
@@ -184,12 +185,12 @@ const verifyInput = ref({
 
 const verifyRules: FormRules = {
   verificationCode: [
-    { required: true, message: '请输入验证码或恢复码', trigger: 'blur' },
+    { required: true, message: '请输入 6 位动态码', trigger: 'blur' },
     {
       validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
         const v = (value || '').trim()
-        if (!/^[0-9]{6}$/.test(v) && !/^[0-9]{8}$/.test(v)) {
-          callback(new Error('请输入6位 TOTP 或 8位恢复码'))
+        if (!/^[0-9]{6}$/.test(v)) {
+          callback(new Error('请输入6位动态码'))
         } else {
           callback()
         }
@@ -293,9 +294,15 @@ const goToRecoveryStep = async () => {
   try {
     await verifyFormRef.value?.validate()
 
+    if (!setupOptions.value?.recoveryCodes?.length) {
+      ElMessage.error('恢复码缺失，请重新获取 TOTP 注册选项')
+      return
+    }
+
     // 验证 TOTP 注册
     await verifyTotpRegistration({
-      code: verifyInput.value.verificationCode
+      code: verifyInput.value.verificationCode.trim(),
+      recoveryCodes: setupOptions.value.recoveryCodes,
     })
 
     updateStep('recovery')

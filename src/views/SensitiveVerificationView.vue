@@ -207,7 +207,20 @@
           <!-- 第二步：TOTP 验证 -->
           <div v-else-if="step === 'totp'" class="step-container" key="totp">
             <h2 class="step-title">TOTP 验证</h2>
-            <p class="step-subtitle">请输入身份验证器应用中显示的 6 位验证码</p>
+            <p class="step-subtitle">请选择一种方式完成 TOTP 验证</p>
+
+            <div class="totp-mode-switch" role="tablist" aria-label="验证码类型选择">
+              <button type="button" class="totp-mode-chip" :class="{ active: totpMode === 'totp' }"
+                :aria-pressed="totpMode === 'totp'" @click="setTotpMode('totp')">
+                <span class="chip-title">动态码</span>
+                <span class="chip-meta">推荐</span>
+              </button>
+              <button type="button" class="totp-mode-chip" :class="{ active: totpMode === 'recovery' }"
+                :aria-pressed="totpMode === 'recovery'" @click="setTotpMode('recovery')">
+                <span class="chip-title">恢复码</span>
+                <span class="chip-meta">应急</span>
+              </button>
+            </div>
 
             <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
               <el-icon class="switch-method-icon">
@@ -218,11 +231,14 @@
 
             <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
               <el-form-item prop="code">
-                <el-input v-model="totpInput.code" placeholder="输入6位验证码或8位恢复码" maxlength="8"
-                  @input="totpInput.code = totpInput.code.replace(/[^\d]/g, '').slice(0, 8)"
+                <el-input v-model="totpInput.code"
+                  :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位大写字母恢复码'"
+                  :maxlength="totpMode === 'totp' ? 6 : 8" @input="handleTotpInput"
                   @keyup.enter="handleTotpVerify" autofocus />
               </el-form-item>
             </el-form>
+
+            <p class="totp-mode-hint">{{ totpModeHint }}</p>
 
             <div class="step-actions">
               <el-button class="back-btn" @click="backToMethod">返回</el-button>
@@ -311,14 +327,34 @@ const totpInput = ref({
   code: '',
 })
 
+const totpMode = ref<'totp' | 'recovery'>('totp')
+
+const totpModeHint = computed(() => {
+  if (totpMode.value === 'totp') {
+    return '请输入身份验证器应用中的 6 位数字动态码'
+  }
+
+  return '请输入 8 位大写字母恢复码（A-Z）'
+})
+
 const totpRules = {
   code: [
     { required: true, message: '请输入验证码或恢复码', trigger: 'blur' },
     {
       validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
         const v = (value || '').trim()
-        if (!/^[0-9]{6}$/.test(v) && !/^[0-9]{8}$/.test(v)) {
-          callback(new Error('请输入 6 位 TOTP 或 8 位恢复码'))
+        if (totpMode.value === 'totp' && !/^[0-9]{6}$/.test(v)) {
+          callback(new Error('请输入 6 位数字动态码'))
+          return
+        }
+
+        if (totpMode.value === 'recovery' && !/^[A-Z]{8}$/.test(v)) {
+          callback(new Error('请输入 8 位大写字母恢复码'))
+          return
+        }
+
+        if (totpMode.value !== 'totp' && totpMode.value !== 'recovery') {
+          callback(new Error('请选择验证方式'))
         } else {
           callback()
         }
@@ -446,7 +482,23 @@ const backToMethod = () => {
   updateStep('method')
   codeInput.value.code = ''
   totpInput.value.code = ''
+  totpMode.value = 'totp'
   cleanupCodeCountdown()
+}
+
+const handleTotpInput = (value: string) => {
+  if (totpMode.value === 'totp') {
+    totpInput.value.code = value.replace(/[^\d]/g, '').slice(0, 6)
+    return
+  }
+
+  totpInput.value.code = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 8)
+}
+
+const setTotpMode = (mode: 'totp' | 'recovery') => {
+  if (totpMode.value === mode) return
+  totpMode.value = mode
+  totpInput.value.code = ''
 }
 
 const handleCancel = () => {
@@ -537,10 +589,19 @@ const handleTotpVerify = async () => {
     await totpFormRef.value?.validate()
     totpLoading.value = true
 
-    await verifySensitiveOperation({
-      method: 'totp',
-      code: totpInput.value.code
-    })
+    const normalizedInput = totpInput.value.code.trim()
+
+    await verifySensitiveOperation(
+      totpMode.value === 'recovery'
+        ? {
+          method: 'totp',
+          recoveryCode: normalizedInput.toUpperCase(),
+        }
+        : {
+          method: 'totp',
+          code: normalizedInput,
+        },
+    )
 
     ElMessage.success('验证成功')
 
@@ -1103,6 +1164,64 @@ const handlePasskeyVerify = async () => {
 
 .switch-method-btn:hover {
   color: var(--el-color-primary);
+}
+
+.totp-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.totp-mode-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-lighter);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.totp-mode-chip:hover {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-fill-color-light);
+}
+
+.totp-mode-chip.active {
+  border-color: var(--el-color-primary);
+  background: rgba(255, 185, 15, 0.08);
+  box-shadow: 0 0 0 2px rgba(255, 185, 15, 0.12);
+}
+
+.chip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.chip-meta {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.totp-mode-chip.active .chip-meta {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary-light-5);
+}
+
+.totp-mode-hint {
+  margin: 2px 0 16px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
 }
 
 /* 响应式设计 */
