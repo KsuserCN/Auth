@@ -252,10 +252,9 @@
 
             <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
               <el-form-item prop="code">
-                <el-input v-model="totpInput.code"
-                  :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位大写字母恢复码'"
-                  :maxlength="totpMode === 'totp' ? 6 : 8" @input="handleTotpInput"
-                  @keyup.enter="handleTotpVerify" autofocus />
+                <el-input v-model="totpInput.code" :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位大写字母恢复码'"
+                  :maxlength="totpMode === 'totp' ? 6 : 8" @input="handleTotpInput" @keyup.enter="handleTotpVerify"
+                  autofocus />
               </el-form-item>
             </el-form>
 

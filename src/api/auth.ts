@@ -46,13 +46,13 @@ export interface MFAChallenge {
 // TOTP 验证请求
 export type TOTPVerifyRequest =
   | {
-    challengeId: string
-    code: string
-  }
+      challengeId: string
+      code: string
+    }
   | {
-    challengeId: string
-    recoveryCode: string
-  }
+      challengeId: string
+      recoveryCode: string
+    }
 
 // TOTP 验证响应
 export interface TOTPVerifyResponse {
