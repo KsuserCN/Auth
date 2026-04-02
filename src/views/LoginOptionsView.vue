@@ -163,10 +163,9 @@
             <Lock />
           </el-icon>
           <span>双因素认证 (TOTP)</span>
-          <el-button v-if="totpEnabled" type="danger" plain size="small" @click="handleDisableTotp"
-            style="margin-left: auto">
-            禁用 TOTP
-          </el-button>
+          <el-tag class="totp-header-tag" :type="totpEnabled ? 'success' : 'info'" size="small" effect="light">
+            {{ totpEnabled ? '已开启防护' : '未开启防护' }}
+          </el-tag>
         </div>
         <div v-if="!totpStatusFetched" class="passkey-loading">
           <el-icon class="loading-icon">
@@ -174,55 +173,82 @@
           </el-icon>
           <span>加载中...</span>
         </div>
-        <div v-else>
-          <div class="passkey-empty" style="padding: 12px 0;">
-            <p v-if="!totpEnabled">使用身份验证器应用保护您的账户</p>
+        <div v-else class="totp-panel">
+          <div class="totp-hero" :class="{ enabled: totpEnabled }">
+            <div class="totp-hero-icon-wrap">
+              <el-icon class="totp-hero-icon">
+                <Lock />
+              </el-icon>
+            </div>
+            <div class="totp-hero-content">
+              <h3 class="totp-hero-title">{{ totpEnabled ? '账户防护已开启' : '立即开启双因素认证' }}</h3>
+              <p class="totp-hero-desc">
+                {{
+                  totpEnabled
+                    ? '登录时将额外验证动态码，账户安全性更高。'
+                    : '使用身份验证器应用生成动态码，为账户增加一道关键防线。'
+                }}
+              </p>
+            </div>
+            <div class="totp-hero-action">
+              <el-button v-if="!totpEnabled" type="primary" size="small" @click="handleEnableTotp">
+                启用 TOTP
+              </el-button>
+              <el-button v-else type="danger" plain size="small" @click="handleDisableTotp">
+                禁用 TOTP
+              </el-button>
+            </div>
           </div>
-          <div class="info-list">
-            <div class="info-row">
-              <div class="row-left">
-                <el-icon class="row-icon">
-                  <Lock />
-                </el-icon>
-                <span class="row-label">状态</span>
-              </div>
-              <div class="row-right">
-                <el-tag v-if="totpEnabled" type="success" size="small">已启用</el-tag>
-                <el-tag v-else type="info" size="small">未启用</el-tag>
+
+          <div class="totp-metrics">
+            <div class="totp-metric-item">
+              <div class="totp-metric-label">状态</div>
+              <div class="totp-metric-value">
+                <el-tag v-if="totpEnabled" type="success" size="small" effect="dark">已启用</el-tag>
+                <el-tag v-else type="info" size="small" effect="light">未启用</el-tag>
               </div>
             </div>
-            <div v-if="totpEnabled" class="info-row">
-              <div class="row-left">
-                <el-icon class="row-icon">
-                  <Key />
-                </el-icon>
-                <span class="row-label">剩余恢复码</span>
-              </div>
-              <div class="row-right">
-                <span class="row-value">{{ recoveryCodesCount }} 个</span>
-                <el-tag v-if="recoveryCodesCount < 3" type="warning" size="small" style="margin-left: 8px">
-                  ⚠️ 即将用完
+            <div v-if="totpEnabled" class="totp-metric-item">
+              <div class="totp-metric-label">剩余恢复码</div>
+              <div class="totp-metric-value recovery-count-wrap">
+                <span class="totp-recovery-count">{{ recoveryCodesCount }} 个</span>
+                <el-tag v-if="recoveryCodesCount < 3" type="warning" size="small" effect="light">
+                  即将用完
                 </el-tag>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="totpEnabled" class="totp-quick-actions">
+            <div class="totp-action-item">
+              <div class="totp-action-info">
+                <div class="totp-action-title">查看恢复码</div>
+                <div class="totp-action-desc">用于设备丢失或无法获取动态码时登录账户。</div>
+              </div>
+              <div class="totp-action-buttons">
                 <el-button text size="small" @click="handleViewRecoveryCodes">查看恢复码</el-button>
+              </div>
+            </div>
+            <div class="totp-action-item">
+              <div class="totp-action-info">
+                <div class="totp-action-title">刷新恢复码</div>
+                <div class="totp-action-desc">旧恢复码会立即失效，请在生成后立刻保存新恢复码。</div>
+              </div>
+              <div class="totp-action-buttons">
                 <el-button text type="warning" size="small" @click="handleRegenerateRecoveryCodes"
                   :disabled="recoveryCodesCount >= 10">
-                  重新生成恢复码
+                  生成新恢复码
                 </el-button>
               </div>
             </div>
-          </div>
-          <div class="totp-actions">
-            <el-button v-if="!totpEnabled" type="primary" plain size="small" @click="handleEnableTotp">
-              启用 TOTP
-            </el-button>
           </div>
         </div>
       </el-card>
     </el-col>
   </el-row>
 
-  <!-- 回复码列表弹窗 -->
-  <el-dialog v-model="showRecoveryCodesDialog" title="回复码列表" width="420px">
+  <!-- 恢复码列表弹窗 -->
+  <el-dialog v-model="showRecoveryCodesDialog" title="恢复码列表" width="420px">
     <div v-if="recoveryCodesLoading" class="dialog-loading">
       <el-icon class="loading-icon" :size="32">
         <Loading />
@@ -230,10 +256,10 @@
       <p>加载中...</p>
     </div>
     <div v-else>
-      <el-alert title="请妥善保管您的回复码，每个码只能使用一次" type="warning" :closable="false" style="margin-bottom: 16px" />
+      <el-alert title="请妥善保管您的恢复码，每个码只能使用一次" type="warning" :closable="false" style="margin-bottom: 16px" />
       <div v-if="recoveryCodesList.length === 0" class="passkey-empty">
-        <p>没有可用的回复码</p>
-        <p class="empty-desc">所有回复码都已使用，请重新生成</p>
+        <p>没有可用的恢复码</p>
+        <p class="empty-desc">所有恢复码都已使用，请重新生成</p>
       </div>
       <div v-else>
         <div class="recovery-codes-grid">
@@ -242,8 +268,8 @@
           </div>
         </div>
         <div style="margin-top: 16px; display: flex; gap: 8px;">
-          <el-button size="small" @click="copyRecoveryCodes(recoveryCodesList)">复制回复码</el-button>
-          <el-button size="small" @click="downloadRecoveryCodes(recoveryCodesList)">下载回复码</el-button>
+          <el-button size="small" @click="copyRecoveryCodes(recoveryCodesList)">复制恢复码</el-button>
+          <el-button size="small" @click="downloadRecoveryCodes(recoveryCodesList)">下载恢复码</el-button>
         </div>
       </div>
     </div>
@@ -252,8 +278,8 @@
     </template>
   </el-dialog>
 
-  <!-- 新回复码弹窗 -->
-  <el-dialog v-model="showRegenerateDialog" title="新的回复码" width="450px" :close-on-click-modal="false">
+  <!-- 新恢复码弹窗 -->
+  <el-dialog v-model="showRegenerateDialog" title="新的恢复码" width="450px" :close-on-click-modal="false">
     <div v-if="regenerateLoading" class="dialog-loading">
       <el-icon class="loading-icon" :size="32">
         <Loading />
@@ -261,21 +287,24 @@
       <p>正在生成...</p>
     </div>
     <div v-else>
-      <el-alert title="新的回复码已生成！请立即保存，关闭后将无法再次查看完整的回复码。" type="success" :closable="false" style="margin-bottom: 16px" />
+      <el-alert title="新的恢复码已生成！请立即保存，关闭后将无法再次查看完整的恢复码。" type="success" :closable="false" style="margin-bottom: 16px" />
       <div class="recovery-codes-grid">
         <div v-for="code in newRecoveryCodes" :key="code" class="recovery-code-item">
           {{ code }}
         </div>
       </div>
       <div style="margin-top: 16px; display: flex; gap: 8px;">
-        <el-button @click="copyRecoveryCodes(newRecoveryCodes)">复制回复码</el-button>
-        <el-button @click="downloadRecoveryCodes(newRecoveryCodes)">下载回复码</el-button>
+        <el-button @click="copyRecoveryCodes(newRecoveryCodes)">复制恢复码</el-button>
+        <el-button @click="downloadRecoveryCodes(newRecoveryCodes)">下载恢复码</el-button>
       </div>
     </div>
     <template #footer>
       <el-button type="primary" @click="showRegenerateDialog = false">已保存，关闭</el-button>
     </template>
   </el-dialog>
+
+  <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
+    @cancel="handleSensitiveVerificationCancel" />
 </template>
 
 <script setup lang="ts">
@@ -314,6 +343,7 @@ import {
   type OAuthAccountStatusItem,
 } from '@/api/auth'
 import { isWebAuthnSupported } from '@/utils/webauthn'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -357,6 +387,8 @@ const recoveryCodesLoading = ref(false)
 const showRegenerateDialog = ref(false)
 const newRecoveryCodes = ref<string[]>([])
 const regenerateLoading = ref(false)
+const sensitiveDialogVisible = ref(false)
+let pendingSensitiveAction: null | (() => Promise<void>) = null
 
 onMounted(async () => {
   await userStore.fetchUserInfo()
@@ -480,26 +512,11 @@ const handleAddPasskey = async () => {
   addLoading.value = true
 
   try {
-    const status = await checkSensitiveVerification()
-
-    if (status.verified) {
-      // 已验证，直接跳转到添加 Passkey 页面
-      router.push('/add-passkey')
-    } else {
-      // 未验证，跳转到验证页面
-      ElMessage.info('需要验证身份')
-      router.push({
-        path: '/sensitive-verification',
-        query: { returnTo: '/add-passkey' }
-      })
-    }
-  } catch (error: unknown) {
-    console.error('Check sensitive verification failed:', error)
-    // 出错时也跳转到验证页面
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: '/add-passkey' }
+    await runWithSensitiveVerification(async () => {
+      await router.push('/add-passkey')
     })
+  } catch (error: unknown) {
+    console.error('Handle add passkey failed:', error)
   } finally {
     addLoading.value = false
   }
@@ -561,23 +578,11 @@ const handleChangeEmail = async () => {
   emailLoading.value = true
 
   try {
-    const status = await checkSensitiveVerification()
-
-    if (status.verified) {
-      router.push('/change-email')
-    } else {
-      ElMessage.info('需要验证身份')
-      router.push({
-        path: '/sensitive-verification',
-        query: { returnTo: '/change-email' }
-      })
-    }
-  } catch (error: unknown) {
-    console.error('Check sensitive verification failed:', error)
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: '/change-email' }
+    await runWithSensitiveVerification(async () => {
+      await router.push('/change-email')
     })
+  } catch (error: unknown) {
+    console.error('Handle change email failed:', error)
   } finally {
     emailLoading.value = false
   }
@@ -588,125 +593,128 @@ const handleChangePassword = async () => {
 
   passwordLoading.value = true
   try {
-    const status = await checkSensitiveVerification()
-
-    if (status.verified) {
-      // 已验证，直接跳转到修改密码页面
-      router.push('/change-password')
-    } else {
-      // 未验证，跳转到验证页面
-      ElMessage.info('需要验证身份')
-      router.push({
-        path: '/sensitive-verification',
-        query: { returnTo: '/change-password' }
-      })
-    }
-  } catch (error: unknown) {
-    console.error('Check sensitive verification failed:', error)
-    // 出错时也跳转到验证页面
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: '/change-password' }
+    await runWithSensitiveVerification(async () => {
+      await router.push('/change-password')
     })
+  } catch (error: unknown) {
+    console.error('Handle change password failed:', error)
   } finally {
     passwordLoading.value = false
   }
 }
 
-const ensureSensitiveVerified = async (): Promise<boolean> => {
+const runWithSensitiveVerification = async (action: () => Promise<void>) => {
   try {
     const status = await checkSensitiveVerification()
-    if (status.verified) return true
+    if (status.verified) {
+      await action()
+      return
+    }
+
     ElMessage.info('需要验证身份')
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: router.currentRoute.value.fullPath },
-    })
-    return false
+    pendingSensitiveAction = action
+    sensitiveDialogVisible.value = true
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
     ElMessage.info('需要验证身份')
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: router.currentRoute.value.fullPath },
-    })
-    return false
+    pendingSensitiveAction = action
+    sensitiveDialogVisible.value = true
   }
+}
+
+const handleSensitiveVerificationSuccess = async () => {
+  const action = pendingSensitiveAction
+  pendingSensitiveAction = null
+  if (!action) return
+
+  try {
+    await action()
+  } catch (error) {
+    console.error('Run pending sensitive action failed:', error)
+  }
+}
+
+const handleSensitiveVerificationCancel = () => {
+  pendingSensitiveAction = null
 }
 
 const handleEnableTotp = async () => {
-  if (!(await ensureSensitiveVerified())) return
-  router.push('/totp')
+  await runWithSensitiveVerification(async () => {
+    await router.push('/totp')
+  })
 }
 
 const handleViewRecoveryCodes = async () => {
-  if (!(await ensureSensitiveVerified())) return
-  recoveryCodesLoading.value = true
-  showRecoveryCodesDialog.value = true
-  try {
-    recoveryCodesList.value = await getRecoveryCodes()
-  } catch (error) {
-    console.error('获取回复码失败:', error)
-    ElMessage.error('获取回复码失败')
-    showRecoveryCodesDialog.value = false
-  } finally {
-    recoveryCodesLoading.value = false
-  }
+  await runWithSensitiveVerification(async () => {
+    recoveryCodesLoading.value = true
+    showRecoveryCodesDialog.value = true
+    try {
+      recoveryCodesList.value = await getRecoveryCodes()
+    } catch (error) {
+      console.error('获取回复码失败:', error)
+      ElMessage.error('获取恢复码失败')
+      showRecoveryCodesDialog.value = false
+    } finally {
+      recoveryCodesLoading.value = false
+    }
+  })
 }
 
 const handleRegenerateRecoveryCodes = async () => {
-  if (!(await ensureSensitiveVerified())) return
-  try {
-    await ElMessageBox.confirm(
-      '重新生成回复码会删除所有旧的回复码。请确保您已保存新的回复码。',
-      '确认重新生成',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
-
-    regenerateLoading.value = true
-    showRegenerateDialog.value = true
+  await runWithSensitiveVerification(async () => {
     try {
-      newRecoveryCodes.value = await regenerateRecoveryCodes()
-      ElMessage.success('回复码已重新生成')
-      await fetchTotpStatus()
-    } catch (error) {
-      console.error('重新生成回复码失败:', error)
-      ElMessage.error('重新生成失败')
-      showRegenerateDialog.value = false
-    } finally {
-      regenerateLoading.value = false
+      await ElMessageBox.confirm(
+        '重新生成恢复码会删除所有旧的恢复码。请确保您已保存新的恢复码。',
+        '确认重新生成',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      )
+
+      regenerateLoading.value = true
+      showRegenerateDialog.value = true
+      try {
+        newRecoveryCodes.value = await regenerateRecoveryCodes()
+        ElMessage.success('恢复码已重新生成')
+        await fetchTotpStatus()
+      } catch (error) {
+        console.error('重新生成回复码失败:', error)
+        ElMessage.error('重新生成失败')
+        showRegenerateDialog.value = false
+      } finally {
+        regenerateLoading.value = false
+      }
+    } catch {
+      // 用户取消
     }
-  } catch {
-    // 用户取消
-  }
+  })
 }
 
 const handleDisableTotp = async () => {
-  if (!(await ensureSensitiveVerified())) return
-  try {
-    await ElMessageBox.confirm(
-      '禁用 TOTP 后，您将无法使用双因素认证。是否继续？',
-      '确认禁用',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
+  await runWithSensitiveVerification(async () => {
+    try {
+      await ElMessageBox.confirm(
+        '禁用 TOTP 后，您将无法使用双因素认证。是否继续？',
+        '确认禁用',
+        {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning',
+        }
+      )
 
-    await disableTotp()
-    ElMessage.success('TOTP 已禁用')
-    await fetchTotpStatus()
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('禁用 TOTP 失败:', error)
-      ElMessage.error('禁用失败')
+      await disableTotp()
+      ElMessage.success('TOTP 已禁用')
+      await fetchTotpStatus()
+    } catch (error) {
+      if (error !== 'cancel') {
+        console.error('禁用 TOTP 失败:', error)
+        ElMessage.error('禁用失败')
+      }
     }
-  }
+  })
 }
 
 const copyRecoveryCodes = (codes: string[]) => {
@@ -719,7 +727,7 @@ const copyRecoveryCodes = (codes: string[]) => {
 }
 
 const downloadRecoveryCodes = (codes: string[]) => {
-  const text = 'TOTP 回复码\n' +
+  const text = 'TOTP 恢复码\n' +
     new Date().toLocaleString() + '\n' +
     '每个码只能使用一次\n\n' +
     codes.join('\n')
@@ -775,33 +783,33 @@ const handleQQBind = async (provider: OAuthProviderItem) => {
 
 const handleQQUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
-  if (!(await ensureSensitiveVerified())) return
+  await runWithSensitiveVerification(async () => {
+    try {
+      await ElMessageBox.confirm('解绑后您将无法使用 QQ 快速登录，是否继续？', '确认解绑', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
 
-  try {
-    await ElMessageBox.confirm('解绑后您将无法使用 QQ 快速登录，是否继续？', '确认解绑', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+    provider.loading = true
+    try {
+      await unbindQQ()
+      provider.bound = false
+      provider.lastLoginAt = null
+      ElMessage.success('QQ 解绑成功')
 
-  provider.loading = true
-  try {
-    await unbindQQ()
-    provider.bound = false
-    provider.lastLoginAt = null
-    ElMessage.success('QQ 解绑成功')
-
-    // 与服务端状态对齐
-    await loadOAuthStatus()
-  } catch (error) {
-    console.error('QQ unbind failed:', error)
-    ElMessage.error('QQ 解绑失败，请稍后重试')
-  } finally {
-    provider.loading = false
-  }
+      // 与服务端状态对齐
+      await loadOAuthStatus()
+    } catch (error) {
+      console.error('QQ unbind failed:', error)
+      ElMessage.error('QQ 解绑失败，请稍后重试')
+    } finally {
+      provider.loading = false
+    }
+  })
 }
 
 const handleGithubBind = async (provider: OAuthProviderItem) => {
@@ -824,32 +832,32 @@ const handleGithubBind = async (provider: OAuthProviderItem) => {
 
 const handleGithubUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
-  if (!(await ensureSensitiveVerified())) return
+  await runWithSensitiveVerification(async () => {
+    try {
+      await ElMessageBox.confirm('解绑后您将无法使用 GitHub 快速登录，是否继续？', '确认解绑', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
 
-  try {
-    await ElMessageBox.confirm('解绑后您将无法使用 GitHub 快速登录，是否继续？', '确认解绑', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+    provider.loading = true
+    try {
+      await unbindGithub()
+      provider.bound = false
+      provider.lastLoginAt = null
+      ElMessage.success('GitHub 解绑成功')
 
-  provider.loading = true
-  try {
-    await unbindGithub()
-    provider.bound = false
-    provider.lastLoginAt = null
-    ElMessage.success('GitHub 解绑成功')
-
-    await loadOAuthStatus()
-  } catch (error) {
-    console.error('GitHub unbind failed:', error)
-    ElMessage.error('GitHub 解绑失败，请稍后重试')
-  } finally {
-    provider.loading = false
-  }
+      await loadOAuthStatus()
+    } catch (error) {
+      console.error('GitHub unbind failed:', error)
+      ElMessage.error('GitHub 解绑失败，请稍后重试')
+    } finally {
+      provider.loading = false
+    }
+  })
 }
 
 const handleMicrosoftBind = async (provider: OAuthProviderItem) => {
@@ -874,32 +882,32 @@ const handleMicrosoftBind = async (provider: OAuthProviderItem) => {
 
 const handleMicrosoftUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
-  if (!(await ensureSensitiveVerified())) return
+  await runWithSensitiveVerification(async () => {
+    try {
+      await ElMessageBox.confirm('解绑后您将无法使用 Microsoft 快速登录，是否继续？', '确认解绑', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
 
-  try {
-    await ElMessageBox.confirm('解绑后您将无法使用 Microsoft 快速登录，是否继续？', '确认解绑', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+    provider.loading = true
+    try {
+      await unbindMicrosoft()
+      provider.bound = false
+      provider.lastLoginAt = null
+      ElMessage.success('Microsoft 解绑成功')
 
-  provider.loading = true
-  try {
-    await unbindMicrosoft()
-    provider.bound = false
-    provider.lastLoginAt = null
-    ElMessage.success('Microsoft 解绑成功')
-
-    await loadOAuthStatus()
-  } catch (error) {
-    console.error('Microsoft unbind failed:', error)
-    ElMessage.error('Microsoft 解绑失败，请稍后重试')
-  } finally {
-    provider.loading = false
-  }
+      await loadOAuthStatus()
+    } catch (error) {
+      console.error('Microsoft unbind failed:', error)
+      ElMessage.error('Microsoft 解绑失败，请稍后重试')
+    } finally {
+      provider.loading = false
+    }
+  })
 }
 
 const handleGoogleBind = async (provider: OAuthProviderItem) => {
@@ -922,32 +930,32 @@ const handleGoogleBind = async (provider: OAuthProviderItem) => {
 
 const handleGoogleUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
-  if (!(await ensureSensitiveVerified())) return
+  await runWithSensitiveVerification(async () => {
+    try {
+      await ElMessageBox.confirm('解绑后您将无法使用 Google 快速登录，是否继续？', '确认解绑', {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      })
+    } catch {
+      return
+    }
 
-  try {
-    await ElMessageBox.confirm('解绑后您将无法使用 Google 快速登录，是否继续？', '确认解绑', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
+    provider.loading = true
+    try {
+      await unbindGoogle()
+      provider.bound = false
+      provider.lastLoginAt = null
+      ElMessage.success('Google 解绑成功')
 
-  provider.loading = true
-  try {
-    await unbindGoogle()
-    provider.bound = false
-    provider.lastLoginAt = null
-    ElMessage.success('Google 解绑成功')
-
-    await loadOAuthStatus()
-  } catch (error) {
-    console.error('Google unbind failed:', error)
-    ElMessage.error('Google 解绑失败，请稍后重试')
-  } finally {
-    provider.loading = false
-  }
+      await loadOAuthStatus()
+    } catch (error) {
+      console.error('Google unbind failed:', error)
+      ElMessage.error('Google 解绑失败，请稍后重试')
+    } finally {
+      provider.loading = false
+    }
+  })
 }
 
 const handleProviderAction = async (provider: OAuthProviderItem) => {
@@ -1227,11 +1235,153 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
 }
 
 /* TOTP 管理样式 */
-.totp-actions {
-  padding: 12px 20px 16px;
+.totp-header-tag {
+  margin-left: auto;
+}
+
+.totp-panel {
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.totp-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-light);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--el-color-primary) 10%, transparent), transparent 58%),
+    var(--el-fill-color-light);
+}
+
+.totp-hero.enabled {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--el-color-success) 12%, transparent), transparent 58%),
+    var(--el-fill-color-light);
+}
+
+.totp-hero-icon-wrap {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  flex-shrink: 0;
+}
+
+.totp-hero.enabled .totp-hero-icon-wrap {
+  background: color-mix(in srgb, var(--el-color-success) 18%, transparent);
+}
+
+.totp-hero-icon {
+  font-size: 20px;
+  color: var(--el-color-primary);
+}
+
+.totp-hero.enabled .totp-hero-icon {
+  color: var(--el-color-success);
+}
+
+.totp-hero-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.totp-hero-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.totp-hero-desc {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.totp-hero-action {
+  flex-shrink: 0;
+}
+
+.totp-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.totp-metric-item {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color-page);
+}
+
+.totp-metric-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 8px;
+}
+
+.totp-metric-value {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-height: 24px;
+}
+
+.recovery-count-wrap {
   flex-wrap: wrap;
+}
+
+.totp-recovery-count {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.totp-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.totp-action-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+}
+
+.totp-action-info {
+  min-width: 0;
+}
+
+.totp-action-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.totp-action-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.totp-action-buttons {
+  flex-shrink: 0;
 }
 
 .dialog-loading {
@@ -1337,6 +1487,32 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
 
   .oauth-right {
     gap: 4px;
+  }
+
+  .totp-hero {
+    flex-wrap: wrap;
+  }
+
+  .totp-hero-action {
+    width: 100%;
+  }
+
+  .totp-hero-action :deep(.el-button) {
+    width: 100%;
+  }
+
+  .totp-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .totp-action-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .totp-action-buttons :deep(.el-button) {
+    width: 100%;
   }
 }
 </style>

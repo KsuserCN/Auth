@@ -130,6 +130,9 @@
         </Transition>
       </div>
     </div>
+
+    <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
+      @cancel="handleSensitiveVerificationCancel" />
   </div>
 </template>
 
@@ -142,6 +145,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import QRCode from 'qrcode'
 import { checkSensitiveVerification, getTotpStatus, getTotpRegistrationOptions, verifyTotpRegistration } from '@/api/auth'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const router = useRouter()
 const verifyFormRef = ref<FormInstance>()
@@ -187,7 +191,7 @@ const verifyRules: FormRules = {
   verificationCode: [
     { required: true, message: '请输入 6 位动态码', trigger: 'blur' },
     {
-      validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
+      validator: (_rule: unknown, value: string, callback: (err?: Error) => void) => {
         const v = (value || '').trim()
         if (!/^[0-9]{6}$/.test(v)) {
           callback(new Error('请输入6位动态码'))
@@ -204,22 +208,22 @@ const verifyRules: FormRules = {
 const verifyLoading = ref(false)
 const completeLoading = ref(false)
 const recoveryCodesSaved = ref(false)
+const sensitiveDialogVisible = ref(false)
 
 // 初始化
 onMounted(async () => {
+  await initTotpPage()
+})
+
+const initTotpPage = async () => {
   try {
-    // 检查敏感操作验证
     const verificationStatus = await checkSensitiveVerification()
     if (!verificationStatus.verified) {
       ElMessage.info('需要验证身份')
-      router.push({
-        path: '/sensitive-verification',
-        query: { returnTo: router.currentRoute.value.fullPath }
-      })
+      sensitiveDialogVisible.value = true
       return
     }
 
-    // 获取 TOTP 状态
     const status = await getTotpStatus()
     totpEnabled.value = status.enabled
 
@@ -233,7 +237,16 @@ onMounted(async () => {
   } finally {
     statusLoading.value = false
   }
-})
+}
+
+const handleSensitiveVerificationSuccess = async () => {
+  statusLoading.value = true
+  await initTotpPage()
+}
+
+const handleSensitiveVerificationCancel = () => {
+  statusLoading.value = false
+}
 
 const renderQrCode = async () => {
   if (qrcodeRendering.value) return

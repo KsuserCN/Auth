@@ -264,6 +264,9 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
+      @cancel="handleSensitiveVerificationCancel" />
   </div>
 </template>
 
@@ -274,7 +277,6 @@ import { useRouter } from 'vue-router'
 import {
   Key,
   Lock,
-  Monitor,
   Delete,
   Document,
 } from '@element-plus/icons-vue'
@@ -289,14 +291,9 @@ import {
   type SensitiveLoginMethod,
   type SensitiveOperationType,
 } from '@/api/auth'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const router = useRouter()
-
-const sessions = ref([
-  { device: 'MacBook Pro (Chrome)', location: '上海', lastActive: '现在' },
-  { device: 'iPhone 15 (Safari)', location: '北京', lastActive: '10 分钟前' },
-  { device: 'Windows (Edge)', location: '深圳', lastActive: '2 小时前' },
-])
 
 const passkeyEnabled = ref(false)
 const totpEnabled = ref(false)
@@ -314,6 +311,8 @@ const settingsUpdating = ref(false)
 const sensitiveLogs = ref<SensitiveLogItem[]>([])
 const sensitiveLogsLoading = ref(false)
 const sensitiveLogsTotal = ref(0)
+const sensitiveDialogVisible = ref(false)
+let pendingSensitiveAction: null | (() => Promise<void>) = null
 
 // 查询与分页/排序状态
 const query = ref<{ page: number; pageSize: number; startDate?: string; endDate?: string; operationType?: string | null; result?: string | null; sortBy?: string | null; sortOrder?: 'asc' | 'desc' | null }>({
@@ -453,7 +452,7 @@ const getBrowserIconClass = (browser?: string | null) => {
 const loadSensitiveLogs = async () => {
   sensitiveLogsLoading.value = true
   try {
-    const params: any = {
+    const params: Record<string, string | number> = {
       page: query.value.page,
       pageSize: query.value.pageSize,
     }
@@ -626,36 +625,49 @@ const goToLoginOptions = () => {
   router.push('/home/login-options')
 }
 
-const handleSessionLogout = (row: any) => {
-  ElMessage.success(`已退出会话：${row.device}`)
-  const index = sessions.value.findIndex(s => s.device === row.device)
-  if (index > -1) {
-    sessions.value.splice(index, 1)
+const handleDeleteAccount = async () => {
+  try {
+    await runWithSensitiveVerification(async () => {
+      await router.push('/delete-account')
+    })
+  } catch (error) {
+    console.error('Handle delete account failed:', error)
   }
 }
 
-const handleDeleteAccount = async () => {
+const runWithSensitiveVerification = async (action: () => Promise<void>) => {
   try {
-    // 检查敏感操作验证状态
     const status = await checkSensitiveVerification()
-    if (!status.verified) {
-      // 先进行敏感操作验证
-      router.push({
-        path: '/sensitive-verification',
-        query: { returnTo: '/delete-account' }
-      })
-    } else {
-      // 验证已完成，直接跳转到删除账号页面
-      router.push('/delete-account')
+    if (status.verified) {
+      await action()
+      return
     }
-  } catch (error) {
-    // 未验证，需要先验证
+
     ElMessage.info('需要先完成身份验证')
-    router.push({
-      path: '/sensitive-verification',
-      query: { returnTo: '/delete-account' }
-    })
+    pendingSensitiveAction = action
+    sensitiveDialogVisible.value = true
+  } catch (error) {
+    console.error('Check sensitive verification failed:', error)
+    ElMessage.info('需要先完成身份验证')
+    pendingSensitiveAction = action
+    sensitiveDialogVisible.value = true
   }
+}
+
+const handleSensitiveVerificationSuccess = async () => {
+  const action = pendingSensitiveAction
+  pendingSensitiveAction = null
+  if (!action) return
+
+  try {
+    await action()
+  } catch (error) {
+    console.error('Run pending sensitive action failed:', error)
+  }
+}
+
+const handleSensitiveVerificationCancel = () => {
+  pendingSensitiveAction = null
 }
 </script>
 
