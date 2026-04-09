@@ -12,6 +12,9 @@ import 'package:flutter/services.dart';
 const Color kPrimaryColor = Color(0xFFFFB90F);
 const Color kSurfaceTint = Color(0xFFFFF2CC);
 const String kDefaultApiBaseUrl = 'https://api.ksuser.cn';
+const String kDesktopAppVersion = '1.0.0';
+const int kDesktopSessionBridgePort = 43921;
+const String kSidebarLogoAsset = 'assets/logo/sidebar_logo.png';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +46,9 @@ class KsuserDesktopApp extends StatefulWidget {
 
 class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
   late final AppController _controller;
+  DesktopSessionBridgeServer? _sessionBridge;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  bool _settingsDialogOpen = false;
 
   @override
   void initState() {
@@ -52,18 +58,59 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
       environmentName: widget.environmentName,
       passkeyOrigin: widget.passkeyOrigin,
     );
+    _sessionBridge = DesktopSessionBridgeServer(
+      controller: _controller,
+      allowedOrigins: _buildAllowedOrigins(widget.passkeyOrigin),
+    );
+    unawaited(_sessionBridge!.start());
     _appMenuChannel.setMethodCallHandler(_handleAppMenuCall);
   }
 
   @override
   void dispose() {
     _appMenuChannel.setMethodCallHandler(null);
+    unawaited(_sessionBridge?.stop());
     _controller.dispose();
     super.dispose();
   }
 
+  Set<String> _buildAllowedOrigins(String passkeyOrigin) {
+    final Set<String> allowed = <String>{};
+    final Uri? uri = Uri.tryParse(passkeyOrigin.trim());
+    if (uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty) {
+      allowed.add(uri.origin);
+      if (uri.host == 'localhost') {
+        allowed.add(
+          uri.hasPort
+              ? Uri(
+                  scheme: uri.scheme,
+                  host: '127.0.0.1',
+                  port: uri.port,
+                ).origin
+              : Uri(scheme: uri.scheme, host: '127.0.0.1').origin,
+        );
+      } else if (uri.host == '127.0.0.1') {
+        allowed.add(
+          uri.hasPort
+              ? Uri(
+                  scheme: uri.scheme,
+                  host: 'localhost',
+                  port: uri.port,
+                ).origin
+              : Uri(scheme: uri.scheme, host: 'localhost').origin,
+        );
+      }
+    }
+    return allowed;
+  }
+
   Future<dynamic> _handleAppMenuCall(MethodCall call) async {
     switch (call.method) {
+      case 'openSettings':
+        _openSettingsPanel();
+        return true;
       case 'refresh':
         if (_controller.isAuthenticated) {
           await _controller.refreshWorkspace();
@@ -106,48 +153,99 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
     }
   }
 
+  void _openSettingsPanel() {
+    final BuildContext? context = _navigatorKey.currentContext;
+    if (context == null || _settingsDialogOpen) {
+      return;
+    }
+    _settingsDialogOpen = true;
+    unawaited(
+      showDesktopSettingsDialog(context, _controller).whenComplete(() {
+        _settingsDialogOpen = false;
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (BuildContext context, _) {
+        return MaterialApp(
+          title: 'Ksuser Auth 统一认证中心',
+          navigatorKey: _navigatorKey,
+          debugShowCheckedModeBanner: false,
+          theme: _buildTheme(Brightness.light),
+          darkTheme: _buildTheme(Brightness.dark),
+          themeMode: _controller.themeMode,
+          themeAnimationDuration: _controller.reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 220),
+          home: DesktopRoot(controller: _controller),
+        );
+      },
+    );
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    final bool isDark = brightness == Brightness.dark;
     final ColorScheme scheme = ColorScheme.fromSeed(
       seedColor: kPrimaryColor,
-      brightness: Brightness.light,
+      brightness: brightness,
+    );
+    final BorderSide outline = BorderSide(
+      color: isDark
+          ? Colors.white.withValues(alpha: 0.08)
+          : Colors.black.withValues(alpha: 0.08),
     );
 
-    return MaterialApp(
-      title: 'Ksuser Auth 统一认证中心',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: scheme,
-        scaffoldBackgroundColor: const Color(0xFFF6F4EE),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: Colors.black.withValues(alpha: 0.05)),
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      brightness: brightness,
+      visualDensity: _controller.compactMode
+          ? const VisualDensity(horizontal: -2, vertical: -2)
+          : VisualDensity.standard,
+      scaffoldBackgroundColor: isDark
+          ? const Color(0xFF171717)
+          : const Color(0xFFF6F4EE),
+      cardTheme: CardThemeData(
+        color: isDark ? const Color(0xFF232323) : Colors.white,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.05),
           ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: const Color(0xFFFBFAF5),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.08)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: kPrimaryColor, width: 1.4),
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         ),
       ),
-      home: DesktopRoot(controller: _controller),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: isDark ? const Color(0xFF262626) : const Color(0xFFFBFAF5),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: outline,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: outline,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: kPrimaryColor, width: 1.4),
+        ),
+        contentPadding: EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: _controller.compactMode ? 14 : 18,
+        ),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: isDark ? const Color(0xFF232323) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      ),
     );
   }
 }
@@ -205,6 +303,91 @@ void showAppMessage(
     );
 }
 
+Future<void> showDesktopSettingsDialog(
+  BuildContext context,
+  AppController controller,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return AnimatedBuilder(
+        animation: controller,
+        builder: (BuildContext context, _) {
+          return AlertDialog(
+            title: const Text('设置'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text('外观', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 12),
+                    SegmentedButton<ThemeMode>(
+                      segments: const <ButtonSegment<ThemeMode>>[
+                        ButtonSegment<ThemeMode>(
+                          value: ThemeMode.system,
+                          icon: Icon(Icons.settings_suggest_rounded),
+                          label: Text('跟随系统'),
+                        ),
+                        ButtonSegment<ThemeMode>(
+                          value: ThemeMode.light,
+                          icon: Icon(Icons.light_mode_rounded),
+                          label: Text('浅色'),
+                        ),
+                        ButtonSegment<ThemeMode>(
+                          value: ThemeMode.dark,
+                          icon: Icon(Icons.dark_mode_rounded),
+                          label: Text('深色'),
+                        ),
+                      ],
+                      selected: <ThemeMode>{controller.themeMode},
+                      onSelectionChanged: (Set<ThemeMode> selection) {
+                        controller.setThemeMode(selection.first);
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      '本地调试',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: controller.compactMode,
+                      onChanged: controller.setCompactMode,
+                      title: const Text('紧凑布局'),
+                      subtitle: const Text('压缩控件间距，便于桌面联调时查看更多内容'),
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: controller.reduceMotion,
+                      onChanged: controller.setReduceMotion,
+                      title: const Text('减少动画'),
+                      subtitle: const Text('切换主题和弹窗时尽量减少动画效果'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: controller.resetLocalPreferences,
+                child: const Text('恢复默认'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('完成'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
 class PasskeyPlatform {
   static Future<bool> isAvailable() async {
     if (!Platform.isMacOS) {
@@ -226,22 +409,27 @@ class PasskeyPlatform {
     }
 
     try {
-      final Map<dynamic, dynamic>? result = await _passkeyChannel.invokeMethod<Map<dynamic, dynamic>>(
-        'performAssertion',
-        <String, dynamic>{
-          'challenge': options.challenge,
-          'rpId': options.rpId,
-          'origin': origin,
-          'userVerification': options.userVerification,
-          'allowCredentials': options.allowedCredentials.map((PasskeyAllowedCredential item) => item.toJson()).toList(),
-        },
-      );
+      final Map<dynamic, dynamic>? result = await _passkeyChannel
+          .invokeMethod<Map<dynamic, dynamic>>(
+            'performAssertion',
+            <String, dynamic>{
+              'challenge': options.challenge,
+              'rpId': options.rpId,
+              'origin': origin,
+              'userVerification': options.userVerification,
+              'allowCredentials': options.allowedCredentials
+                  .map((PasskeyAllowedCredential item) => item.toJson())
+                  .toList(),
+            },
+          );
       if (result == null) {
         throw ApiException('未获取到 Passkey 凭证');
       }
       return PasskeyAssertionResult.fromChannelMap(result);
     } on PlatformException catch (error) {
-      final String message = error.message?.trim().isNotEmpty == true ? error.message!.trim() : 'Passkey 验证失败';
+      final String message = error.message?.trim().isNotEmpty == true
+          ? error.message!.trim()
+          : 'Passkey 验证失败';
       throw ApiException(message);
     }
   }
@@ -270,6 +458,9 @@ class AppController extends ChangeNotifier {
   MFAChallenge? pendingMfaChallenge;
   bool workspaceLoading = false;
   bool authBusy = false;
+  ThemeMode themeMode = ThemeMode.system;
+  bool compactMode = false;
+  bool reduceMotion = false;
   String? workspaceError;
 
   bool get isAuthenticated => _apiClient.accessToken != null;
@@ -293,7 +484,9 @@ class AppController extends ChangeNotifier {
   }
 
   void updateApiBaseUrl(String value) {
-    final String nextValue = value.trim().isEmpty ? kDefaultApiBaseUrl : value.trim();
+    final String nextValue = value.trim().isEmpty
+        ? kDefaultApiBaseUrl
+        : value.trim();
     if (_apiClient.baseUrl == nextValue) {
       return;
     }
@@ -309,7 +502,41 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loginWithPassword({required String email, required String password}) async {
+  void setThemeMode(ThemeMode value) {
+    if (themeMode == value) {
+      return;
+    }
+    themeMode = value;
+    notifyListeners();
+  }
+
+  void setCompactMode(bool value) {
+    if (compactMode == value) {
+      return;
+    }
+    compactMode = value;
+    notifyListeners();
+  }
+
+  void setReduceMotion(bool value) {
+    if (reduceMotion == value) {
+      return;
+    }
+    reduceMotion = value;
+    notifyListeners();
+  }
+
+  void resetLocalPreferences() {
+    themeMode = ThemeMode.system;
+    compactMode = false;
+    reduceMotion = false;
+    notifyListeners();
+  }
+
+  Future<void> loginWithPassword({
+    required String email,
+    required String password,
+  }) async {
     authBusy = true;
     pendingMfaChallenge = null;
     notifyListeners();
@@ -332,7 +559,10 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  Future<void> loginWithCode({required String email, required String code}) async {
+  Future<void> loginWithCode({
+    required String email,
+    required String code,
+  }) async {
     authBusy = true;
     pendingMfaChallenge = null;
     notifyListeners();
@@ -356,14 +586,19 @@ class AppController extends ChangeNotifier {
     authBusy = true;
     notifyListeners();
     try {
-      final Map<String, dynamic> payload = <String, dynamic>{'challengeId': challengeId};
+      final Map<String, dynamic> payload = <String, dynamic>{
+        'challengeId': challengeId,
+      };
       if (code != null && code.isNotEmpty) {
         payload['code'] = code.trim();
       }
       if (recoveryCode != null && recoveryCode.isNotEmpty) {
         payload['recoveryCode'] = recoveryCode.trim();
       }
-      final dynamic data = await _apiClient.post('/auth/totp/mfa-verify', body: payload);
+      final dynamic data = await _apiClient.post(
+        '/auth/totp/mfa-verify',
+        body: payload,
+      );
       pendingMfaChallenge = null;
       await _consumeLoginPayload(data);
     } finally {
@@ -376,12 +611,13 @@ class AppController extends ChangeNotifier {
     authBusy = true;
     notifyListeners();
     try {
-      final BrowserPasskeyBridgeResponse response = await BrowserPasskeyBridge.start(
-        passkeyOrigin: passkeyOrigin,
-        apiBaseUrl: apiBaseUrl,
-        mode: BrowserPasskeyBridgeMode.mfa,
-        mfaChallengeId: challengeId,
-      );
+      final BrowserPasskeyBridgeResponse response =
+          await BrowserPasskeyBridge.start(
+            passkeyOrigin: passkeyOrigin,
+            apiBaseUrl: apiBaseUrl,
+            mode: BrowserPasskeyBridgeMode.mfa,
+            mfaChallengeId: challengeId,
+          );
       if (response.accessToken == null || response.accessToken!.isEmpty) {
         throw ApiException(response.message ?? '浏览器未返回登录结果');
       }
@@ -408,7 +644,9 @@ class AppController extends ChangeNotifier {
 
   Future<PasswordRequirement> fetchPasswordRequirement() async {
     final dynamic data = await _apiClient.get('/info/password-requirement');
-    final PasswordRequirement requirement = PasswordRequirement.fromJson(asMap(data));
+    final PasswordRequirement requirement = PasswordRequirement.fromJson(
+      asMap(data),
+    );
     passwordRequirement = requirement;
     notifyListeners();
     return requirement;
@@ -466,7 +704,9 @@ class AppController extends ChangeNotifier {
       user = UserDetails.fromJson(asMap(userData));
 
       sessions = await _loadSessions();
-      sensitiveLogs = await _loadSensitiveLogs(logsQuery ?? const SensitiveLogsQuery());
+      sensitiveLogs = await _loadSensitiveLogs(
+        logsQuery ?? const SensitiveLogsQuery(),
+      );
       passkeys = await _loadPasskeys();
       totpStatus = await _loadTotpStatus();
     } catch (error) {
@@ -479,7 +719,9 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> refreshSensitiveLogs({SensitiveLogsQuery? query}) async {
-    sensitiveLogs = await _loadSensitiveLogs(query ?? const SensitiveLogsQuery());
+    sensitiveLogs = await _loadSensitiveLogs(
+      query ?? const SensitiveLogsQuery(),
+    );
     notifyListeners();
   }
 
@@ -522,7 +764,10 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateProfileField({required String key, required String value}) async {
+  Future<void> updateProfileField({
+    required String key,
+    required String value,
+  }) async {
     final dynamic data = await _apiClient.post(
       '/auth/update/profile',
       authorized: true,
@@ -533,7 +778,10 @@ class AppController extends ChangeNotifier {
   }
 
   Future<SensitiveVerificationStatus> checkSensitiveVerification() async {
-    final dynamic data = await _apiClient.get('/auth/check-sensitive-verification', authorized: true);
+    final dynamic data = await _apiClient.get(
+      '/auth/check-sensitive-verification',
+      authorized: true,
+    );
     return SensitiveVerificationStatus.fromJson(asMap(data));
   }
 
@@ -557,11 +805,17 @@ class AppController extends ChangeNotifier {
     if (code != null && code.trim().isNotEmpty) {
       payload['code'] = code.trim();
     }
-    return _apiClient.post('/auth/verify-sensitive', authorized: true, body: payload);
+    return _apiClient.post(
+      '/auth/verify-sensitive',
+      authorized: true,
+      body: payload,
+    );
   }
 
   Future<PasskeyAssertionOptions> getPasskeyAuthenticationOptions() async {
-    final dynamic data = await _apiClient.post('/auth/passkey/authentication-options');
+    final dynamic data = await _apiClient.post(
+      '/auth/passkey/authentication-options',
+    );
     return PasskeyAssertionOptions.fromJson(asMap(data));
   }
 
@@ -570,11 +824,12 @@ class AppController extends ChangeNotifier {
     pendingMfaChallenge = null;
     notifyListeners();
     try {
-      final BrowserPasskeyBridgeResponse response = await BrowserPasskeyBridge.start(
-        passkeyOrigin: passkeyOrigin,
-        apiBaseUrl: apiBaseUrl,
-        mode: BrowserPasskeyBridgeMode.login,
-      );
+      final BrowserPasskeyBridgeResponse response =
+          await BrowserPasskeyBridge.start(
+            passkeyOrigin: passkeyOrigin,
+            apiBaseUrl: apiBaseUrl,
+            mode: BrowserPasskeyBridgeMode.login,
+          );
       if (response.accessToken == null || response.accessToken!.isEmpty) {
         throw ApiException(response.message ?? '浏览器未返回登录结果');
       }
@@ -586,7 +841,8 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<PasskeyAssertionOptions> getPasskeySensitiveVerificationOptions() async {
+  Future<PasskeyAssertionOptions>
+  getPasskeySensitiveVerificationOptions() async {
     final dynamic data = await _apiClient.post(
       '/auth/passkey/sensitive-verification-options',
       authorized: true,
@@ -620,13 +876,14 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> registerPasskeyInBrowser({String? preferredName}) async {
-    final BrowserPasskeyBridgeResponse response = await BrowserPasskeyBridge.start(
-      passkeyOrigin: passkeyOrigin,
-      apiBaseUrl: apiBaseUrl,
-      mode: BrowserPasskeyBridgeMode.register,
-      accessToken: _apiClient.accessToken,
-      passkeyName: preferredName,
-    );
+    final BrowserPasskeyBridgeResponse response =
+        await BrowserPasskeyBridge.start(
+          passkeyOrigin: passkeyOrigin,
+          apiBaseUrl: apiBaseUrl,
+          mode: BrowserPasskeyBridgeMode.register,
+          accessToken: _apiClient.accessToken,
+          passkeyName: preferredName,
+        );
     if (!response.registered) {
       throw ApiException(response.message ?? '浏览器未完成 Passkey 登记');
     }
@@ -641,7 +898,10 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  Future<void> changeEmail({required String newEmail, required String code}) async {
+  Future<void> changeEmail({
+    required String newEmail,
+    required String code,
+  }) async {
     final dynamic data = await _apiClient.post(
       '/auth/update/email',
       authorized: true,
@@ -649,7 +909,9 @@ class AppController extends ChangeNotifier {
     );
     final Map<String, dynamic> payload = asMap(data);
     if (user != null) {
-      user = user!.copyWith(email: asString(payload['email']) ?? newEmail.trim());
+      user = user!.copyWith(
+        email: asString(payload['email']) ?? newEmail.trim(),
+      );
     }
     notifyListeners();
   }
@@ -701,13 +963,19 @@ class AppController extends ChangeNotifier {
     await _apiClient.post(
       '/auth/totp/registration-verify',
       authorized: true,
-      body: <String, dynamic>{'code': code.trim(), 'recoveryCodes': recoveryCodes},
+      body: <String, dynamic>{
+        'code': code.trim(),
+        'recoveryCodes': recoveryCodes,
+      },
     );
     await refreshTotpStatus();
   }
 
   Future<List<String>> getRecoveryCodes() async {
-    final dynamic data = await _apiClient.get('/auth/totp/recovery-codes', authorized: true);
+    final dynamic data = await _apiClient.get(
+      '/auth/totp/recovery-codes',
+      authorized: true,
+    );
     return asList(data).map((dynamic item) => item.toString()).toList();
   }
 
@@ -737,6 +1005,37 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<SessionTransferTicket> createSessionTransferTicket({
+    required String target,
+  }) async {
+    if (!isAuthenticated) {
+      throw ApiException('当前桌面端尚未登录');
+    }
+    final dynamic data = await _apiClient.post(
+      '/auth/session-transfer/create',
+      authorized: true,
+      body: <String, dynamic>{'target': target},
+    );
+    return SessionTransferTicket.fromJson(asMap(data));
+  }
+
+  Future<void> importSessionTransferTicket(String transferCode) async {
+    final dynamic data = await _apiClient.post(
+      '/auth/session-transfer/exchange',
+      body: <String, dynamic>{
+        'transferCode': transferCode.trim(),
+        'target': 'desktop',
+      },
+    );
+    final String? nextAccessToken = asString(asMap(data)['accessToken']);
+    if (nextAccessToken == null || nextAccessToken.isEmpty) {
+      throw ApiException('跨端登录失败，未获取到 accessToken');
+    }
+    _apiClient.accessToken = nextAccessToken;
+    pendingMfaChallenge = null;
+    await refreshWorkspace();
+  }
+
   Future<void> _consumeLoginPayload(dynamic data) async {
     final Map<String, dynamic> json = asMap(data);
     if (json.containsKey('challengeId')) {
@@ -749,32 +1048,45 @@ class AppController extends ChangeNotifier {
   }
 
   Future<List<SessionItem>> _loadSessions() async {
-    final dynamic data = await _apiClient.get('/auth/sessions', authorized: true);
-    return asList(data).map((dynamic item) => SessionItem.fromJson(asMap(item))).toList();
+    final dynamic data = await _apiClient.get(
+      '/auth/sessions',
+      authorized: true,
+    );
+    return asList(
+      data,
+    ).map((dynamic item) => SessionItem.fromJson(asMap(item))).toList();
   }
 
-  Future<List<SensitiveLogItem>> _loadSensitiveLogs(SensitiveLogsQuery query) async {
+  Future<List<SensitiveLogItem>> _loadSensitiveLogs(
+    SensitiveLogsQuery query,
+  ) async {
     final dynamic data = await _apiClient.get(
       '/auth/sensitive-logs',
       authorized: true,
       query: query.toQuery(),
     );
     final Map<String, dynamic> payload = asMap(data);
-    return asList(payload['data'])
-        .map((dynamic item) => SensitiveLogItem.fromJson(asMap(item)))
-        .toList();
+    return asList(
+      payload['data'],
+    ).map((dynamic item) => SensitiveLogItem.fromJson(asMap(item))).toList();
   }
 
   Future<List<PasskeyListItem>> _loadPasskeys() async {
-    final dynamic data = await _apiClient.get('/auth/passkey/list', authorized: true);
+    final dynamic data = await _apiClient.get(
+      '/auth/passkey/list',
+      authorized: true,
+    );
     final Map<String, dynamic> payload = asMap(data);
-    return asList(payload['passkeys'])
-        .map((dynamic item) => PasskeyListItem.fromJson(asMap(item)))
-        .toList();
+    return asList(
+      payload['passkeys'],
+    ).map((dynamic item) => PasskeyListItem.fromJson(asMap(item))).toList();
   }
 
   Future<TotpStatusResponse> _loadTotpStatus() async {
-    final dynamic data = await _apiClient.get('/auth/totp/status', authorized: true);
+    final dynamic data = await _apiClient.get(
+      '/auth/totp/status',
+      authorized: true,
+    );
     return TotpStatusResponse.fromJson(asMap(data));
   }
 }
@@ -782,8 +1094,10 @@ class AppController extends ChangeNotifier {
 class KsuserApiClient {
   KsuserApiClient({required this.baseUrl});
 
-  final HttpClient _httpClient = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+  final HttpClient _httpClient = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 12);
   final Map<String, Cookie> _cookies = <String, Cookie>{};
+  final String _desktopUserAgent = _buildDesktopUserAgent();
   String baseUrl;
   String? accessToken;
   VoidCallback? onSessionExpired;
@@ -829,10 +1143,7 @@ class KsuserApiClient {
     return _request('PUT', path, body: body, authorized: authorized);
   }
 
-  Future<dynamic> delete(
-    String path, {
-    bool authorized = false,
-  }) {
+  Future<dynamic> delete(String path, {bool authorized = false}) {
     return _request('DELETE', path, authorized: authorized);
   }
 
@@ -869,22 +1180,35 @@ class KsuserApiClient {
       await _refreshCsrfToken();
     }
 
-    final Uri baseUri = Uri.parse(baseUrl.endsWith('/') ? baseUrl : '$baseUrl/');
-    final Uri uri = baseUri.resolve(path.startsWith('/') ? path.substring(1) : path).replace(
+    final Uri baseUri = Uri.parse(
+      baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
+    );
+    final Uri uri = baseUri
+        .resolve(path.startsWith('/') ? path.substring(1) : path)
+        .replace(
           queryParameters: query == null || query.isEmpty ? null : query,
         );
 
     try {
       final HttpClientRequest request = await _httpClient.openUrl(method, uri);
+      request.headers.set(HttpHeaders.userAgentHeader, _desktopUserAgent);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8');
+      request.headers.set(
+        HttpHeaders.contentTypeHeader,
+        'application/json; charset=utf-8',
+      );
       if (authorized && accessToken != null) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $accessToken');
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $accessToken',
+        );
       }
       if (_cookies.isNotEmpty) {
         request.headers.set(
           HttpHeaders.cookieHeader,
-          _cookies.values.map((Cookie cookie) => '${cookie.name}=${cookie.value}').join('; '),
+          _cookies.values
+              .map((Cookie cookie) => '${cookie.name}=${cookie.value}')
+              .join('; '),
         );
       }
       final Cookie? xsrf = _cookies['XSRF-TOKEN'];
@@ -902,7 +1226,11 @@ class KsuserApiClient {
       final String? responseMessage = _extractMessage(decoded);
 
       if (response.statusCode == 401) {
-        if (_canAttemptTokenRefresh(path, authorized: authorized, tokenRetried: tokenRetried)) {
+        if (_canAttemptTokenRefresh(
+          path,
+          authorized: authorized,
+          tokenRetried: tokenRetried,
+        )) {
           try {
             await _refreshAccessToken();
             return _request(
@@ -937,11 +1265,19 @@ class KsuserApiClient {
         );
       }
       if (response.statusCode >= 400) {
-        throw ApiException(responseMessage ?? '请求失败', statusCode: response.statusCode);
+        throw ApiException(
+          responseMessage ?? '请求失败',
+          statusCode: response.statusCode,
+        );
       }
       if (decoded is Map<String, dynamic>) {
         final int? code = asInt(decoded['code']);
-        if (code == 401 && _canAttemptTokenRefresh(path, authorized: authorized, tokenRetried: tokenRetried)) {
+        if (code == 401 &&
+            _canAttemptTokenRefresh(
+              path,
+              authorized: authorized,
+              tokenRetried: tokenRetried,
+            )) {
           try {
             await _refreshAccessToken();
             return _request(
@@ -955,7 +1291,10 @@ class KsuserApiClient {
               tokenRetried: true,
             );
           } on ApiException {
-            throw ApiException(responseMessage ?? '认证已失效，请重新登录', statusCode: 401);
+            throw ApiException(
+              responseMessage ?? '认证已失效，请重新登录',
+              statusCode: 401,
+            );
           }
         }
         if (code != null && code >= 400) {
@@ -1076,6 +1415,21 @@ class KsuserApiClient {
       _refreshCompleter = null;
     }
   }
+
+  static String _buildDesktopUserAgent() {
+    final String operatingSystem;
+    if (Platform.isMacOS) {
+      operatingSystem = 'macOS';
+    } else if (Platform.isWindows) {
+      operatingSystem = 'Windows';
+    } else if (Platform.isLinux) {
+      operatingSystem = 'Linux';
+    } else {
+      operatingSystem = Platform.operatingSystem;
+    }
+
+    return 'KsuserAuthDesktop/$kDesktopAppVersion ($operatingSystem; Flutter Desktop)';
+  }
 }
 
 class ApiException implements Exception {
@@ -1086,6 +1440,23 @@ class ApiException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class SessionTransferTicket {
+  const SessionTransferTicket({
+    required this.transferCode,
+    required this.expiresInSeconds,
+  });
+
+  factory SessionTransferTicket.fromJson(Map<String, dynamic> json) {
+    return SessionTransferTicket(
+      transferCode: asString(json['transferCode']) ?? '',
+      expiresInSeconds: asInt(json['expiresInSeconds']) ?? 0,
+    );
+  }
+
+  final String transferCode;
+  final int expiresInSeconds;
 }
 
 class DesktopAuthPortal extends StatefulWidget {
@@ -1104,10 +1475,14 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _mfaCodeController = TextEditingController();
   final TextEditingController _mfaRecoveryController = TextEditingController();
-  final TextEditingController _registerUsernameController = TextEditingController();
-  final TextEditingController _registerEmailController = TextEditingController();
-  final TextEditingController _registerPasswordController = TextEditingController();
-  final TextEditingController _registerConfirmController = TextEditingController();
+  final TextEditingController _registerUsernameController =
+      TextEditingController();
+  final TextEditingController _registerEmailController =
+      TextEditingController();
+  final TextEditingController _registerPasswordController =
+      TextEditingController();
+  final TextEditingController _registerConfirmController =
+      TextEditingController();
   final TextEditingController _registerCodeController = TextEditingController();
 
   AuthTab _tab = AuthTab.login;
@@ -1117,6 +1492,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   bool? _usernameAvailable;
   String? _usernameHint;
   bool _passkeyAvailable = false;
+  bool _bridgeBusy = false;
 
   @override
   void initState() {
@@ -1152,7 +1528,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   }
 
   Future<void> _detectPasskeyAvailability() async {
-    final bool available = BrowserPasskeyBridge.isSupported(widget.controller.passkeyOrigin);
+    final bool available = BrowserPasskeyBridge.isSupported(
+      widget.controller.passkeyOrigin,
+    );
     if (!mounted) {
       return;
     }
@@ -1167,7 +1545,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
       return;
     }
     final MfaMode nextMode;
-    if (challenge.method == 'passkey' && challenge.methods.contains('passkey')) {
+    if (challenge.method == 'passkey' &&
+        challenge.methods.contains('passkey')) {
       nextMode = MfaMode.passkey;
     } else {
       nextMode = MfaMode.code;
@@ -1204,7 +1583,10 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
           _showError('请输入 6 位验证码');
           return;
         }
-        await widget.controller.loginWithCode(email: email, code: _codeController.text);
+        await widget.controller.loginWithCode(
+          email: email,
+          code: _codeController.text,
+        );
       }
       if (mounted && widget.controller.pendingMfaChallenge == null) {
         _showSuccess('登录成功');
@@ -1239,18 +1621,22 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     }
     if (_mfaMode == MfaMode.passkey) {
       try {
-        await widget.controller.completePasskeyMfa(challengeId: challenge.challengeId);
+        await widget.controller.completePasskeyMfa(
+          challengeId: challenge.challengeId,
+        );
         _showSuccess('二次验证通过');
       } catch (error) {
         _showError(error.toString());
       }
       return;
     }
-    if (_mfaMode == MfaMode.code && _mfaCodeController.text.trim().length != 6) {
+    if (_mfaMode == MfaMode.code &&
+        _mfaCodeController.text.trim().length != 6) {
       _showError('请输入 6 位动态码');
       return;
     }
-    if (_mfaMode == MfaMode.recoveryCode && _mfaRecoveryController.text.trim().isEmpty) {
+    if (_mfaMode == MfaMode.recoveryCode &&
+        _mfaRecoveryController.text.trim().isEmpty) {
       _showError('请输入恢复码');
       return;
     }
@@ -1258,7 +1644,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
       await widget.controller.completeTotpMfa(
         challengeId: challenge.challengeId,
         code: _mfaMode == MfaMode.code ? _mfaCodeController.text : null,
-        recoveryCode: _mfaMode == MfaMode.recoveryCode ? _mfaRecoveryController.text : null,
+        recoveryCode: _mfaMode == MfaMode.recoveryCode
+            ? _mfaRecoveryController.text
+            : null,
       );
       _showSuccess('二次验证通过');
     } catch (error) {
@@ -1337,7 +1725,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
       _showError('两次输入的密码不一致');
       return;
     }
-    final PasswordRequirement? requirement = widget.controller.passwordRequirement;
+    final PasswordRequirement? requirement =
+        widget.controller.passwordRequirement;
     if (requirement != null) {
       final String? error = requirement.validate(password);
       if (error != null) {
@@ -1360,6 +1749,50 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     }
   }
 
+  Uri _buildWebLoginUri({
+    String? transferCode,
+    bool desktopBridgeHint = false,
+  }) {
+    final String origin = widget.controller.passkeyOrigin.trim();
+    final Uri baseUri = Uri.parse(origin.endsWith('/') ? origin : '$origin/');
+    return baseUri
+        .resolve('login')
+        .replace(
+          queryParameters: <String, String>{
+            if (desktopBridgeHint) 'desktopBridge': '1',
+            if (transferCode != null && transferCode.isNotEmpty)
+              'transferCode': transferCode,
+            if (widget.controller.apiBaseUrl.trim().isNotEmpty)
+              'apiBaseUrl': widget.controller.apiBaseUrl.trim(),
+          },
+        );
+  }
+
+  Future<void> _openBrowserLoginForDesktopSync() async {
+    if (_bridgeBusy) {
+      return;
+    }
+    setState(() {
+      _bridgeBusy = true;
+    });
+    try {
+      await openExternalUrl(
+        _buildWebLoginUri(desktopBridgeHint: true).toString(),
+      );
+      if (mounted) {
+        _showSuccess('已打开浏览器，请在网页端登录，桌面端会自动接收登录状态');
+      }
+    } catch (error) {
+      _showError(error.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _bridgeBusy = false;
+        });
+      }
+    }
+  }
+
   void _showError(String message) {
     showAppMessage(context, message, error: true);
   }
@@ -1370,7 +1803,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
 
   @override
   Widget build(BuildContext context) {
-    final PasswordRequirement? requirement = widget.controller.passwordRequirement;
+    final PasswordRequirement? requirement =
+        widget.controller.passwordRequirement;
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -1388,9 +1822,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                         if (_tab == AuthTab.login) ...<Widget>[
                           Text(
                             '账户登录',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
                           const Text('桌面端采用工作台布局，保留网页端相同的认证信息与流程。'),
@@ -1447,8 +1880,12 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                 Align(
                                   alignment: Alignment.centerLeft,
                                   child: OutlinedButton.icon(
-                                    onPressed: widget.controller.authBusy ? null : _sendLoginCode,
-                                    icon: const Icon(Icons.send_to_mobile_rounded),
+                                    onPressed: widget.controller.authBusy
+                                        ? null
+                                        : _sendLoginCode,
+                                    icon: const Icon(
+                                      Icons.send_to_mobile_rounded,
+                                    ),
                                     label: const Text('发送验证码'),
                                   ),
                                 ),
@@ -1458,15 +1895,80 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
-                              onPressed: widget.controller.authBusy ? null : _login,
+                              onPressed: widget.controller.authBusy
+                                  ? null
+                                  : _login,
                               icon: widget.controller.authBusy
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.login_rounded),
                               label: const Text('登录'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(
+                                color: Colors.black.withValues(alpha: 0.06),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    const Icon(
+                                      Icons.language_rounded,
+                                      color: kPrimaryColor,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: const <Widget>[
+                                          Text(
+                                            '从网页登录到桌面端',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          SizedBox(height: 4),
+                                          Text(
+                                            '打开浏览器登录页；登录成功后，网页会把登录态自动同步回当前桌面应用。',
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton.tonalIcon(
+                                  onPressed: _bridgeBusy
+                                      ? null
+                                      : _openBrowserLoginForDesktopSync,
+                                  icon: _bridgeBusy
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.open_in_browser_rounded,
+                                        ),
+                                  label: const Text('打开网页登录页'),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -1475,17 +1977,28 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFFBFAF5),
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                              border: Border.all(
+                                color: Colors.black.withValues(alpha: 0.06),
+                              ),
                             ),
                             child: Row(
                               children: <Widget>[
-                                const Icon(Icons.fingerprint_rounded, color: kPrimaryColor),
+                                const Icon(
+                                  Icons.fingerprint_rounded,
+                                  color: kPrimaryColor,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: <Widget>[
-                                      const Text('Passkey 登录', style: TextStyle(fontWeight: FontWeight.w700)),
+                                      const Text(
+                                        'Passkey 登录',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                                       const SizedBox(height: 4),
                                       Text(
                                         _passkeyAvailable
@@ -1497,7 +2010,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                 ),
                                 const SizedBox(width: 12),
                                 FilledButton.tonalIcon(
-                                  onPressed: !_passkeyAvailable || widget.controller.authBusy
+                                  onPressed:
+                                      !_passkeyAvailable ||
+                                          widget.controller.authBusy
                                       ? null
                                       : _loginWithPasskey,
                                   icon: const Icon(Icons.fingerprint_rounded),
@@ -1506,7 +2021,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                               ],
                             ),
                           ),
-                          if (widget.controller.pendingMfaChallenge != null) ...<Widget>[
+                          if (widget.controller.pendingMfaChallenge !=
+                              null) ...<Widget>[
                             const SizedBox(height: 18),
                             _MfaPanel(
                               challenge: widget.controller.pendingMfaChallenge!,
@@ -1526,9 +2042,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                         ] else ...<Widget>[
                           Text(
                             '创建新账户',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
                           const Text('桌面端注册改为并排信息表单，不沿用网页端的分步卡片。'),
@@ -1540,16 +2055,24 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                   controller: _registerUsernameController,
                                   decoration: InputDecoration(
                                     labelText: '用户名',
-                                    prefixIcon: const Icon(Icons.person_outline_rounded),
+                                    prefixIcon: const Icon(
+                                      Icons.person_outline_rounded,
+                                    ),
                                     suffixIcon: IconButton(
-                                      onPressed: _checkingUsername ? null : _checkUsername,
+                                      onPressed: _checkingUsername
+                                          ? null
+                                          : _checkUsername,
                                       icon: _checkingUsername
                                           ? const SizedBox(
                                               width: 18,
                                               height: 18,
-                                              child: CircularProgressIndicator(strokeWidth: 2),
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
                                             )
-                                          : const Icon(Icons.verified_user_outlined),
+                                          : const Icon(
+                                              Icons.verified_user_outlined,
+                                            ),
                                     ),
                                   ),
                                 ),
@@ -1560,7 +2083,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                   controller: _registerEmailController,
                                   decoration: const InputDecoration(
                                     labelText: '邮箱',
-                                    prefixIcon: Icon(Icons.mail_outline_rounded),
+                                    prefixIcon: Icon(
+                                      Icons.mail_outline_rounded,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1571,7 +2096,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                             Text(
                               _usernameHint!,
                               style: TextStyle(
-                                color: _usernameAvailable == true ? Colors.green.shade700 : Colors.red.shade700,
+                                color: _usernameAvailable == true
+                                    ? Colors.green.shade700
+                                    : Colors.red.shade700,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1610,13 +2137,17 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                   controller: _registerCodeController,
                                   decoration: const InputDecoration(
                                     labelText: '邮箱验证码',
-                                    prefixIcon: Icon(Icons.confirmation_number_outlined),
+                                    prefixIcon: Icon(
+                                      Icons.confirmation_number_outlined,
+                                    ),
                                   ),
                                 ),
                               ),
                               const SizedBox(width: 12),
                               OutlinedButton.icon(
-                                onPressed: widget.controller.authBusy ? null : _sendRegisterCode,
+                                onPressed: widget.controller.authBusy
+                                    ? null
+                                    : _sendRegisterCode,
                                 icon: const Icon(Icons.send_rounded),
                                 label: const Text('发送验证码'),
                               ),
@@ -1628,12 +2159,16 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
-                              onPressed: widget.controller.authBusy ? null : _register,
+                              onPressed: widget.controller.authBusy
+                                  ? null
+                                  : _register,
                               icon: widget.controller.authBusy
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.rocket_launch_rounded),
                               label: const Text('完成注册'),
@@ -1652,9 +2187,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                         children: <Widget>[
                           Text(
                             'Ksuser Auth 统一认证中心',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 8),
                           const Text('桌面端默认使用当前环境配置，不再暴露环境和 API 地址选择。'),
@@ -1712,6 +2246,26 @@ class DesktopWorkspace extends StatelessWidget {
   Widget build(BuildContext context) {
     final UserDetails? user = controller.user;
     final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
+    final Color sidebarBackground = isDark
+        ? const Color(0xFF222222)
+        : const Color(0xFFF1ECE0);
+    final Color sidebarBorder = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : const Color(0xFFE1D8C4);
+    final Color sidebarTitleColor = isDark
+        ? Colors.white
+        : const Color(0xFF2F281C);
+    final Color sidebarSubtitleColor = isDark
+        ? Colors.white70
+        : const Color(0xFF6B614E);
+    final Color railSelectedTextColor = isDark
+        ? const Color(0xFF2A2204)
+        : const Color(0xFF3A2C00);
+    final Color railUnselectedColor = isDark
+        ? Colors.white70
+        : const Color(0xFF756A55);
+
     return Scaffold(
       body: SafeArea(
         child: Row(
@@ -1719,89 +2273,262 @@ class DesktopWorkspace extends StatelessWidget {
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
                 final bool extended = MediaQuery.of(context).size.width > 1240;
+                final double railWidth = extended ? 248 : 88;
+
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(18, 18, 0, 18),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(28),
-                    child: NavigationRail(
-                      backgroundColor: const Color(0xFF171717),
-                      selectedIndex: DesktopSection.values.indexOf(controller.selectedSection),
-                      extended: extended,
-                      groupAlignment: -0.7,
-                      onDestinationSelected: (int index) {
-                        controller.setSection(DesktopSection.values[index]);
-                      },
-                      leading: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20),
-                        child: extended
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: <Widget>[
-                                  Container(
-                                    width: 42,
-                                    height: 42,
-                                    decoration: BoxDecoration(
-                                      color: kPrimaryColor,
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: const Icon(Icons.admin_panel_settings_rounded),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Ksuser',
-                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                                  ),
-                                ],
-                              )
-                            : Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  color: kPrimaryColor,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Icon(Icons.admin_panel_settings_rounded),
-                              ),
+                  child: SizedBox(
+                    width: railWidth,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: sidebarBackground,
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: sidebarBorder),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.18 : 0.04,
+                            ),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
-                      unselectedIconTheme: const IconThemeData(color: Colors.white70),
-                      unselectedLabelTextStyle: const TextStyle(color: Colors.white70),
-                      selectedIconTheme: const IconThemeData(color: Colors.black),
-                      selectedLabelTextStyle: const TextStyle(color: kPrimaryColor, fontWeight: FontWeight.w700),
-                      indicatorColor: kPrimaryColor,
-                      destinations: const <NavigationRailDestination>[
-                        NavigationRailDestination(
-                          icon: Icon(Icons.dashboard_outlined),
-                          selectedIcon: Icon(Icons.dashboard_customize_rounded),
-                          label: Text('概览'),
+                      child: NavigationRail(
+                        backgroundColor: Colors.transparent,
+                        selectedIndex: DesktopSection.values.indexOf(
+                          controller.selectedSection,
                         ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.badge_outlined),
-                          selectedIcon: Icon(Icons.badge_rounded),
-                          label: Text('资料'),
+                        extended: extended,
+                        groupAlignment: -1,
+                        minWidth: 88,
+                        minExtendedWidth: 248,
+                        onDestinationSelected: (int index) {
+                          controller.setSection(DesktopSection.values[index]);
+                        },
+                        leading: Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                          child: SizedBox(
+                            width: extended ? 194 : 48,
+                            child: extended
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Row(
+                                        children: <Widget>[
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            child: Image.asset(
+                                              kSidebarLogoAsset,
+                                              width: 48,
+                                              height: 48,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: <Widget>[
+                                                Text(
+                                                  'Ksuser Auth',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: sidebarTitleColor,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 18,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  '统一认证中心',
+                                                  style: TextStyle(
+                                                    color:
+                                                        sidebarSubtitleColor,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (user != null) ...<Widget>[
+                                        const SizedBox(height: 16),
+                                        Container(
+                                          padding: const EdgeInsets.all(14),
+                                          decoration: BoxDecoration(
+                                            color: isDark
+                                                ? Colors.white.withValues(
+                                                    alpha: 0.04,
+                                                  )
+                                                : Colors.white.withValues(
+                                                    alpha: 0.72,
+                                                  ),
+                                            borderRadius:
+                                                BorderRadius.circular(18),
+                                            border: Border.all(
+                                              color: isDark
+                                                  ? Colors.white.withValues(
+                                                      alpha: 0.06,
+                                                    )
+                                                  : Colors.black.withValues(
+                                                      alpha: 0.04,
+                                                    ),
+                                            ),
+                                          ),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(
+                                                user.username,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: sidebarTitleColor,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                user.email,
+                                                maxLines: 1,
+                                                overflow:
+                                                    TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color:
+                                                      sidebarSubtitleColor,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  )
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Image.asset(
+                                      kSidebarLogoAsset,
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                          ),
                         ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.lock_outline_rounded),
-                          selectedIcon: Icon(Icons.verified_user_rounded),
-                          label: Text('安全'),
+                        unselectedIconTheme: IconThemeData(
+                          color: railUnselectedColor,
                         ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.devices_other_outlined),
-                          selectedIcon: Icon(Icons.devices_rounded),
-                          label: Text('设备'),
+                        unselectedLabelTextStyle: TextStyle(
+                          color: railUnselectedColor,
+                          fontWeight: FontWeight.w600,
                         ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.history_outlined),
-                          selectedIcon: Icon(Icons.history_rounded),
-                          label: Text('日志'),
+                        selectedIconTheme: IconThemeData(
+                          color: railSelectedTextColor,
                         ),
-                      ],
-                      trailing: Padding(
-                        padding: const EdgeInsets.only(bottom: 18),
-                        child: IconButton(
-                          onPressed: () async {
-                            await controller.logout();
-                          },
-                          icon: const Icon(Icons.logout_rounded, color: Colors.white70),
+                        selectedLabelTextStyle: TextStyle(
+                          color: railSelectedTextColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        indicatorColor: kPrimaryColor,
+                        destinations: const <NavigationRailDestination>[
+                          NavigationRailDestination(
+                            icon: Icon(Icons.dashboard_outlined),
+                            selectedIcon: Icon(
+                              Icons.dashboard_customize_rounded,
+                            ),
+                            label: Text('概览'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.badge_outlined),
+                            selectedIcon: Icon(Icons.badge_rounded),
+                            label: Text('资料'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.lock_outline_rounded),
+                            selectedIcon: Icon(Icons.verified_user_rounded),
+                            label: Text('安全'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.devices_other_outlined),
+                            selectedIcon: Icon(Icons.devices_rounded),
+                            label: Text('设备'),
+                          ),
+                          NavigationRailDestination(
+                            icon: Icon(Icons.history_outlined),
+                            selectedIcon: Icon(Icons.history_rounded),
+                            label: Text('日志'),
+                          ),
+                        ],
+                        trailing: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+                          child: SizedBox(
+                            width: extended ? 194 : 48,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
+                              children: <Widget>[
+                                if (extended)
+                                  Text(
+                                    '账户操作',
+                                    style: TextStyle(
+                                      color: sidebarSubtitleColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                if (extended) const SizedBox(height: 10),
+                                if (extended)
+                                  FilledButton.tonalIcon(
+                                    onPressed: () async {
+                                      await controller.logout();
+                                    },
+                                    icon: const Icon(Icons.logout_rounded),
+                                    label: const Text('退出登录'),
+                                    style: FilledButton.styleFrom(
+                                      foregroundColor: sidebarTitleColor,
+                                      backgroundColor: isDark
+                                          ? Colors.white.withValues(alpha: 0.06)
+                                          : Colors.white.withValues(alpha: 0.78),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  IconButton.filledTonal(
+                                    onPressed: () async {
+                                      await controller.logout();
+                                    },
+                                    style: IconButton.styleFrom(
+                                      foregroundColor: sidebarTitleColor,
+                                      backgroundColor: isDark
+                                          ? Colors.white.withValues(alpha: 0.06)
+                                          : Colors.white.withValues(alpha: 0.78),
+                                    ),
+                                    icon: const Icon(Icons.logout_rounded),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -1818,23 +2545,33 @@ class DesktopWorkspace extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        Row(
                           children: <Widget>[
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  sectionTitle(controller.selectedSection),
-                                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(sectionSubtitle(controller.selectedSection)),
-                              ],
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: <Widget>[
+                                  Text(
+                                    sectionTitle(controller.selectedSection),
+                                    style: theme.textTheme.headlineSmall
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    sectionSubtitle(controller.selectedSection),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const Spacer(),
+                            IconButton(
+                              tooltip: '设置',
+                              onPressed: () {
+                                showDesktopSettingsDialog(context, controller);
+                              },
+                              icon: const Icon(Icons.settings_rounded),
+                            ),
+                            const SizedBox(width: 8),
                             FilledButton.icon(
                               onPressed: controller.workspaceLoading
                                   ? null
@@ -1846,7 +2583,11 @@ class DesktopWorkspace extends StatelessWidget {
                                         }
                                       } catch (error) {
                                         if (context.mounted) {
-                                          showAppMessage(context, error.toString(), error: true);
+                                          showAppMessage(
+                                            context,
+                                            error.toString(),
+                                            error: true,
+                                          );
                                         }
                                       }
                                     },
@@ -1854,7 +2595,9 @@ class DesktopWorkspace extends StatelessWidget {
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.refresh_rounded),
                               label: const Text('刷新'),
@@ -1876,9 +2619,14 @@ class DesktopWorkspace extends StatelessWidget {
                                 padding: const EdgeInsets.all(16),
                                 child: Row(
                                   children: <Widget>[
-                                    Icon(Icons.error_outline_rounded, color: Colors.red.shade700),
+                                    Icon(
+                                      Icons.error_outline_rounded,
+                                      color: Colors.red.shade700,
+                                    ),
                                     const SizedBox(width: 10),
-                                    Expanded(child: Text(controller.workspaceError!)),
+                                    Expanded(
+                                      child: Text(controller.workspaceError!),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1940,6 +2688,79 @@ class OverviewPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          _SectionCard(
+            title: '跨端联通',
+            subtitle: '桌面端与网页端可直接互通，无需重复输入密码。',
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: () async {
+                    try {
+                      final SessionTransferTicket ticket = await controller
+                          .createSessionTransferTicket(target: 'web');
+                      final Uri baseUri = Uri.parse(
+                        controller.passkeyOrigin.endsWith('/')
+                            ? controller.passkeyOrigin
+                            : '${controller.passkeyOrigin}/',
+                      );
+                      final Uri launchUri = baseUri
+                          .resolve('login')
+                          .replace(
+                            queryParameters: <String, String>{
+                              'transferCode': ticket.transferCode,
+                              'from': 'desktop',
+                              'apiBaseUrl': controller.apiBaseUrl,
+                            },
+                          );
+                      await openExternalUrl(launchUri.toString());
+                      if (context.mounted) {
+                        showAppMessage(context, '已在浏览器打开网页端并自动登录');
+                      }
+                    } catch (error) {
+                      if (context.mounted) {
+                        showAppMessage(context, error.toString(), error: true);
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.open_in_browser_rounded),
+                  label: const Text('打开网页端并自动登录'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () async {
+                    try {
+                      final Uri baseUri = Uri.parse(
+                        controller.passkeyOrigin.endsWith('/')
+                            ? controller.passkeyOrigin
+                            : '${controller.passkeyOrigin}/',
+                      );
+                      final Uri launchUri = baseUri
+                          .resolve('login')
+                          .replace(
+                            queryParameters: <String, String>{
+                              'desktopBridge': '1',
+                              'from': 'desktop',
+                              'apiBaseUrl': controller.apiBaseUrl,
+                            },
+                          );
+                      await openExternalUrl(launchUri.toString());
+                      if (context.mounted) {
+                        showAppMessage(context, '已打开网页登录页；网页登录成功后会自动同步回桌面端');
+                      }
+                    } catch (error) {
+                      if (context.mounted) {
+                        showAppMessage(context, error.toString(), error: true);
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.sync_alt_rounded),
+                  label: const Text('通过网页登录同步回桌面端'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
           Wrap(
             spacing: 16,
             runSpacing: 16,
@@ -1953,13 +2774,16 @@ class OverviewPage extends StatelessWidget {
               _MetricCard(
                 title: '安全评分',
                 value: '$securityScore%',
-                caption: controller.totpStatus?.enabled == true ? '已启用 TOTP 防护' : '建议开启 TOTP',
+                caption: controller.totpStatus?.enabled == true
+                    ? '已启用 TOTP 防护'
+                    : '建议开启 TOTP',
                 icon: Icons.shield_moon_outlined,
               ),
               _MetricCard(
                 title: '在线设备',
                 value: '${controller.sessions.length}',
-                caption: '${controller.sessions.where((SessionItem item) => item.online).length} 台在线',
+                caption:
+                    '${controller.sessions.where((SessionItem item) => item.online).length} 台在线',
                 icon: Icons.devices_other_rounded,
               ),
               _MetricCard(
@@ -1987,7 +2811,10 @@ class OverviewPage extends StatelessWidget {
                       _InfoChip(label: '真实姓名', value: user.realName ?? '未填写'),
                       _InfoChip(label: '地区', value: user.region ?? '未填写'),
                       _InfoChip(label: '性别', value: displayGender(user.gender)),
-                      _InfoChip(label: '资料更新时间', value: formatDateTime(user.updatedAt)),
+                      _InfoChip(
+                        label: '资料更新时间',
+                        value: formatDateTime(user.updatedAt),
+                      ),
                     ],
                   ),
                 ),
@@ -2005,7 +2832,10 @@ class OverviewPage extends StatelessWidget {
                         .map(
                           (String item) => Chip(
                             label: Text(item),
-                            avatar: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                            avatar: const Icon(
+                              Icons.check_circle_outline_rounded,
+                              size: 18,
+                            ),
                           ),
                         )
                         .toList(),
@@ -2024,7 +2854,9 @@ class OverviewPage extends StatelessWidget {
                   title: '近期设备活动',
                   subtitle: '最近会话按桌面列表展示。',
                   child: Column(
-                    children: controller.sessions.take(4).map((SessionItem item) {
+                    children: controller.sessions.take(4).map((
+                      SessionItem item,
+                    ) {
                       return _SessionRow(item: item, compact: true);
                     }).toList(),
                   ),
@@ -2037,7 +2869,9 @@ class OverviewPage extends StatelessWidget {
                   title: '近期敏感操作',
                   subtitle: '与后端 `sensitive-logs` 数据同步。',
                   child: Column(
-                    children: controller.sensitiveLogs.take(4).map((SensitiveLogItem item) {
+                    children: controller.sensitiveLogs.take(4).map((
+                      SensitiveLogItem item,
+                    ) {
                       return _LogTile(log: item, compact: true);
                     }).toList(),
                   ),
@@ -2078,7 +2912,10 @@ class ProfilePage extends StatelessWidget {
                     context,
                     title: '修改用户名',
                     initialValue: user.username,
-                    onSubmit: (String value) => controller.updateProfileField(key: 'username', value: value),
+                    onSubmit: (String value) => controller.updateProfileField(
+                      key: 'username',
+                      value: value,
+                    ),
                   ),
                 ),
                 _EditableRow(
@@ -2088,7 +2925,10 @@ class ProfilePage extends StatelessWidget {
                     context,
                     title: '修改头像地址',
                     initialValue: user.avatarUrl ?? '',
-                    onSubmit: (String value) => controller.updateProfileField(key: 'avatarUrl', value: value),
+                    onSubmit: (String value) => controller.updateProfileField(
+                      key: 'avatarUrl',
+                      value: value,
+                    ),
                   ),
                 ),
                 _EditableRow(label: '邮箱', value: user.email, onEdit: null),
@@ -2109,7 +2949,10 @@ class ProfilePage extends StatelessWidget {
                     context,
                     title: '修改真实姓名',
                     initialValue: user.realName ?? '',
-                    onSubmit: (String value) => controller.updateProfileField(key: 'realName', value: value),
+                    onSubmit: (String value) => controller.updateProfileField(
+                      key: 'realName',
+                      value: value,
+                    ),
                   ),
                 ),
                 _EditableRow(
@@ -2124,7 +2967,10 @@ class ProfilePage extends StatelessWidget {
                       _SelectionOption(value: 'female', label: '女'),
                       _SelectionOption(value: 'secret', label: '保密'),
                     ],
-                    onSubmit: (String value) => controller.updateProfileField(key: 'gender', value: value),
+                    onSubmit: (String value) => controller.updateProfileField(
+                      key: 'gender',
+                      value: value,
+                    ),
                   ),
                 ),
                 _EditableRow(
@@ -2135,7 +2981,10 @@ class ProfilePage extends StatelessWidget {
                     title: '修改出生日期',
                     initialValue: user.birthDate ?? '',
                     hintText: 'YYYY-MM-DD',
-                    onSubmit: (String value) => controller.updateProfileField(key: 'birthDate', value: value),
+                    onSubmit: (String value) => controller.updateProfileField(
+                      key: 'birthDate',
+                      value: value,
+                    ),
                   ),
                 ),
                 _EditableRow(
@@ -2145,7 +2994,10 @@ class ProfilePage extends StatelessWidget {
                     context,
                     title: '修改地区',
                     initialValue: user.region ?? '',
-                    onSubmit: (String value) => controller.updateProfileField(key: 'region', value: value),
+                    onSubmit: (String value) => controller.updateProfileField(
+                      key: 'region',
+                      value: value,
+                    ),
                   ),
                 ),
                 _EditableRow(
@@ -2156,7 +3008,8 @@ class ProfilePage extends StatelessWidget {
                     title: '修改简介',
                     initialValue: user.bio ?? '',
                     maxLines: 4,
-                    onSubmit: (String value) => controller.updateProfileField(key: 'bio', value: value),
+                    onSubmit: (String value) =>
+                        controller.updateProfileField(key: 'bio', value: value),
                   ),
                 ),
               ],
@@ -2200,7 +3053,10 @@ class SecurityPage extends StatelessWidget {
                         onChanged: (bool value) async {
                           await _runWithFeedback(
                             context,
-                            () => controller.updateSetting(field: 'mfaEnabled', value: value),
+                            () => controller.updateSetting(
+                              field: 'mfaEnabled',
+                              value: value,
+                            ),
                             success: value ? '已开启 MFA' : '已关闭 MFA',
                           );
                         },
@@ -2213,7 +3069,10 @@ class SecurityPage extends StatelessWidget {
                         onChanged: (bool value) async {
                           await _runWithFeedback(
                             context,
-                            () => controller.updateSetting(field: 'detectUnusualLogin', value: value),
+                            () => controller.updateSetting(
+                              field: 'detectUnusualLogin',
+                              value: value,
+                            ),
                             success: value ? '已开启异地登录检测' : '已关闭异地登录检测',
                           );
                         },
@@ -2226,7 +3085,10 @@ class SecurityPage extends StatelessWidget {
                         onChanged: (bool value) async {
                           await _runWithFeedback(
                             context,
-                            () => controller.updateSetting(field: 'notifySensitiveActionEmail', value: value),
+                            () => controller.updateSetting(
+                              field: 'notifySensitiveActionEmail',
+                              value: value,
+                            ),
                             success: value ? '已开启提醒' : '已关闭提醒',
                           );
                         },
@@ -2239,7 +3101,10 @@ class SecurityPage extends StatelessWidget {
                         onChanged: (bool value) async {
                           await _runWithFeedback(
                             context,
-                            () => controller.updateSetting(field: 'subscribeNewsEmail', value: value),
+                            () => controller.updateSetting(
+                              field: 'subscribeNewsEmail',
+                              value: value,
+                            ),
                             success: value ? '已更新邮件订阅' : '已关闭邮件订阅',
                           );
                         },
@@ -2277,7 +3142,9 @@ class SecurityPage extends StatelessWidget {
                                         success: '登录 MFA 偏好已更新',
                                       );
                                     },
-                              decoration: const InputDecoration(labelText: '登录 MFA 偏好'),
+                              decoration: const InputDecoration(
+                                labelText: '登录 MFA 偏好',
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -2285,8 +3152,14 @@ class SecurityPage extends StatelessWidget {
                             child: DropdownButtonFormField<String>(
                               initialValue: settings.preferredSensitiveMethod,
                               items: <DropdownMenuItem<String>>[
-                                const DropdownMenuItem<String>(value: 'password', child: Text('密码')),
-                                const DropdownMenuItem<String>(value: 'email-code', child: Text('邮箱验证码')),
+                                const DropdownMenuItem<String>(
+                                  value: 'password',
+                                  child: Text('密码'),
+                                ),
+                                const DropdownMenuItem<String>(
+                                  value: 'email-code',
+                                  child: Text('邮箱验证码'),
+                                ),
                                 DropdownMenuItem<String>(
                                   value: 'passkey',
                                   enabled: controller.passkeys.isNotEmpty,
@@ -2311,7 +3184,9 @@ class SecurityPage extends StatelessWidget {
                                   success: '敏感操作验证偏好已更新',
                                 );
                               },
-                              decoration: const InputDecoration(labelText: '敏感操作验证偏好'),
+                              decoration: const InputDecoration(
+                                labelText: '敏感操作验证偏好',
+                              ),
                             ),
                           ),
                         ],
@@ -2342,7 +3217,11 @@ class SecurityPage extends StatelessWidget {
                       _CapabilityLine(
                         icon: Icons.fingerprint_rounded,
                         title: 'Passkey',
-                        trailing: Text(controller.passkeys.isEmpty ? '未配置' : '${controller.passkeys.length} 个'),
+                        trailing: Text(
+                          controller.passkeys.isEmpty
+                              ? '未配置'
+                              : '${controller.passkeys.length} 个',
+                        ),
                       ),
                       _CapabilityLine(
                         icon: Icons.security_rounded,
@@ -2354,7 +3233,8 @@ class SecurityPage extends StatelessWidget {
                         onPressed: () => _runWithSensitiveVerification(
                           context,
                           controller: controller,
-                          action: () => _showChangeEmailDialog(context, controller),
+                          action: () =>
+                              _showChangeEmailDialog(context, controller),
                         ),
                         icon: const Icon(Icons.alternate_email_rounded),
                         label: const Text('修改邮箱'),
@@ -2364,7 +3244,8 @@ class SecurityPage extends StatelessWidget {
                         onPressed: () => _runWithSensitiveVerification(
                           context,
                           controller: controller,
-                          action: () => _showChangePasswordDialog(context, controller),
+                          action: () =>
+                              _showChangePasswordDialog(context, controller),
                         ),
                         icon: const Icon(Icons.password_rounded),
                         label: const Text('修改密码'),
@@ -2400,14 +3281,19 @@ class SecurityPage extends StatelessWidget {
                           onPressed: () async {
                             try {
                               await controller.registerPasskeyInBrowser(
-                                preferredName: 'Ksuser Desktop (${Platform.localHostname})',
+                                preferredName:
+                                    'Ksuser Desktop (${Platform.localHostname})',
                               );
                               if (context.mounted) {
                                 showAppMessage(context, 'Passkey 已添加');
                               }
                             } catch (error) {
                               if (context.mounted) {
-                                showAppMessage(context, error.toString(), error: true);
+                                showAppMessage(
+                                  context,
+                                  error.toString(),
+                                  error: true,
+                                );
                               }
                             }
                           },
@@ -2420,8 +3306,13 @@ class SecurityPage extends StatelessWidget {
                         const Text('当前没有已登记的 Passkey。')
                       else
                         Column(
-                          children: controller.passkeys.map((PasskeyListItem item) {
-                            return _PasskeyRow(controller: controller, item: item);
+                          children: controller.passkeys.map((
+                            PasskeyListItem item,
+                          ) {
+                            return _PasskeyRow(
+                              controller: controller,
+                              item: item,
+                            );
                           }).toList(),
                         ),
                     ],
@@ -2453,7 +3344,11 @@ class DevicesPage extends StatelessWidget {
                 ? const Text('暂无在线设备。')
                 : Column(
                     children: controller.sessions.map((SessionItem item) {
-                      return _SessionRow(item: item, compact: false, controller: controller);
+                      return _SessionRow(
+                        item: item,
+                        compact: false,
+                        controller: controller,
+                      );
                     }).toList(),
                   ),
           ),
@@ -2468,9 +3363,12 @@ class DevicesPage extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 FilledButton.tonalIcon(
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red.shade50),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade50,
+                  ),
                   onPressed: () async {
-                    final bool confirmed = await showDialog<bool>(
+                    final bool confirmed =
+                        await showDialog<bool>(
                           context: context,
                           builder: (BuildContext context) {
                             return AlertDialog(
@@ -2478,11 +3376,13 @@ class DevicesPage extends StatelessWidget {
                               content: const Text('当前桌面会话也会立即失效。'),
                               actions: <Widget>[
                                 TextButton(
-                                  onPressed: () => Navigator.of(context).pop(false),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(false),
                                   child: const Text('取消'),
                                 ),
                                 FilledButton(
-                                  onPressed: () => Navigator.of(context).pop(true),
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(true),
                                   child: const Text('确认退出'),
                                 ),
                               ],
@@ -2500,7 +3400,10 @@ class DevicesPage extends StatelessWidget {
                     );
                   },
                   icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                  label: const Text('退出所有设备', style: TextStyle(color: Colors.red)),
+                  label: const Text(
+                    '退出所有设备',
+                    style: TextStyle(color: Colors.red),
+                  ),
                 ),
               ],
             ),
@@ -2567,12 +3470,30 @@ class _ActivityPageState extends State<ActivityPage> {
                         initialValue: _operationType,
                         decoration: const InputDecoration(labelText: '操作类型'),
                         items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem<String>(value: 'LOGIN', child: Text('登录')),
-                          DropdownMenuItem<String>(value: 'REGISTER', child: Text('注册')),
-                          DropdownMenuItem<String>(value: 'CHANGE_PASSWORD', child: Text('修改密码')),
-                          DropdownMenuItem<String>(value: 'CHANGE_EMAIL', child: Text('修改邮箱')),
-                          DropdownMenuItem<String>(value: 'ENABLE_TOTP', child: Text('启用 TOTP')),
-                          DropdownMenuItem<String>(value: 'DISABLE_TOTP', child: Text('禁用 TOTP')),
+                          DropdownMenuItem<String>(
+                            value: 'LOGIN',
+                            child: Text('登录'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'REGISTER',
+                            child: Text('注册'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'CHANGE_PASSWORD',
+                            child: Text('修改密码'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'CHANGE_EMAIL',
+                            child: Text('修改邮箱'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'ENABLE_TOTP',
+                            child: Text('启用 TOTP'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'DISABLE_TOTP',
+                            child: Text('禁用 TOTP'),
+                          ),
                         ],
                         onChanged: (String? value) {
                           setState(() {
@@ -2587,8 +3508,14 @@ class _ActivityPageState extends State<ActivityPage> {
                         initialValue: _result,
                         decoration: const InputDecoration(labelText: '执行结果'),
                         items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem<String>(value: 'SUCCESS', child: Text('成功')),
-                          DropdownMenuItem<String>(value: 'FAILURE', child: Text('失败')),
+                          DropdownMenuItem<String>(
+                            value: 'SUCCESS',
+                            child: Text('成功'),
+                          ),
+                          DropdownMenuItem<String>(
+                            value: 'FAILURE',
+                            child: Text('失败'),
+                          ),
                         ],
                         onChanged: (String? value) {
                           setState(() {
@@ -2617,7 +3544,10 @@ class _ActivityPageState extends State<ActivityPage> {
                 else
                   Column(
                     children: widget.controller.sensitiveLogs
-                        .map((SensitiveLogItem item) => _LogTile(log: item, compact: false))
+                        .map(
+                          (SensitiveLogItem item) =>
+                              _LogTile(log: item, compact: false),
+                        )
                         .toList(),
                   ),
               ],
@@ -2674,7 +3604,12 @@ class _PasswordRequirementCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: rules
-                .map((String item) => Chip(avatar: const Icon(Icons.done_rounded, size: 16), label: Text(item)))
+                .map(
+                  (String item) => Chip(
+                    avatar: const Icon(Icons.done_rounded, size: 16),
+                    label: Text(item),
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -2711,7 +3646,10 @@ class _DisabledCapabilityCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 4),
                 Text(description),
               ],
@@ -2756,14 +3694,23 @@ class _MfaPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text('二次验证', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          const Text(
+            '二次验证',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 6),
           Text('当前挑战：${challenge.methods.join(' / ')}'),
           const SizedBox(height: 14),
           SegmentedButton<MfaMode>(
             segments: <ButtonSegment<MfaMode>>[
-              const ButtonSegment<MfaMode>(value: MfaMode.code, label: Text('动态码')),
-              const ButtonSegment<MfaMode>(value: MfaMode.recoveryCode, label: Text('恢复码')),
+              const ButtonSegment<MfaMode>(
+                value: MfaMode.code,
+                label: Text('动态码'),
+              ),
+              const ButtonSegment<MfaMode>(
+                value: MfaMode.recoveryCode,
+                label: Text('恢复码'),
+              ),
               if (supportsPasskey)
                 ButtonSegment<MfaMode>(
                   value: MfaMode.passkey,
@@ -2772,7 +3719,8 @@ class _MfaPanel extends StatelessWidget {
                 ),
             ],
             selected: <MfaMode>{mode},
-            onSelectionChanged: (Set<MfaMode> selection) => onModeChanged(selection.first),
+            onSelectionChanged: (Set<MfaMode> selection) =>
+                onModeChanged(selection.first),
           ),
           const SizedBox(height: 14),
           if (mode == MfaMode.code)
@@ -2802,8 +3750,14 @@ class _MfaPanel extends StatelessWidget {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : Icon(mode == MfaMode.passkey ? Icons.fingerprint_rounded : Icons.verified_rounded),
-            label: Text(mode == MfaMode.passkey ? '使用 Passkey 验证' : '完成 MFA 验证'),
+                : Icon(
+                    mode == MfaMode.passkey
+                        ? Icons.fingerprint_rounded
+                        : Icons.verified_rounded,
+                  ),
+            label: Text(
+              mode == MfaMode.passkey ? '使用 Passkey 验证' : '完成 MFA 验证',
+            ),
           ),
         ],
       ),
@@ -2836,8 +3790,13 @@ class _WorkspaceBanner extends StatelessWidget {
             radius: 28,
             backgroundColor: Colors.black,
             child: Text(
-              user.username.isEmpty ? 'K' : user.username.substring(0, 1).toUpperCase(),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              user.username.isEmpty
+                  ? 'K'
+                  : user.username.substring(0, 1).toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -2847,12 +3806,17 @@ class _WorkspaceBanner extends StatelessWidget {
               children: <Widget>[
                 Text(
                   user.username,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(user.email),
                 const SizedBox(height: 8),
-                Text('当前安全评分 $score%，已同步 ${controller.sessions.length} 台设备和 ${controller.sensitiveLogs.length} 条日志。'),
+                Text(
+                  '当前安全评分 $score%，已同步 ${controller.sessions.length} 台设备和 ${controller.sensitiveLogs.length} 条日志。',
+                ),
               ],
             ),
           ),
@@ -2893,7 +3857,10 @@ class _MetricCard extends StatelessWidget {
             const SizedBox(height: 16),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+            ),
             const SizedBox(height: 6),
             Text(caption),
           ],
@@ -2926,7 +3893,10 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 6),
           Text(subtitle),
           const SizedBox(height: 18),
@@ -2965,7 +3935,11 @@ class _InfoChip extends StatelessWidget {
 }
 
 class _EditableRow extends StatelessWidget {
-  const _EditableRow({required this.label, required this.value, required this.onEdit});
+  const _EditableRow({
+    required this.label,
+    required this.value,
+    required this.onEdit,
+  });
 
   final String label;
   final String value;
@@ -2989,7 +3963,10 @@ class _EditableRow extends StatelessWidget {
                 children: <Widget>[
                   Text(label, style: const TextStyle(color: Colors.black54)),
                   const SizedBox(height: 6),
-                  Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                  Text(
+                    value,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ],
               ),
             ),
@@ -3025,7 +4002,12 @@ class _CapabilityLine extends StatelessWidget {
         children: <Widget>[
           Icon(icon, color: kPrimaryColor),
           const SizedBox(width: 12),
-          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w700))),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
           trailing,
         ],
       ),
@@ -3054,15 +4036,25 @@ class _TotpPanel extends StatelessWidget {
           ),
           child: Row(
             children: <Widget>[
-              Icon(enabled ? Icons.verified_user_rounded : Icons.shield_outlined, color: kPrimaryColor),
+              Icon(
+                enabled ? Icons.verified_user_rounded : Icons.shield_outlined,
+                color: kPrimaryColor,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(enabled ? 'TOTP 已启用' : 'TOTP 尚未启用', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(
+                      enabled ? 'TOTP 已启用' : 'TOTP 尚未启用',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                     const SizedBox(height: 4),
-                    Text(enabled ? '恢复码剩余 ${status?.recoveryCodesCount ?? 0} 个' : '可通过二维码或密钥完成注册。'),
+                    Text(
+                      enabled
+                          ? '恢复码剩余 ${status?.recoveryCodesCount ?? 0} 个'
+                          : '可通过二维码或密钥完成注册。',
+                    ),
                   ],
                 ),
               ),
@@ -3103,9 +4095,14 @@ class _TotpPanel extends StatelessWidget {
                         context,
                         controller: controller,
                         action: () async {
-                          final List<String> codes = await controller.getRecoveryCodes();
+                          final List<String> codes = await controller
+                              .getRecoveryCodes();
                           if (context.mounted) {
-                            await _showRecoveryCodesDialog(context, '恢复码列表', codes);
+                            await _showRecoveryCodesDialog(
+                              context,
+                              '恢复码列表',
+                              codes,
+                            );
                           }
                         },
                       );
@@ -3121,9 +4118,14 @@ class _TotpPanel extends StatelessWidget {
                         context,
                         controller: controller,
                         action: () async {
-                          final List<String> codes = await controller.regenerateRecoveryCodes();
+                          final List<String> codes = await controller
+                              .regenerateRecoveryCodes();
                           if (context.mounted) {
-                            await _showRecoveryCodesDialog(context, '新恢复码', codes);
+                            await _showRecoveryCodesDialog(
+                              context,
+                              '新恢复码',
+                              codes,
+                            );
                           }
                         },
                       );
@@ -3162,10 +4164,17 @@ class _PasskeyRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(item.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(
+                  item.name,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
                 const SizedBox(height: 4),
                 Text('创建于 ${formatDateTime(item.createdAt)}'),
-                Text(item.lastUsedAt == null ? '从未使用' : '最近使用 ${formatDateTime(item.lastUsedAt)}'),
+                Text(
+                  item.lastUsedAt == null
+                      ? '从未使用'
+                      : '最近使用 ${formatDateTime(item.lastUsedAt)}',
+                ),
               ],
             ),
           ),
@@ -3174,13 +4183,15 @@ class _PasskeyRow extends StatelessWidget {
               context,
               title: '重命名 Passkey',
               initialValue: item.name,
-              onSubmit: (String value) => controller.renamePasskey(item.id, value),
+              onSubmit: (String value) =>
+                  controller.renamePasskey(item.id, value),
             ),
             child: const Text('重命名'),
           ),
           TextButton(
             onPressed: () async {
-              final bool confirmed = await showDialog<bool>(
+              final bool confirmed =
+                  await showDialog<bool>(
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
@@ -3300,7 +4311,9 @@ class _LogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color statusColor = log.result == 'SUCCESS' ? Colors.green : Colors.red;
+    final Color statusColor = log.result == 'SUCCESS'
+        ? Colors.green
+        : Colors.red;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -3319,7 +4332,9 @@ class _LogTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              log.result == 'SUCCESS' ? Icons.task_alt_rounded : Icons.error_outline_rounded,
+              log.result == 'SUCCESS'
+                  ? Icons.task_alt_rounded
+                  : Icons.error_outline_rounded,
               color: statusColor,
             ),
           ),
@@ -3340,12 +4355,20 @@ class _LogTile extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('${log.result == 'SUCCESS' ? '成功' : '失败'} · ${formatDateTime(log.createdAt)}'),
+                Text(
+                  '${log.result == 'SUCCESS' ? '成功' : '失败'} · ${formatDateTime(log.createdAt)}',
+                ),
                 if (!compact) ...<Widget>[
                   const SizedBox(height: 4),
-                  Text('${log.ipLocation ?? '未知位置'} · ${log.ipAddress} · 风险 ${log.riskScore}'),
-                  if (log.failureReason != null && log.failureReason!.isNotEmpty)
-                    Text(log.failureReason!, style: const TextStyle(color: Colors.red)),
+                  Text(
+                    '${log.ipLocation ?? '未知位置'} · ${log.ipAddress} · 风险 ${log.riskScore}',
+                  ),
+                  if (log.failureReason != null &&
+                      log.failureReason!.isNotEmpty)
+                    Text(
+                      log.failureReason!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
                 ],
               ],
             ),
@@ -3372,8 +4395,13 @@ Future<void> _runWithSensitiveVerification(
     try {
       await action();
     } on ApiException catch (error) {
-      if (error.statusCode == 403 && error.message == '请先完成敏感操作验证' && context.mounted) {
-        final bool verified = await _showSensitiveVerificationDialog(context, controller: controller);
+      if (error.statusCode == 403 &&
+          error.message == '请先完成敏感操作验证' &&
+          context.mounted) {
+        final bool verified = await _showSensitiveVerificationDialog(
+          context,
+          controller: controller,
+        );
         if (verified && context.mounted) {
           await action();
         }
@@ -3384,7 +4412,8 @@ Future<void> _runWithSensitiveVerification(
   }
 
   try {
-    final SensitiveVerificationStatus status = await controller.checkSensitiveVerification();
+    final SensitiveVerificationStatus status = await controller
+        .checkSensitiveVerification();
     if (status.verified) {
       await runAction();
       return;
@@ -3406,7 +4435,10 @@ Future<void> _runWithSensitiveVerification(
       return;
     }
     showAppMessage(context, '需要先完成身份验证');
-    final bool verified = await _showSensitiveVerificationDialog(context, controller: controller);
+    final bool verified = await _showSensitiveVerificationDialog(
+      context,
+      controller: controller,
+    );
     if (verified && context.mounted) {
       await runAction();
     }
@@ -3440,21 +4472,25 @@ class _SensitiveVerificationDialog extends StatefulWidget {
   final SensitiveVerificationStatus? initialStatus;
 
   @override
-  State<_SensitiveVerificationDialog> createState() => _SensitiveVerificationDialogState();
+  State<_SensitiveVerificationDialog> createState() =>
+      _SensitiveVerificationDialogState();
 }
 
-class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDialog> {
+class _SensitiveVerificationDialogState
+    extends State<_SensitiveVerificationDialog> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _totpController = TextEditingController();
 
   Timer? _countdownTimer;
-  List<SensitiveVerificationMethod> _methods = const <SensitiveVerificationMethod>[
-    SensitiveVerificationMethod.password,
-    SensitiveVerificationMethod.emailCode,
-    SensitiveVerificationMethod.totp,
-  ];
-  SensitiveVerificationMethod _selectedMethod = SensitiveVerificationMethod.password;
+  List<SensitiveVerificationMethod> _methods =
+      const <SensitiveVerificationMethod>[
+        SensitiveVerificationMethod.password,
+        SensitiveVerificationMethod.emailCode,
+        SensitiveVerificationMethod.totp,
+      ];
+  SensitiveVerificationMethod _selectedMethod =
+      SensitiveVerificationMethod.password;
   bool _loading = true;
   bool _sendingCode = false;
   bool _verifying = false;
@@ -3478,16 +4514,20 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
 
   Future<void> _loadStatus() async {
     try {
-      final bool browserPasskeyAvailable = BrowserPasskeyBridge.isSupported(widget.controller.passkeyOrigin);
+      final bool browserPasskeyAvailable = BrowserPasskeyBridge.isSupported(
+        widget.controller.passkeyOrigin,
+      );
       final SensitiveVerificationStatus status =
-          widget.initialStatus ?? await widget.controller.checkSensitiveVerification();
+          widget.initialStatus ??
+          await widget.controller.checkSensitiveVerification();
       if (status.verified) {
         if (mounted) {
           Navigator.of(context).pop(true);
         }
         return;
       }
-      final List<SensitiveVerificationMethod> methods = status.methods.length <= 1
+      final List<SensitiveVerificationMethod> methods =
+          status.methods.length <= 1
           ? const <SensitiveVerificationMethod>[
               SensitiveVerificationMethod.password,
               SensitiveVerificationMethod.emailCode,
@@ -3495,13 +4535,17 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
               SensitiveVerificationMethod.passkey,
             ]
           : status.methods;
-      final List<SensitiveVerificationMethod> preferredOrder = <SensitiveVerificationMethod>[
-        ...<SensitiveVerificationMethod?>[status.preferredMethod].whereType<SensitiveVerificationMethod>(),
-        ...methods,
-      ];
+      final List<SensitiveVerificationMethod> preferredOrder =
+          <SensitiveVerificationMethod>[
+            ...<SensitiveVerificationMethod?>[
+              status.preferredMethod,
+            ].whereType<SensitiveVerificationMethod>(),
+            ...methods,
+          ];
       final SensitiveVerificationMethod selected = preferredOrder.firstWhere(
         (SensitiveVerificationMethod method) =>
-            method != SensitiveVerificationMethod.passkey || browserPasskeyAvailable,
+            method != SensitiveVerificationMethod.passkey ||
+            browserPasskeyAvailable,
         orElse: () => preferredOrder.first,
       );
       if (!mounted) {
@@ -3534,7 +4578,8 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
     setState(() {
       _selectedMethod = method;
     });
-    if (method == SensitiveVerificationMethod.emailCode && _codeCountdown == 0) {
+    if (method == SensitiveVerificationMethod.emailCode &&
+        _codeCountdown == 0) {
       await _sendCode();
     }
   }
@@ -3597,7 +4642,8 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
     } else if (_selectedMethod == SensitiveVerificationMethod.totp &&
         _totpController.text.trim().length != 6) {
       message = '请输入 6 位动态码';
-    } else if (_selectedMethod == SensitiveVerificationMethod.passkey && !_browserPasskeyAvailable) {
+    } else if (_selectedMethod == SensitiveVerificationMethod.passkey &&
+        !_browserPasskeyAvailable) {
       message = '当前环境未配置可用的 Passkey 浏览器桥接';
     }
     if (message != null) {
@@ -3632,7 +4678,8 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
           if (mounted) {
             showAppMessage(context, '即将打开浏览器完成 Passkey 验证');
           }
-          await widget.controller.verifySensitiveOperationWithPasskeyInBrowser();
+          await widget.controller
+              .verifySensitiveOperationWithPasskeyInBrowser();
           break;
       }
       if (mounted) {
@@ -3673,13 +4720,20 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: _methods.map((SensitiveVerificationMethod method) {
+                      children: _methods.map((
+                        SensitiveVerificationMethod method,
+                      ) {
                         final bool supported =
-                            method != SensitiveVerificationMethod.passkey || _browserPasskeyAvailable;
+                            method != SensitiveVerificationMethod.passkey ||
+                            _browserPasskeyAvailable;
                         return ChoiceChip(
-                          label: Text(sensitiveVerificationMethodChipLabel(method)),
+                          label: Text(
+                            sensitiveVerificationMethodChipLabel(method),
+                          ),
                           selected: _selectedMethod == method,
-                          onSelected: supported ? (_) => _selectMethod(method) : null,
+                          onSelected: supported
+                              ? (_) => _selectMethod(method)
+                              : null,
                         );
                       }).toList(),
                     ),
@@ -3695,14 +4749,17 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
                         obscureText: true,
                         decoration: const InputDecoration(labelText: '登录密码'),
                       )
-                    else if (_selectedMethod == SensitiveVerificationMethod.emailCode)
+                    else if (_selectedMethod ==
+                        SensitiveVerificationMethod.emailCode)
                       Row(
                         children: <Widget>[
                           Expanded(
                             child: TextField(
                               controller: _codeController,
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(labelText: '邮箱验证码'),
+                              decoration: const InputDecoration(
+                                labelText: '邮箱验证码',
+                              ),
                               inputFormatters: <TextInputFormatter>[
                                 FilteringTextInputFormatter.digitsOnly,
                                 LengthLimitingTextInputFormatter(6),
@@ -3711,12 +4768,19 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
                           ),
                           const SizedBox(width: 12),
                           OutlinedButton(
-                            onPressed: _sendingCode || _codeCountdown > 0 ? null : _sendCode,
-                            child: Text(_codeCountdown > 0 ? '${_codeCountdown}s' : '发送验证码'),
+                            onPressed: _sendingCode || _codeCountdown > 0
+                                ? null
+                                : _sendCode,
+                            child: Text(
+                              _codeCountdown > 0
+                                  ? '${_codeCountdown}s'
+                                  : '发送验证码',
+                            ),
                           ),
                         ],
                       )
-                    else if (_selectedMethod == SensitiveVerificationMethod.totp)
+                    else if (_selectedMethod ==
+                        SensitiveVerificationMethod.totp)
                       TextField(
                         controller: _totpController,
                         keyboardType: TextInputType.number,
@@ -3728,7 +4792,9 @@ class _SensitiveVerificationDialogState extends State<_SensitiveVerificationDial
                       )
                     else
                       _DisabledCapabilityCard(
-                        title: _browserPasskeyAvailable ? 'Passkey 浏览器验证已接入' : 'Passkey 当前不可用',
+                        title: _browserPasskeyAvailable
+                            ? 'Passkey 浏览器验证已接入'
+                            : 'Passkey 当前不可用',
                         description: _browserPasskeyAvailable
                             ? '点击验证后会自动打开默认浏览器完成 WebAuthn，成功后当前弹窗会自动继续。'
                             : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
@@ -3766,54 +4832,63 @@ Future<void> _showEditDialog(
   String? hintText,
   int maxLines = 1,
 }) async {
-  final TextEditingController controller = TextEditingController(text: initialValue);
+  final TextEditingController controller = TextEditingController(
+    text: initialValue,
+  );
   final bool? saved = await showDialog<bool>(
     context: context,
     builder: (BuildContext context) {
       bool busy = false;
       return StatefulBuilder(
-        builder: (BuildContext context, void Function(void Function()) setState) {
-          return AlertDialog(
-            title: Text(title),
-            content: TextField(
-              controller: controller,
-              maxLines: maxLines,
-              decoration: InputDecoration(hintText: hintText),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setState(() {
-                          busy = true;
-                        });
-                        try {
-                          await onSubmit(controller.text);
-                          if (context.mounted) {
-                            Navigator.of(context).pop(true);
-                          }
-                        } catch (error) {
-                          if (context.mounted) {
-                            showAppMessage(context, error.toString(), error: true);
-                          }
-                        } finally {
-                          if (context.mounted) {
+        builder:
+            (BuildContext context, void Function(void Function()) setState) {
+              return AlertDialog(
+                title: Text(title),
+                content: TextField(
+                  controller: controller,
+                  maxLines: maxLines,
+                  decoration: InputDecoration(hintText: hintText),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: busy
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () async {
                             setState(() {
-                              busy = false;
+                              busy = true;
                             });
-                          }
-                        }
-                      },
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
+                            try {
+                              await onSubmit(controller.text);
+                              if (context.mounted) {
+                                Navigator.of(context).pop(true);
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                showAppMessage(
+                                  context,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setState(() {
+                                  busy = false;
+                                });
+                              }
+                            }
+                          },
+                    child: const Text('保存'),
+                  ),
+                ],
+              );
+            },
       );
     },
   );
@@ -3836,58 +4911,65 @@ Future<void> _showSelectionDialog(
     builder: (BuildContext context) {
       bool busy = false;
       return StatefulBuilder(
-        builder: (BuildContext context, void Function(void Function()) setState) {
-          return AlertDialog(
-            title: Text(title),
-            content: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: options.map((_SelectionOption option) {
-                return ChoiceChip(
-                  label: Text(option.label),
-                  selected: value == option.value,
-                  onSelected: (_) {
-                    setState(() {
-                      value = option.value;
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
+        builder:
+            (BuildContext context, void Function(void Function()) setState) {
+              return AlertDialog(
+                title: Text(title),
+                content: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: options.map((_SelectionOption option) {
+                    return ChoiceChip(
+                      label: Text(option.label),
+                      selected: value == option.value,
+                      onSelected: (_) {
                         setState(() {
-                          busy = true;
+                          value = option.value;
                         });
-                        try {
-                          await onSubmit(value);
-                          if (context.mounted) {
-                            Navigator.of(context).pop(true);
-                          }
-                        } catch (error) {
-                          if (context.mounted) {
-                            showAppMessage(context, error.toString(), error: true);
-                          }
-                        } finally {
-                          if (context.mounted) {
-                            setState(() {
-                              busy = false;
-                            });
-                          }
-                        }
                       },
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
+                    );
+                  }).toList(),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: busy
+                        ? null
+                        : () => Navigator.of(context).pop(false),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            setState(() {
+                              busy = true;
+                            });
+                            try {
+                              await onSubmit(value);
+                              if (context.mounted) {
+                                Navigator.of(context).pop(true);
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                showAppMessage(
+                                  context,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setState(() {
+                                  busy = false;
+                                });
+                              }
+                            }
+                          },
+                    child: const Text('保存'),
+                  ),
+                ],
+              );
+            },
       );
     },
   );
@@ -3896,7 +4978,10 @@ Future<void> _showSelectionDialog(
   }
 }
 
-Future<void> _showChangeEmailDialog(BuildContext context, AppController controller) async {
+Future<void> _showChangeEmailDialog(
+  BuildContext context,
+  AppController controller,
+) async {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
   await showDialog<void>(
@@ -3904,82 +4989,96 @@ Future<void> _showChangeEmailDialog(BuildContext context, AppController controll
     builder: (BuildContext context) {
       bool busy = false;
       return StatefulBuilder(
-        builder: (BuildContext context, void Function(void Function()) setState) {
-          return AlertDialog(
-            title: const Text('修改邮箱'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                TextField(controller: emailController, decoration: const InputDecoration(labelText: '新邮箱')),
-                const SizedBox(height: 12),
-                Row(
+        builder:
+            (BuildContext context, void Function(void Function()) setState) {
+              return AlertDialog(
+                title: const Text('修改邮箱'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Expanded(
-                      child: TextField(
-                        controller: codeController,
-                        decoration: const InputDecoration(labelText: '验证码'),
-                      ),
+                    TextField(
+                      controller: emailController,
+                      decoration: const InputDecoration(labelText: '新邮箱'),
                     ),
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      onPressed: busy
-                          ? null
-                          : () async {
-                              try {
-                                await controller.sendChangeEmailCode(emailController.text);
-                                if (context.mounted) {
-                                  showAppMessage(context, '验证码已发送');
-                                }
-                              } catch (error) {
-                                if (context.mounted) {
-                                  showAppMessage(context, error.toString(), error: true);
-                                }
-                              }
-                            },
-                      child: const Text('发送验证码'),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: TextField(
+                            controller: codeController,
+                            decoration: const InputDecoration(labelText: '验证码'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton(
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  try {
+                                    await controller.sendChangeEmailCode(
+                                      emailController.text,
+                                    );
+                                    if (context.mounted) {
+                                      showAppMessage(context, '验证码已发送');
+                                    }
+                                  } catch (error) {
+                                    if (context.mounted) {
+                                      showAppMessage(
+                                        context,
+                                        error.toString(),
+                                        error: true,
+                                      );
+                                    }
+                                  }
+                                },
+                          child: const Text('发送验证码'),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setState(() {
-                          busy = true;
-                        });
-                        try {
-                          await controller.changeEmail(
-                            newEmail: emailController.text,
-                            code: codeController.text,
-                          );
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                            showAppMessage(context, '邮箱已更新');
-                          }
-                        } catch (error) {
-                          if (context.mounted) {
-                            showAppMessage(context, error.toString(), error: true);
-                          }
-                        } finally {
-                          if (context.mounted) {
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: busy ? null : () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () async {
                             setState(() {
-                              busy = false;
+                              busy = true;
                             });
-                          }
-                        }
-                      },
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
+                            try {
+                              await controller.changeEmail(
+                                newEmail: emailController.text,
+                                code: codeController.text,
+                              );
+                              if (context.mounted) {
+                                Navigator.of(context).pop();
+                                showAppMessage(context, '邮箱已更新');
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                showAppMessage(
+                                  context,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setState(() {
+                                  busy = false;
+                                });
+                              }
+                            }
+                          },
+                    child: const Text('保存'),
+                  ),
+                ],
+              );
+            },
       );
     },
   );
@@ -3987,66 +5086,80 @@ Future<void> _showChangeEmailDialog(BuildContext context, AppController controll
   codeController.dispose();
 }
 
-Future<void> _showChangePasswordDialog(BuildContext context, AppController controller) async {
+Future<void> _showChangePasswordDialog(
+  BuildContext context,
+  AppController controller,
+) async {
   final TextEditingController passwordController = TextEditingController();
   await showDialog<void>(
     context: context,
     builder: (BuildContext context) {
       bool busy = false;
       return StatefulBuilder(
-        builder: (BuildContext context, void Function(void Function()) setState) {
-          return AlertDialog(
-            title: const Text('修改密码'),
-            content: TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: '新密码'),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setState(() {
-                          busy = true;
-                        });
-                        try {
-                          await controller.changePassword(passwordController.text);
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
-                            showAppMessage(context, '密码已更新');
-                          }
-                        } catch (error) {
-                          if (context.mounted) {
-                            showAppMessage(context, error.toString(), error: true);
-                          }
-                        } finally {
-                          if (context.mounted) {
+        builder:
+            (BuildContext context, void Function(void Function()) setState) {
+              return AlertDialog(
+                title: const Text('修改密码'),
+                content: TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '新密码'),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: busy ? null : () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () async {
                             setState(() {
-                              busy = false;
+                              busy = true;
                             });
-                          }
-                        }
-                      },
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
+                            try {
+                              await controller.changePassword(
+                                passwordController.text,
+                              );
+                              if (context.mounted) {
+                                Navigator.of(context).pop();
+                                showAppMessage(context, '密码已更新');
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                showAppMessage(
+                                  context,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setState(() {
+                                  busy = false;
+                                });
+                              }
+                            }
+                          },
+                    child: const Text('保存'),
+                  ),
+                ],
+              );
+            },
       );
     },
   );
   passwordController.dispose();
 }
 
-Future<void> _showEnableTotpDialog(BuildContext context, AppController controller) async {
+Future<void> _showEnableTotpDialog(
+  BuildContext context,
+  AppController controller,
+) async {
   final NavigatorState navigator = Navigator.of(context);
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
-  final TotpRegistrationOptionsResponse options = await controller.getTotpRegistrationOptions();
+  final TotpRegistrationOptionsResponse options = await controller
+      .getTotpRegistrationOptions();
   if (!navigator.context.mounted) {
     return;
   }
@@ -4056,88 +5169,102 @@ Future<void> _showEnableTotpDialog(BuildContext context, AppController controlle
     builder: (BuildContext context) {
       bool busy = false;
       return StatefulBuilder(
-        builder: (BuildContext context, void Function(void Function()) setState) {
-          return AlertDialog(
-            title: const Text('启用 TOTP'),
-            content: SizedBox(
-              width: 480,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    const Text('扫描二维码或手动录入密钥，然后输入身份验证器生成的 6 位动态码。'),
-                    const SizedBox(height: 16),
-                    _buildQrWidget(options.qrCodeUrl),
-                    const SizedBox(height: 16),
-                    SelectableText(options.secret, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: codeController,
-                      decoration: const InputDecoration(labelText: '动态码'),
+        builder:
+            (BuildContext context, void Function(void Function()) setState) {
+              return AlertDialog(
+                title: const Text('启用 TOTP'),
+                content: SizedBox(
+                  width: 480,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Text('扫描二维码或手动录入密钥，然后输入身份验证器生成的 6 位动态码。'),
+                        const SizedBox(height: 16),
+                        _buildQrWidget(options.qrCodeUrl),
+                        const SizedBox(height: 16),
+                        SelectableText(
+                          options.secret,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: codeController,
+                          decoration: const InputDecoration(labelText: '动态码'),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('初始恢复码'),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: options.recoveryCodes
+                              .map((String item) => Chip(label: Text(item)))
+                              .toList(),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    const Text('初始恢复码'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: options.recoveryCodes.map((String item) => Chip(label: Text(item))).toList(),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(context).pop(),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setState(() {
-                          busy = true;
-                        });
-                        try {
-                          await controller.verifyTotpRegistration(
-                            code: codeController.text,
-                            recoveryCodes: options.recoveryCodes,
-                          );
-                          if (navigator.context.mounted) {
-                            Navigator.of(context).pop();
-                            await _showRecoveryCodesDialog(
-                              navigator.context,
-                              '请保存恢复码',
-                              options.recoveryCodes,
-                            );
-                            showAppMessage(messenger.context, 'TOTP 已启用');
-                          }
-                        } catch (error) {
-                          if (context.mounted) {
-                            showAppMessage(messenger.context, error.toString(), error: true);
-                          }
-                        } finally {
-                          if (context.mounted) {
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: busy ? null : () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () async {
                             setState(() {
-                              busy = false;
+                              busy = true;
                             });
-                          }
-                        }
-                      },
-                child: const Text('确认启用'),
-              ),
-            ],
-          );
-        },
+                            try {
+                              await controller.verifyTotpRegistration(
+                                code: codeController.text,
+                                recoveryCodes: options.recoveryCodes,
+                              );
+                              if (navigator.context.mounted) {
+                                Navigator.of(context).pop();
+                                await _showRecoveryCodesDialog(
+                                  navigator.context,
+                                  '请保存恢复码',
+                                  options.recoveryCodes,
+                                );
+                                showAppMessage(messenger.context, 'TOTP 已启用');
+                              }
+                            } catch (error) {
+                              if (context.mounted) {
+                                showAppMessage(
+                                  messenger.context,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            } finally {
+                              if (context.mounted) {
+                                setState(() {
+                                  busy = false;
+                                });
+                              }
+                            }
+                          },
+                    child: const Text('确认启用'),
+                  ),
+                ],
+              );
+            },
       );
     },
   );
   codeController.dispose();
 }
 
-Future<void> _showRecoveryCodesDialog(BuildContext context, String title, List<String> codes) {
+Future<void> _showRecoveryCodesDialog(
+  BuildContext context,
+  String title,
+  List<String> codes,
+) {
   return showDialog<void>(
     context: context,
     builder: (BuildContext context) {
@@ -4148,7 +5275,9 @@ Future<void> _showRecoveryCodesDialog(BuildContext context, String title, List<S
           child: Wrap(
             spacing: 10,
             runSpacing: 10,
-            children: codes.map((String item) => Chip(label: Text(item))).toList(),
+            children: codes
+                .map((String item) => Chip(label: Text(item)))
+                .toList(),
           ),
         ),
         actions: <Widget>[
@@ -4216,7 +5345,9 @@ SensitiveVerificationMethod? parseSensitiveVerificationMethod(String? value) {
   }
 }
 
-String sensitiveVerificationMethodChipLabel(SensitiveVerificationMethod method) {
+String sensitiveVerificationMethodChipLabel(
+  SensitiveVerificationMethod method,
+) {
   switch (method) {
     case SensitiveVerificationMethod.password:
       return '密码';
@@ -4229,7 +5360,9 @@ String sensitiveVerificationMethodChipLabel(SensitiveVerificationMethod method) 
   }
 }
 
-String sensitiveVerificationMethodDescription(SensitiveVerificationMethod method) {
+String sensitiveVerificationMethodDescription(
+  SensitiveVerificationMethod method,
+) {
   switch (method) {
     case SensitiveVerificationMethod.password:
       return '输入当前登录密码完成验证。';
@@ -4294,7 +5427,9 @@ int computeSecurityScore(UserDetails user, AppController controller) {
 
 IconData deviceIcon(String? deviceType) {
   final String value = (deviceType ?? '').toLowerCase();
-  if (value.contains('android') || value.contains('ios') || value.contains('mobile')) {
+  if (value.contains('android') ||
+      value.contains('ios') ||
+      value.contains('mobile')) {
     return Icons.smartphone_rounded;
   }
   if (value.contains('ipad') || value.contains('tablet')) {
@@ -4383,7 +5518,9 @@ Map<String, dynamic> asMap(dynamic value) {
     return value;
   }
   if (value is Map) {
-    return value.map((dynamic key, dynamic data) => MapEntry(key.toString(), data));
+    return value.map(
+      (dynamic key, dynamic data) => MapEntry(key.toString(), data),
+    );
   }
   throw ApiException('数据格式错误');
 }
@@ -4423,13 +5560,19 @@ bool asBool(dynamic value, {bool fallback = false}) {
 }
 
 class MFAChallenge {
-  const MFAChallenge({required this.challengeId, required this.method, required this.methods});
+  const MFAChallenge({
+    required this.challengeId,
+    required this.method,
+    required this.methods,
+  });
 
   factory MFAChallenge.fromJson(Map<String, dynamic> json) {
     return MFAChallenge(
       challengeId: asString(json['challengeId']) ?? '',
       method: asString(json['method']) ?? 'totp',
-      methods: asList(json['methods']).map((dynamic item) => item.toString()).toList(),
+      methods: asList(
+        json['methods'],
+      ).map((dynamic item) => item.toString()).toList(),
     );
   }
 
@@ -4494,7 +5637,9 @@ class UserDetails {
       region: asString(json['region']),
       bio: asString(json['bio']),
       updatedAt: asString(json['updatedAt']),
-      settings: json['settings'] == null ? null : UserSettings.fromJson(asMap(json['settings'])),
+      settings: json['settings'] == null
+          ? null
+          : UserSettings.fromJson(asMap(json['settings'])),
     );
   }
 
@@ -4594,7 +5739,10 @@ class PasswordRequirement {
 }
 
 class TotpStatusResponse {
-  const TotpStatusResponse({required this.enabled, required this.recoveryCodesCount});
+  const TotpStatusResponse({
+    required this.enabled,
+    required this.recoveryCodesCount,
+  });
 
   factory TotpStatusResponse.fromJson(Map<String, dynamic> json) {
     return TotpStatusResponse(
@@ -4619,9 +5767,13 @@ class SensitiveVerificationStatus {
     return SensitiveVerificationStatus(
       verified: asBool(json['verified']),
       remainingSeconds: asInt(json['remainingSeconds']) ?? 0,
-      preferredMethod: parseSensitiveVerificationMethod(asString(json['preferredMethod'])),
+      preferredMethod: parseSensitiveVerificationMethod(
+        asString(json['preferredMethod']),
+      ),
       methods: asList(json['methods'])
-          .map((dynamic item) => parseSensitiveVerificationMethod(item.toString()))
+          .map(
+            (dynamic item) => parseSensitiveVerificationMethod(item.toString()),
+          )
           .whereType<SensitiveVerificationMethod>()
           .toList(),
     );
@@ -4644,7 +5796,9 @@ class PasskeyAllowedCredential {
     return PasskeyAllowedCredential(
       id: asString(json['id']) ?? '',
       type: asString(json['type']),
-      transports: asList(json['transports']).map((dynamic item) => item.toString()).toList(),
+      transports: asList(
+        json['transports'],
+      ).map((dynamic item) => item.toString()).toList(),
     );
   }
 
@@ -4675,7 +5829,8 @@ class PasskeyAssertionOptions {
     final dynamic allowCredentialsRaw = json['allowCredentials'];
     List<dynamic> parsedCredentials = <dynamic>[];
 
-    if (allowCredentialsRaw is String && allowCredentialsRaw.trim().isNotEmpty) {
+    if (allowCredentialsRaw is String &&
+        allowCredentialsRaw.trim().isNotEmpty) {
       try {
         final dynamic decoded = jsonDecode(allowCredentialsRaw);
         if (decoded is List<dynamic>) {
@@ -4752,7 +5907,9 @@ class TotpRegistrationOptionsResponse {
     return TotpRegistrationOptionsResponse(
       secret: asString(json['secret']) ?? '',
       qrCodeUrl: asString(json['qrCodeUrl']) ?? '',
-      recoveryCodes: asList(json['recoveryCodes']).map((dynamic item) => item.toString()).toList(),
+      recoveryCodes: asList(
+        json['recoveryCodes'],
+      ).map((dynamic item) => item.toString()).toList(),
     );
   }
 
@@ -4899,7 +6056,8 @@ class SensitiveLogsQuery {
     return <String, String>{
       if (page != null) 'page': '$page',
       if (pageSize != null) 'pageSize': '$pageSize',
-      if (operationType != null && operationType!.isNotEmpty) 'operationType': operationType!,
+      if (operationType != null && operationType!.isNotEmpty)
+        'operationType': operationType!,
       if (result != null && result!.isNotEmpty) 'result': result!,
       if (startDate != null && startDate!.isNotEmpty) 'startDate': startDate!,
       if (endDate != null && endDate!.isNotEmpty) 'endDate': endDate!,
@@ -4938,7 +6096,9 @@ class BrowserPasskeyBridgeResponse {
 class BrowserPasskeyBridge {
   static bool isSupported(String origin) {
     final Uri? uri = Uri.tryParse(origin.trim());
-    return uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && (uri.host.isNotEmpty);
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        (uri.host.isNotEmpty);
   }
 
   static Future<BrowserPasskeyBridgeResponse> start({
@@ -4953,8 +6113,12 @@ class BrowserPasskeyBridge {
       throw ApiException('当前环境未配置可用的 Passkey 浏览器桥接地址');
     }
 
-    final HttpServer server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final Completer<BrowserPasskeyBridgeResponse> completer = Completer<BrowserPasskeyBridgeResponse>();
+    final HttpServer server = await HttpServer.bind(
+      InternetAddress.loopbackIPv4,
+      0,
+    );
+    final Completer<BrowserPasskeyBridgeResponse> completer =
+        Completer<BrowserPasskeyBridgeResponse>();
     final String state = _randomState();
     final Uri callbackUri = Uri(
       scheme: 'http',
@@ -4975,15 +6139,20 @@ class BrowserPasskeyBridge {
 
     late final StreamSubscription<HttpRequest> subscription;
     subscription = server.listen((HttpRequest request) async {
-      await _handleCallbackRequest(request, expectedState: state, completer: completer);
-      if (request.uri.path == '/desktop-passkey-callback' && request.method == 'POST') {
+      await _handleCallbackRequest(
+        request,
+        expectedState: state,
+        completer: completer,
+      );
+      if (request.uri.path == '/desktop-passkey-callback' &&
+          request.method == 'POST') {
         await subscription.cancel();
         await server.close(force: true);
       }
     });
 
     try {
-      await _openExternalBrowser(launchUri.toString());
+      await openExternalUrl(launchUri.toString());
       return await completer.future.timeout(
         const Duration(minutes: 5),
         onTimeout: () => throw ApiException('等待浏览器回传结果超时'),
@@ -5006,22 +6175,30 @@ class BrowserPasskeyBridge {
     String? accessToken,
     String? passkeyName,
   }) {
-    final Uri originUri = Uri.parse(passkeyOrigin.endsWith('/') ? passkeyOrigin : '$passkeyOrigin/');
+    final Uri originUri = Uri.parse(
+      passkeyOrigin.endsWith('/') ? passkeyOrigin : '$passkeyOrigin/',
+    );
     final Map<String, String> query = <String, String>{
       'mode': mode.name,
       'callback': callbackUri.toString(),
       'state': state,
       'apiBaseUrl': apiBaseUrl,
-      if (mfaChallengeId != null && mfaChallengeId.isNotEmpty) 'mfaChallengeId': mfaChallengeId,
-      if (passkeyName != null && passkeyName.isNotEmpty) 'passkeyName': passkeyName,
+      if (mfaChallengeId != null && mfaChallengeId.isNotEmpty)
+        'mfaChallengeId': mfaChallengeId,
+      if (passkeyName != null && passkeyName.isNotEmpty)
+        'passkeyName': passkeyName,
     };
     final String fragment = accessToken != null && accessToken.isNotEmpty
-        ? Uri(queryParameters: <String, String>{'accessToken': accessToken}).query
+        ? Uri(
+            queryParameters: <String, String>{'accessToken': accessToken},
+          ).query
         : '';
-    return originUri.resolve('desktop/passkey-bridge').replace(
-      queryParameters: query,
-      fragment: fragment.isEmpty ? null : fragment,
-    );
+    return originUri
+        .resolve('desktop/passkey-bridge')
+        .replace(
+          queryParameters: query,
+          fragment: fragment.isEmpty ? null : fragment,
+        );
   }
 
   static Future<void> _handleCallbackRequest(
@@ -5041,7 +6218,8 @@ class BrowserPasskeyBridge {
       return;
     }
 
-    if (request.method != 'POST' || request.uri.path != '/desktop-passkey-callback') {
+    if (request.method != 'POST' ||
+        request.uri.path != '/desktop-passkey-callback') {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write('<html><body>Not found</body></html>');
       await request.response.close();
@@ -5049,7 +6227,9 @@ class BrowserPasskeyBridge {
     }
 
     final String raw = await utf8.decoder.bind(request).join();
-    final Map<String, dynamic> payload = raw.isEmpty ? <String, dynamic>{} : asMap(jsonDecode(raw));
+    final Map<String, dynamic> payload = raw.isEmpty
+        ? <String, dynamic>{}
+        : asMap(jsonDecode(raw));
     final String? state = asString(payload['state']);
     if (state != expectedState) {
       request.response.statusCode = HttpStatus.forbidden;
@@ -5061,30 +6241,25 @@ class BrowserPasskeyBridge {
       return;
     }
 
-    final BrowserPasskeyBridgeResponse response = BrowserPasskeyBridgeResponse.fromJson(payload);
+    final BrowserPasskeyBridgeResponse response =
+        BrowserPasskeyBridgeResponse.fromJson(payload);
     request.response.statusCode = HttpStatus.ok;
-    request.response.write(response.success ? _successHtml(response.message) : _errorHtml(response.message));
+    request.response.write(
+      response.success
+          ? _successHtml(response.message)
+          : _errorHtml(response.message),
+    );
     await request.response.close();
 
     if (!completer.isCompleted) {
       if (response.success) {
         completer.complete(response);
       } else {
-        completer.completeError(ApiException(response.message ?? '浏览器未完成 Passkey 操作'));
+        completer.completeError(
+          ApiException(response.message ?? '浏览器未完成 Passkey 操作'),
+        );
       }
     }
-  }
-
-  static Future<void> _openExternalBrowser(String url) async {
-    if (Platform.isMacOS) {
-      await Process.run('open', <String>[url]);
-      return;
-    }
-    if (Platform.isWindows) {
-      await Process.run('cmd', <String>['/c', 'start', '', url]);
-      return;
-    }
-    await Process.run('xdg-open', <String>[url]);
   }
 
   static String _randomState() {
@@ -5094,7 +6269,9 @@ class BrowserPasskeyBridge {
   }
 
   static String _successHtml(String? message) {
-    final String text = htmlEscape.convert(message ?? '桌面端已收到 Passkey 结果，可以关闭当前页面。');
+    final String text = htmlEscape.convert(
+      message ?? '桌面端已收到 Passkey 结果，可以关闭当前页面。',
+    );
     return '<html><body style="font-family:sans-serif;padding:32px;background:#f6f4ee;">'
         '<h2>操作已完成</h2><p>$text</p><p>现在可以回到桌面端。</p></body></html>';
   }
@@ -5103,6 +6280,199 @@ class BrowserPasskeyBridge {
     final String text = htmlEscape.convert(message ?? '桌面端未收到有效结果。');
     return '<html><body style="font-family:sans-serif;padding:32px;background:#fff4f4;">'
         '<h2>操作失败</h2><p>$text</p><p>请返回桌面端重试。</p></body></html>';
+  }
+}
+
+Future<void> openExternalUrl(String url) async {
+  ProcessResult result;
+  if (Platform.isMacOS) {
+    result = await Process.run('open', <String>[url]);
+  } else if (Platform.isWindows) {
+    result = await Process.run('cmd', <String>['/c', 'start', '', url]);
+  } else {
+    result = await Process.run('xdg-open', <String>[url]);
+  }
+
+  if (result.exitCode != 0) {
+    final String message = result.stderr?.toString().trim().isNotEmpty == true
+        ? result.stderr.toString().trim()
+        : '无法打开外部浏览器';
+    throw ApiException(message);
+  }
+}
+
+class DesktopSessionBridgeServer {
+  DesktopSessionBridgeServer({
+    required this.controller,
+    required Set<String> allowedOrigins,
+  }) : _allowedOrigins = allowedOrigins;
+
+  final AppController controller;
+  final Set<String> _allowedOrigins;
+
+  HttpServer? _server;
+  StreamSubscription<HttpRequest>? _subscription;
+
+  Future<void> start() async {
+    if (_server != null) {
+      return;
+    }
+    try {
+      final HttpServer server = await HttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        kDesktopSessionBridgePort,
+      );
+      _server = server;
+      _subscription = server.listen(_handleRequest);
+    } on SocketException {
+      // Ignore bridge startup failures so the app can continue to function normally.
+    }
+  }
+
+  Future<void> stop() async {
+    await _subscription?.cancel();
+    await _server?.close(force: true);
+    _subscription = null;
+    _server = null;
+  }
+
+  Future<void> _handleRequest(HttpRequest request) async {
+    final String? origin = request.headers.value('origin');
+    final bool originAllowed = _isAllowedOrigin(origin);
+
+    if (origin != null && !originAllowed) {
+      request.response.statusCode = HttpStatus.forbidden;
+      request.response.write('forbidden');
+      await request.response.close();
+      return;
+    }
+
+    _setCorsHeaders(
+      request.response,
+      origin: origin,
+      allowOrigin: originAllowed,
+    );
+
+    if (request.method == 'OPTIONS') {
+      request.response.statusCode = HttpStatus.noContent;
+      await request.response.close();
+      return;
+    }
+
+    try {
+      if (request.method == 'GET' &&
+          request.uri.path == '/ksuser-auth/bridge/status') {
+        await _writeJson(request.response, <String, dynamic>{
+          'authenticated': controller.isAuthenticated,
+          'environmentName': controller.environmentName,
+          'apiBaseUrl': controller.apiBaseUrl,
+          if (controller.user != null)
+            'user': <String, dynamic>{
+              'uuid': controller.user!.uuid,
+              'username': controller.user!.username,
+              'email': controller.user!.email,
+              'avatarUrl': controller.user!.avatarUrl,
+            },
+        });
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          request.uri.path == '/ksuser-auth/bridge/export') {
+        if (!controller.isAuthenticated) {
+          await _writeJson(request.response, <String, dynamic>{
+            'message': '桌面端当前未登录',
+          }, statusCode: HttpStatus.conflict);
+          return;
+        }
+        final SessionTransferTicket ticket = await controller
+            .createSessionTransferTicket(target: 'web');
+        await _writeJson(request.response, <String, dynamic>{
+          'transferCode': ticket.transferCode,
+          'expiresInSeconds': ticket.expiresInSeconds,
+          if (controller.user != null)
+            'user': <String, dynamic>{
+              'uuid': controller.user!.uuid,
+              'username': controller.user!.username,
+              'email': controller.user!.email,
+              'avatarUrl': controller.user!.avatarUrl,
+            },
+        });
+        return;
+      }
+
+      if (request.method == 'POST' &&
+          request.uri.path == '/ksuser-auth/bridge/import') {
+        final String raw = await utf8.decoder.bind(request).join();
+        final Map<String, dynamic> payload = raw.isEmpty
+            ? <String, dynamic>{}
+            : asMap(jsonDecode(raw));
+        final String? transferCode = asString(payload['transferCode']);
+        if (transferCode == null || transferCode.trim().isEmpty) {
+          await _writeJson(request.response, <String, dynamic>{
+            'message': 'transferCode 不能为空',
+          }, statusCode: HttpStatus.badRequest);
+          return;
+        }
+        await controller.importSessionTransferTicket(transferCode);
+        await _writeJson(request.response, <String, dynamic>{
+          'authenticated': controller.isAuthenticated,
+          if (controller.user != null)
+            'user': <String, dynamic>{
+              'uuid': controller.user!.uuid,
+              'username': controller.user!.username,
+              'email': controller.user!.email,
+              'avatarUrl': controller.user!.avatarUrl,
+            },
+        });
+        return;
+      }
+
+      await _writeJson(request.response, <String, dynamic>{
+        'message': 'Not found',
+      }, statusCode: HttpStatus.notFound);
+    } on ApiException catch (error) {
+      await _writeJson(request.response, <String, dynamic>{
+        'message': error.message,
+      }, statusCode: error.statusCode ?? HttpStatus.badRequest);
+    } catch (error) {
+      await _writeJson(request.response, <String, dynamic>{
+        'message': error.toString(),
+      }, statusCode: HttpStatus.internalServerError);
+    }
+  }
+
+  bool _isAllowedOrigin(String? origin) {
+    if (origin == null || origin.isEmpty) {
+      return true;
+    }
+    return _allowedOrigins.contains(origin);
+  }
+
+  void _setCorsHeaders(
+    HttpResponse response, {
+    required String? origin,
+    required bool allowOrigin,
+  }) {
+    response.headers
+      ..set(HttpHeaders.contentTypeHeader, 'application/json; charset=utf-8')
+      ..set(HttpHeaders.accessControlAllowMethodsHeader, 'GET, POST, OPTIONS')
+      ..set(HttpHeaders.accessControlAllowHeadersHeader, 'Content-Type');
+    if (origin != null && allowOrigin) {
+      response.headers
+        ..set(HttpHeaders.accessControlAllowOriginHeader, origin)
+        ..set(HttpHeaders.varyHeader, 'Origin');
+    }
+  }
+
+  Future<void> _writeJson(
+    HttpResponse response,
+    Map<String, dynamic> payload, {
+    int statusCode = HttpStatus.ok,
+  }) async {
+    response.statusCode = statusCode;
+    response.write(jsonEncode(payload));
+    await response.close();
   }
 }
 
@@ -5119,7 +6489,9 @@ class EnvConfig {
 
   static Future<EnvConfig> load() async {
     final bool isDevelopment = kDebugMode;
-    final String assetName = isDevelopment ? '.env.development' : '.env.production';
+    final String assetName = isDevelopment
+        ? '.env.development'
+        : '.env.production';
     final String environmentName = isDevelopment ? 'Development' : 'Production';
 
     try {
@@ -5130,15 +6502,20 @@ class EnvConfig {
             ? values['FLUTTER_API_BASE_URL']!.trim()
             : kDefaultApiBaseUrl,
         environmentName: environmentName,
-        passkeyOrigin: values['FLUTTER_PASSKEY_ORIGIN']?.trim().isNotEmpty == true
+        passkeyOrigin:
+            values['FLUTTER_PASSKEY_ORIGIN']?.trim().isNotEmpty == true
             ? values['FLUTTER_PASSKEY_ORIGIN']!.trim()
-            : (isDevelopment ? 'http://localhost:5173' : 'https://auth.ksuser.cn'),
+            : (isDevelopment
+                  ? 'http://localhost:5173'
+                  : 'https://auth.ksuser.cn'),
       );
     } catch (_) {
       return EnvConfig(
         apiBaseUrl: kDefaultApiBaseUrl,
         environmentName: environmentName,
-        passkeyOrigin: isDevelopment ? 'http://localhost:5173' : 'https://auth.ksuser.cn',
+        passkeyOrigin: isDevelopment
+            ? 'http://localhost:5173'
+            : 'https://auth.ksuser.cn',
       );
     }
   }

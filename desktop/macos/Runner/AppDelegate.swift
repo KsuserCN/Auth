@@ -27,6 +27,10 @@ class AppDelegate: FlutterAppDelegate {
     dispatchMenuCommand("refresh")
   }
 
+  @objc private func openSettingsFromMenu(_ sender: Any?) {
+    dispatchMenuCommand("openSettings")
+  }
+
   @objc private func logoutFromMenu(_ sender: Any?) {
     dispatchMenuCommand("logout")
   }
@@ -58,6 +62,7 @@ class AppDelegate: FlutterAppDelegate {
     - 登录页默认读取当前环境配置，不再暴露 API 或环境切换。
     - Passkey 会自动拉起默认浏览器完成验证。
     - 常用菜单：
+      • Command-, 打开设置
       • Command-R 刷新数据
       • Command-1~5 快速切换工作台模块
       • Shift-Command-L 退出登录
@@ -107,6 +112,14 @@ class AppDelegate: FlutterAppDelegate {
       mainMenu.insertItem(fileItem, at: 1)
       configureFileMenu(fileMenu)
     }
+
+    if mainMenu.items.first(where: { $0.title == "账户" }) == nil {
+      let accountItem = NSMenuItem(title: "账户", action: nil, keyEquivalent: "")
+      let accountMenu = NSMenu(title: "账户")
+      accountItem.submenu = accountMenu
+      mainMenu.insertItem(accountItem, at: 2)
+      configureAccountMenu(accountMenu)
+    }
   }
 
   private func configureApplicationMenu(_ menu: NSMenu?) {
@@ -119,10 +132,10 @@ class AppDelegate: FlutterAppDelegate {
     }
 
     if let preferencesItem = menu.items.first(where: { $0.keyEquivalent == "," }) {
-      preferencesItem.title = "显示主窗口"
+      preferencesItem.title = "设置..."
       preferencesItem.target = self
-      preferencesItem.action = #selector(showMainWindow(_:))
-      preferencesItem.keyEquivalent = "0"
+      preferencesItem.action = #selector(openSettingsFromMenu(_:))
+      preferencesItem.keyEquivalent = ","
       preferencesItem.keyEquivalentModifierMask = [.command]
     }
 
@@ -161,6 +174,27 @@ class AppDelegate: FlutterAppDelegate {
     menu.addItem(logoutItem)
     menu.addItem(NSMenuItem.separator())
     menu.addItem(closeItem)
+  }
+
+  private func configureAccountMenu(_ menu: NSMenu) {
+    menu.removeAllItems()
+
+    let refreshItem = NSMenuItem(title: "刷新数据", action: #selector(refreshFromMenu(_:)), keyEquivalent: "r")
+    refreshItem.keyEquivalentModifierMask = [.command]
+    refreshItem.target = self
+
+    let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: ",")
+    settingsItem.keyEquivalentModifierMask = [.command]
+    settingsItem.target = self
+
+    let logoutItem = NSMenuItem(title: "退出登录", action: #selector(logoutFromMenu(_:)), keyEquivalent: "l")
+    logoutItem.keyEquivalentModifierMask = [.command, .shift]
+    logoutItem.target = self
+
+    menu.addItem(refreshItem)
+    menu.addItem(settingsItem)
+    menu.addItem(NSMenuItem.separator())
+    menu.addItem(logoutItem)
   }
 
   private func configureViewMenu(_ menu: NSMenu?) {
