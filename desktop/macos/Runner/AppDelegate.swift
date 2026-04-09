@@ -31,6 +31,10 @@ class AppDelegate: FlutterAppDelegate {
     dispatchMenuCommand("openSettings")
   }
 
+  @objc private func openAboutFromMenu(_ sender: Any?) {
+    dispatchMenuCommand("openAbout")
+  }
+
   @objc private func logoutFromMenu(_ sender: Any?) {
     dispatchMenuCommand("logout")
   }
@@ -129,6 +133,8 @@ class AppDelegate: FlutterAppDelegate {
 
     if let aboutItem = menu.items.first {
       aboutItem.title = "关于 \(appDisplayName)"
+      aboutItem.target = self
+      aboutItem.action = #selector(openAboutFromMenu(_:))
     }
 
     if let preferencesItem = menu.items.first(where: { $0.keyEquivalent == "," }) {
@@ -239,9 +245,14 @@ class AppDelegate: FlutterAppDelegate {
 
     menu.removeAllItems()
 
+    let aboutItem = NSMenuItem(title: "关于 \(appDisplayName)", action: #selector(openAboutFromMenu(_:)), keyEquivalent: "")
+    aboutItem.target = self
+
     let helpItem = NSMenuItem(title: "使用说明", action: #selector(showUsageHelp(_:)), keyEquivalent: "?")
     helpItem.keyEquivalentModifierMask = [.command, .shift]
     helpItem.target = self
+    menu.addItem(aboutItem)
+    menu.addItem(NSMenuItem.separator())
     menu.addItem(helpItem)
   }
 

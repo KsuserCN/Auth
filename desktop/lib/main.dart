@@ -108,6 +108,9 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
 
   Future<dynamic> _handleAppMenuCall(MethodCall call) async {
     switch (call.method) {
+      case 'openAbout':
+        _openAboutPanel();
+        return true;
       case 'openSettings':
         _openSettingsPanel();
         return true;
@@ -164,6 +167,14 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
         _settingsDialogOpen = false;
       }),
     );
+  }
+
+  void _openAboutPanel() {
+    final BuildContext? context = _navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+    unawaited(showDesktopAboutDialog(context, _controller));
   }
 
   @override
@@ -386,6 +397,51 @@ Future<void> showDesktopSettingsDialog(
       );
     },
   );
+}
+
+Future<void> showDesktopAboutDialog(
+  BuildContext context,
+  AppController controller,
+) {
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext context) {
+      return AboutDialog(
+        applicationName: 'Ksuser Auth 统一认证中心',
+        applicationVersion: kDesktopAppVersion,
+        applicationIcon: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Image.asset(
+            kSidebarLogoAsset,
+            width: 56,
+            height: 56,
+            fit: BoxFit.cover,
+          ),
+        ),
+        children: <Widget>[
+          const SizedBox(height: 8),
+          const Text('桌面统一认证客户端'),
+          const SizedBox(height: 8),
+          Text('运行环境：${controller.environmentName}'),
+          Text('主题模式：${themeModeLabel(controller.themeMode)}'),
+          Text(
+            '本地调试：${controller.compactMode ? '紧凑布局，' : ''}${controller.reduceMotion ? '减少动画' : '标准动画'}',
+          ),
+        ],
+      );
+    },
+  );
+}
+
+String themeModeLabel(ThemeMode mode) {
+  switch (mode) {
+    case ThemeMode.system:
+      return '跟随系统';
+    case ThemeMode.light:
+      return '浅色';
+    case ThemeMode.dark:
+      return '深色';
+  }
 }
 
 class PasskeyPlatform {
@@ -618,6 +674,11 @@ class AppController extends ChangeNotifier {
             mode: BrowserPasskeyBridgeMode.mfa,
             mfaChallengeId: challengeId,
           );
+      if (response.transferCode != null && response.transferCode!.isNotEmpty) {
+        await importSessionTransferTicket(response.transferCode!);
+        pendingMfaChallenge = null;
+        return;
+      }
       if (response.accessToken == null || response.accessToken!.isEmpty) {
         throw ApiException(response.message ?? '浏览器未返回登录结果');
       }
@@ -830,6 +891,10 @@ class AppController extends ChangeNotifier {
             apiBaseUrl: apiBaseUrl,
             mode: BrowserPasskeyBridgeMode.login,
           );
+      if (response.transferCode != null && response.transferCode!.isNotEmpty) {
+        await importSessionTransferTicket(response.transferCode!);
+        return;
+      }
       if (response.accessToken == null || response.accessToken!.isEmpty) {
         throw ApiException(response.message ?? '浏览器未返回登录结果');
       }
@@ -6133,6 +6198,7 @@ class BrowserPasskeyBridgeResponse {
     required this.success,
     required this.message,
     this.accessToken,
+    this.transferCode,
     this.verified = false,
     this.registered = false,
   });
@@ -6142,6 +6208,7 @@ class BrowserPasskeyBridgeResponse {
       success: asString(json['status']) != 'error',
       message: asString(json['message']),
       accessToken: asString(json['accessToken']),
+      transferCode: asString(json['transferCode']),
       verified: asBool(json['verified']),
       registered: asBool(json['registered']),
     );
@@ -6150,6 +6217,7 @@ class BrowserPasskeyBridgeResponse {
   final bool success;
   final String? message;
   final String? accessToken;
+  final String? transferCode;
   final bool verified;
   final bool registered;
 }
