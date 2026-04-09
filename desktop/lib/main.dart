@@ -4965,6 +4965,7 @@ Future<void> _showEditDialog(
     context: context,
     builder: (BuildContext context) {
       bool busy = false;
+      bool closed = false;
       return StatefulBuilder(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
@@ -4992,6 +4993,7 @@ Future<void> _showEditDialog(
                             try {
                               await onSubmit(controller.text);
                               if (context.mounted) {
+                                closed = true;
                                 Navigator.of(context).pop(true);
                               }
                             } catch (error) {
@@ -5003,7 +5005,7 @@ Future<void> _showEditDialog(
                                 );
                               }
                             } finally {
-                              if (context.mounted) {
+                              if (context.mounted && !closed) {
                                 setState(() {
                                   busy = false;
                                 });
@@ -5036,6 +5038,7 @@ Future<void> _showSelectionDialog(
     context: context,
     builder: (BuildContext context) {
       bool busy = false;
+      bool closed = false;
       return StatefulBuilder(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
@@ -5073,6 +5076,7 @@ Future<void> _showSelectionDialog(
                             try {
                               await onSubmit(value);
                               if (context.mounted) {
+                                closed = true;
                                 Navigator.of(context).pop(true);
                               }
                             } catch (error) {
@@ -5084,7 +5088,7 @@ Future<void> _showSelectionDialog(
                                 );
                               }
                             } finally {
-                              if (context.mounted) {
+                              if (context.mounted && !closed) {
                                 setState(() {
                                   busy = false;
                                 });
