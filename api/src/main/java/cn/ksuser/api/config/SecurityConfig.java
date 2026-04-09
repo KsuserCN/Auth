@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .requestMatchers("/", "/auth/health", "/auth/health/",
                     "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
                     "/auth/login-with-code", "/auth/login-with-code/",
+                    "/auth/session-transfer/exchange", "/auth/session-transfer/exchange/",
                     "/auth/refresh", "/auth/refresh/", "/auth/logout", "/auth/logout/",
                     "/auth/check-username", "/auth/check-username/", "/auth/send-code", "/auth/send-code/",
                     "/auth/passkey/authentication-options", "/auth/passkey/authentication-options/",

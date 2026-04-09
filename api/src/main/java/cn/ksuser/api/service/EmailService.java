@@ -18,13 +18,15 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
+    private final UserAgentParserService userAgentParserService;
 
     @Value("${spring.mail.username}")
     private String fromEmail;
 
-    public EmailService(JavaMailSender mailSender, TemplateEngine templateEngine) {
+    public EmailService(JavaMailSender mailSender, TemplateEngine templateEngine, UserAgentParserService userAgentParserService) {
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
+        this.userAgentParserService = userAgentParserService;
     }
 
     /**
@@ -76,6 +78,7 @@ public class EmailService {
             context.setVariable("ipLocation", log.getIpLocation());
             context.setVariable("deviceType", log.getDeviceType());
             context.setVariable("browser", log.getBrowser());
+            context.setVariable("clientSource", userAgentParserService.describeClientSource(log.getBrowser(), log.getDeviceType()));
 
             String htmlContent = templateEngine.process("sensitive-action-reminder", context);
             helper.setText(htmlContent, true);

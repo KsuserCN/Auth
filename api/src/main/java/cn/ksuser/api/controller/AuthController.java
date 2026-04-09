@@ -58,6 +58,7 @@ public class AuthController {
     private final EncryptionUtil encryptionUtil;
     private final MfaService mfaService;
     private final SensitiveLogUtil sensitiveLogUtil;
+    private final SessionTransferService sessionTransferService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
@@ -66,7 +67,8 @@ public class AuthController {
                           AppProperties appProperties, PasskeyService passkeyService,
                           TotpService totpService, EncryptionUtil encryptionUtil,
                           UserSettingsRepository userSettingsRepository, MfaService mfaService,
-                          SensitiveLogUtil sensitiveLogUtil) {
+                          SensitiveLogUtil sensitiveLogUtil,
+                          SessionTransferService sessionTransferService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -83,6 +85,7 @@ public class AuthController {
         this.userSettingsRepository = userSettingsRepository;
         this.mfaService = mfaService;
         this.sensitiveLogUtil = sensitiveLogUtil;
+        this.sessionTransferService = sessionTransferService;
     }
 
     /**
@@ -946,6 +949,83 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "刷新成功", new RefreshResponse(newAccessToken)));
+    }
+
+    /**
+     * 创建一次性跨端登录票据
+     */
+    @PostMapping("/session-transfer/create")
+    public ResponseEntity<ApiResponse<SessionTransferResponse>> createSessionTransfer(
+            @RequestBody(required = false) SessionTransferCreateRequest requestBody,
+            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        String target = requestBody == null ? null : requestBody.getTarget();
+        try {
+            SessionTransferService.SessionTransferPayload payload =
+                sessionTransferService.createTransfer(user.getId(), target);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "跨端票据已创建",
+                    new SessionTransferResponse(payload.getTransferCode(), SessionTransferService.DEFAULT_TTL_SECONDS)));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "跨端票据创建失败"));
+        }
+    }
+
+    /**
+     * 兑换一次性跨端登录票据，目标端会获得自己的完整会话
+     */
+    @PostMapping("/session-transfer/exchange")
+    public ResponseEntity<ApiResponse<TokenResponse>> exchangeSessionTransfer(
+            @RequestBody SessionTransferExchangeRequest requestBody,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        if (requestBody == null || requestBody.getTransferCode() == null || requestBody.getTransferCode().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "transferCode 不能为空"));
+        }
+
+        if (requestBody.getTarget() == null || requestBody.getTarget().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "target 不能为空"));
+        }
+
+        try {
+            SessionTransferService.SessionTransferPayload payload =
+                sessionTransferService.consumeTransfer(requestBody.getTransferCode(), requestBody.getTarget());
+            User user = userService.findById(payload.getUserId()).orElse(null);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(401, "用户不存在"));
+            }
+
+            String clientIp = rateLimitService.getClientIp(request);
+            String userAgent = request.getHeader("User-Agent");
+            TokenResponse tokenResponse = issueSessionToken(user, clientIp, userAgent, response);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "跨端登录成功", tokenResponse));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "跨端登录失败"));
+        }
     }
 
     /**
@@ -1950,6 +2030,15 @@ public class AuthController {
             return null;
         }
         return jwtUtil.getSessionId(accessToken);
+    }
+
+    private TokenResponse issueSessionToken(User user, String clientIp, String userAgent, HttpServletResponse response) {
+        String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
+        UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
+        int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+        String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
+        setRefreshTokenCookie(response, refreshToken);
+        return new TokenResponse(accessToken);
     }
 
     // ==================== Passkey (WebAuthn) 端点 ====================

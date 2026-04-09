@@ -14,6 +14,7 @@ import java.util.regex.Matcher;
 public class UserAgentParserService {
 
     private static final Logger logger = LoggerFactory.getLogger(UserAgentParserService.class);
+    private static final Pattern KSUSER_DESKTOP_PATTERN = Pattern.compile("(?i)KsuserAuthDesktop/([\\d.]+)");
 
     // 常见浏览器模式（优先匹配 Edge）
     private static final String[] BROWSER_PATTERNS = {
@@ -56,6 +57,11 @@ public class UserAgentParserService {
      * 从User-Agent提取浏览器信息
      */
     private String parseBrowser(String userAgent) {
+        Matcher desktopMatcher = KSUSER_DESKTOP_PATTERN.matcher(userAgent);
+        if (desktopMatcher.find()) {
+            return "Ksuser Auth Desktop " + desktopMatcher.group(1);
+        }
+
         for (int i = 0; i < BROWSER_PATTERNS.length; i++) {
             Pattern pattern = Pattern.compile(BROWSER_PATTERNS[i]);
             Matcher matcher = pattern.matcher(userAgent);
@@ -76,6 +82,12 @@ public class UserAgentParserService {
         if (ua.contains("bot") || ua.contains("spider") || ua.contains("crawler")) {
             return "Bot";
         }
+        if (ua.contains("macos")) {
+            return "Mac";
+        }
+        if (ua.contains("windows")) {
+            return "Windows";
+        }
         if (ua.contains("windows nt")) {
             return "Windows";
         }
@@ -88,13 +100,59 @@ public class UserAgentParserService {
         if (ua.contains("iphone") || ua.contains("ipad") || ua.contains("ios")) {
             return "iOS";
         }
-        if (ua.contains("linux") || ua.contains("x11")) {
-            return "Linux";
-        }
         if (ua.contains("cros")) {
             return "ChromeOS";
         }
+        if (ua.contains("linux") || ua.contains("x11")) {
+            return "Linux";
+        }
         return "Unknown";
+    }
+
+    public String describeClientSource(String userAgent) {
+        return describeClientSource(parse(userAgent));
+    }
+
+    public String describeClientSource(String browser, String deviceType) {
+        return describeClientSource(new UserAgentInfo(browser, deviceType));
+    }
+
+    public String describeClientSource(UserAgentInfo info) {
+        String browser = info.getBrowser();
+        String deviceType = normalizeDeviceLabel(info.getDeviceType());
+
+        if (browser != null && browser.startsWith("Ksuser Auth Desktop")) {
+            if ("未知系统".equals(deviceType)) {
+                return "Ksuser 桌面版";
+            }
+            return "Ksuser 桌面版（" + deviceType + "）";
+        }
+
+        boolean hasBrowser = browser != null && !browser.isBlank() && !"Unknown".equals(browser);
+        boolean hasDevice = deviceType != null && !"未知系统".equals(deviceType);
+        if (hasBrowser && hasDevice) {
+            return "网页端（" + browser + " / " + deviceType + "）";
+        }
+        if (hasBrowser) {
+            return "网页端（" + browser + "）";
+        }
+        if (hasDevice) {
+            return "网页端（" + deviceType + "）";
+        }
+        return "未知客户端";
+    }
+
+    private String normalizeDeviceLabel(String deviceType) {
+        if (deviceType == null || deviceType.isBlank() || "Unknown".equals(deviceType)) {
+            return "未知系统";
+        }
+        if ("Mac".equals(deviceType)) {
+            return "macOS";
+        }
+        if ("iOS".equals(deviceType)) {
+            return "iOS";
+        }
+        return deviceType;
     }
 
     /**
