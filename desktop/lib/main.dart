@@ -2351,8 +2351,7 @@ class DesktopWorkspace extends StatelessWidget {
                                                 Text(
                                                   '统一认证中心',
                                                   style: TextStyle(
-                                                    color:
-                                                        sidebarSubtitleColor,
+                                                    color: sidebarSubtitleColor,
                                                     fontSize: 12,
                                                   ),
                                                 ),
@@ -2373,8 +2372,9 @@ class DesktopWorkspace extends StatelessWidget {
                                                 : Colors.white.withValues(
                                                     alpha: 0.72,
                                                   ),
-                                            borderRadius:
-                                                BorderRadius.circular(18),
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
                                             border: Border.all(
                                               color: isDark
                                                   ? Colors.white.withValues(
@@ -2393,8 +2393,7 @@ class DesktopWorkspace extends StatelessWidget {
                                               Text(
                                                 user.username,
                                                 maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   color: sidebarTitleColor,
                                                   fontWeight: FontWeight.w700,
@@ -2404,11 +2403,9 @@ class DesktopWorkspace extends StatelessWidget {
                                               Text(
                                                 user.email,
                                                 maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                  color:
-                                                      sidebarSubtitleColor,
+                                                  color: sidebarSubtitleColor,
                                                   fontSize: 12,
                                                 ),
                                               ),
@@ -2479,8 +2476,7 @@ class DesktopWorkspace extends StatelessWidget {
                             width: extended ? 194 : 48,
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
                                 if (extended)
                                   Text(
@@ -2503,7 +2499,9 @@ class DesktopWorkspace extends StatelessWidget {
                                       foregroundColor: sidebarTitleColor,
                                       backgroundColor: isDark
                                           ? Colors.white.withValues(alpha: 0.06)
-                                          : Colors.white.withValues(alpha: 0.78),
+                                          : Colors.white.withValues(
+                                              alpha: 0.78,
+                                            ),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 14,
                                         vertical: 12,
@@ -2522,7 +2520,9 @@ class DesktopWorkspace extends StatelessWidget {
                                       foregroundColor: sidebarTitleColor,
                                       backgroundColor: isDark
                                           ? Colors.white.withValues(alpha: 0.06)
-                                          : Colors.white.withValues(alpha: 0.78),
+                                          : Colors.white.withValues(
+                                              alpha: 0.78,
+                                            ),
                                     ),
                                     icon: const Icon(Icons.logout_rounded),
                                   ),
@@ -2633,7 +2633,9 @@ class DesktopWorkspace extends StatelessWidget {
                             ),
                           ),
                         Expanded(
-                          child: controller.workspaceLoading && controller.user == null
+                          child:
+                              controller.workspaceLoading &&
+                                  controller.user == null
                               ? const Center(child: CircularProgressIndicator())
                               : _buildSection(context),
                         ),
@@ -2902,7 +2904,7 @@ class ProfilePage extends StatelessWidget {
         children: <Widget>[
           _SectionCard(
             title: '基础信息',
-            subtitle: '桌面端采用双列表单，不复用网页端的单栏编辑页。',
+            subtitle: '在这里查看你的基础信息',
             child: Column(
               children: <Widget>[
                 _EditableRow(
@@ -2939,7 +2941,7 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 16),
           _SectionCard(
             title: '扩展资料',
-            subtitle: '字段与 `/auth/update/profile` 保持一致。',
+            subtitle: '在这里查看与修改你的个人信息',
             child: Column(
               children: <Widget>[
                 _EditableRow(
@@ -3042,7 +3044,7 @@ class SecurityPage extends StatelessWidget {
                 flex: 3,
                 child: _SectionCard(
                   title: '安全开关',
-                  subtitle: '映射网页端 `SecurityView` 的开关和偏好。',
+                  subtitle: '在这里管理你的账号安全偏好',
                   child: Column(
                     children: <Widget>[
                       SwitchListTile.adaptive(
@@ -3200,7 +3202,7 @@ class SecurityPage extends StatelessWidget {
                 flex: 2,
                 child: _SectionCard(
                   title: '身份验证能力',
-                  subtitle: '网页端“登录选项”和“安全性”合并为桌面摘要。',
+                  subtitle: '配置验证方式',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -3263,7 +3265,7 @@ class SecurityPage extends StatelessWidget {
               Expanded(
                 child: _SectionCard(
                   title: 'TOTP 管理',
-                  subtitle: '复用后端 TOTP 接口，桌面端改为侧重信息密度的操作面板。',
+                  subtitle: '在这里管理你的一次性验证码',
                   child: _TotpPanel(controller: controller),
                 ),
               ),
@@ -3271,7 +3273,7 @@ class SecurityPage extends StatelessWidget {
               Expanded(
                 child: _SectionCard(
                   title: 'Passkey 列表',
-                  subtitle: '展示网页端相同信息；新增能力改为浏览器桥接完成。',
+                  subtitle: '当前该功能使用新增能力改为浏览器桥接完成',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -3339,7 +3341,7 @@ class DevicesPage extends StatelessWidget {
         children: <Widget>[
           _SectionCard(
             title: '在线会话',
-            subtitle: '会话字段直接对应 `/auth/sessions`。',
+            subtitle: '管理您的登录与在线信息',
             child: controller.sessions.isEmpty
                 ? const Text('暂无在线设备。')
                 : Column(
@@ -3460,7 +3462,7 @@ class _ActivityPageState extends State<ActivityPage> {
         children: <Widget>[
           _SectionCard(
             title: '敏感操作日志',
-            subtitle: '登录方式和结果映射遵循 `FRONTEND_LOGIN_METHOD_GUIDE.md`。',
+            subtitle: '在这里查看你的敏感操作记录',
             child: Column(
               children: <Widget>[
                 Row(
@@ -3786,18 +3788,10 @@ class _WorkspaceBanner extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          CircleAvatar(
+          _UserAvatar(
+            imageUrl: user.avatarUrl,
+            username: user.username,
             radius: 28,
-            backgroundColor: Colors.black,
-            child: Text(
-              user.username.isEmpty
-                  ? 'K'
-                  : user.username.substring(0, 1).toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -3821,6 +3815,73 @@ class _WorkspaceBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _UserAvatar extends StatelessWidget {
+  const _UserAvatar({
+    required this.imageUrl,
+    required this.username,
+    this.radius = 20,
+  });
+
+  final String? imageUrl;
+  final String username;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final String normalizedName = username.trim();
+    final String initial = normalizedName.isEmpty
+        ? 'K'
+        : normalizedName.substring(0, 1).toUpperCase();
+
+    final String? normalizedUrl = imageUrl?.trim();
+    final bool hasRemoteAvatar =
+        normalizedUrl != null &&
+        normalizedUrl.isNotEmpty &&
+        (normalizedUrl.startsWith('http://') ||
+            normalizedUrl.startsWith('https://'));
+
+    final Widget fallback = CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.black,
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: radius * 0.72,
+        ),
+      ),
+    );
+
+    if (!hasRemoteAvatar) {
+      return fallback;
+    }
+
+    final String remoteUrl = normalizedUrl;
+
+    return ClipOval(
+      child: Image.network(
+        remoteUrl,
+        width: radius * 2,
+        height: radius * 2,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => fallback,
+        loadingBuilder:
+            (
+              BuildContext context,
+              Widget child,
+              ImageChunkEvent? loadingProgress,
+            ) {
+              if (loadingProgress == null) {
+                return child;
+              }
+              return fallback;
+            },
       ),
     );
   }
