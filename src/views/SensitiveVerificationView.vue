@@ -32,7 +32,10 @@
 
       <!-- 右侧：表单内容 -->
       <div class="login-right">
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in">
+        <Transition
+          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in"
+        >
           <!-- 第一步：选择验证方式 -->
           <div v-if="step === 'method'" class="step-container" key="method">
             <h2 class="step-title">选择验证方式</h2>
@@ -40,8 +43,11 @@
 
             <div class="method-list">
               <!-- 密码验证 -->
-              <div class="method-option" @click="!methodSelecting && selectMethod('password')"
-                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('password') }">
+              <div
+                class="method-option"
+                @click="!methodSelecting && selectMethod('password')"
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('password') }"
+              >
                 <el-icon class="method-icon" :size="28">
                   <Lock />
                 </el-icon>
@@ -58,8 +64,11 @@
               </div>
 
               <!-- 邮箱验证码验证 -->
-              <div class="method-option" @click="!methodSelecting && selectMethod('email-code')"
-                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('email-code') }">
+              <div
+                class="method-option"
+                @click="!methodSelecting && selectMethod('email-code')"
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('email-code') }"
+              >
                 <el-icon class="method-icon" :size="28">
                   <Message />
                 </el-icon>
@@ -76,9 +85,12 @@
               </div>
 
               <!-- Passkey 验证 -->
-              <div v-if="isMethodAvailable('passkey')" class="method-option"
+              <div
+                v-if="isMethodAvailable('passkey')"
+                class="method-option"
                 @click="!methodSelecting && selectMethod('passkey')"
-                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('passkey') }">
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('passkey') }"
+              >
                 <el-icon class="method-icon" :size="28">
                   <Key />
                 </el-icon>
@@ -95,8 +107,11 @@
               </div>
 
               <!-- TOTP 验证 -->
-              <div class="method-option" @click="!methodSelecting && selectMethod('totp')"
-                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('totp') }">
+              <div
+                class="method-option"
+                @click="!methodSelecting && selectMethod('totp')"
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('totp') }"
+              >
                 <el-icon class="method-icon" :size="28">
                   <Key />
                 </el-icon>
@@ -123,17 +138,33 @@
             <h2 class="step-title">输入密码</h2>
             <p class="step-subtitle">请输入您的登录密码以验证身份</p>
 
-            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+            <div
+              v-if="canChooseSensitiveMethod()"
+              class="switch-method-section"
+              @click="backToMethod"
+            >
               <el-icon class="switch-method-icon">
                 <Refresh />
               </el-icon>
               <span>选择其他验证方式</span>
             </div>
 
-            <el-form ref="passwordFormRef" :model="passwordInput" :rules="passwordRules" label-position="top">
+            <el-form
+              ref="passwordFormRef"
+              :model="passwordInput"
+              :rules="passwordRules"
+              label-position="top"
+            >
               <el-form-item prop="password">
-                <el-input v-model="passwordInput.password" type="password" placeholder="密码" show-password
-                  @keyup.enter="handlePasswordVerify" autocomplete="current-password" autofocus />
+                <el-input
+                  v-model="passwordInput.password"
+                  type="password"
+                  placeholder="密码"
+                  show-password
+                  @keyup.enter="handlePasswordVerify"
+                  autocomplete="current-password"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
@@ -150,7 +181,11 @@
             <h2 class="step-title">输入验证码</h2>
             <p class="step-subtitle">验证码已发送至 {{ userEmail }}</p>
 
-            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+            <div
+              v-if="canChooseSensitiveMethod()"
+              class="switch-method-section"
+              @click="backToMethod"
+            >
               <el-icon class="switch-method-icon">
                 <Refresh />
               </el-icon>
@@ -159,9 +194,14 @@
 
             <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
               <el-form-item prop="code">
-                <el-input v-model="codeInput.code" placeholder="输入6位验证码" maxlength="6"
-                  @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')" @keyup.enter="handleCodeVerify"
-                  autofocus />
+                <el-input
+                  v-model="codeInput.code"
+                  placeholder="输入6位验证码"
+                  maxlength="6"
+                  @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
+                  @keyup.enter="handleCodeVerify"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
@@ -169,7 +209,9 @@
               <el-button v-if="!canResendCode" disabled class="resend-btn resend-disabled">
                 {{ codeCountdown }}s 后重新发送
               </el-button>
-              <el-button v-else type="primary" @click="resendCode" class="resend-btn">重新发送验证码</el-button>
+              <el-button v-else type="primary" @click="resendCode" class="resend-btn"
+                >重新发送验证码</el-button
+              >
             </div>
 
             <div class="step-actions">
@@ -185,7 +227,11 @@
             <h2 class="step-title">Passkey 验证</h2>
             <p class="step-subtitle">使用生物识别或安全密钥进行身份验证</p>
 
-            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+            <div
+              v-if="canChooseSensitiveMethod()"
+              class="switch-method-section"
+              @click="backToMethod"
+            >
               <el-icon class="switch-method-icon">
                 <Refresh />
               </el-icon>
@@ -210,19 +256,33 @@
             <p class="step-subtitle">请选择一种方式完成 TOTP 验证</p>
 
             <div class="totp-mode-switch" role="tablist" aria-label="验证码类型选择">
-              <button type="button" class="totp-mode-chip" :class="{ active: totpMode === 'totp' }"
-                :aria-pressed="totpMode === 'totp'" @click="setTotpMode('totp')">
+              <button
+                type="button"
+                class="totp-mode-chip"
+                :class="{ active: totpMode === 'totp' }"
+                :aria-pressed="totpMode === 'totp'"
+                @click="setTotpMode('totp')"
+              >
                 <span class="chip-title">动态码</span>
                 <span class="chip-meta">推荐</span>
               </button>
-              <button type="button" class="totp-mode-chip" :class="{ active: totpMode === 'recovery' }"
-                :aria-pressed="totpMode === 'recovery'" @click="setTotpMode('recovery')">
+              <button
+                type="button"
+                class="totp-mode-chip"
+                :class="{ active: totpMode === 'recovery' }"
+                :aria-pressed="totpMode === 'recovery'"
+                @click="setTotpMode('recovery')"
+              >
                 <span class="chip-title">恢复码</span>
                 <span class="chip-meta">应急</span>
               </button>
             </div>
 
-            <div v-if="canChooseSensitiveMethod()" class="switch-method-section" @click="backToMethod">
+            <div
+              v-if="canChooseSensitiveMethod()"
+              class="switch-method-section"
+              @click="backToMethod"
+            >
               <el-icon class="switch-method-icon">
                 <Refresh />
               </el-icon>
@@ -231,9 +291,14 @@
 
             <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
               <el-form-item prop="code">
-                <el-input v-model="totpInput.code" :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位大写字母恢复码'"
-                  :maxlength="totpMode === 'totp' ? 6 : 8" @input="handleTotpInput" @keyup.enter="handleTotpVerify"
-                  autofocus />
+                <el-input
+                  v-model="totpInput.code"
+                  :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位大写字母恢复码'"
+                  :maxlength="totpMode === 'totp' ? 6 : 8"
+                  @input="handleTotpInput"
+                  @keyup.enter="handleTotpVerify"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
@@ -256,18 +321,31 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Lock, Lightning, Key, Message, Loading, Refresh } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  Lock,
+  Lightning,
+  Key,
+  Message,
+  Loading,
+  Refresh,
+} from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { getStoredAccessToken } from '@/utils/authSession'
 import { useUserStore } from '@/stores/user'
 import {
   checkSensitiveVerification,
   verifySensitiveOperation,
   sendSensitiveVerificationCode,
   getPasskeySensitiveVerificationOptions,
-  verifyPasskeySensitiveOperation
+  verifyPasskeySensitiveOperation,
 } from '@/api/auth'
-import { isWebAuthnSupported, getPasskeyCredential, extractAuthenticationData } from '@/utils/webauthn'
+import {
+  isWebAuthnSupported,
+  getPasskeyCredential,
+  extractAuthenticationData,
+} from '@/utils/webauthn'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -294,7 +372,7 @@ const updateStep = (newStep: 'method' | 'password' | 'email-code' | 'passkey' | 
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // 用户邮箱
@@ -386,7 +464,7 @@ const canResendCode = ref(false)
 let codeCountdownTimer: number | null = null
 
 const ensureAuthenticated = () => {
-  const token = sessionStorage.getItem('accessToken')
+  const token = getStoredAccessToken()
   if (!token) {
     ElMessage.warning('请先登录')
     router.replace({
@@ -407,7 +485,7 @@ onMounted(async () => {
     const status = await checkSensitiveVerification()
 
     if (status.verified && status.remainingSeconds > 0) {
-      const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+      const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
       router.push(returnTo)
       return
     }
@@ -419,8 +497,8 @@ onMounted(async () => {
     )
 
     const preferredMethod = status.preferredMethod
-    const defaultMethod = [preferredMethod, ...availableMethods.value].find((item) =>
-      item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp'),
+    const defaultMethod = [preferredMethod, ...availableMethods.value].find(
+      (item) => item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp'),
     ) as 'password' | 'email-code' | 'passkey' | 'totp' | undefined
 
     if (defaultMethod) {
@@ -491,7 +569,10 @@ const handleTotpInput = (value: string) => {
     return
   }
 
-  totpInput.value.code = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 8)
+  totpInput.value.code = value
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, 8)
 }
 
 const setTotpMode = (mode: 'totp' | 'recovery') => {
@@ -513,13 +594,13 @@ const handlePasswordVerify = async () => {
 
     await verifySensitiveOperation({
       method: 'password',
-      password: passwordInput.value.password
+      password: passwordInput.value.password,
     })
 
     ElMessage.success('验证成功')
 
     // 获取返回地址
-    const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+    const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
     router.push(returnTo)
   } catch (error: unknown) {
     console.error('Password verify failed:', error)
@@ -566,13 +647,13 @@ const handleCodeVerify = async () => {
 
     await verifySensitiveOperation({
       method: 'email-code',
-      code: codeInput.value.code
+      code: codeInput.value.code,
     })
 
     ElMessage.success('验证成功')
 
     // 获取返回地址
-    const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+    const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
     router.push(returnTo)
   } catch (error: unknown) {
     console.error('Code verify failed:', error)
@@ -593,18 +674,18 @@ const handleTotpVerify = async () => {
     await verifySensitiveOperation(
       totpMode.value === 'recovery'
         ? {
-          method: 'totp',
-          recoveryCode: normalizedInput.toUpperCase(),
-        }
+            method: 'totp',
+            recoveryCode: normalizedInput.toUpperCase(),
+          }
         : {
-          method: 'totp',
-          code: normalizedInput,
-        },
+            method: 'totp',
+            code: normalizedInput,
+          },
     )
 
     ElMessage.success('验证成功')
 
-    const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+    const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
     router.push(returnTo)
   } catch (error: unknown) {
     console.error('TOTP verify failed:', error)
@@ -676,7 +757,7 @@ const handlePasskeyVerify = async () => {
     ElMessage.success('验证成功，有效期15分钟')
 
     // 5. 获取返回地址并跳转
-    const returnTo = router.currentRoute.value.query.returnTo as string || '/home/login-options'
+    const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
     router.push(returnTo)
   } catch (error: unknown) {
     // 处理不同类型的错误
@@ -1032,7 +1113,11 @@ const handlePasskeyVerify = async () => {
 }
 
 .resend-btn:not(.resend-disabled) {
-  background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--el-color-primary) 0%,
+    var(--el-color-primary-light-3) 100%
+  );
   color: white;
   border: none;
   box-shadow: 0 4px 12px rgba(255, 185, 15, 0.2);

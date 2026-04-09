@@ -340,6 +340,34 @@ export const refreshAccessToken = async (): Promise<{ accessToken: string }> => 
   return response.data as unknown as { accessToken: string }
 }
 
+export type SessionTransferTarget = 'web' | 'desktop'
+
+export interface SessionTransferResponse {
+  transferCode: string
+  expiresInSeconds: number
+}
+
+export const createSessionTransfer = async (
+  target: SessionTransferTarget,
+): Promise<SessionTransferResponse> => {
+  const response = await request.post<ApiResponse<SessionTransferResponse>>(
+    '/auth/session-transfer/create',
+    { target },
+  )
+  return response.data as unknown as SessionTransferResponse
+}
+
+export const exchangeSessionTransfer = async (
+  transferCode: string,
+  target: SessionTransferTarget,
+): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>(
+    '/auth/session-transfer/exchange',
+    { transferCode, target },
+  )
+  return response.data as unknown as LoginResponse
+}
+
 // ========== 获取用户信息 ==========
 
 /**

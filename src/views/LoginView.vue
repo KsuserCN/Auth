@@ -8,6 +8,10 @@
         </div>
         <h1 class="login-title">登录</h1>
         <p class="login-description">使用多种验证方式登录您的Ksuser账户</p>
+        <div v-if="desktopBridgeHint" class="desktop-login-hint" style="padding-bottom: 16px">
+          当前页面由桌面端拉起。您在网页完成登录后，桌面端会自动同步为已登录状态。
+        </div>
+        <br v-if="desktopBridgeHint">
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
@@ -31,8 +35,17 @@
       </div>
 
       <!-- 右侧：表单内容 -->
-      <div class="login-right">
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in">
+      <div class="login-right" :class="{ 'is-bootstrapping': loginBootstrapping }">
+        <div v-if="loginBootstrapping" class="bootstrap-state">
+          <el-icon class="bootstrap-spinner" :size="32">
+            <Loading />
+          </el-icon>
+          <h2 class="bootstrap-title">{{ loginBootstrapTitle }}</h2>
+          <p class="bootstrap-description">{{ loginBootstrapDescription }}</p>
+        </div>
+
+        <Transition v-else :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in">
           <!-- 第一步：邮箱输入 -->
           <div v-if="step === 'email'" class="step-container" key="email">
             <h2 class="step-title">开始登录</h2>
@@ -53,6 +66,20 @@
 
             <div class="create-account">
               还没有账号？<router-link to="/register" class="link">创建账号</router-link>
+            </div>
+
+            <div v-if="desktopBridgeReady" class="desktop-bridge-card">
+              <div class="desktop-bridge-copy">
+                <div class="desktop-bridge-title">检测到桌面端已登录</div>
+                <div class="desktop-bridge-user">
+                  {{ desktopBridgeUser?.username || desktopBridgeUser?.email }}
+                  <span v-if="desktopBridgeUser?.email"> · {{ desktopBridgeUser?.email }}</span>
+                </div>
+              </div>
+              <el-button class="desktop-bridge-btn" type="primary" plain @click="handleDesktopBridgeLogin"
+                :loading="desktopBridgeLoginLoading">
+                使用桌面端登录
+              </el-button>
             </div>
           </div>
 
@@ -188,8 +215,10 @@
                 </el-icon>
               </div>
 
-              <div class="method-option" @click="!methodSelecting && selectMfaMethod('passkey')"
-                :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('passkey') || !isPasskeySupported }">
+              <div class="method-option" @click="!methodSelecting && selectMfaMethod('passkey')" :class="{
+                'is-disabled':
+                  methodSelecting || !mfaMethods.includes('passkey') || !isPasskeySupported,
+              }">
                 <el-icon class="method-icon" :size="28">
                   <Key />
                 </el-icon>
@@ -274,10 +303,9 @@
               </el-button>
             </div>
           </div>
-
         </Transition>
 
-        <div v-if="step === 'email'" class="extra-login">
+        <div v-if="!loginBootstrapping && step === 'email'" class="extra-login">
           <div class="extra-title">其他登录方式</div>
           <div class="extra-actions">
             <div class="extra-icons">
@@ -312,7 +340,15 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Lock, Lightning, Key, Message, Loading, Refresh } from '@element-plus/icons-vue'
+import {
+  ArrowRight,
+  Lock,
+  Lightning,
+  Key,
+  Message,
+  Loading,
+  Refresh,
+} from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -327,10 +363,26 @@ import {
   buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
+  exchangeSessionTransfer,
+  refreshAccessToken,
   type MFAChallenge,
-  type LoginResponse
+  type LoginResponse,
 } from '@/api/auth'
-import { isWebAuthnSupported, getPasskeyCredential, extractAuthenticationData } from '@/utils/webauthn'
+import {
+  exchangeDesktopSessionToWeb,
+  finalizeWebLogin,
+  getDesktopBridgeStatus,
+  storeWebSession,
+  syncCurrentWebSessionToDesktop,
+  type DesktopBridgeUser,
+} from '@/utils/desktopBridge'
+import { getStoredAccessToken, hydrateSessionStorageFromSharedStorage } from '@/utils/authSession'
+import { setRequestBaseUrl } from '@/utils/request'
+import {
+  isWebAuthnSupported,
+  getPasskeyCredential,
+  extractAuthenticationData,
+} from '@/utils/webauthn'
 
 // 表单引用
 const emailFormRef = ref<FormInstance>()
@@ -343,7 +395,9 @@ const router = useRouter()
 const route = useRoute()
 
 // 流程步骤
-const step = ref<'email' | 'method' | 'password' | 'email-code' | 'mfa-method' | 'mfa-passkey' | 'totp'>('email')
+const step = ref<
+  'email' | 'method' | 'password' | 'email-code' | 'mfa-method' | 'mfa-passkey' | 'totp'
+>('email')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
 const stepOrder = ['email', 'method', 'password', 'email-code', 'mfa-method', 'mfa-passkey', 'totp']
@@ -361,7 +415,7 @@ const updateStep = (
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // 邮箱输入
@@ -449,7 +503,9 @@ const totpLoading = ref(false)
 
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
-const mfaSource = ref<'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null>(null)
+const mfaSource = ref<
+  'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null
+>(null)
 const mfaMethods = ref<Array<'totp' | 'passkey'>>([])
 
 // 验证码倒计时
@@ -459,13 +515,30 @@ let codeCountdownTimer: number | null = null
 
 // Passkey 支持检测
 const isPasskeySupported = ref(false)
+const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
+const desktopBridgeLoginLoading = ref(false)
+const loginBootstrapping = ref(true)
+
+const desktopBridgeReady = computed(() => {
+  return !!desktopBridgeUser.value && step.value === 'email'
+})
+const desktopBridgeHint = computed(() => route.query.desktopBridge === '1')
+const loginBootstrapTitle = computed(() =>
+  desktopBridgeHint.value ? '正在识别网页登录状态' : '正在初始化登录状态',
+)
+const loginBootstrapDescription = computed(() =>
+  desktopBridgeHint.value
+    ? '如果当前浏览器已登录，页面会直接跳转，并同步桌面端状态。'
+    : '请稍候，系统正在检查当前浏览器是否已有可复用的登录会话。',
+)
 
 const normalizeMfaMethods = (
   methods: MFAChallenge['methods'],
   fallbackMethod: MFAChallenge['method'],
 ): Array<'totp' | 'passkey'> => {
-  const normalized = (methods ?? [])
-    .filter((item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey')
+  const normalized = (methods ?? []).filter(
+    (item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey',
+  )
 
   if (normalized.length > 0) {
     return [...new Set(normalized)]
@@ -475,7 +548,11 @@ const normalizeMfaMethods = (
 }
 
 const canChooseMfaMethod = () => {
-  return mfaMethods.value.includes('totp') && mfaMethods.value.includes('passkey') && isPasskeySupported.value
+  return (
+    mfaMethods.value.includes('totp') &&
+    mfaMethods.value.includes('passkey') &&
+    isPasskeySupported.value
+  )
 }
 
 const handleTotpInput = (value: string) => {
@@ -484,7 +561,10 @@ const handleTotpInput = (value: string) => {
     return
   }
 
-  totpInput.value.code = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 8)
+  totpInput.value.code = value
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, 8)
 }
 
 const setTotpMode = (mode: 'totp' | 'recovery') => {
@@ -538,6 +618,7 @@ const startMfaFlow = (
 
 onMounted(() => {
   isPasskeySupported.value = isWebAuthnSupported()
+  void initializeLoginView()
 
   const challengeId = route.query.challengeId
   const method = route.query.method
@@ -550,9 +631,12 @@ onMounted(() => {
     const challenge: MFAChallenge = {
       challengeId: challengeId.trim(),
       method: normalizedMethod,
-      methods: queryMethods.length > 0
-        ? queryMethods.filter((item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey')
-        : undefined,
+      methods:
+        queryMethods.length > 0
+          ? queryMethods.filter(
+            (item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey',
+          )
+          : undefined,
     }
 
     const source =
@@ -563,6 +647,111 @@ onMounted(() => {
     startMfaFlow(challenge, source)
   }
 })
+
+const shouldBlockLoginBootstrap = (): boolean => {
+  const transferCode =
+    typeof route.query.transferCode === 'string' ? route.query.transferCode.trim() : ''
+
+  if (desktopBridgeHint.value || transferCode) {
+    return true
+  }
+
+  return Boolean(getStoredAccessToken())
+}
+
+const initializeLoginView = async () => {
+  const shouldBlock = shouldBlockLoginBootstrap()
+  loginBootstrapping.value = shouldBlock
+
+  try {
+    const apiBaseUrl =
+      typeof route.query.apiBaseUrl === 'string' ? route.query.apiBaseUrl.trim() : ''
+    if (apiBaseUrl) {
+      setRequestBaseUrl(apiBaseUrl)
+    }
+
+    const transferCode =
+      typeof route.query.transferCode === 'string' ? route.query.transferCode.trim() : ''
+    if (transferCode) {
+      await handleTransferCodeLogin(transferCode)
+      return
+    }
+
+    const resumedSession = await resumeExistingWebSession()
+    if (resumedSession) {
+      if (desktopBridgeHint.value) {
+        const synced = await syncCurrentWebSessionToDesktop()
+        ElMessage.success(synced ? '已复用当前网页登录，并同步到桌面端' : '当前网页已登录')
+      }
+      await router.replace('/home')
+      return
+    }
+
+    if (desktopBridgeHint.value) {
+      await loadDesktopBridgeStatus()
+      return
+    }
+
+    void loadDesktopBridgeStatus()
+  } finally {
+    if (shouldBlock) {
+      loginBootstrapping.value = false
+    }
+  }
+}
+
+const resumeExistingWebSession = async (): Promise<boolean> => {
+  const currentAccessToken = getStoredAccessToken()
+  if (currentAccessToken) {
+    hydrateSessionStorageFromSharedStorage()
+    return true
+  }
+
+  try {
+    const refreshed = await refreshAccessToken()
+    if (!refreshed.accessToken) {
+      return false
+    }
+    storeWebSession(refreshed.accessToken)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const loadDesktopBridgeStatus = async () => {
+  if (getStoredAccessToken()) {
+    return
+  }
+
+  const status = await getDesktopBridgeStatus()
+  if (status?.authenticated && status.user) {
+    desktopBridgeUser.value = status.user
+    return
+  }
+
+  desktopBridgeUser.value = null
+}
+
+const handleTransferCodeLogin = async (transferCode: string) => {
+  try {
+    desktopBridgeLoginLoading.value = true
+    const response = await exchangeSessionTransfer(transferCode, 'web')
+    await finalizeWebLogin({
+      accessToken: response.accessToken,
+      user: response.user,
+      syncDesktop: false,
+    })
+    ElMessage.success('已从桌面端自动登录网页端')
+    router.replace('/home')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '桌面端自动登录失败'
+    ElMessage.error(message)
+    await loadDesktopBridgeStatus()
+  } finally {
+    desktopBridgeLoginLoading.value = false
+  }
+}
 
 // ===== 第一步：邮箱验证 =====
 
@@ -613,7 +802,7 @@ const handlePasswordLogin = async () => {
     // 调用密码登录接口
     const response = await passwordLogin({
       email: emailInput.value.email,
-      password: passwordInput.value.password
+      password: passwordInput.value.password,
     })
 
     // 检查是否需要 MFA 验证
@@ -622,11 +811,11 @@ const handlePasswordLogin = async () => {
     } else {
       // 直接登录成功
       const loginResp = response as LoginResponse
-      sessionStorage.setItem('accessToken', loginResp.accessToken)
-      if (loginResp.user) {
-        sessionStorage.setItem('user', JSON.stringify(loginResp.user))
-      }
-      ElMessage.success('登录成功')
+      const desktopSynced = await finalizeWebLogin({
+        accessToken: loginResp.accessToken,
+        user: loginResp.user,
+      })
+      ElMessage.success(desktopSynced ? '登录成功，已同步到桌面端' : '登录成功')
       router.push('/home')
     }
   } catch (error: unknown) {
@@ -643,7 +832,7 @@ const sendCode = async () => {
   try {
     // 调用发送登录验证码接口
     await sendLoginCode({
-      email: emailInput.value.email
+      email: emailInput.value.email,
     })
 
     ElMessage.success('验证码已发送')
@@ -662,7 +851,7 @@ const resendCode = async () => {
 
     // 调用发送登录验证码接口
     await sendLoginCode({
-      email: emailInput.value.email
+      email: emailInput.value.email,
     })
 
     ElMessage.success('验证码已重新发送')
@@ -705,7 +894,7 @@ const handleEmailCodeLogin = async () => {
     // 调用邮箱验证码登录接口
     const response = await loginWithCode({
       email: emailInput.value.email,
-      code: codeInput.value.code
+      code: codeInput.value.code,
     })
 
     // 检查是否需要 MFA 验证
@@ -714,11 +903,11 @@ const handleEmailCodeLogin = async () => {
     } else {
       // 直接登录成功
       const loginResp = response as LoginResponse
-      sessionStorage.setItem('accessToken', loginResp.accessToken)
-      if (loginResp.user) {
-        sessionStorage.setItem('user', JSON.stringify(loginResp.user))
-      }
-      ElMessage.success('登录成功')
+      const desktopSynced = await finalizeWebLogin({
+        accessToken: loginResp.accessToken,
+        user: loginResp.user,
+      })
+      ElMessage.success(desktopSynced ? '登录成功，已同步到桌面端' : '登录成功')
       router.push('/home')
     }
   } catch (error: unknown) {
@@ -769,11 +958,11 @@ const handlePasskeyLogin = async () => {
     } else {
       // 直接登录成功
       const loginResp = response as LoginResponse
-      sessionStorage.setItem('accessToken', loginResp.accessToken)
-      if (loginResp.user) {
-        sessionStorage.setItem('user', JSON.stringify(loginResp.user))
-      }
-      ElMessage.success('Passkey 登录成功')
+      const desktopSynced = await finalizeWebLogin({
+        accessToken: loginResp.accessToken,
+        user: loginResp.user,
+      })
+      ElMessage.success(desktopSynced ? 'Passkey 登录成功，已同步到桌面端' : 'Passkey 登录成功')
       router.push('/home')
     }
   } catch (error: unknown) {
@@ -977,13 +1166,11 @@ const handlePasskeyMfaVerify = async () => {
       ...authData,
     })
 
-    sessionStorage.setItem('accessToken', response.accessToken)
-
-    if (response.user) {
-      sessionStorage.setItem('user', JSON.stringify(response.user))
-    }
-
-    ElMessage.success('MFA 验证成功，登录完成')
+    const desktopSynced = await finalizeWebLogin({
+      accessToken: response.accessToken,
+      user: response.user,
+    })
+    ElMessage.success(desktopSynced ? 'MFA 验证成功，已同步到桌面端' : 'MFA 验证成功，登录完成')
     router.push('/home')
   } catch (error: unknown) {
     if (error instanceof Error) {
@@ -1038,14 +1225,11 @@ const handleTotpVerify = async () => {
     )
 
     // 存储 Access Token 到 sessionStorage
-    sessionStorage.setItem('accessToken', response.accessToken)
-
-    // 如果返回了用户信息，也一并存储
-    if (response.user) {
-      sessionStorage.setItem('user', JSON.stringify(response.user))
-    }
-
-    ElMessage.success('MFA 验证成功，登录完成')
+    const desktopSynced = await finalizeWebLogin({
+      accessToken: response.accessToken,
+      user: response.user,
+    })
+    ElMessage.success(desktopSynced ? 'MFA 验证成功，已同步到桌面端' : 'MFA 验证成功，登录完成')
 
     // 跳转到首页
     router.push('/home')
@@ -1080,6 +1264,30 @@ const backToMFASource = () => {
       break
     default:
       updateStep('email')
+  }
+}
+
+const handleDesktopBridgeLogin = async () => {
+  if (desktopBridgeLoginLoading.value) {
+    return
+  }
+
+  try {
+    desktopBridgeLoginLoading.value = true
+    const response = await exchangeDesktopSessionToWeb()
+    await finalizeWebLogin({
+      accessToken: response.accessToken,
+      user: response.user,
+      syncDesktop: false,
+    })
+    ElMessage.success('已使用桌面端登录')
+    router.push('/home')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '桌面端登录失败'
+    ElMessage.error(message)
+    desktopBridgeUser.value = null
+  } finally {
+    desktopBridgeLoginLoading.value = false
   }
 }
 
@@ -1182,6 +1390,42 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--el-bg-color);
   transition: all 2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.login-right.is-bootstrapping {
+  align-items: center;
+}
+
+.bootstrap-state {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.bootstrap-spinner {
+  color: var(--el-color-primary);
+  animation: rotateBootstrap 1s linear infinite;
+}
+
+.bootstrap-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.bootstrap-description {
+  max-width: 360px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--el-text-color-regular);
 }
 
 @keyframes slideIn {
@@ -1288,6 +1532,16 @@ onBeforeUnmount(() => {
 
   to {
     opacity: 1;
+  }
+}
+
+@keyframes rotateBootstrap {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -1558,7 +1812,9 @@ onBeforeUnmount(() => {
 }
 
 .resend-btn:not(.resend-disabled) {
-  background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
+  background: linear-gradient(135deg,
+      var(--el-color-primary) 0%,
+      var(--el-color-primary-light-3) 100%);
   color: white;
   border: none;
   box-shadow: 0 4px 12px rgba(255, 185, 15, 0.2);
@@ -1665,6 +1921,50 @@ onBeforeUnmount(() => {
 .create-account .link:hover {
   color: #ffd700;
   text-decoration: underline;
+}
+
+.desktop-login-hint {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 185, 15, 0.12);
+  border: 1px solid rgba(255, 185, 15, 0.2);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-primary);
+}
+
+.desktop-bridge-card {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 185, 15, 0.28);
+  background: linear-gradient(135deg, rgba(255, 185, 15, 0.12) 0%, rgba(255, 241, 204, 0.72) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.desktop-bridge-copy {
+  min-width: 0;
+}
+
+.desktop-bridge-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.desktop-bridge-user {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  word-break: break-all;
+}
+
+.desktop-bridge-btn {
+  flex-shrink: 0;
 }
 
 /* 输入框样式 */
@@ -1819,7 +2119,9 @@ onBeforeUnmount(() => {
   font-size: 28px;
   color: var(--el-text-color-secondary);
   opacity: 0.7;
-  transition: opacity 0.3s ease, color 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    color 0.3s ease;
 }
 
 .icon-btn:hover i {

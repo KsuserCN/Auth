@@ -92,6 +92,11 @@ const router = createRouter({
       component: () => import('../views/AddPasskeyView.vue'),
     },
     {
+      path: '/desktop/passkey-bridge',
+      name: 'desktop-passkey-bridge',
+      component: () => import('../views/DesktopPasskeyBridgeView.vue'),
+    },
+    {
       path: '/oauth/qq/callback',
       name: 'qq-callback',
       meta: { provider: 'qq' },

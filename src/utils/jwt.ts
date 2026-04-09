@@ -74,7 +74,7 @@ export const isTokenExpired = (token: string): boolean => {
  * @returns 解析后的 payload 对象，失败返回 null
  */
 export const getCurrentUserFromToken = (): JWTPayload | null => {
-  const token = sessionStorage.getItem('accessToken')
+  const token = getStoredAccessToken()
   if (!token) {
     return null
   }
@@ -98,3 +98,4 @@ export const formatTimestamp = (timestamp: number): string => {
     second: '2-digit',
   })
 }
+import { getStoredAccessToken } from '@/utils/authSession'

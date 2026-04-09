@@ -32,7 +32,10 @@
 
       <!-- 右侧：表单内容 -->
       <div class="login-right">
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in">
+        <Transition
+          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in"
+        >
           <!-- 第一步：输入用户名确认 -->
           <div v-if="step === 'username'" class="step-container" key="username">
             <h2 class="step-title">确认用户名</h2>
@@ -45,18 +48,25 @@
               <p>注销后，您的账号和所有数据将被永久删除，无法恢复</p>
             </div>
 
-            <el-form ref="usernameFormRef" :model="usernameInput" :rules="usernameRules" label-position="top">
+            <el-form
+              ref="usernameFormRef"
+              :model="usernameInput"
+              :rules="usernameRules"
+              label-position="top"
+            >
               <el-form-item prop="username">
-                <el-input v-model="usernameInput.username" placeholder="请输入您的用户名" @keyup.enter="goToConfirmStep"
-                  autofocus />
+                <el-input
+                  v-model="usernameInput.username"
+                  placeholder="请输入您的用户名"
+                  @keyup.enter="goToConfirmStep"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
             <div class="step-actions">
               <el-button class="back-btn" @click="handleCancel">取消</el-button>
-              <el-button class="next-btn" @click="goToConfirmStep">
-                下一步
-              </el-button>
+              <el-button class="next-btn" @click="goToConfirmStep"> 下一步 </el-button>
             </div>
           </div>
 
@@ -76,22 +86,37 @@
               <el-icon class="warning-icon">
                 <WarningFilled />
               </el-icon>
-              <p>此操作<strong>不可撤销</strong><br>您的账号和所有相关数据将被永久删除。</p>
+              <p>此操作<strong>不可撤销</strong><br />您的账号和所有相关数据将被永久删除。</p>
             </div>
 
-            <el-form ref="confirmTextFormRef" :model="confirmTextInput" :rules="confirmTextRules" label-position="top">
+            <el-form
+              ref="confirmTextFormRef"
+              :model="confirmTextInput"
+              :rules="confirmTextRules"
+              label-position="top"
+            >
               <el-form-item prop="confirmText">
-                <el-input v-model="confirmTextInput.confirmText" placeholder="请输入 我真的不想要我的号辣 以确认"
-                  @keyup.enter="handleSubmit" autofocus />
+                <el-input
+                  v-model="confirmTextInput.confirmText"
+                  placeholder="请输入 我真的不想要我的号辣 以确认"
+                  @keyup.enter="handleSubmit"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
-            <p class="confirm-hint">输入确切的短语 <strong>我真的不想要我的号辣</strong> 来确认账号注销</p>
+            <p class="confirm-hint">
+              输入确切的短语 <strong>我真的不想要我的号辣</strong> 来确认账号注销
+            </p>
 
             <div class="step-actions">
               <el-button class="back-btn" @click="backToUsername">返回</el-button>
-              <el-button class="next-btn danger-btn" @click="handleSubmit" :loading="submitLoading"
-                :disabled="confirmTextInput.confirmText !== '我真的不想要我的号辣'">
+              <el-button
+                class="next-btn danger-btn"
+                @click="handleSubmit"
+                :loading="submitLoading"
+                :disabled="confirmTextInput.confirmText !== '我真的不想要我的号辣'"
+              >
                 确认注销
               </el-button>
             </div>
@@ -110,6 +135,7 @@ import { Lock, Lightning, WarningFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { clearAuthSession } from '@/utils/authSession'
 import { deleteAccount, checkSensitiveVerification } from '@/api/auth'
 
 const router = useRouter()
@@ -136,7 +162,7 @@ const updateStep = (newStep: 'username' | 'confirm') => {
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // 表单数据
@@ -157,9 +183,7 @@ const usernameRules: FormRules = {
 }
 
 const confirmTextRules: FormRules = {
-  confirmText: [
-    { required: true, message: '请输入 我真的不想要我的号辣 以确认', trigger: 'blur' },
-  ],
+  confirmText: [{ required: true, message: '请输入 我真的不想要我的号辣 以确认', trigger: 'blur' }],
 }
 
 // 加载状态
@@ -175,14 +199,14 @@ onMounted(async () => {
       ElMessage.warning('请先完成身份验证')
       router.push({
         path: '/sensitive-verification',
-        query: { returnTo: '/delete-account' }
+        query: { returnTo: '/delete-account' },
       })
     }
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
     router.push({
       path: '/sensitive-verification',
-      query: { returnTo: '/delete-account' }
+      query: { returnTo: '/delete-account' },
     })
   }
 
@@ -234,7 +258,7 @@ const handleSubmit = async () => {
         confirmButtonText: '确认注销',
         cancelButtonText: '取消',
         type: 'warning',
-      }
+      },
     )
 
     submitLoading.value = true
@@ -243,7 +267,7 @@ const handleSubmit = async () => {
     ElMessage.success('账号已注销')
     // 清除用户信息并跳转到登录页
     userStore.user = null
-    localStorage.removeItem('accessToken')
+    clearAuthSession()
     router.push('/login')
   } catch (error: any) {
     if (error?.message === 'Cancel' || error?.message === 'cancel') {
@@ -256,7 +280,7 @@ const handleSubmit = async () => {
       ElMessage.error('身份验证已过期，请重新验证')
       router.push({
         path: '/sensitive-verification',
-        query: { returnTo: '/delete-account' }
+        query: { returnTo: '/delete-account' },
       })
     } else if (error?.response?.status === 400) {
       ElMessage.error(error?.response?.data?.msg || '删除失败，请重试')

@@ -5,9 +5,7 @@
         <h1 class="page-title">设备与登录</h1>
         <p class="page-subtitle">查看和管理您已连接的设备</p>
       </div>
-      <el-button @click="loadSessions" :loading="loading" :icon="Refresh">
-        刷新
-      </el-button>
+      <el-button @click="loadSessions" :loading="loading" :icon="Refresh"> 刷新 </el-button>
     </div>
 
     <el-row :gutter="16">
@@ -18,13 +16,24 @@
               <Monitor />
             </el-icon>
             <span>已连接的设备</span>
-            <el-tag v-if="sessions.length > 0" type="info" effect="plain" size="small" style="margin-left: 8px">
+            <el-tag
+              v-if="sessions.length > 0"
+              type="info"
+              effect="plain"
+              size="small"
+              style="margin-left: 8px"
+            >
               {{ sessions.length }} 个会话
             </el-tag>
           </div>
 
-          <el-table :data="sessions" class="modern-table" size="small" v-loading="loading"
-            :empty-text="loading ? '加载中...' : '暂无设备'">
+          <el-table
+            :data="sessions"
+            class="modern-table"
+            size="small"
+            v-loading="loading"
+            :empty-text="loading ? '加载中...' : '暂无设备'"
+          >
             <el-table-column label="设备" min-width="220">
               <template #default="{ row }">
                 <div class="device-cell">
@@ -34,11 +43,19 @@
                   <div class="device-details">
                     <div class="device-name">
                       {{ row.browser || '未知浏览器' }}
-                      <el-tag v-if="row.current" type="success" size="small" effect="plain" style="margin-left: 8px">
+                      <el-tag
+                        v-if="row.current"
+                        type="success"
+                        size="small"
+                        effect="plain"
+                        style="margin-left: 8px"
+                      >
                         当前
                       </el-tag>
                     </div>
-                    <div class="device-os">{{ row.deviceType || '未知设备' }} · {{ row.ipAddress }}</div>
+                    <div class="device-os">
+                      {{ row.deviceType || '未知设备' }} · {{ row.ipAddress }}
+                    </div>
                   </div>
                 </div>
               </template>
@@ -48,7 +65,12 @@
                 {{ row.ipLocation || '未知' }}
               </template>
             </el-table-column>
-            <el-table-column label="最后活动" min-width="160" sortable :sort-method="sortByLastSeen">
+            <el-table-column
+              label="最后活动"
+              min-width="160"
+              sortable
+              :sort-method="sortByLastSeen"
+            >
               <template #default="{ row }">
                 {{ formatLastSeen(row.lastSeenAt) }}
               </template>
@@ -62,14 +84,18 @@
             </el-table-column>
             <el-table-column label="操作" width="100" align="right">
               <template #default="{ row }">
-                <el-button v-if="!row.current" text type="danger" size="small" @click="handleRevoke(row)"
-                  :loading="revokingIds.has(row.id)">
+                <el-button
+                  v-if="!row.current"
+                  text
+                  type="danger"
+                  size="small"
+                  @click="handleRevoke(row)"
+                  :loading="revokingIds.has(row.id)"
+                >
                   撤销
                 </el-button>
                 <el-tooltip v-else content="无法撤销当前会话" placement="top">
-                  <el-button text type="info" size="small" disabled>
-                    撤销
-                  </el-button>
+                  <el-button text type="info" size="small" disabled> 撤销 </el-button>
                 </el-tooltip>
               </template>
             </el-table-column>
@@ -91,7 +117,9 @@
           <div class="danger-content">
             <div class="danger-info">
               <h3 class="danger-title">从所有设备退出登录</h3>
-              <p class="danger-desc">这将撤销您在所有设备上的登录状态，包括当前设备。您需要重新登录才能继续使用。</p>
+              <p class="danger-desc">
+                这将撤销您在所有设备上的登录状态，包括当前设备。您需要重新登录才能继续使用。
+              </p>
             </div>
             <el-button type="danger" plain @click="handleLogoutAll" :loading="logoutAllLoading">
               退出所有设备
@@ -109,6 +137,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Monitor, Cellphone, Iphone, Refresh, WarningFilled } from '@element-plus/icons-vue'
 import { getSessions, revokeSession, logoutAll, type SessionItem } from '@/api/auth'
 import { useRouter } from 'vue-router'
+import { clearAuthSession } from '@/utils/authSession'
 
 const router = useRouter()
 const sessions = ref<SessionItem[]>([])
@@ -132,15 +161,11 @@ const loadSessions = async () => {
 // 撤销会话
 const handleRevoke = async (session: SessionItem) => {
   try {
-    await ElMessageBox.confirm(
-      `确定要撤销此会话吗？该设备将被强制登出。`,
-      '确认撤销',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      }
-    )
+    await ElMessageBox.confirm(`确定要撤销此会话吗？该设备将被强制登出。`, '确认撤销', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
 
     revokingIds.value.add(session.id)
     try {
@@ -162,7 +187,12 @@ const handleRevoke = async (session: SessionItem) => {
 // 获取设备图标
 const getDeviceIcon = (deviceType: string | null) => {
   const type = (deviceType || '').toLowerCase()
-  if (type.includes('android') || type.includes('ios') || type.includes('iphone') || type.includes('mobile')) {
+  if (
+    type.includes('android') ||
+    type.includes('ios') ||
+    type.includes('iphone') ||
+    type.includes('mobile')
+  ) {
     return Cellphone
   }
   if (type.includes('ipad') || type.includes('tablet')) {
@@ -221,15 +251,13 @@ const handleLogoutAll = async () => {
         cancelButtonText: '取消',
         type: 'warning',
         distinguishCancelAndClose: true,
-      }
+      },
     )
 
     logoutAllLoading.value = true
     try {
       await logoutAll()
-      // 清除本地存储
-      sessionStorage.removeItem('accessToken')
-      sessionStorage.removeItem('refreshToken')
+      clearAuthSession()
       ElMessage.success('已从所有设备退出登录')
       // 延迟跳转，让用户看到成功消息
       setTimeout(() => {
@@ -304,15 +332,15 @@ onMounted(() => {
 }
 
 .device-icon.device-android {
-  color: #3DDC84;
+  color: #3ddc84;
 }
 
 .device-icon.device-ios {
-  color: #007AFF;
+  color: #007aff;
 }
 
 .device-icon.device-windows {
-  color: #0078D4;
+  color: #0078d4;
 }
 
 .device-icon.device-mac {
@@ -320,7 +348,7 @@ onMounted(() => {
 }
 
 .device-icon.device-linux {
-  color: #FCC624;
+  color: #fcc624;
 }
 
 .device-icon.device-bot {

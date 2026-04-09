@@ -91,6 +91,7 @@ import type {
   MicrosoftOAuthOperation,
   OAuthUnbindCallbackResponse,
 } from '@/api/auth'
+import { finalizeWebLogin } from '@/utils/desktopBridge'
 
 const router = useRouter()
 const route = useRoute()
@@ -230,7 +231,9 @@ const handleCallback = async () => {
     // 【关键】开发环境回调先跳转到本地地址 - 需要在所有错误检查之前执行
     // 这样即使有error也能重定向到localhost让本地环境处理
     if (returnedParsedState.env === 'dev' && window.location.origin !== 'http://localhost:5173') {
-      window.location.replace(`http://localhost:5173/oauth/${provider.value}/callback${window.location.search}`)
+      window.location.replace(
+        `http://localhost:5173/oauth/${provider.value}/callback${window.location.search}`,
+      )
       return
     }
 
@@ -284,7 +287,8 @@ const handleCallback = async () => {
 
       // 情况 1: 需要绑定账号 (HTTP 202，needBind=true)
       if (loginResponse.needBind === true) {
-        const warningMsg = loginResponse.message || `该 ${providerLabel.value} 账号尚未绑定，请先绑定或注册账号`
+        const warningMsg =
+          loginResponse.message || `该 ${providerLabel.value} 账号尚未绑定，请先绑定或注册账号`
         ElMessage.warning(warningMsg)
         if (loginResponse.openid) {
           sessionStorage.setItem(openIdStorageKey.value, loginResponse.openid)
@@ -314,12 +318,16 @@ const handleCallback = async () => {
 
       // 情况 3: 直接登录成功 (HTTP 200，accessToken 存在)
       if (loginResponse.accessToken) {
-        sessionStorage.setItem('accessToken', loginResponse.accessToken)
-        if (loginResponse.user) {
-          sessionStorage.setItem('user', JSON.stringify(loginResponse.user))
-        }
+        const desktopSynced = await finalizeWebLogin({
+          accessToken: loginResponse.accessToken,
+          user: loginResponse.user,
+        })
         state.value = 'success'
-        ElMessage.success(`${providerLabel.value} 登录成功`)
+        ElMessage.success(
+          desktopSynced
+            ? `${providerLabel.value} 登录成功，已同步到桌面端`
+            : `${providerLabel.value} 登录成功`,
+        )
         setTimeout(() => {
           router.push('/home')
         }, 1000)
@@ -393,7 +401,7 @@ watch(
       isDark.value = mode === 'dark'
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 onMounted(() => {

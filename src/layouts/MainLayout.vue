@@ -30,11 +30,14 @@
           <el-divider direction="vertical" />
           <!-- 加载中：显示骨架屏 -->
           <div v-if="loading" class="user-skeleton">
-            <el-skeleton-item variant="text" class="skeleton-avatar"
-              style="width: 32px; height: 32px; min-width: 32px;" />
+            <el-skeleton-item
+              variant="text"
+              class="skeleton-avatar"
+              style="width: 32px; height: 32px; min-width: 32px"
+            />
             <div class="skeleton-text">
-              <el-skeleton-item variant="text" style="width: 80px; height: 16px;" />
-              <el-skeleton-item variant="text" style="width: 140px; height: 14px;" />
+              <el-skeleton-item variant="text" style="width: 80px; height: 16px" />
+              <el-skeleton-item variant="text" style="width: 140px; height: 14px" />
             </div>
           </div>
           <!-- 加载完成：显示用户信息 -->
@@ -100,8 +103,14 @@
           </el-menu>
 
           <div class="side-footer">
-            <el-button class="logout-btn" type="danger" plain :loading="logoutLoading" :disabled="logoutLoading"
-              @click="handleLogout">
+            <el-button
+              class="logout-btn"
+              type="danger"
+              plain
+              :loading="logoutLoading"
+              :disabled="logoutLoading"
+              @click="handleLogout"
+            >
               <el-icon>
                 <SwitchButton />
               </el-icon>
@@ -133,12 +142,13 @@ import {
   Setting,
   Sunny,
   SwitchButton,
-  User
+  User,
 } from '@element-plus/icons-vue'
 import { logout } from '@/api/auth'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
+import { clearAuthSession } from '@/utils/authSession'
 
 const userStore = useUserStore()
 const { user, loading } = storeToRefs(userStore)
@@ -150,7 +160,7 @@ const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system'
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // 计算当前主题图标
@@ -174,9 +184,7 @@ const handleLogout = async () => {
     // 清除用户信息
     userStore.clearUser()
 
-    // 清除本地存储的数据（仅清除认证相关的，保留主题偏好）
-    sessionStorage.removeItem('accessToken')
-    sessionStorage.removeItem('user')
+    clearAuthSession()
 
     ElMessage.success('退出登录成功')
 
@@ -202,7 +210,7 @@ watch(
       isDark.value = mode === 'dark'
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 onMounted(() => {
@@ -222,7 +230,8 @@ onMounted(() => {
 .page {
   height: 100%;
   background: var(--el-bg-color-page);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .layout {
@@ -342,7 +351,6 @@ onMounted(() => {
 }
 
 @keyframes pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -433,7 +441,11 @@ onMounted(() => {
 }
 
 :deep(.el-button) {
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 :deep(.el-button):not(.is-disabled):hover {
