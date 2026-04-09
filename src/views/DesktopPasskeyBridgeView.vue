@@ -82,6 +82,7 @@ import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Loading } from '@element-plus/icons-vue'
 import {
+  createSessionTransfer,
   getPasskeyAuthenticationOptions,
   getPasskeyRegistrationOptions,
   getPasskeySensitiveVerificationOptions,
@@ -115,6 +116,7 @@ interface BridgeCallbackPayload {
   state: string
   message?: string
   accessToken?: string
+  transferCode?: string
   verified?: boolean
   registered?: boolean
 }
@@ -261,6 +263,22 @@ const completeWithSuccess = async (payload: Omit<BridgeCallbackPayload, 'status'
   errorMessage.value = ''
 }
 
+const createDesktopTransferCode = async (nextAccessToken: string): Promise<string> => {
+  const currentAccessToken = getStoredAccessToken()
+
+  try {
+    setStoredAccessToken(nextAccessToken)
+    const transfer = await createSessionTransfer('desktop')
+    return transfer.transferCode
+  } finally {
+    if (currentAccessToken) {
+      setStoredAccessToken(currentAccessToken)
+    } else {
+      clearStoredAccessToken()
+    }
+  }
+}
+
 const failWithMessage = async (message: string) => {
   errorMessage.value = message
   try {
@@ -307,8 +325,10 @@ const handleLoginResponse = async (response: LoginResponse | MFAChallenge) => {
     throw new Error('当前账号需要额外的 MFA 验证，但浏览器桥接页无法继续完成')
   }
 
+  const transferCode = await createDesktopTransferCode(response.accessToken)
   await completeWithSuccess({
     accessToken: response.accessToken,
+    transferCode,
     message: 'Passkey 登录成功',
   })
   successMessage.value = 'Passkey 登录成功，桌面端会自动进入工作台。'
@@ -356,8 +376,10 @@ const runPasskeyMfa = async (challengeId: string) => {
     ...extractAuthenticationData(credential),
   })
 
+  const transferCode = await createDesktopTransferCode(response.accessToken)
   await completeWithSuccess({
     accessToken: response.accessToken,
+    transferCode,
     message: 'MFA 验证成功',
   })
   successMessage.value = 'Passkey 二次验证成功，桌面端会自动继续登录。'
@@ -439,8 +461,10 @@ const submitTotp = async () => {
     )
 
     pendingMfaChallenge.value = null
+    const transferCode = await createDesktopTransferCode(response.accessToken)
     await completeWithSuccess({
       accessToken: response.accessToken,
+      transferCode,
       message: 'MFA 验证成功',
     })
     successMessage.value = 'MFA 验证成功，桌面端会自动继续登录。'
