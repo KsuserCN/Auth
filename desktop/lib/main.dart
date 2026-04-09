@@ -192,6 +192,15 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
           themeAnimationDuration: _controller.reduceMotion
               ? Duration.zero
               : const Duration(milliseconds: 220),
+          builder: (BuildContext context, Widget? child) {
+            return Stack(
+              children: <Widget>[
+                child ?? const SizedBox.shrink(),
+                if (_controller.isUiBusy)
+                  _GlobalLoadingOverlay(message: _controller.currentBusyLabel),
+              ],
+            );
+          },
           home: DesktopRoot(controller: _controller),
         );
       },
@@ -276,6 +285,59 @@ class DesktopRoot extends StatelessWidget {
         }
         return DesktopAuthPortal(controller: controller);
       },
+    );
+  }
+}
+
+class _GlobalLoadingOverlay extends StatelessWidget {
+  const _GlobalLoadingOverlay({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: isDark ? 0.34 : 0.22),
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 240, maxWidth: 320),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF262626) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.10),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -518,9 +580,40 @@ class AppController extends ChangeNotifier {
   bool compactMode = false;
   bool reduceMotion = false;
   String? workspaceError;
+  final List<String> _busyLabelStack = <String>[];
 
   bool get isAuthenticated => _apiClient.accessToken != null;
   String get apiBaseUrl => _apiClient.baseUrl;
+  bool get hasPendingUiAction => _busyLabelStack.isNotEmpty;
+  bool get isUiBusy => authBusy || workspaceLoading || hasPendingUiAction;
+  String get currentBusyLabel {
+    if (_busyLabelStack.isNotEmpty) {
+      return _busyLabelStack.last;
+    }
+    if (authBusy) {
+      return '正在处理认证请求...';
+    }
+    if (workspaceLoading) {
+      return '正在同步桌面数据...';
+    }
+    return '正在处理中...';
+  }
+
+  Future<T> runBusyAction<T>(
+    String label,
+    Future<T> Function() action,
+  ) async {
+    _busyLabelStack.add(label);
+    notifyListeners();
+    try {
+      return await action();
+    } finally {
+      if (_busyLabelStack.isNotEmpty) {
+        _busyLabelStack.removeLast();
+      }
+      notifyListeners();
+    }
+  }
 
   void _resetLocalSessionState() {
     _apiClient.clearSession();
@@ -593,45 +686,51 @@ class AppController extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
-    authBusy = true;
-    pendingMfaChallenge = null;
-    notifyListeners();
-    try {
-      final dynamic data = await _apiClient.post(
-        '/auth/login',
-        body: <String, dynamic>{'email': email.trim(), 'password': password},
-      );
-      await _consumeLoginPayload(data);
-    } finally {
-      authBusy = false;
+    await runBusyAction('正在登录...', () async {
+      authBusy = true;
+      pendingMfaChallenge = null;
       notifyListeners();
-    }
+      try {
+        final dynamic data = await _apiClient.post(
+          '/auth/login',
+          body: <String, dynamic>{'email': email.trim(), 'password': password},
+        );
+        await _consumeLoginPayload(data);
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> sendLoginCode(String email) {
-    return _apiClient.post(
-      '/auth/send-code',
-      body: <String, dynamic>{'email': email.trim(), 'type': 'login'},
-    );
+    return runBusyAction('正在发送登录验证码...', () {
+      return _apiClient.post(
+        '/auth/send-code',
+        body: <String, dynamic>{'email': email.trim(), 'type': 'login'},
+      );
+    });
   }
 
   Future<void> loginWithCode({
     required String email,
     required String code,
   }) async {
-    authBusy = true;
-    pendingMfaChallenge = null;
-    notifyListeners();
-    try {
-      final dynamic data = await _apiClient.post(
-        '/auth/login-with-code',
-        body: <String, dynamic>{'email': email.trim(), 'code': code.trim()},
-      );
-      await _consumeLoginPayload(data);
-    } finally {
-      authBusy = false;
+    await runBusyAction('正在登录...', () async {
+      authBusy = true;
+      pendingMfaChallenge = null;
       notifyListeners();
-    }
+      try {
+        final dynamic data = await _apiClient.post(
+          '/auth/login-with-code',
+          body: <String, dynamic>{'email': email.trim(), 'code': code.trim()},
+        );
+        await _consumeLoginPayload(data);
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> completeTotpMfa({
@@ -639,56 +738,61 @@ class AppController extends ChangeNotifier {
     String? code,
     String? recoveryCode,
   }) async {
-    authBusy = true;
-    notifyListeners();
-    try {
-      final Map<String, dynamic> payload = <String, dynamic>{
-        'challengeId': challengeId,
-      };
-      if (code != null && code.isNotEmpty) {
-        payload['code'] = code.trim();
-      }
-      if (recoveryCode != null && recoveryCode.isNotEmpty) {
-        payload['recoveryCode'] = recoveryCode.trim();
-      }
-      final dynamic data = await _apiClient.post(
-        '/auth/totp/mfa-verify',
-        body: payload,
-      );
-      pendingMfaChallenge = null;
-      await _consumeLoginPayload(data);
-    } finally {
-      authBusy = false;
+    await runBusyAction('正在验证二次认证...', () async {
+      authBusy = true;
       notifyListeners();
-    }
+      try {
+        final Map<String, dynamic> payload = <String, dynamic>{
+          'challengeId': challengeId,
+        };
+        if (code != null && code.isNotEmpty) {
+          payload['code'] = code.trim();
+        }
+        if (recoveryCode != null && recoveryCode.isNotEmpty) {
+          payload['recoveryCode'] = recoveryCode.trim();
+        }
+        final dynamic data = await _apiClient.post(
+          '/auth/totp/mfa-verify',
+          body: payload,
+        );
+        pendingMfaChallenge = null;
+        await _consumeLoginPayload(data);
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> completePasskeyMfa({required String challengeId}) async {
-    authBusy = true;
-    notifyListeners();
-    try {
-      final BrowserPasskeyBridgeResponse response =
-          await BrowserPasskeyBridge.start(
-            passkeyOrigin: passkeyOrigin,
-            apiBaseUrl: apiBaseUrl,
-            mode: BrowserPasskeyBridgeMode.mfa,
-            mfaChallengeId: challengeId,
-          );
-      if (response.transferCode != null && response.transferCode!.isNotEmpty) {
-        await importSessionTransferTicket(response.transferCode!);
-        pendingMfaChallenge = null;
-        return;
-      }
-      if (response.accessToken == null || response.accessToken!.isEmpty) {
-        throw ApiException(response.message ?? '浏览器未返回登录结果');
-      }
-      _apiClient.accessToken = response.accessToken;
-      pendingMfaChallenge = null;
-      await refreshWorkspace();
-    } finally {
-      authBusy = false;
+    await runBusyAction('正在等待 Passkey 完成二次验证...', () async {
+      authBusy = true;
       notifyListeners();
-    }
+      try {
+        final BrowserPasskeyBridgeResponse response =
+            await BrowserPasskeyBridge.start(
+              passkeyOrigin: passkeyOrigin,
+              apiBaseUrl: apiBaseUrl,
+              mode: BrowserPasskeyBridgeMode.mfa,
+              mfaChallengeId: challengeId,
+            );
+        if (response.transferCode != null &&
+            response.transferCode!.isNotEmpty) {
+          await importSessionTransferTicket(response.transferCode!);
+          pendingMfaChallenge = null;
+          return;
+        }
+        if (response.accessToken == null || response.accessToken!.isEmpty) {
+          throw ApiException(response.message ?? '浏览器未返回登录结果');
+        }
+        _apiClient.accessToken = response.accessToken;
+        pendingMfaChallenge = null;
+        await refreshWorkspace();
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<bool> checkUsername(String username) async {
@@ -704,20 +808,24 @@ class AppController extends ChangeNotifier {
   }
 
   Future<PasswordRequirement> fetchPasswordRequirement() async {
-    final dynamic data = await _apiClient.get('/info/password-requirement');
-    final PasswordRequirement requirement = PasswordRequirement.fromJson(
-      asMap(data),
-    );
-    passwordRequirement = requirement;
-    notifyListeners();
-    return requirement;
+    return runBusyAction('正在加载密码规则...', () async {
+      final dynamic data = await _apiClient.get('/info/password-requirement');
+      final PasswordRequirement requirement = PasswordRequirement.fromJson(
+        asMap(data),
+      );
+      passwordRequirement = requirement;
+      notifyListeners();
+      return requirement;
+    });
   }
 
   Future<void> sendRegisterCode(String email) {
-    return _apiClient.post(
-      '/auth/send-code',
-      body: <String, dynamic>{'email': email.trim(), 'type': 'register'},
-    );
+    return runBusyAction('正在发送注册验证码...', () {
+      return _apiClient.post(
+        '/auth/send-code',
+        body: <String, dynamic>{'email': email.trim(), 'type': 'register'},
+      );
+    });
   }
 
   Future<void> register({
@@ -726,26 +834,28 @@ class AppController extends ChangeNotifier {
     required String password,
     required String code,
   }) async {
-    authBusy = true;
-    notifyListeners();
-    try {
-      final dynamic data = await _apiClient.post(
-        '/auth/register',
-        body: <String, dynamic>{
-          'username': username.trim(),
-          'email': email.trim(),
-          'password': password,
-          'code': code.trim(),
-        },
-      );
-      final Map<String, dynamic> json = asMap(data);
-      _apiClient.accessToken = asString(json['accessToken']);
-      pendingMfaChallenge = null;
-      await refreshWorkspace();
-    } finally {
-      authBusy = false;
+    await runBusyAction('正在创建账户...', () async {
+      authBusy = true;
       notifyListeners();
-    }
+      try {
+        final dynamic data = await _apiClient.post(
+          '/auth/register',
+          body: <String, dynamic>{
+            'username': username.trim(),
+            'email': email.trim(),
+            'password': password,
+            'code': code.trim(),
+          },
+        );
+        final Map<String, dynamic> json = asMap(data);
+        _apiClient.accessToken = asString(json['accessToken']);
+        pendingMfaChallenge = null;
+        await refreshWorkspace();
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<void> refreshWorkspace({SensitiveLogsQuery? logsQuery}) async {
@@ -780,25 +890,33 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> refreshSensitiveLogs({SensitiveLogsQuery? query}) async {
-    sensitiveLogs = await _loadSensitiveLogs(
-      query ?? const SensitiveLogsQuery(),
-    );
-    notifyListeners();
+    await runBusyAction('正在刷新敏感日志...', () async {
+      sensitiveLogs = await _loadSensitiveLogs(
+        query ?? const SensitiveLogsQuery(),
+      );
+      notifyListeners();
+    });
   }
 
   Future<void> refreshSessions() async {
-    sessions = await _loadSessions();
-    notifyListeners();
+    await runBusyAction('正在刷新在线设备...', () async {
+      sessions = await _loadSessions();
+      notifyListeners();
+    });
   }
 
   Future<void> refreshPasskeys() async {
-    passkeys = await _loadPasskeys();
-    notifyListeners();
+    await runBusyAction('正在刷新 Passkey 列表...', () async {
+      passkeys = await _loadPasskeys();
+      notifyListeners();
+    });
   }
 
   Future<void> refreshTotpStatus() async {
-    totpStatus = await _loadTotpStatus();
-    notifyListeners();
+    await runBusyAction('正在刷新 TOTP 状态...', () async {
+      totpStatus = await _loadTotpStatus();
+      notifyListeners();
+    });
   }
 
   Future<void> updateSetting({
@@ -806,52 +924,60 @@ class AppController extends ChangeNotifier {
     bool? value,
     String? stringValue,
   }) async {
-    final Map<String, dynamic> payload = <String, dynamic>{'field': field};
-    if (value != null) {
-      payload['value'] = value;
-    }
-    if (stringValue != null) {
-      payload['stringValue'] = stringValue;
-    }
-    final dynamic data = await _apiClient.post(
-      '/auth/update/setting',
-      authorized: true,
-      body: payload,
-    );
-    final UserSettings settings = UserSettings.fromJson(asMap(data));
-    if (user != null) {
-      user = user!.copyWith(settings: settings);
-    }
-    notifyListeners();
+    await runBusyAction('正在保存设置...', () async {
+      final Map<String, dynamic> payload = <String, dynamic>{'field': field};
+      if (value != null) {
+        payload['value'] = value;
+      }
+      if (stringValue != null) {
+        payload['stringValue'] = stringValue;
+      }
+      final dynamic data = await _apiClient.post(
+        '/auth/update/setting',
+        authorized: true,
+        body: payload,
+      );
+      final UserSettings settings = UserSettings.fromJson(asMap(data));
+      if (user != null) {
+        user = user!.copyWith(settings: settings);
+      }
+      notifyListeners();
+    });
   }
 
   Future<void> updateProfileField({
     required String key,
     required String value,
   }) async {
-    final dynamic data = await _apiClient.post(
-      '/auth/update/profile',
-      authorized: true,
-      body: <String, dynamic>{'key': key, 'value': value.trim()},
-    );
-    user = UserDetails.fromJson(asMap(data));
-    notifyListeners();
+    await runBusyAction('正在保存资料...', () async {
+      final dynamic data = await _apiClient.post(
+        '/auth/update/profile',
+        authorized: true,
+        body: <String, dynamic>{'key': key, 'value': value.trim()},
+      );
+      user = UserDetails.fromJson(asMap(data));
+      notifyListeners();
+    });
   }
 
   Future<SensitiveVerificationStatus> checkSensitiveVerification() async {
-    final dynamic data = await _apiClient.get(
-      '/auth/check-sensitive-verification',
-      authorized: true,
-    );
-    return SensitiveVerificationStatus.fromJson(asMap(data));
+    return runBusyAction('正在检查验证状态...', () async {
+      final dynamic data = await _apiClient.get(
+        '/auth/check-sensitive-verification',
+        authorized: true,
+      );
+      return SensitiveVerificationStatus.fromJson(asMap(data));
+    });
   }
 
   Future<void> sendSensitiveVerificationCode() {
-    return _apiClient.post(
-      '/auth/send-code',
-      authorized: true,
-      body: const <String, dynamic>{'type': 'sensitive-verification'},
-    );
+    return runBusyAction('正在发送验证邮件...', () {
+      return _apiClient.post(
+        '/auth/send-code',
+        authorized: true,
+        body: const <String, dynamic>{'type': 'sensitive-verification'},
+      );
+    });
   }
 
   Future<void> verifySensitiveOperation({
@@ -859,18 +985,20 @@ class AppController extends ChangeNotifier {
     String? password,
     String? code,
   }) {
-    final Map<String, dynamic> payload = <String, dynamic>{'method': method};
-    if (password != null && password.trim().isNotEmpty) {
-      payload['password'] = password;
-    }
-    if (code != null && code.trim().isNotEmpty) {
-      payload['code'] = code.trim();
-    }
-    return _apiClient.post(
-      '/auth/verify-sensitive',
-      authorized: true,
-      body: payload,
-    );
+    return runBusyAction('正在验证身份...', () {
+      final Map<String, dynamic> payload = <String, dynamic>{'method': method};
+      if (password != null && password.trim().isNotEmpty) {
+        payload['password'] = password;
+      }
+      if (code != null && code.trim().isNotEmpty) {
+        payload['code'] = code.trim();
+      }
+      return _apiClient.post(
+        '/auth/verify-sensitive',
+        authorized: true,
+        body: payload,
+      );
+    });
   }
 
   Future<PasskeyAssertionOptions> getPasskeyAuthenticationOptions() async {
@@ -881,29 +1009,32 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> loginWithPasskey() async {
-    authBusy = true;
-    pendingMfaChallenge = null;
-    notifyListeners();
-    try {
-      final BrowserPasskeyBridgeResponse response =
-          await BrowserPasskeyBridge.start(
-            passkeyOrigin: passkeyOrigin,
-            apiBaseUrl: apiBaseUrl,
-            mode: BrowserPasskeyBridgeMode.login,
-          );
-      if (response.transferCode != null && response.transferCode!.isNotEmpty) {
-        await importSessionTransferTicket(response.transferCode!);
-        return;
-      }
-      if (response.accessToken == null || response.accessToken!.isEmpty) {
-        throw ApiException(response.message ?? '浏览器未返回登录结果');
-      }
-      _apiClient.accessToken = response.accessToken;
-      await refreshWorkspace();
-    } finally {
-      authBusy = false;
+    await runBusyAction('正在等待 Passkey 登录...', () async {
+      authBusy = true;
+      pendingMfaChallenge = null;
       notifyListeners();
-    }
+      try {
+        final BrowserPasskeyBridgeResponse response =
+            await BrowserPasskeyBridge.start(
+              passkeyOrigin: passkeyOrigin,
+              apiBaseUrl: apiBaseUrl,
+              mode: BrowserPasskeyBridgeMode.login,
+            );
+        if (response.transferCode != null &&
+            response.transferCode!.isNotEmpty) {
+          await importSessionTransferTicket(response.transferCode!);
+          return;
+        }
+        if (response.accessToken == null || response.accessToken!.isEmpty) {
+          throw ApiException(response.message ?? '浏览器未返回登录结果');
+        }
+        _apiClient.accessToken = response.accessToken;
+        await refreshWorkspace();
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
   }
 
   Future<PasskeyAssertionOptions>
@@ -928,12 +1059,14 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> verifySensitiveOperationWithPasskeyInBrowser() {
-    return BrowserPasskeyBridge.start(
-      passkeyOrigin: passkeyOrigin,
-      apiBaseUrl: apiBaseUrl,
-      mode: BrowserPasskeyBridgeMode.sensitive,
-      accessToken: _apiClient.accessToken,
-    ).then((BrowserPasskeyBridgeResponse response) {
+    return runBusyAction('正在等待 Passkey 验证...', () async {
+      final BrowserPasskeyBridgeResponse response =
+          await BrowserPasskeyBridge.start(
+            passkeyOrigin: passkeyOrigin,
+            apiBaseUrl: apiBaseUrl,
+            mode: BrowserPasskeyBridgeMode.sensitive,
+            accessToken: _apiClient.accessToken,
+          );
       if (!response.verified) {
         throw ApiException(response.message ?? '浏览器未完成敏感验证');
       }
@@ -941,164 +1074,208 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> registerPasskeyInBrowser({String? preferredName}) async {
-    final BrowserPasskeyBridgeResponse response =
-        await BrowserPasskeyBridge.start(
-          passkeyOrigin: passkeyOrigin,
-          apiBaseUrl: apiBaseUrl,
-          mode: BrowserPasskeyBridgeMode.register,
-          accessToken: _apiClient.accessToken,
-          passkeyName: preferredName,
-        );
-    if (!response.registered) {
-      throw ApiException(response.message ?? '浏览器未完成 Passkey 登记');
-    }
-    await refreshPasskeys();
+    await runBusyAction('正在等待浏览器完成 Passkey 登记...', () async {
+      final BrowserPasskeyBridgeResponse response =
+          await BrowserPasskeyBridge.start(
+            passkeyOrigin: passkeyOrigin,
+            apiBaseUrl: apiBaseUrl,
+            mode: BrowserPasskeyBridgeMode.register,
+            accessToken: _apiClient.accessToken,
+            passkeyName: preferredName,
+          );
+      if (!response.registered) {
+        throw ApiException(response.message ?? '浏览器未完成 Passkey 登记');
+      }
+      await refreshPasskeys();
+    });
   }
 
   Future<void> sendChangeEmailCode(String email) {
-    return _apiClient.post(
-      '/auth/send-code',
-      authorized: true,
-      body: <String, dynamic>{'email': email.trim(), 'type': 'change-email'},
-    );
+    return runBusyAction('正在发送邮箱验证码...', () {
+      return _apiClient.post(
+        '/auth/send-code',
+        authorized: true,
+        body: <String, dynamic>{'email': email.trim(), 'type': 'change-email'},
+      );
+    });
   }
 
   Future<void> changeEmail({
     required String newEmail,
     required String code,
   }) async {
-    final dynamic data = await _apiClient.post(
-      '/auth/update/email',
-      authorized: true,
-      body: <String, dynamic>{'newEmail': newEmail.trim(), 'code': code.trim()},
-    );
-    final Map<String, dynamic> payload = asMap(data);
-    if (user != null) {
-      user = user!.copyWith(
-        email: asString(payload['email']) ?? newEmail.trim(),
+    await runBusyAction('正在更新邮箱...', () async {
+      final dynamic data = await _apiClient.post(
+        '/auth/update/email',
+        authorized: true,
+        body: <String, dynamic>{
+          'newEmail': newEmail.trim(),
+          'code': code.trim(),
+        },
       );
-    }
-    notifyListeners();
+      final Map<String, dynamic> payload = asMap(data);
+      if (user != null) {
+        user = user!.copyWith(
+          email: asString(payload['email']) ?? newEmail.trim(),
+        );
+      }
+      notifyListeners();
+    });
   }
 
   Future<void> changePassword(String newPassword) {
-    return _apiClient.post(
-      '/auth/update/password',
-      authorized: true,
-      body: <String, dynamic>{'newPassword': newPassword},
-    );
+    return runBusyAction('正在更新密码...', () {
+      return _apiClient.post(
+        '/auth/update/password',
+        authorized: true,
+        body: <String, dynamic>{'newPassword': newPassword},
+      );
+    });
   }
 
   Future<void> revokeSession(int sessionId) async {
-    await _apiClient.post('/auth/sessions/$sessionId/revoke', authorized: true);
-    await refreshSessions();
+    await runBusyAction('正在撤销会话...', () async {
+      await _apiClient.post(
+        '/auth/sessions/$sessionId/revoke',
+        authorized: true,
+      );
+      sessions = await _loadSessions();
+      notifyListeners();
+    });
   }
 
   Future<void> logoutAll() async {
-    await _apiClient.post('/auth/logout/all', authorized: true);
-    logout();
+    await runBusyAction('正在退出所有设备...', () async {
+      await _apiClient.post('/auth/logout/all', authorized: true);
+      await logout();
+    });
   }
 
   Future<void> renamePasskey(int passkeyId, String name) async {
-    await _apiClient.put(
-      '/auth/passkey/$passkeyId/rename',
-      authorized: true,
-      body: <String, dynamic>{'newName': name.trim()},
-    );
-    await refreshPasskeys();
+    await runBusyAction('正在重命名 Passkey...', () async {
+      await _apiClient.put(
+        '/auth/passkey/$passkeyId/rename',
+        authorized: true,
+        body: <String, dynamic>{'newName': name.trim()},
+      );
+      passkeys = await _loadPasskeys();
+      notifyListeners();
+    });
   }
 
   Future<void> deletePasskey(int passkeyId) async {
-    await _apiClient.delete('/auth/passkey/$passkeyId', authorized: true);
-    await refreshPasskeys();
+    await runBusyAction('正在删除 Passkey...', () async {
+      await _apiClient.delete('/auth/passkey/$passkeyId', authorized: true);
+      passkeys = await _loadPasskeys();
+      notifyListeners();
+    });
   }
 
   Future<TotpRegistrationOptionsResponse> getTotpRegistrationOptions() async {
-    final dynamic data = await _apiClient.post(
-      '/auth/totp/registration-options',
-      authorized: true,
-    );
-    return TotpRegistrationOptionsResponse.fromJson(asMap(data));
+    return runBusyAction('正在获取 TOTP 配置...', () async {
+      final dynamic data = await _apiClient.post(
+        '/auth/totp/registration-options',
+        authorized: true,
+      );
+      return TotpRegistrationOptionsResponse.fromJson(asMap(data));
+    });
   }
 
   Future<void> verifyTotpRegistration({
     required String code,
     required List<String> recoveryCodes,
   }) async {
-    await _apiClient.post(
-      '/auth/totp/registration-verify',
-      authorized: true,
-      body: <String, dynamic>{
-        'code': code.trim(),
-        'recoveryCodes': recoveryCodes,
-      },
-    );
-    await refreshTotpStatus();
+    await runBusyAction('正在启用 TOTP...', () async {
+      await _apiClient.post(
+        '/auth/totp/registration-verify',
+        authorized: true,
+        body: <String, dynamic>{
+          'code': code.trim(),
+          'recoveryCodes': recoveryCodes,
+        },
+      );
+      totpStatus = await _loadTotpStatus();
+      notifyListeners();
+    });
   }
 
   Future<List<String>> getRecoveryCodes() async {
-    final dynamic data = await _apiClient.get(
-      '/auth/totp/recovery-codes',
-      authorized: true,
-    );
-    return asList(data).map((dynamic item) => item.toString()).toList();
+    return runBusyAction('正在加载恢复码...', () async {
+      final dynamic data = await _apiClient.get(
+        '/auth/totp/recovery-codes',
+        authorized: true,
+      );
+      return asList(data).map((dynamic item) => item.toString()).toList();
+    });
   }
 
   Future<List<String>> regenerateRecoveryCodes() async {
-    final dynamic data = await _apiClient.post(
-      '/auth/totp/recovery-codes/regenerate',
-      authorized: true,
-    );
-    await refreshTotpStatus();
-    return asList(data).map((dynamic item) => item.toString()).toList();
+    return runBusyAction('正在生成新的恢复码...', () async {
+      final dynamic data = await _apiClient.post(
+        '/auth/totp/recovery-codes/regenerate',
+        authorized: true,
+      );
+      totpStatus = await _loadTotpStatus();
+      notifyListeners();
+      return asList(data).map((dynamic item) => item.toString()).toList();
+    });
   }
 
   Future<void> disableTotp() async {
-    await _apiClient.post('/auth/totp/disable', authorized: true);
-    await refreshTotpStatus();
+    await runBusyAction('正在关闭 TOTP...', () async {
+      await _apiClient.post('/auth/totp/disable', authorized: true);
+      totpStatus = await _loadTotpStatus();
+      notifyListeners();
+    });
   }
 
   Future<void> logout() async {
-    try {
-      if (isAuthenticated) {
-        await _apiClient.post('/auth/logout', authorized: true);
+    await runBusyAction('正在退出登录...', () async {
+      try {
+        if (isAuthenticated) {
+          await _apiClient.post('/auth/logout', authorized: true);
+        }
+      } catch (_) {
+        // Ignore logout API failures and clear local session anyway.
       }
-    } catch (_) {
-      // Ignore logout API failures and clear local session anyway.
-    }
-    _resetLocalSessionState();
-    notifyListeners();
+      _resetLocalSessionState();
+      notifyListeners();
+    });
   }
 
   Future<SessionTransferTicket> createSessionTransferTicket({
     required String target,
   }) async {
-    if (!isAuthenticated) {
-      throw ApiException('当前桌面端尚未登录');
-    }
-    final dynamic data = await _apiClient.post(
-      '/auth/session-transfer/create',
-      authorized: true,
-      body: <String, dynamic>{'target': target},
-    );
-    return SessionTransferTicket.fromJson(asMap(data));
+    return runBusyAction('正在生成跨端登录票据...', () async {
+      if (!isAuthenticated) {
+        throw ApiException('当前桌面端尚未登录');
+      }
+      final dynamic data = await _apiClient.post(
+        '/auth/session-transfer/create',
+        authorized: true,
+        body: <String, dynamic>{'target': target},
+      );
+      return SessionTransferTicket.fromJson(asMap(data));
+    });
   }
 
   Future<void> importSessionTransferTicket(String transferCode) async {
-    final dynamic data = await _apiClient.post(
-      '/auth/session-transfer/exchange',
-      body: <String, dynamic>{
-        'transferCode': transferCode.trim(),
-        'target': 'desktop',
-      },
-    );
-    final String? nextAccessToken = asString(asMap(data)['accessToken']);
-    if (nextAccessToken == null || nextAccessToken.isEmpty) {
-      throw ApiException('跨端登录失败，未获取到 accessToken');
-    }
-    _apiClient.accessToken = nextAccessToken;
-    pendingMfaChallenge = null;
-    await refreshWorkspace();
+    await runBusyAction('正在同步网页登录状态...', () async {
+      final dynamic data = await _apiClient.post(
+        '/auth/session-transfer/exchange',
+        body: <String, dynamic>{
+          'transferCode': transferCode.trim(),
+          'target': 'desktop',
+        },
+      );
+      final String? nextAccessToken = asString(asMap(data)['accessToken']);
+      if (nextAccessToken == null || nextAccessToken.isEmpty) {
+        throw ApiException('跨端登录失败，未获取到 accessToken');
+      }
+      _apiClient.accessToken = nextAccessToken;
+      pendingMfaChallenge = null;
+      await refreshWorkspace();
+    });
   }
 
   Future<void> _consumeLoginPayload(dynamic data) async {
@@ -1563,7 +1740,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   void initState() {
     super.initState();
     _apiController.text = widget.controller.apiBaseUrl;
-    _loadPasswordRequirement();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_loadPasswordRequirement());
+    });
     _detectPasskeyAvailability();
   }
 
@@ -1841,9 +2020,11 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
       _bridgeBusy = true;
     });
     try {
-      await openExternalUrl(
-        _buildWebLoginUri(desktopBridgeHint: true).toString(),
-      );
+      await widget.controller.runBusyAction('正在打开浏览器登录页...', () {
+        return openExternalUrl(
+          _buildWebLoginUri(desktopBridgeHint: true).toString(),
+        );
+      });
       if (mounted) {
         _showSuccess('已打开浏览器，请在网页端登录，桌面端会自动接收登录状态');
       }
@@ -2765,23 +2946,25 @@ class OverviewPage extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: () async {
                     try {
-                      final SessionTransferTicket ticket = await controller
-                          .createSessionTransferTicket(target: 'web');
-                      final Uri baseUri = Uri.parse(
-                        controller.passkeyOrigin.endsWith('/')
-                            ? controller.passkeyOrigin
-                            : '${controller.passkeyOrigin}/',
-                      );
-                      final Uri launchUri = baseUri
-                          .resolve('login')
-                          .replace(
-                            queryParameters: <String, String>{
-                              'transferCode': ticket.transferCode,
-                              'from': 'desktop',
-                              'apiBaseUrl': controller.apiBaseUrl,
-                            },
-                          );
-                      await openExternalUrl(launchUri.toString());
+                      await controller.runBusyAction('正在打开网页端...', () async {
+                        final SessionTransferTicket ticket = await controller
+                            .createSessionTransferTicket(target: 'web');
+                        final Uri baseUri = Uri.parse(
+                          controller.passkeyOrigin.endsWith('/')
+                              ? controller.passkeyOrigin
+                              : '${controller.passkeyOrigin}/',
+                        );
+                        final Uri launchUri = baseUri
+                            .resolve('login')
+                            .replace(
+                              queryParameters: <String, String>{
+                                'transferCode': ticket.transferCode,
+                                'from': 'desktop',
+                                'apiBaseUrl': controller.apiBaseUrl,
+                              },
+                            );
+                        await openExternalUrl(launchUri.toString());
+                      });
                       if (context.mounted) {
                         showAppMessage(context, '已在浏览器打开网页端并自动登录');
                       }
@@ -2797,21 +2980,23 @@ class OverviewPage extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: () async {
                     try {
-                      final Uri baseUri = Uri.parse(
-                        controller.passkeyOrigin.endsWith('/')
-                            ? controller.passkeyOrigin
-                            : '${controller.passkeyOrigin}/',
-                      );
-                      final Uri launchUri = baseUri
-                          .resolve('login')
-                          .replace(
-                            queryParameters: <String, String>{
-                              'desktopBridge': '1',
-                              'from': 'desktop',
-                              'apiBaseUrl': controller.apiBaseUrl,
-                            },
-                          );
-                      await openExternalUrl(launchUri.toString());
+                      await controller.runBusyAction('正在打开网页登录页...', () async {
+                        final Uri baseUri = Uri.parse(
+                          controller.passkeyOrigin.endsWith('/')
+                              ? controller.passkeyOrigin
+                              : '${controller.passkeyOrigin}/',
+                        );
+                        final Uri launchUri = baseUri
+                            .resolve('login')
+                            .replace(
+                              queryParameters: <String, String>{
+                                'desktopBridge': '1',
+                                'from': 'desktop',
+                                'apiBaseUrl': controller.apiBaseUrl,
+                              },
+                            );
+                        await openExternalUrl(launchUri.toString());
+                      });
                       if (context.mounted) {
                         showAppMessage(context, '已打开网页登录页；网页登录成功后会自动同步回桌面端');
                       }
@@ -4897,11 +5082,19 @@ class _SensitiveVerificationDialogState
                             onPressed: _sendingCode || _codeCountdown > 0
                                 ? null
                                 : _sendCode,
-                            child: Text(
-                              _codeCountdown > 0
-                                  ? '${_codeCountdown}s'
-                                  : '发送验证码',
-                            ),
+                            child: _sendingCode
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    _codeCountdown > 0
+                                        ? '${_codeCountdown}s'
+                                        : '发送验证码',
+                                  ),
                           ),
                         ],
                       )
@@ -4935,15 +5128,16 @@ class _SensitiveVerificationDialogState
           onPressed: _verifying ? null : () => Navigator.of(context).pop(false),
           child: const Text('取消'),
         ),
-        FilledButton(
+        FilledButton.icon(
           onPressed: _loading || _verifying ? null : _verify,
-          child: _verifying
+          icon: _verifying
               ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('验证'),
+              : const Icon(Icons.verified_user_rounded),
+          label: Text(_verifying ? '验证中...' : '验证'),
         ),
       ],
     );
@@ -4958,71 +5152,47 @@ Future<void> _showEditDialog(
   String? hintText,
   int maxLines = 1,
 }) async {
-  final TextEditingController controller = TextEditingController(
-    text: initialValue,
-  );
-  final bool? saved = await showDialog<bool>(
+  String value = initialValue;
+  final String? nextValue = await showDialog<String>(
     context: context,
     builder: (BuildContext context) {
-      bool busy = false;
-      bool closed = false;
-      return StatefulBuilder(
-        builder:
-            (BuildContext context, void Function(void Function()) setState) {
-              return AlertDialog(
-                title: Text(title),
-                content: TextField(
-                  controller: controller,
-                  maxLines: maxLines,
-                  decoration: InputDecoration(hintText: hintText),
-                ),
-                actions: <Widget>[
-                  TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.of(context).pop(false),
-                    child: const Text('取消'),
-                  ),
-                  FilledButton(
-                    onPressed: busy
-                        ? null
-                        : () async {
-                            setState(() {
-                              busy = true;
-                            });
-                            try {
-                              await onSubmit(controller.text);
-                              if (context.mounted) {
-                                closed = true;
-                                Navigator.of(context).pop(true);
-                              }
-                            } catch (error) {
-                              if (context.mounted) {
-                                showAppMessage(
-                                  context,
-                                  error.toString(),
-                                  error: true,
-                                );
-                              }
-                            } finally {
-                              if (context.mounted && !closed) {
-                                setState(() {
-                                  busy = false;
-                                });
-                              }
-                            }
-                          },
-                    child: const Text('保存'),
-                  ),
-                ],
-              );
-            },
+      return AlertDialog(
+        title: Text(title),
+        content: TextFormField(
+          initialValue: initialValue,
+          maxLines: maxLines,
+          decoration: InputDecoration(hintText: hintText),
+          onChanged: (String next) {
+            value = next;
+          },
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(value),
+            child: const Text('保存'),
+          ),
+        ],
       );
     },
   );
-  controller.dispose();
-  if (saved == true && context.mounted) {
-    showAppMessage(context, '已保存');
+  await _awaitDialogTeardown();
+  if (nextValue == null || !context.mounted) {
+    return;
+  }
+
+  try {
+    await onSubmit(nextValue);
+    if (context.mounted) {
+      showAppMessage(context, '已保存');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      showAppMessage(context, error.toString(), error: true);
+    }
   }
 }
 
@@ -5034,11 +5204,9 @@ Future<void> _showSelectionDialog(
   required Future<void> Function(String value) onSubmit,
 }) async {
   String value = currentValue;
-  final bool? saved = await showDialog<bool>(
+  final String? nextValue = await showDialog<String>(
     context: context,
     builder: (BuildContext context) {
-      bool busy = false;
-      bool closed = false;
       return StatefulBuilder(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
@@ -5061,40 +5229,11 @@ Future<void> _showSelectionDialog(
                 ),
                 actions: <Widget>[
                   TextButton(
-                    onPressed: busy
-                        ? null
-                        : () => Navigator.of(context).pop(false),
+                    onPressed: () => Navigator.of(context).pop(),
                     child: const Text('取消'),
                   ),
                   FilledButton(
-                    onPressed: busy
-                        ? null
-                        : () async {
-                            setState(() {
-                              busy = true;
-                            });
-                            try {
-                              await onSubmit(value);
-                              if (context.mounted) {
-                                closed = true;
-                                Navigator.of(context).pop(true);
-                              }
-                            } catch (error) {
-                              if (context.mounted) {
-                                showAppMessage(
-                                  context,
-                                  error.toString(),
-                                  error: true,
-                                );
-                              }
-                            } finally {
-                              if (context.mounted && !closed) {
-                                setState(() {
-                                  busy = false;
-                                });
-                              }
-                            }
-                          },
+                    onPressed: () => Navigator.of(context).pop(value),
                     child: const Text('保存'),
                   ),
                 ],
@@ -5103,8 +5242,20 @@ Future<void> _showSelectionDialog(
       );
     },
   );
-  if (saved == true && context.mounted) {
-    showAppMessage(context, '已保存');
+  await _awaitDialogTeardown();
+  if (nextValue == null || !context.mounted) {
+    return;
+  }
+
+  try {
+    await onSubmit(nextValue);
+    if (context.mounted) {
+      showAppMessage(context, '已保存');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      showAppMessage(context, error.toString(), error: true);
+    }
   }
 }
 
@@ -5161,7 +5312,15 @@ Future<void> _showChangeEmailDialog(
                                     }
                                   }
                                 },
-                          child: const Text('发送验证码'),
+                          child: busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('发送验证码'),
                         ),
                       ],
                     ),
@@ -5172,7 +5331,7 @@ Future<void> _showChangeEmailDialog(
                     onPressed: busy ? null : () => Navigator.of(context).pop(),
                     child: const Text('取消'),
                   ),
-                  FilledButton(
+                  FilledButton.icon(
                     onPressed: busy
                         ? null
                         : () async {
@@ -5204,7 +5363,14 @@ Future<void> _showChangeEmailDialog(
                               }
                             }
                           },
-                    child: const Text('保存'),
+                    icon: busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_rounded),
+                    label: Text(busy ? '保存中...' : '保存'),
                   ),
                 ],
               );
@@ -5212,8 +5378,10 @@ Future<void> _showChangeEmailDialog(
       );
     },
   );
-  emailController.dispose();
-  codeController.dispose();
+  await _disposeTextControllers(<TextEditingController>[
+    emailController,
+    codeController,
+  ]);
 }
 
 Future<void> _showChangePasswordDialog(
@@ -5240,7 +5408,7 @@ Future<void> _showChangePasswordDialog(
                     onPressed: busy ? null : () => Navigator.of(context).pop(),
                     child: const Text('取消'),
                   ),
-                  FilledButton(
+                  FilledButton.icon(
                     onPressed: busy
                         ? null
                         : () async {
@@ -5271,7 +5439,14 @@ Future<void> _showChangePasswordDialog(
                               }
                             }
                           },
-                    child: const Text('保存'),
+                    icon: busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_rounded),
+                    label: Text(busy ? '保存中...' : '保存'),
                   ),
                 ],
               );
@@ -5279,7 +5454,7 @@ Future<void> _showChangePasswordDialog(
       );
     },
   );
-  passwordController.dispose();
+  await _disposeTextControllers(<TextEditingController>[passwordController]);
 }
 
 Future<void> _showEnableTotpDialog(
@@ -5342,7 +5517,7 @@ Future<void> _showEnableTotpDialog(
                     onPressed: busy ? null : () => Navigator.of(context).pop(),
                     child: const Text('取消'),
                   ),
-                  FilledButton(
+                  FilledButton.icon(
                     onPressed: busy
                         ? null
                         : () async {
@@ -5379,7 +5554,14 @@ Future<void> _showEnableTotpDialog(
                               }
                             }
                           },
-                    child: const Text('确认启用'),
+                    icon: busy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.verified_user_rounded),
+                    label: Text(busy ? '启用中...' : '确认启用'),
                   ),
                 ],
               );
@@ -5387,7 +5569,22 @@ Future<void> _showEnableTotpDialog(
       );
     },
   );
-  codeController.dispose();
+  await _disposeTextControllers(<TextEditingController>[codeController]);
+}
+
+Future<void> _disposeTextControllers(
+  List<TextEditingController> controllers,
+) async {
+  await Future<void>.delayed(Duration.zero);
+  for (final TextEditingController controller in controllers) {
+    controller.dispose();
+  }
+}
+
+Future<void> _awaitDialogTeardown() async {
+  await WidgetsBinding.instance.endOfFrame;
+  await WidgetsBinding.instance.endOfFrame;
+  await Future<void>.delayed(const Duration(milliseconds: 180));
 }
 
 Future<void> _showRecoveryCodesDialog(
