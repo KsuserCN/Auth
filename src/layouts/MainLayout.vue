@@ -46,7 +46,18 @@
               {{ user?.username?.slice(0, 1) || 'K' }}
             </el-avatar>
             <div class="user-meta">
-              <div class="user-name">{{ user?.username || '未登录' }}</div>
+              <div class="user-name">
+                {{ user?.username || '未登录' }}
+                <el-tag
+                  v-if="verificationLabel"
+                  size="small"
+                  effect="plain"
+                  :type="verificationTagType"
+                  class="verify-tag"
+                >
+                  {{ verificationLabel }}
+                </el-tag>
+              </div>
               <div class="user-email">{{ user?.email || '—' }}</div>
             </div>
           </div>
@@ -100,6 +111,12 @@
               </el-icon>
               <span>偏好设置</span>
             </el-menu-item>
+            <el-menu-item index="/home/open-platform" to="/home/open-platform">
+              <el-icon>
+                <Connection />
+              </el-icon>
+              <span>开放平台</span>
+            </el-menu-item>
           </el-menu>
 
           <div class="side-footer">
@@ -133,6 +150,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useDark, useStorage } from '@vueuse/core'
 import { useRouter, RouterView } from 'vue-router'
 import {
+  Connection,
   DataLine,
   HomeFilled,
   Key,
@@ -168,6 +186,20 @@ const currentThemeIcon = computed(() => {
   if (themeMode.value === 'light') return 'light'
   if (themeMode.value === 'dark') return 'dark'
   return 'system'
+})
+
+const verificationLabel = computed(() => {
+  const type = user.value?.verificationType
+  if (type === 'enterprise') return '企业认证'
+  if (type === 'personal') return '个人认证'
+  return ''
+})
+
+const verificationTagType = computed(() => {
+  const type = user.value?.verificationType
+  if (type === 'enterprise') return 'warning'
+  if (type === 'personal') return 'success'
+  return 'info'
 })
 
 const handleThemeCommand = (command: 'light' | 'dark' | 'system') => {
@@ -306,11 +338,18 @@ onMounted(() => {
   font-size: 14px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .user-email {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.verify-tag {
+  transform: translateY(-1px);
 }
 
 .user-skeleton {

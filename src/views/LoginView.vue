@@ -377,6 +377,7 @@ import {
   type DesktopBridgeUser,
 } from '@/utils/desktopBridge'
 import { getStoredAccessToken, hydrateSessionStorageFromSharedStorage } from '@/utils/authSession'
+import { consumePostLoginRedirect, normalizePostLoginRedirect, persistPostLoginRedirect } from '@/utils/postLoginRedirect'
 import { setRequestBaseUrl } from '@/utils/request'
 import {
   isWebAuthnSupported,
@@ -532,6 +533,32 @@ const loginBootstrapDescription = computed(() =>
     : '请稍候，系统正在检查当前浏览器是否已有可复用的登录会话。',
 )
 
+const getDirectPostLoginTarget = () => {
+  return normalizePostLoginRedirect(
+    typeof route.query.redirect === 'string' ? route.query.redirect : null,
+  )
+}
+
+const clearStoredPostLoginRedirect = () => {
+  consumePostLoginRedirect()
+}
+
+const navigateAfterLogin = async () => {
+  const directTarget = getDirectPostLoginTarget()
+  if (directTarget) {
+    clearStoredPostLoginRedirect()
+    await router.replace(directTarget)
+    return
+  }
+
+  const storedTarget = consumePostLoginRedirect()
+  await router.replace(storedTarget || '/home/overview')
+}
+
+const persistCurrentPostLoginRedirect = () => {
+  persistPostLoginRedirect(typeof route.query.redirect === 'string' ? route.query.redirect : null)
+}
+
 const normalizeMfaMethods = (
   methods: MFAChallenge['methods'],
   fallbackMethod: MFAChallenge['method'],
@@ -683,7 +710,7 @@ const initializeLoginView = async () => {
         const synced = await syncCurrentWebSessionToDesktop()
         ElMessage.success(synced ? '已复用当前网页登录，并同步到桌面端' : '当前网页已登录')
       }
-      await router.replace('/home')
+      await navigateAfterLogin()
       return
     }
 
@@ -743,7 +770,7 @@ const handleTransferCodeLogin = async (transferCode: string) => {
       syncDesktop: false,
     })
     ElMessage.success('已从桌面端自动登录网页端')
-    router.replace('/home')
+    await navigateAfterLogin()
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '桌面端自动登录失败'
     ElMessage.error(message)
@@ -816,7 +843,7 @@ const handlePasswordLogin = async () => {
         user: loginResp.user,
       })
       ElMessage.success(desktopSynced ? '登录成功，已同步到桌面端' : '登录成功')
-      router.push('/home')
+      await navigateAfterLogin()
     }
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
@@ -908,7 +935,7 @@ const handleEmailCodeLogin = async () => {
         user: loginResp.user,
       })
       ElMessage.success(desktopSynced ? '登录成功，已同步到桌面端' : '登录成功')
-      router.push('/home')
+      await navigateAfterLogin()
     }
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
@@ -963,7 +990,7 @@ const handlePasskeyLogin = async () => {
         user: loginResp.user,
       })
       ElMessage.success(desktopSynced ? 'Passkey 登录成功，已同步到桌面端' : 'Passkey 登录成功')
-      router.push('/home')
+      await navigateAfterLogin()
     }
   } catch (error: unknown) {
     // 处理不同类型的错误
@@ -1025,6 +1052,7 @@ const generatePkcePair = async (): Promise<{ codeVerifier: string; codeChallenge
 
 const handleQQLogin = async () => {
   try {
+    persistCurrentPostLoginRedirect()
     // 生成随机字符串
     const randomString = generateRandomString()
 
@@ -1050,6 +1078,7 @@ const handleQQLogin = async () => {
 
 const handleGithubLogin = async () => {
   try {
+    persistCurrentPostLoginRedirect()
     const randomString = generateRandomString()
     const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
     const state = `${randomString};login;${debugState}`
@@ -1066,6 +1095,7 @@ const handleGithubLogin = async () => {
 
 const handleMicrosoftLogin = async () => {
   try {
+    persistCurrentPostLoginRedirect()
     const randomString = generateRandomString()
     const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
     const state = `${randomString};login;${debugState}`
@@ -1084,6 +1114,7 @@ const handleMicrosoftLogin = async () => {
 
 const handleGoogleLogin = async () => {
   try {
+    persistCurrentPostLoginRedirect()
     const randomString = generateRandomString()
     const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
     const state = `${randomString};login;${debugState}`
@@ -1171,7 +1202,7 @@ const handlePasskeyMfaVerify = async () => {
       user: response.user,
     })
     ElMessage.success(desktopSynced ? 'MFA 验证成功，已同步到桌面端' : 'MFA 验证成功，登录完成')
-    router.push('/home')
+    await navigateAfterLogin()
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.name === 'NotAllowedError') {
@@ -1230,9 +1261,7 @@ const handleTotpVerify = async () => {
       user: response.user,
     })
     ElMessage.success(desktopSynced ? 'MFA 验证成功，已同步到桌面端' : 'MFA 验证成功，登录完成')
-
-    // 跳转到首页
-    router.push('/home')
+    await navigateAfterLogin()
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
     console.error('TOTP verification failed:', error)
@@ -1281,7 +1310,7 @@ const handleDesktopBridgeLogin = async () => {
       syncDesktop: false,
     })
     ElMessage.success('已使用桌面端登录')
-    router.push('/home')
+    await navigateAfterLogin()
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '桌面端登录失败'
     ElMessage.error(message)

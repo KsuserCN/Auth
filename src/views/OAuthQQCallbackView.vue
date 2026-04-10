@@ -92,6 +92,7 @@ import type {
   OAuthUnbindCallbackResponse,
 } from '@/api/auth'
 import { finalizeWebLogin } from '@/utils/desktopBridge'
+import { consumePostLoginRedirect } from '@/utils/postLoginRedirect'
 
 const router = useRouter()
 const route = useRoute()
@@ -322,6 +323,7 @@ const handleCallback = async () => {
           accessToken: loginResponse.accessToken,
           user: loginResponse.user,
         })
+        const postLoginTarget = consumePostLoginRedirect()
         state.value = 'success'
         ElMessage.success(
           desktopSynced
@@ -329,7 +331,7 @@ const handleCallback = async () => {
             : `${providerLabel.value} 登录成功`,
         )
         setTimeout(() => {
-          router.push('/home')
+          router.replace(postLoginTarget || '/home/overview')
         }, 1000)
         return
       }

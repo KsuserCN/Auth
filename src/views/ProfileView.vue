@@ -78,6 +78,19 @@
               </div>
             </div>
 
+            <!-- 账号认证 -->
+            <div class="info-row disabled">
+              <div class="row-left">
+                <el-icon class="row-icon">
+                  <Lock />
+                </el-icon>
+                <span class="row-label">账号认证</span>
+              </div>
+              <div class="row-right">
+                <el-tag :type="verificationTagType" effect="light">{{ verificationLabel }}</el-tag>
+              </div>
+            </div>
+
             <!-- 用户名 -->
             <div class="info-row" @click="openEditDialog('username')">
               <div class="row-left">
@@ -294,6 +307,20 @@ const form = reactive({
   region: '',
   bio: '',
   avatarUrl: ''
+})
+
+const verificationLabel = computed(() => {
+  const type = user.value?.verificationType
+  if (type === 'enterprise') return '企业认证'
+  if (type === 'personal') return '个人认证'
+  return '未认证'
+})
+
+const verificationTagType = computed(() => {
+  const type = user.value?.verificationType
+  if (type === 'enterprise') return 'warning'
+  if (type === 'personal') return 'success'
+  return 'info'
 })
 
 // 性别文本转换

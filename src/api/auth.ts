@@ -7,8 +7,11 @@ export interface User {
   username: string
   email: string
   avatarUrl?: string | null
+  verificationType?: VerificationType
   settings?: UserSettings
 }
+
+export type VerificationType = 'none' | 'personal' | 'enterprise'
 
 // 用户详细信息类型
 export interface UserDetails extends User {

@@ -15,6 +15,10 @@ const router = createRouter({
       component: MainLayout,
       children: [
         {
+          path: '',
+          redirect: '/home/overview',
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/ProfileView.vue'),
@@ -48,6 +52,11 @@ const router = createRouter({
           path: 'preferences',
           name: 'preferences',
           component: () => import('../views/PreferencesView.vue'),
+        },
+        {
+          path: 'open-platform',
+          name: 'open-platform',
+          component: () => import('../views/OpenPlatformView.vue'),
         },
       ],
     },
@@ -95,6 +104,11 @@ const router = createRouter({
       path: '/desktop/passkey-bridge',
       name: 'desktop-passkey-bridge',
       component: () => import('../views/DesktopPasskeyBridgeView.vue'),
+    },
+    {
+      path: '/oauth/authorize',
+      name: 'oauth-authorize',
+      component: () => import('../views/OAuthAuthorizeView.vue'),
     },
     {
       path: '/oauth/qq/callback',
