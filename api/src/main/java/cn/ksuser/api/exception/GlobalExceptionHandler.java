@@ -21,6 +21,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex) {
         String contentType = ex.getContentType() != null ? ex.getContentType().toString() : "unknown";
         return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-            .body(new ApiResponse<>(415, "不支持的请求类型: " + contentType + "。请使用 Content-Type: application/json"));
+            .body(new ApiResponse<>(415, "不支持的请求类型: " + contentType));
     }
 }

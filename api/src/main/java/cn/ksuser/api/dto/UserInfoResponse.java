@@ -13,23 +13,27 @@ public class UserInfoResponse {
     private LocalDate birthDate;
     private String region;
     private String bio;
+    private String verificationType;
     private LocalDateTime updatedAt;
     private UserSettingsResponse settings;
 
     public UserInfoResponse() {
     }
 
-    public UserInfoResponse(String uuid, String username, String email, String avatarUrl, UserSettingsResponse settings) {
+    public UserInfoResponse(String uuid, String username, String email, String avatarUrl,
+                            String verificationType, UserSettingsResponse settings) {
         this.uuid = uuid;
         this.username = username;
         this.email = email;
         this.avatarUrl = avatarUrl;
+        this.verificationType = verificationType;
         this.settings = settings;
     }
 
     public UserInfoResponse(String uuid, String username, String email, String avatarUrl,
                            String realName, String gender, LocalDate birthDate,
-                           String region, String bio, LocalDateTime updatedAt,
+                           String region, String bio, String verificationType,
+                           LocalDateTime updatedAt,
                            UserSettingsResponse settings) {
         this.uuid = uuid;
         this.username = username;
@@ -40,6 +44,7 @@ public class UserInfoResponse {
         this.birthDate = birthDate;
         this.region = region;
         this.bio = bio;
+        this.verificationType = verificationType;
         this.updatedAt = updatedAt;
         this.settings = settings;
     }
@@ -114,6 +119,14 @@ public class UserInfoResponse {
 
     public void setBio(String bio) {
         this.bio = bio;
+    }
+
+    public String getVerificationType() {
+        return verificationType;
+    }
+
+    public void setVerificationType(String verificationType) {
+        this.verificationType = verificationType;
     }
 
     public LocalDateTime getUpdatedAt() {

@@ -42,6 +42,9 @@ public class User {
     @Column(name = "bio", length = 200)
     private String bio;
 
+    @Column(name = "verification_type", length = 20, nullable = false)
+    private String verificationType = "none";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -56,6 +59,7 @@ public class User {
         this.username = username;
         this.email = email;
         this.passwordHash = passwordHash;
+        this.verificationType = "none";
         this.createdAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }
@@ -163,5 +167,15 @@ public class User {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getVerificationType() {
+        return verificationType == null || verificationType.isBlank() ? "none" : verificationType;
+    }
+
+    public void setVerificationType(String verificationType) {
+        this.verificationType = verificationType == null || verificationType.isBlank()
+            ? "none"
+            : verificationType;
     }
 }

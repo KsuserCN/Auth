@@ -697,6 +697,7 @@ public class AuthController {
                 user.getBirthDate(),
                 user.getRegion(),
                 user.getBio(),
+                user.getVerificationType(),
                 user.getUpdatedAt(),
                 settingsResponse
             );
@@ -706,6 +707,7 @@ public class AuthController {
                 user.getUsername(),
                 user.getEmail(),
                 user.getAvatarUrl(),
+                user.getVerificationType(),
                 settingsResponse
             );
         }

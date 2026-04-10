@@ -7,6 +7,7 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS oauth2_applications;
 DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -29,6 +30,7 @@ CREATE TABLE users (
   birth_date DATE DEFAULT NULL COMMENT '出生日期 YYYY-MM-DD',
   region VARCHAR(100) DEFAULT NULL COMMENT '地区',
   bio VARCHAR(200) DEFAULT NULL COMMENT '个人简介（最多200字）',
+  verification_type ENUM('none', 'personal', 'enterprise') NOT NULL DEFAULT 'none' COMMENT '开发者认证状态（none=未认证 personal=个人认证 enterprise=企业认证）',
 
   avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像地址',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -38,7 +40,7 @@ CREATE TABLE users (
   PRIMARY KEY (id),
   UNIQUE KEY uk_users_uuid (uuid) COMMENT '唯一约束：对外公开UUID(sub)不可重复',
   UNIQUE KEY uk_users_username (username) COMMENT '唯一约束：用户名不可重复',
-  UNIQUE KEY uk_users_email (email) COMMENT '唯一约束：邮箱不可重复（NULL可重复）'
+  UNIQUE KEY uk_users_email (email) COMMENT '唯一约束：邮箱不可重复（NULL可重复）'  
 
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
@@ -88,6 +90,38 @@ CREATE TABLE user_oauth_accounts (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='用户第三方OAuth账号绑定表（最小身份映射版）';
+
+DROP TABLE IF EXISTS oauth2_applications;
+CREATE TABLE oauth2_applications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'OAuth2 应用主键ID',
+  owner_user_id BIGINT UNSIGNED NOT NULL COMMENT '应用创建者（users.id）',
+
+  app_id VARCHAR(64) NOT NULL COMMENT '公开 AppID',
+  app_secret_hash VARCHAR(255) NOT NULL COMMENT 'AppSecret 哈希，仅创建时返回明文',
+
+  app_name VARCHAR(100) NOT NULL COMMENT '应用名称',
+  redirect_uri VARCHAR(500) NOT NULL COMMENT '唯一回调地址，仅支持 http://localhost 或 https://',
+  contact_info VARCHAR(120) NOT NULL COMMENT '开发者联系方式',
+  scopes VARCHAR(255) NOT NULL DEFAULT '' COMMENT '允许授权的范围，空格分隔（profile email）',
+
+  is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '应用状态（1=启用 0=停用）',
+
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_oauth2_applications_app_id (app_id),
+  KEY idx_oauth2_applications_owner (owner_user_id),
+
+  CONSTRAINT fk_oauth2_applications_owner
+    FOREIGN KEY (owner_user_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='开发者 OAuth2 应用表';
 
 
 

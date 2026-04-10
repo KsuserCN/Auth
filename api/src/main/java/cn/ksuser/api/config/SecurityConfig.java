@@ -44,6 +44,9 @@ public class SecurityConfig {
                     "/auth/passkey/authentication-verify", "/auth/passkey/authentication-verify/",
                     "/auth/passkey/mfa-verify", "/auth/passkey/mfa-verify/",
                     "/auth/totp/mfa-verify", "/auth/totp/mfa-verify/",
+                    "/oauth2/token", "/oauth2/token/",
+                    "/oauth2/userinfo", "/oauth2/userinfo/",
+                    "/oauth2/authorize/context", "/oauth2/authorize/context/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
                     "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
@@ -104,7 +107,8 @@ public class SecurityConfig {
                     "/oauth/google/callback/login", "/oauth/google/callback/login/",
                     "/oauth/google/callback/bind", "/oauth/google/callback/bind/",
                     "/oauth/google/callback/unbind", "/oauth/google/callback/unbind/",
-                    "/oauth/google/unbind", "/oauth/google/unbind/"
+                    "/oauth/google/unbind", "/oauth/google/unbind/",
+                    "/oauth2/token", "/oauth2/token/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

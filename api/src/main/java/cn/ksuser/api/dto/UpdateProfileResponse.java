@@ -13,6 +13,7 @@ public class UpdateProfileResponse {
     private LocalDate birthDate;
     private String region;
     private String bio;
+    private String verificationType;
     private LocalDateTime updatedAt;
 
     public UpdateProfileResponse() {
@@ -27,7 +28,8 @@ public class UpdateProfileResponse {
 
     public UpdateProfileResponse(String uuid, String username, String email, String avatarUrl,
                                 String realName, String gender, LocalDate birthDate,
-                                String region, String bio, LocalDateTime updatedAt) {
+                                String region, String bio, String verificationType,
+                                LocalDateTime updatedAt) {
         this.uuid = uuid;
         this.username = username;
         this.email = email;
@@ -37,6 +39,7 @@ public class UpdateProfileResponse {
         this.birthDate = birthDate;
         this.region = region;
         this.bio = bio;
+        this.verificationType = verificationType;
         this.updatedAt = updatedAt;
     }
 
@@ -51,6 +54,7 @@ public class UpdateProfileResponse {
             user.getBirthDate(),
             user.getRegion(),
             user.getBio(),
+            user.getVerificationType(),
             user.getUpdatedAt()
         );
     }
@@ -110,6 +114,14 @@ public class UpdateProfileResponse {
 
     public void setBio(String bio) {
         this.bio = bio;
+    }
+
+    public String getVerificationType() {
+        return verificationType;
+    }
+
+    public void setVerificationType(String verificationType) {
+        this.verificationType = verificationType;
     }
 
     public LocalDateTime getUpdatedAt() {
