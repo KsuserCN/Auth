@@ -8,7 +8,9 @@
 
       <div class="title-area">
         <h1 class="title">应用授权确认</h1>
-        <p class="subtitle">确认后将向第三方应用签发一次性授权码。</p>
+        <p class="subtitle">
+          {{ context?.oidcRequest ? '确认后将签发授权码，应用可继续换取 Access Token 与 ID Token。' : '确认后将向第三方应用签发一次性授权码。' }}
+        </p>
       </div>
 
       <div v-if="loading" class="state-panel">
@@ -46,6 +48,7 @@
           <div class="permission-title">本次授权后应用可获取：</div>
           <ul class="permission-list">
             <li>`openid` 与 `unionid`</li>
+            <li v-if="context.oidcRequest">`sub` 与 `id_token`（OIDC 标准身份断言）</li>
             <li v-if="!context.requestedScopes.length">仅基础身份标识，不额外读取昵称或邮箱</li>
             <li v-for="scope in context.requestedScopes" :key="scope">
               {{ scopeDescription(scope) }}
@@ -90,6 +93,14 @@ const requestParams = computed(() => {
     typeof route.query.response_type === 'string' ? route.query.response_type.trim() : ''
   const scope = typeof route.query.scope === 'string' ? route.query.scope.trim() : ''
   const state = typeof route.query.state === 'string' ? route.query.state : undefined
+  const nonce = typeof route.query.nonce === 'string' ? route.query.nonce.trim() : ''
+  const codeChallenge =
+    typeof route.query.code_challenge === 'string' ? route.query.code_challenge.trim() : ''
+  const codeChallengeMethod =
+    typeof route.query.code_challenge_method === 'string'
+      ? route.query.code_challenge_method.trim().toUpperCase()
+      : ''
+  const normalizedCodeChallengeMethod = codeChallengeMethod === 'S256' ? ('S256' as const) : undefined
 
   return {
     clientId,
@@ -97,6 +108,9 @@ const requestParams = computed(() => {
     responseType,
     scope: scope || undefined,
     state,
+    nonce: nonce || undefined,
+    codeChallenge: codeChallenge || undefined,
+    codeChallengeMethod: normalizedCodeChallengeMethod,
   }
 })
 
@@ -157,6 +171,9 @@ const loadContext = async () => {
       redirectUri,
       responseType,
       scope,
+      nonce: requestParams.value.nonce,
+      codeChallenge: requestParams.value.codeChallenge,
+      codeChallengeMethod: requestParams.value.codeChallengeMethod,
     })
     const authenticated = await ensureAuthenticated()
     if (!authenticated) {
@@ -183,6 +200,9 @@ const handleApprove = async () => {
       responseType: 'code',
       scope: requestParams.value.scope,
       state: requestParams.value.state,
+      nonce: requestParams.value.nonce,
+      codeChallenge: requestParams.value.codeChallenge,
+      codeChallengeMethod: requestParams.value.codeChallengeMethod,
     })
     window.location.replace(response.redirectUrl)
   } catch (error) {

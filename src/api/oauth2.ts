@@ -46,6 +46,7 @@ export interface OAuth2AuthorizeContext {
   contactInfo: string
   redirectUri: string
   requestedScopes: OAuth2Scope[]
+  oidcRequest: boolean
 }
 
 export interface OAuth2AuthorizeApproveRequest {
@@ -54,6 +55,9 @@ export interface OAuth2AuthorizeApproveRequest {
   responseType: 'code'
   scope?: string
   state?: string
+  nonce?: string
+  codeChallenge?: string
+  codeChallengeMethod?: 'S256'
 }
 
 export interface OAuth2AuthorizeApproveResponse {
@@ -92,6 +96,9 @@ export const getOAuth2AuthorizeContext = async (params: {
   redirectUri: string
   responseType: string
   scope?: string
+  nonce?: string
+  codeChallenge?: string
+  codeChallengeMethod?: 'S256'
 }): Promise<OAuth2AuthorizeContext> => {
   const response = await request.get<any>('/oauth2/authorize/context', {
     params: {
@@ -99,6 +106,9 @@ export const getOAuth2AuthorizeContext = async (params: {
       redirect_uri: params.redirectUri,
       response_type: params.responseType,
       scope: params.scope,
+      nonce: params.nonce,
+      code_challenge: params.codeChallenge,
+      code_challenge_method: params.codeChallengeMethod,
     },
   })
   return response.data as OAuth2AuthorizeContext
