@@ -347,6 +347,9 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  --privacy-card-bg: var(--el-fill-color-blank);
+  --privacy-item-bg: var(--el-fill-color-light);
+  --privacy-item-hover-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
 }
 
 .content-header {
@@ -378,9 +381,12 @@ onMounted(() => {
 .card {
   border-radius: 18px;
   border: 1px solid var(--el-border-color-light);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.92)),
-    var(--el-bg-color);
+  background: var(--privacy-card-bg);
+}
+
+.overview-card :deep(.el-card__body),
+.card :deep(.el-card__body) {
+  background: transparent;
 }
 
 .overview-label {
@@ -433,14 +439,14 @@ onMounted(() => {
   padding: 14px;
   border: 1px solid var(--el-border-color-light);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--privacy-item-bg);
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .app-item:hover {
   border-color: var(--el-color-primary-light-5);
   transform: translateY(-1px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--privacy-item-hover-shadow);
 }
 
 .app-left {
@@ -517,6 +523,7 @@ onMounted(() => {
   padding: 12px;
   border: 1px solid var(--el-border-color-light);
   border-radius: 10px;
+  background: var(--privacy-item-bg);
 }
 
 .action-info {
@@ -555,5 +562,22 @@ onMounted(() => {
     flex-direction: column;
     align-items: stretch;
   }
+}
+</style>
+
+<style>
+html.dark .privacy-page .app-item,
+:root.dark .privacy-page .app-item {
+  box-shadow: none;
+}
+
+html.dark .privacy-page .app-item:hover,
+:root.dark .privacy-page .app-item:hover {
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+}
+
+html.dark .privacy-page .el-loading-mask,
+:root.dark .privacy-page .el-loading-mask {
+  background-color: rgba(0, 0, 0, 0.45) !important;
 }
 </style>
