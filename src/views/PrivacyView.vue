@@ -155,7 +155,9 @@
             <div class="action-title">下载您的数据</div>
             <div class="action-desc">获取您账户的完整数据备份（JSON 格式）</div>
           </div>
-          <el-button type="primary" plain>下载</el-button>
+          <el-button type="primary" plain :loading="downloading" @click="handleDownloadData">
+            下载
+          </el-button>
         </div>
 
         <el-divider />
@@ -179,6 +181,12 @@
         </div>
       </div>
     </el-card>
+
+    <SensitiveVerificationDialog
+      v-model="sensitiveDialogVisible"
+      @success="handleSensitiveVerificationSuccess"
+      @cancel="handleSensitiveVerificationCancel"
+    />
   </div>
 </template>
 
@@ -198,11 +206,17 @@ import {
   type SSOAuthorizedClient,
   type SSOScope,
 } from '@/api/sso'
+import { checkSensitiveVerification } from '@/api/auth'
+import { downloadPrivacyExportFile, fetchPrivacyExportData } from '@/api/privacyExport'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const loading = ref(false)
 const revokingId = ref('')
 const oauthApps = ref<OAuth2AuthorizedApp[]>([])
 const ssoApps = ref<SSOAuthorizedClient[]>([])
+const downloading = ref(false)
+const sensitiveDialogVisible = ref(false)
+let pendingSensitiveAction: (() => Promise<void>) | null = null
 
 const oauthScopeLabel = (scope: OAuth2Scope) => {
   if (scope === 'email') return '邮箱地址'
@@ -265,6 +279,58 @@ const handleRevokeSso = async (clientId: string) => {
   } finally {
     revokingId.value = ''
   }
+}
+
+const runWithSensitiveVerification = async (action: () => Promise<void>) => {
+  try {
+    const status = await checkSensitiveVerification()
+    if (status.verified) {
+      await action()
+      return
+    }
+
+    pendingSensitiveAction = action
+    sensitiveDialogVisible.value = true
+    ElMessage.info('需要验证身份')
+  } catch (error) {
+    pendingSensitiveAction = action
+    sensitiveDialogVisible.value = true
+    ElMessage.info('需要验证身份')
+  }
+}
+
+const executeDataDownload = async () => {
+  downloading.value = true
+  try {
+    const payload = await fetchPrivacyExportData()
+    downloadPrivacyExportFile(payload)
+    ElMessage.success('数据已下载')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '导出失败，请稍后重试')
+  } finally {
+    downloading.value = false
+  }
+}
+
+const handleDownloadData = async () => {
+  if (downloading.value) return
+  await runWithSensitiveVerification(executeDataDownload)
+}
+
+const handleSensitiveVerificationSuccess = async () => {
+  const action = pendingSensitiveAction
+  pendingSensitiveAction = null
+  if (!action) return
+
+  try {
+    await action()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '执行失败，请稍后重试')
+  }
+}
+
+const handleSensitiveVerificationCancel = () => {
+  pendingSensitiveAction = null
 }
 
 const handleDeleteAccount = () => {
