@@ -53,7 +53,8 @@ public class SecurityConfig {
                     "/oauth/github/callback/login", "/oauth/github/callback/login/",
                     "/oauth/microsoft/callback/login", "/oauth/microsoft/callback/login/",
                     "/oauth/google/callback/login", "/oauth/google/callback/login/",
-                    "/info/password-requirement", "/info/password-requirement/")
+                    "/info/password-requirement", "/info/password-requirement/",
+                    "/static/**")
                 .permitAll()
                 .anyRequest().authenticated()
             )

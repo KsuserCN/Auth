@@ -17,11 +17,18 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.Duration;
@@ -37,10 +44,13 @@ import cn.ksuser.api.dto.MfaChallengeResponse;
 import cn.ksuser.api.dto.MfaTotpVerifyRequest;
 
 import java.util.Arrays;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
+    private static final long AVATAR_MAX_SIZE_BYTES = 3L * 1024 * 1024;
+    private static final String AVATAR_STORAGE_DIR = "static/avatars";
 
     private final UserService userService;
     private final UserSessionService userSessionService;
@@ -1488,6 +1498,104 @@ public class AuthController {
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "更新成功", UpdateProfileResponse.fromUser(result.getUser())));
+    }
+
+    /**
+     * 上传头像（保存到 API 本地静态目录）
+     * @param file 上传文件
+     * @param authentication 认证信息（AccessToken）
+     * @return ApiResponse
+     */
+    @PostMapping(value = "/upload/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UpdateProfileResponse>> uploadAvatar(@RequestPart("file") MultipartFile file,
+                                                                            Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "请选择头像文件"));
+        }
+
+        if (file.getSize() > AVATAR_MAX_SIZE_BYTES) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "头像文件不能超过 3MB"));
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "仅支持图片文件"));
+        }
+
+        String fileExtension = resolveFileExtension(contentType, file.getOriginalFilename());
+        if (fileExtension == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "不支持的图片格式"));
+        }
+
+        try {
+            Path avatarDir = Paths.get(AVATAR_STORAGE_DIR).toAbsolutePath().normalize();
+            Files.createDirectories(avatarDir);
+
+            String filename = UUID.randomUUID().toString().replace("-", "") + fileExtension;
+            Path target = avatarDir.resolve(filename);
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+
+            String avatarUrl = getAvatarHostPrefix() + "/static/avatars/" + filename;
+            RegisterResult result = userService.updateProfileSingleField(user, "avatarUrl", avatarUrl, null);
+
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "头像上传成功", UpdateProfileResponse.fromUser(result.getUser())));
+        } catch (IOException ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "头像上传失败"));
+        }
+    }
+
+    private String getAvatarHostPrefix() {
+        return appProperties.isDebug() ? "http://localhost:8000" : "https://api.ksuser.cn";
+    }
+
+    private String resolveFileExtension(String contentType, String originalFilename) {
+        String normalizedType = contentType.toLowerCase(Locale.ROOT);
+        switch (normalizedType) {
+            case "image/jpeg":
+            case "image/jpg":
+                return ".jpg";
+            case "image/png":
+                return ".png";
+            case "image/webp":
+                return ".webp";
+            case "image/gif":
+                return ".gif";
+            default:
+                break;
+        }
+
+        if (originalFilename == null) {
+            return null;
+        }
+        int index = originalFilename.lastIndexOf('.');
+        if (index < 0 || index == originalFilename.length() - 1) {
+            return null;
+        }
+
+        String extension = originalFilename.substring(index).toLowerCase(Locale.ROOT);
+        if (".jpg".equals(extension) || ".jpeg".equals(extension) || ".png".equals(extension)
+            || ".webp".equals(extension) || ".gif".equals(extension)) {
+            return ".jpeg".equals(extension) ? ".jpg" : extension;
+        }
+        return null;
     }
 
     /**
