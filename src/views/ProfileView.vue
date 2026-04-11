@@ -37,7 +37,7 @@
                 <span class="row-label">头像</span>
               </div>
               <div class="row-right">
-                <div class="avatar-preview">
+                <div class="avatar-preview" @click="triggerAvatarSelect">
                   <el-avatar :size="72" :src="form.avatarUrl" class="profile-avatar">
                     {{ form.username?.slice(0, 1) || 'K' }}
                   </el-avatar>
@@ -48,7 +48,7 @@
                   </div>
                   <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
                 </div>
-                <span class="upload-tip">点击上传头像</span>
+                <span class="upload-tip">点击上传头像（最大 3MB，支持裁剪）</span>
               </div>
             </div>
 
@@ -207,6 +207,53 @@
       </el-col>
     </el-row>
 
+    <el-dialog
+      v-model="avatarCropDialogVisible"
+      title="裁剪头像"
+      width="520px"
+      :close-on-click-modal="false"
+      @close="resetAvatarCropDialog"
+    >
+      <div class="avatar-crop-wrapper">
+        <div
+          class="crop-stage"
+          @mousedown="startDragImage"
+          @touchstart.prevent="startDragImage"
+        >
+          <img
+            v-if="cropImageUrl"
+            :src="cropImageUrl"
+            class="crop-image"
+            :style="cropImageStyle"
+            draggable="false"
+          />
+          <div class="crop-mask crop-mask-top" />
+          <div class="crop-mask crop-mask-bottom" />
+          <div class="crop-mask crop-mask-left" />
+          <div class="crop-mask crop-mask-right" />
+          <div class="crop-frame" />
+        </div>
+        <div class="crop-slider-row">
+          <span class="slider-label">缩放</span>
+          <el-slider
+            v-model="cropScale"
+            :min="cropMinScale"
+            :max="cropMaxScale"
+            :step="0.01"
+            @input="handleCropScaleChange"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="avatarCropDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="avatarUploading" @click="confirmAvatarCrop">
+            确认上传
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <!-- 编辑对话框 -->
     <el-dialog v-model="editDialogVisible" :title="editDialogTitle" width="500px" @close="resetEditDialog">
       <el-form ref="editFormRef" :model="editForm" :rules="getFieldRules()" label-width="80px" @submit.prevent>
@@ -266,11 +313,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { User, Camera, Message, ArrowRight, Lock, Iphone, Calendar, Location, Document } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
-import { updateUserProfile, type UserDetails } from '@/api/auth'
+import { updateUserProfile, uploadAvatar, type UserDetails } from '@/api/auth'
 import { storeToRefs } from 'pinia'
 
 type ValidationRule = {
@@ -287,6 +334,33 @@ const { user, detailsLoading } = storeToRefs(userStore)
 const fileInput = ref<HTMLInputElement>()
 const editFormRef = ref()
 const submitLoading = ref(false)
+const avatarCropDialogVisible = ref(false)
+const avatarUploading = ref(false)
+
+const CROP_STAGE_SIZE = 320
+const CROP_FRAME_SIZE = 220
+const CROP_STAGE_CENTER = CROP_STAGE_SIZE / 2
+const CROP_FRAME_LEFT = (CROP_STAGE_SIZE - CROP_FRAME_SIZE) / 2
+const CROP_FRAME_TOP = (CROP_STAGE_SIZE - CROP_FRAME_SIZE) / 2
+const MAX_AVATAR_SIZE = 3 * 1024 * 1024
+
+const cropImageUrl = ref('')
+const cropImageNaturalWidth = ref(0)
+const cropImageNaturalHeight = ref(0)
+const cropScale = ref(1)
+const cropMinScale = ref(1)
+const cropMaxScale = ref(3)
+const cropOffsetX = ref(0)
+const cropOffsetY = ref(0)
+const selectedAvatarFile = ref<File | null>(null)
+
+const dragState = reactive({
+  active: false,
+  startX: 0,
+  startY: 0,
+  startOffsetX: 0,
+  startOffsetY: 0
+})
 
 // 编辑对话框相关
 const editDialogVisible = ref(false)
@@ -488,36 +562,229 @@ const handleAvatarChange = (event: Event) => {
   // 验证文件类型
   if (!file.type.startsWith('image/')) {
     ElMessage.error('请选择图片文件')
+    target.value = ''
     return
   }
 
-  // 验证文件大小（最大 5MB）
-  if (file.size > 5 * 1024 * 1024) {
-    ElMessage.error('图片大小不能超过 5MB')
+  // 验证文件大小（最大 3MB）
+  if (file.size > MAX_AVATAR_SIZE) {
+    ElMessage.error('图片大小不能超过 3MB')
+    target.value = ''
     return
   }
 
-  // 读取文件并显示预览
-  const reader = new FileReader()
-  reader.onload = async (e) => {
-    const avatarUrl = e.target?.result as string
-    if (!avatarUrl) return
+  selectedAvatarFile.value = file
+  openAvatarCropDialog(file)
+}
 
-    try {
-      const result = await updateUserProfile({
-        key: 'avatarUrl',
-        value: avatarUrl
-      })
-      form.avatarUrl = avatarUrl
-      userStore.user = result
-      userStore.userDetails = result
-      ElMessage.success('头像已更新')
-    } catch {
-      ElMessage.error('头像更新失败')
+const triggerAvatarSelect = () => {
+  fileInput.value?.click()
+}
+
+const openAvatarCropDialog = (file: File) => {
+  if (cropImageUrl.value) {
+    URL.revokeObjectURL(cropImageUrl.value)
+  }
+  const objectUrl = URL.createObjectURL(file)
+  const image = new Image()
+  image.onload = () => {
+    cropImageNaturalWidth.value = image.naturalWidth
+    cropImageNaturalHeight.value = image.naturalHeight
+    initializeCropState()
+    cropImageUrl.value = objectUrl
+    avatarCropDialogVisible.value = true
+  }
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl)
+    ElMessage.error('图片读取失败，请重试')
+  }
+  image.src = objectUrl
+}
+
+const initializeCropState = () => {
+  if (!cropImageNaturalWidth.value || !cropImageNaturalHeight.value) return
+
+  const minScaleByFrame = Math.max(
+    CROP_FRAME_SIZE / cropImageNaturalWidth.value,
+    CROP_FRAME_SIZE / cropImageNaturalHeight.value
+  )
+
+  cropMinScale.value = minScaleByFrame
+  cropMaxScale.value = Math.max(minScaleByFrame * 4, minScaleByFrame + 1)
+  cropScale.value = minScaleByFrame
+  cropOffsetX.value = CROP_STAGE_CENTER - (cropImageNaturalWidth.value * cropScale.value) / 2
+  cropOffsetY.value = CROP_STAGE_CENTER - (cropImageNaturalHeight.value * cropScale.value) / 2
+  clampCropOffset()
+}
+
+const clampCropOffset = () => {
+  if (!cropImageNaturalWidth.value || !cropImageNaturalHeight.value) return
+
+  const displayWidth = cropImageNaturalWidth.value * cropScale.value
+  const displayHeight = cropImageNaturalHeight.value * cropScale.value
+  const minX = CROP_FRAME_LEFT + CROP_FRAME_SIZE - displayWidth
+  const maxX = CROP_FRAME_LEFT
+  const minY = CROP_FRAME_TOP + CROP_FRAME_SIZE - displayHeight
+  const maxY = CROP_FRAME_TOP
+
+  cropOffsetX.value = Math.min(Math.max(cropOffsetX.value, minX), maxX)
+  cropOffsetY.value = Math.min(Math.max(cropOffsetY.value, minY), maxY)
+}
+
+const startDragImage = (event: MouseEvent | TouchEvent) => {
+  if (!cropImageUrl.value) return
+
+  dragState.active = true
+  const point = getEventPoint(event)
+  dragState.startX = point.x
+  dragState.startY = point.y
+  dragState.startOffsetX = cropOffsetX.value
+  dragState.startOffsetY = cropOffsetY.value
+
+  window.addEventListener('mousemove', handleDragging)
+  window.addEventListener('mouseup', stopDragImage)
+  window.addEventListener('touchmove', handleDragging, { passive: false })
+  window.addEventListener('touchend', stopDragImage)
+}
+
+const handleDragging = (event: MouseEvent | TouchEvent) => {
+  if (!dragState.active) return
+  if (event instanceof TouchEvent) {
+    event.preventDefault()
+  }
+
+  const point = getEventPoint(event)
+  const deltaX = point.x - dragState.startX
+  const deltaY = point.y - dragState.startY
+  cropOffsetX.value = dragState.startOffsetX + deltaX
+  cropOffsetY.value = dragState.startOffsetY + deltaY
+  clampCropOffset()
+}
+
+const stopDragImage = () => {
+  dragState.active = false
+  window.removeEventListener('mousemove', handleDragging)
+  window.removeEventListener('mouseup', stopDragImage)
+  window.removeEventListener('touchmove', handleDragging)
+  window.removeEventListener('touchend', stopDragImage)
+}
+
+const getEventPoint = (event: MouseEvent | TouchEvent) => {
+  if (event instanceof TouchEvent) {
+    const touch = event.touches[0] || event.changedTouches[0]
+    return {
+      x: touch?.clientX || 0,
+      y: touch?.clientY || 0
     }
   }
-  reader.readAsDataURL(file)
+  return {
+    x: event.clientX,
+    y: event.clientY
+  }
 }
+
+const handleCropScaleChange = (value: number | number[]) => {
+  const nextValue = Array.isArray(value) ? value[0] : value
+  if (!nextValue || !cropImageNaturalWidth.value || !cropImageNaturalHeight.value) return
+
+  const prevScale = cropScale.value
+  const prevCenterX = CROP_STAGE_CENTER
+  const prevCenterY = CROP_STAGE_CENTER
+  const imagePointX = (prevCenterX - cropOffsetX.value) / prevScale
+  const imagePointY = (prevCenterY - cropOffsetY.value) / prevScale
+
+  cropScale.value = nextValue
+  cropOffsetX.value = prevCenterX - imagePointX * cropScale.value
+  cropOffsetY.value = prevCenterY - imagePointY * cropScale.value
+  clampCropOffset()
+}
+
+const confirmAvatarCrop = async () => {
+  if (!cropImageUrl.value || !selectedAvatarFile.value) return
+
+  try {
+    avatarUploading.value = true
+    const blob = await exportCroppedAvatarBlob()
+    const result = await uploadAvatar(blob)
+
+    form.avatarUrl = result.avatarUrl || ''
+    userStore.user = result
+    userStore.userDetails = result
+    avatarCropDialogVisible.value = false
+    ElMessage.success('头像已更新')
+  } catch {
+    ElMessage.error('头像上传失败')
+  } finally {
+    avatarUploading.value = false
+  }
+}
+
+const exportCroppedAvatarBlob = async (): Promise<Blob> => {
+  return await new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => {
+      const sourceX = (CROP_FRAME_LEFT - cropOffsetX.value) / cropScale.value
+      const sourceY = (CROP_FRAME_TOP - cropOffsetY.value) / cropScale.value
+      const sourceSize = CROP_FRAME_SIZE / cropScale.value
+
+      const canvas = document.createElement('canvas')
+      canvas.width = 512
+      canvas.height = 512
+      const context = canvas.getContext('2d')
+      if (!context) {
+        reject(new Error('canvas_context_unavailable'))
+        return
+      }
+
+      context.drawImage(
+        image,
+        sourceX,
+        sourceY,
+        sourceSize,
+        sourceSize,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      )
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('crop_failed'))
+          return
+        }
+        resolve(blob)
+      }, 'image/jpeg', 0.92)
+    }
+    image.onerror = () => reject(new Error('image_load_failed'))
+    image.src = cropImageUrl.value
+  })
+}
+
+const resetAvatarCropDialog = () => {
+  stopDragImage()
+  avatarUploading.value = false
+  selectedAvatarFile.value = null
+  if (cropImageUrl.value) {
+    URL.revokeObjectURL(cropImageUrl.value)
+  }
+  cropImageUrl.value = ''
+  cropImageNaturalWidth.value = 0
+  cropImageNaturalHeight.value = 0
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
+
+const cropImageStyle = computed(() => ({
+  width: `${cropImageNaturalWidth.value * cropScale.value}px`,
+  height: `${cropImageNaturalHeight.value * cropScale.value}px`,
+  transform: `translate(${cropOffsetX.value}px, ${cropOffsetY.value}px)`
+}))
+
+onBeforeUnmount(() => {
+  resetAvatarCropDialog()
+})
 </script>
 
 <style scoped>
@@ -805,6 +1072,93 @@ const handleAvatarChange = (event: Event) => {
 .char-count {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.avatar-crop-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.crop-stage {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #111827;
+  touch-action: none;
+  cursor: move;
+}
+
+.crop-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  user-select: none;
+}
+
+.crop-mask {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.crop-mask-top {
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50px;
+}
+
+.crop-mask-bottom {
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 50px;
+}
+
+.crop-mask-left {
+  top: 50px;
+  left: 0;
+  width: 50px;
+  height: 220px;
+}
+
+.crop-mask-right {
+  top: 50px;
+  right: 0;
+  width: 50px;
+  height: 220px;
+}
+
+.crop-frame {
+  position: absolute;
+  top: 50px;
+  left: 50px;
+  width: 220px;
+  height: 220px;
+  border: 2px solid #ffffff;
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+.crop-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.slider-label {
+  min-width: 36px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.crop-slider-row :deep(.el-slider) {
+  flex: 1;
 }
 
 @media (max-width: 1024px) {

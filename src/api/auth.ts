@@ -450,6 +450,17 @@ export const updateUserProfile = async (data: UpdateProfileRequest): Promise<Use
   return response.data as UserDetails
 }
 
+/**
+ * 上传头像
+ * POST /auth/upload/avatar
+ */
+export const uploadAvatar = async (file: Blob): Promise<UserDetails> => {
+  const formData = new FormData()
+  formData.append('file', file, 'avatar.jpg')
+  const response = await request.post<any>('/auth/upload/avatar', formData)
+  return response.data as UserDetails
+}
+
 // ========== 敏感操作验证 ==========
 
 /**
