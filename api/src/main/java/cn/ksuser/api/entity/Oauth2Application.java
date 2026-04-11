@@ -30,6 +30,9 @@ public class Oauth2Application {
     @Column(name = "contact_info", length = 120, nullable = false)
     private String contactInfo;
 
+    @Column(name = "logo_url", length = 255)
+    private String logoUrl;
+
     @Column(name = "scopes", length = 255, nullable = false)
     private String scopes = "";
 
@@ -118,6 +121,14 @@ public class Oauth2Application {
 
     public void setContactInfo(String contactInfo) {
         this.contactInfo = contactInfo;
+    }
+
+    public String getLogoUrl() {
+        return logoUrl;
+    }
+
+    public void setLogoUrl(String logoUrl) {
+        this.logoUrl = logoUrl;
     }
 
     public String getScopes() {

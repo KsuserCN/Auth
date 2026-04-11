@@ -1,10 +1,18 @@
 package cn.ksuser.api.controller;
 
 import cn.ksuser.api.config.AppProperties;
-import cn.ksuser.api.dto.*;
+import cn.ksuser.api.dto.ApiResponse;
+import cn.ksuser.api.dto.SsoAuthorizeApproveResponse;
+import cn.ksuser.api.dto.SsoAuthorizeContextResponse;
+import cn.ksuser.api.dto.SsoAuthorizeRequest;
+import cn.ksuser.api.dto.SsoClientCreateRequest;
+import cn.ksuser.api.dto.SsoClientCreateResponse;
+import cn.ksuser.api.dto.SsoClientResponse;
+import cn.ksuser.api.dto.SsoClientUpdateRequest;
+import cn.ksuser.api.dto.SsoClientsOverviewResponse;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
-import cn.ksuser.api.service.Oauth2PlatformService;
+import cn.ksuser.api.service.SsoPlatformService;
 import cn.ksuser.api.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
@@ -13,7 +21,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -21,66 +40,64 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.Locale;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/oauth2")
-public class Oauth2PlatformController {
+@RequestMapping("/sso")
+public class SsoPlatformController {
     private static final long LOGO_MAX_SIZE_BYTES = 3L * 1024 * 1024;
-    private static final String LOGO_STORAGE_DIR = "static/oauth2-logos";
+    private static final String LOGO_STORAGE_DIR = "static/sso-logos";
 
-    private final Oauth2PlatformService oauth2PlatformService;
+    private final SsoPlatformService ssoPlatformService;
     private final UserService userService;
     private final AppProperties appProperties;
 
-    public Oauth2PlatformController(Oauth2PlatformService oauth2PlatformService,
-                                    UserService userService,
-                                    AppProperties appProperties) {
-        this.oauth2PlatformService = oauth2PlatformService;
+    public SsoPlatformController(SsoPlatformService ssoPlatformService,
+                                 UserService userService,
+                                 AppProperties appProperties) {
+        this.ssoPlatformService = ssoPlatformService;
         this.userService = userService;
         this.appProperties = appProperties;
     }
 
-    @GetMapping("/apps")
-    public ResponseEntity<ApiResponse<Oauth2AppsOverviewResponse>> listApplications(Authentication authentication) {
+    @GetMapping("/clients")
+    public ResponseEntity<ApiResponse<SsoClientsOverviewResponse>> listClients(Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", oauth2PlatformService.listApplications(user)));
+        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.listClients(user)));
     }
 
-    @PostMapping("/apps")
-    public ResponseEntity<ApiResponse<Oauth2AppCreateResponse>> createApplication(
-        @RequestBody Oauth2AppCreateRequest request,
-        Authentication authentication) {
+    @PostMapping("/clients")
+    public ResponseEntity<ApiResponse<SsoClientCreateResponse>> createClient(@RequestBody SsoClientCreateRequest request,
+                                                                             Authentication authentication) {
         User user = requireUser(authentication);
-        Oauth2AppCreateResponse response = oauth2PlatformService.createApplication(user, request);
+        SsoClientCreateResponse response = ssoPlatformService.createClient(user, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(new ApiResponse<>(201, "创建成功，请妥善保存 AppSecret", response));
+            .body(new ApiResponse<>(201, "创建成功，请妥善保存 ClientSecret", response));
     }
 
-    @PutMapping("/apps/{appId}")
-    public ResponseEntity<ApiResponse<Oauth2AppResponse>> updateApplication(@PathVariable String appId,
-                                                                            @RequestBody Oauth2AppUpdateRequest request,
-                                                                            Authentication authentication) {
+    @PutMapping("/clients/{clientId}")
+    public ResponseEntity<ApiResponse<SsoClientResponse>> updateClient(@PathVariable String clientId,
+                                                                       @RequestBody SsoClientUpdateRequest request,
+                                                                       Authentication authentication) {
         User user = requireUser(authentication);
-        Oauth2AppResponse response = oauth2PlatformService.updateApplication(user, appId, request);
-        return ResponseEntity.ok(new ApiResponse<>(200, "更新成功", response));
+        return ResponseEntity.ok(new ApiResponse<>(200, "更新成功", ssoPlatformService.updateClient(user, clientId, request)));
     }
 
-    @DeleteMapping("/apps/{appId}")
-    public ResponseEntity<ApiResponse<Void>> deleteApplication(@PathVariable String appId,
-                                                               Authentication authentication) {
+    @DeleteMapping("/clients/{clientId}")
+    public ResponseEntity<ApiResponse<Void>> deleteClient(@PathVariable String clientId,
+                                                          Authentication authentication) {
         User user = requireUser(authentication);
-        oauth2PlatformService.deleteApplication(user, appId);
+        ssoPlatformService.deleteClient(user, clientId);
         return ResponseEntity.ok(new ApiResponse<>(200, "删除成功"));
     }
 
-    @PostMapping(value = "/apps/{appId}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ApiResponse<Oauth2AppResponse>> uploadApplicationLogo(@PathVariable String appId,
-                                                                                 @RequestPart("file") MultipartFile file,
-                                                                                 Authentication authentication) {
+    @PostMapping(value = "/clients/{clientId}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<SsoClientResponse>> uploadClientLogo(@PathVariable String clientId,
+                                                                            @RequestPart("file") MultipartFile file,
+                                                                            Authentication authentication) {
         User user = requireUser(authentication);
         if (file == null || file.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -110,8 +127,8 @@ public class Oauth2PlatformController {
             Path target = logoDir.resolve(filename);
             Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
 
-            String logoUrl = getStaticHostPrefix() + "/static/oauth2-logos/" + filename;
-            Oauth2AppResponse response = oauth2PlatformService.updateApplicationLogo(user, appId, logoUrl);
+            String logoUrl = getStaticHostPrefix() + "/static/sso-logos/" + filename;
+            SsoClientResponse response = ssoPlatformService.updateClientLogo(user, clientId, logoUrl);
             return ResponseEntity.ok(new ApiResponse<>(200, "Logo 上传成功", response));
         } catch (IOException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -120,24 +137,24 @@ public class Oauth2PlatformController {
     }
 
     @GetMapping("/authorize/context")
-    public ResponseEntity<ApiResponse<Oauth2AuthorizeContextResponse>> authorizeContext(
+    public ResponseEntity<ApiResponse<SsoAuthorizeContextResponse>> authorizeContext(
         @RequestParam(name = "client_id") String clientId,
         @RequestParam(name = "redirect_uri") String redirectUri,
         @RequestParam(name = "response_type") String responseType,
-        @RequestParam(name = "scope", required = false) String scope) {
-        Oauth2AuthorizeContextResponse response = oauth2PlatformService.buildAuthorizeContext(
-            clientId, redirectUri, responseType, scope
-        );
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", response));
+        @RequestParam(name = "scope", required = false) String scope,
+        @RequestParam(name = "nonce", required = false) String nonce,
+        @RequestParam(name = "code_challenge", required = false) String codeChallenge,
+        @RequestParam(name = "code_challenge_method", required = false) String codeChallengeMethod) {
+        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.buildAuthorizeContext(
+            clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod
+        )));
     }
 
     @PostMapping("/authorize/approve")
-    public ResponseEntity<ApiResponse<Oauth2AuthorizeApproveResponse>> approveAuthorization(
-        @RequestBody Oauth2AuthorizeRequest request,
-        Authentication authentication) {
+    public ResponseEntity<ApiResponse<SsoAuthorizeApproveResponse>> approveAuthorization(@RequestBody SsoAuthorizeRequest request,
+                                                                                         Authentication authentication) {
         User user = requireUser(authentication);
-        Oauth2AuthorizeApproveResponse response = oauth2PlatformService.approveAuthorization(user, request);
-        return ResponseEntity.ok(new ApiResponse<>(200, "授权成功", response));
+        return ResponseEntity.ok(new ApiResponse<>(200, "授权成功", ssoPlatformService.approveAuthorization(user, request)));
     }
 
     @PostMapping("/token")
@@ -146,14 +163,14 @@ public class Oauth2PlatformController {
         @RequestParam(name = "code", required = false) String code,
         @RequestParam(name = "client_id", required = false) String clientId,
         @RequestParam(name = "client_secret", required = false) String clientSecret,
-        @RequestParam(name = "redirect_uri", required = false) String redirectUri) {
-        Map<String, Object> response = oauth2PlatformService.exchangeAuthorizationCode(
-            grantType, code, clientId, clientSecret, redirectUri
-        );
+        @RequestParam(name = "redirect_uri", required = false) String redirectUri,
+        @RequestParam(name = "code_verifier", required = false) String codeVerifier) {
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.PRAGMA, "no-cache")
-            .body(response);
+            .body(ssoPlatformService.exchangeAuthorizationCode(
+                grantType, code, clientId, clientSecret, redirectUri, codeVerifier
+            ));
     }
 
     @GetMapping("/userinfo")
@@ -161,39 +178,36 @@ public class Oauth2PlatformController {
         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
         @RequestParam(name = "access_token", required = false) String accessToken) {
         String token = extractBearerToken(authorization, accessToken);
-        Map<String, Object> response = oauth2PlatformService.buildUserInfo(token);
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .header(HttpHeaders.PRAGMA, "no-cache")
-            .body(response);
+            .body(ssoPlatformService.buildUserInfo(token));
     }
 
     @ExceptionHandler(Oauth2Exception.class)
     public ResponseEntity<?> handleOauth2Exception(Oauth2Exception ex, HttpServletRequest request) {
-        if (isOauthProtocolRequest(request)) {
+        if (isSsoProtocolRequest(request)) {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("error", ex.getError());
             body.put("error_description", ex.getDescription());
             return ResponseEntity.status(ex.getStatus()).body(body);
         }
-
         return ResponseEntity.status(ex.getStatus())
             .body(new ApiResponse<>(ex.getStatus().value(), ex.getDescription()));
     }
 
-    private boolean isOauthProtocolRequest(HttpServletRequest request) {
+    private boolean isSsoProtocolRequest(HttpServletRequest request) {
         String path = request == null ? "" : request.getRequestURI();
-        return path.endsWith("/oauth2/token")
-            || path.endsWith("/oauth2/token/")
-            || path.endsWith("/oauth2/userinfo")
-            || path.endsWith("/oauth2/userinfo/");
+        return path.endsWith("/sso/token")
+            || path.endsWith("/sso/token/")
+            || path.endsWith("/sso/userinfo")
+            || path.endsWith("/sso/userinfo/");
     }
 
     private User requireUser(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "未登录");
         }
-
         String uuid = authentication.getPrincipal().toString();
         return userService.findByUuid(uuid)
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "用户不存在"));

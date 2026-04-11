@@ -1,6 +1,13 @@
 package cn.ksuser.api.service;
 
-import cn.ksuser.api.dto.*;
+import cn.ksuser.api.dto.Oauth2AppCreateRequest;
+import cn.ksuser.api.dto.Oauth2AppCreateResponse;
+import cn.ksuser.api.dto.Oauth2AppResponse;
+import cn.ksuser.api.dto.Oauth2AppUpdateRequest;
+import cn.ksuser.api.dto.Oauth2AppsOverviewResponse;
+import cn.ksuser.api.dto.Oauth2AuthorizeApproveResponse;
+import cn.ksuser.api.dto.Oauth2AuthorizeContextResponse;
+import cn.ksuser.api.dto.Oauth2AuthorizeRequest;
 import cn.ksuser.api.entity.Oauth2Application;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
@@ -21,7 +28,17 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class Oauth2PlatformService {
@@ -64,7 +81,7 @@ public class Oauth2PlatformService {
             .stream()
             .map(this::toAppResponse)
             .toList();
-        boolean verified = isVerifiedUser(user);
+        boolean verified = isOauthCreator(user);
         int currentCount = apps.size();
         return new Oauth2AppsOverviewResponse(
             user.getVerificationType(),
@@ -77,7 +94,7 @@ public class Oauth2PlatformService {
     }
 
     public Oauth2AppCreateResponse createApplication(User user, Oauth2AppCreateRequest request) {
-        ensureVerifiedUser(user);
+        ensureOauthCreator(user);
 
         if (applicationRepository.countByOwnerUserId(user.getId()) >= maxAppsPerUser) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
@@ -90,7 +107,7 @@ public class Oauth2PlatformService {
         List<String> scopes = normalizeAppScopes(request == null ? null : request.getScopes());
 
         String appId = generateUniqueAppId();
-        String appSecret = generateOpaqueValue("kssecret_", 36);
+        String appSecret = generateOpaqueValue("ksapp_secret_", 36);
 
         Oauth2Application application = new Oauth2Application();
         application.setOwnerUserId(user.getId());
@@ -105,6 +122,7 @@ public class Oauth2PlatformService {
         return new Oauth2AppCreateResponse(
             saved.getAppId(),
             saved.getAppName(),
+            saved.getLogoUrl(),
             saved.getRedirectUri(),
             saved.getContactInfo(),
             scopes,
@@ -116,18 +134,20 @@ public class Oauth2PlatformService {
 
     public Oauth2AppResponse updateApplication(User user, String appId, Oauth2AppUpdateRequest request) {
         Oauth2Application application = findOwnedApplication(user, appId);
-
         application.setAppName(normalizeAppName(request == null ? null : request.getAppName()));
         application.setRedirectUri(normalizeAndValidateRedirectUri(request == null ? null : request.getRedirectUri()));
         application.setContactInfo(normalizeContactInfo(request == null ? null : request.getContactInfo()));
-
-        Oauth2Application updated = applicationRepository.save(application);
-        return toAppResponse(updated);
+        return toAppResponse(applicationRepository.save(application));
     }
 
     public void deleteApplication(User user, String appId) {
+        applicationRepository.delete(findOwnedApplication(user, appId));
+    }
+
+    public Oauth2AppResponse updateApplicationLogo(User user, String appId, String logoUrl) {
         Oauth2Application application = findOwnedApplication(user, appId);
-        applicationRepository.delete(application);
+        application.setLogoUrl(normalizeOptional(logoUrl));
+        return toAppResponse(applicationRepository.save(application));
     }
 
     public Oauth2AuthorizeContextResponse buildAuthorizeContext(String clientId, String redirectUri,
@@ -135,13 +155,13 @@ public class Oauth2PlatformService {
         validateResponseType(responseType);
         Oauth2Application application = findActiveApplication(clientId, HttpStatus.BAD_REQUEST);
         validateRedirectUriMatches(application, redirectUri);
-        List<String> requestedScopes = resolveRequestedScopes(application, scope);
         return new Oauth2AuthorizeContextResponse(
             application.getAppId(),
             application.getAppName(),
+            application.getLogoUrl(),
             application.getContactInfo(),
             application.getRedirectUri(),
-            requestedScopes
+            resolveRequestedScopes(application, scope)
         );
     }
 
@@ -188,12 +208,10 @@ public class Oauth2PlatformService {
         }
 
         validateRedirectUriMatches(application, redirectUri);
-
         AuthorizationCodePayload payload = consumeAuthorizationCode(code);
         if (payload == null) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码无效、已过期或已使用");
         }
-
         if (!application.getAppId().equals(payload.clientId())
             || !application.getRedirectUri().equals(payload.redirectUri())) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码与当前应用或回调地址不匹配");
@@ -236,8 +254,10 @@ public class Oauth2PlatformService {
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 对应用户不存在"));
 
         Map<String, Object> response = new LinkedHashMap<>();
-        response.put("openid", nonBlankOrDefault(parsed.openid(), buildOpenId(application.getAppId(), user.getUuid())));
-        response.put("unionid", nonBlankOrDefault(parsed.unionid(), buildUnionId(parsed.ownerUserId(), user.getUuid())));
+        response.put("openid", parsed.openid() == null || parsed.openid().isBlank()
+            ? buildOpenId(application.getAppId(), user.getUuid()) : parsed.openid());
+        response.put("unionid", parsed.unionid() == null || parsed.unionid().isBlank()
+            ? buildUnionId(parsed.ownerUserId(), user.getUuid()) : parsed.unionid());
 
         Set<String> scopes = new LinkedHashSet<>(parseScopes(parsed.scope()));
         if (scopes.contains("profile")) {
@@ -253,15 +273,17 @@ public class Oauth2PlatformService {
         return response;
     }
 
-    public boolean isVerifiedUser(User user) {
+    public boolean isOauthCreator(User user) {
         String verificationType = user == null ? "none" : user.getVerificationType();
-        return "personal".equalsIgnoreCase(verificationType) || "enterprise".equalsIgnoreCase(verificationType);
+        return "personal".equalsIgnoreCase(verificationType)
+            || "enterprise".equalsIgnoreCase(verificationType)
+            || "admin".equalsIgnoreCase(verificationType);
     }
 
-    private void ensureVerifiedUser(User user) {
-        if (!isVerifiedUser(user)) {
+    private void ensureOauthCreator(User user) {
+        if (!isOauthCreator(user)) {
             throw new Oauth2Exception(HttpStatus.FORBIDDEN, "unauthorized_client",
-                "仅个人认证或企业认证用户可以创建 OAuth2 应用");
+                "仅个人认证、企业认证或管理员账号可以创建 OAuth2 应用");
         }
     }
 
@@ -320,7 +342,6 @@ public class Oauth2PlatformService {
             URI uri = URI.create(normalized);
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
             String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
-
             boolean httpsAllowed = "https".equals(scheme) && !host.isBlank();
             boolean localhostHttpAllowed = "http".equals(scheme) && "localhost".equals(host);
             if (!httpsAllowed && !localhostHttpAllowed) {
@@ -340,7 +361,6 @@ public class Oauth2PlatformService {
         if (scopes == null || scopes.isEmpty()) {
             return List.of();
         }
-
         StringBuilder builder = new StringBuilder();
         for (String scope : scopes) {
             if (scope == null || scope.isBlank()) {
@@ -351,7 +371,6 @@ public class Oauth2PlatformService {
             }
             builder.append(scope.trim());
         }
-
         return orderScopes(parseScopes(builder.toString()));
     }
 
@@ -360,7 +379,6 @@ public class Oauth2PlatformService {
         if (requestedScope == null || requestedScope.isBlank()) {
             return allowedScopes;
         }
-
         List<String> requestedScopes = orderScopes(parseScopes(requestedScope));
         if (!allowedScopes.containsAll(requestedScopes)) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope",
@@ -373,21 +391,14 @@ public class Oauth2PlatformService {
         if (scopeValue == null || scopeValue.isBlank()) {
             return List.of();
         }
-
         LinkedHashSet<String> scopes = new LinkedHashSet<>();
-        String[] rawParts = scopeValue.trim().split("[\\s,]+");
-        for (String rawPart : rawParts) {
-            String scope = rawPart == null ? "" : rawPart.trim().toLowerCase(Locale.ROOT);
-            if (scope.isBlank()) {
-                continue;
-            }
+        for (String scope : Oauth2ScopeUtil.parseScopeList(scopeValue)) {
             if (!SUPPORTED_SCOPES.contains(scope)) {
                 throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope",
                     "暂仅支持 profile、email 两种 scope");
             }
             scopes.add(scope);
         }
-
         return orderScopes(scopes);
     }
 
@@ -395,7 +406,6 @@ public class Oauth2PlatformService {
         if (scopes == null || scopes.isEmpty()) {
             return List.of();
         }
-
         List<String> ordered = new ArrayList<>();
         for (String supportedScope : SUPPORTED_SCOPE_ORDER) {
             if (scopes.contains(supportedScope)) {
@@ -413,6 +423,7 @@ public class Oauth2PlatformService {
         return new Oauth2AppResponse(
             application.getAppId(),
             application.getAppName(),
+            application.getLogoUrl(),
             application.getRedirectUri(),
             application.getContactInfo(),
             parseScopes(application.getScopes()),
@@ -454,12 +465,10 @@ public class Oauth2PlatformService {
         if (normalizedCode == null) {
             return null;
         }
-
         String raw = redisTemplate.opsForValue().getAndDelete(AUTH_CODE_PREFIX + normalizedCode);
         if (raw == null || raw.isBlank()) {
             return null;
         }
-
         try {
             return objectMapper.readValue(raw, AuthorizationCodePayload.class);
         } catch (JsonProcessingException ex) {
@@ -501,10 +510,6 @@ public class Oauth2PlatformService {
         }
         String normalized = value.trim();
         return normalized.isEmpty() ? null : normalized;
-    }
-
-    private String nonBlankOrDefault(String value, String fallback) {
-        return value == null || value.isBlank() ? fallback : value;
     }
 
     private record AuthorizationCodePayload(Long userId,

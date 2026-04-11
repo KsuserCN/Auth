@@ -6,6 +6,7 @@ import java.util.List;
 public class Oauth2AppResponse {
     private String appId;
     private String appName;
+    private String logoUrl;
     private String redirectUri;
     private String contactInfo;
     private List<String> scopes;
@@ -15,10 +16,11 @@ public class Oauth2AppResponse {
     public Oauth2AppResponse() {
     }
 
-    public Oauth2AppResponse(String appId, String appName, String redirectUri, String contactInfo,
+    public Oauth2AppResponse(String appId, String appName, String logoUrl, String redirectUri, String contactInfo,
                              List<String> scopes, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.appId = appId;
         this.appName = appName;
+        this.logoUrl = logoUrl;
         this.redirectUri = redirectUri;
         this.contactInfo = contactInfo;
         this.scopes = scopes;
@@ -40,6 +42,14 @@ public class Oauth2AppResponse {
 
     public void setAppName(String appName) {
         this.appName = appName;
+    }
+
+    public String getLogoUrl() {
+        return logoUrl;
+    }
+
+    public void setLogoUrl(String logoUrl) {
+        this.logoUrl = logoUrl;
     }
 
     public String getRedirectUri() {

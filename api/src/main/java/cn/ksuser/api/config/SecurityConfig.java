@@ -35,6 +35,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/", "/auth/health", "/auth/health/",
+                    "/.well-known/openid-configuration",
                     "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
                     "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/session-transfer/exchange", "/auth/session-transfer/exchange/",
@@ -47,6 +48,9 @@ public class SecurityConfig {
                     "/oauth2/token", "/oauth2/token/",
                     "/oauth2/userinfo", "/oauth2/userinfo/",
                     "/oauth2/authorize/context", "/oauth2/authorize/context/",
+                    "/sso/token", "/sso/token/",
+                    "/sso/userinfo", "/sso/userinfo/",
+                    "/sso/authorize/context", "/sso/authorize/context/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
                     "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
@@ -109,7 +113,8 @@ public class SecurityConfig {
                     "/oauth/google/callback/bind", "/oauth/google/callback/bind/",
                     "/oauth/google/callback/unbind", "/oauth/google/callback/unbind/",
                     "/oauth/google/unbind", "/oauth/google/unbind/",
-                    "/oauth2/token", "/oauth2/token/"
+                    "/oauth2/token", "/oauth2/token/",
+                    "/sso/token", "/sso/token/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

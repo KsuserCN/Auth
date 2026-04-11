@@ -42,3 +42,5 @@ cookies.txt
 .env.development
 .env.production
 .DS_Store
+
+static/*

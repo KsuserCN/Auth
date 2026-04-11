@@ -30,7 +30,7 @@ CREATE TABLE users (
   birth_date DATE DEFAULT NULL COMMENT '出生日期 YYYY-MM-DD',
   region VARCHAR(100) DEFAULT NULL COMMENT '地区',
   bio VARCHAR(200) DEFAULT NULL COMMENT '个人简介（最多200字）',
-  verification_type ENUM('none', 'personal', 'enterprise') NOT NULL DEFAULT 'none' COMMENT '开发者认证状态（none=未认证 personal=个人认证 enterprise=企业认证）',
+  verification_type ENUM('none', 'personal', 'enterprise', 'admin') NOT NULL DEFAULT 'none' COMMENT '开发者认证状态（none=未认证 personal=个人认证 enterprise=企业认证 admin=管理员认证）',
 
   avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像地址',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -100,6 +100,7 @@ CREATE TABLE oauth2_applications (
   app_secret_hash VARCHAR(255) NOT NULL COMMENT 'AppSecret 哈希，仅创建时返回明文',
 
   app_name VARCHAR(100) NOT NULL COMMENT '应用名称',
+  logo_url VARCHAR(255) DEFAULT NULL COMMENT '应用 Logo 地址',
   redirect_uri VARCHAR(500) NOT NULL COMMENT '唯一回调地址，仅支持 http://localhost 或 https://',
   contact_info VARCHAR(120) NOT NULL COMMENT '开发者联系方式',
   scopes VARCHAR(255) NOT NULL DEFAULT '' COMMENT '允许授权的范围，空格分隔（profile email）',
@@ -187,6 +188,18 @@ CREATE TABLE user_sessions (
   session_version INT NOT NULL DEFAULT 0
     COMMENT '会话令牌版本（用于使旧AccessToken失效）',
 
+  session_sid VARCHAR(64) NOT NULL
+    COMMENT 'OIDC / SSO 会话标识',
+
+  auth_time DATETIME DEFAULT NULL
+    COMMENT '最近一次满足当前登录态的认证时间',
+
+  auth_method VARCHAR(32) DEFAULT NULL
+    COMMENT '登录认证方式（pwd/email-code/passkey/oidc 等）',
+
+  last_mfa_verified_at DATETIME DEFAULT NULL
+    COMMENT '最近一次通过 MFA 的时间',
+
   ip_address VARCHAR(45) DEFAULT NULL
     COMMENT '会话创建IP',
 
@@ -231,6 +244,33 @@ CREATE INDEX idx_user_sessions_user_active
 -- ---------------------------
 CREATE UNIQUE INDEX uk_user_sessions_refresh_verifier
   ON user_sessions (refresh_token_verifier);
+
+
+-- ---------------------------
+-- oidc_clients：内部 OIDC 客户端注册表
+-- ---------------------------
+DROP TABLE IF EXISTS oidc_clients;
+CREATE TABLE oidc_clients (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT 'OIDC 客户端主键ID',
+  client_id VARCHAR(128) NOT NULL COMMENT '客户端 ID',
+  client_secret_hash VARCHAR(255) DEFAULT NULL COMMENT '机密客户端密钥哈希',
+  client_name VARCHAR(120) NOT NULL COMMENT '客户端名称',
+  logo_url VARCHAR(255) DEFAULT NULL COMMENT '客户端 Logo 地址',
+  client_type VARCHAR(32) NOT NULL DEFAULT 'public' COMMENT '客户端类型（public/confidential）',
+  application_type VARCHAR(32) NOT NULL DEFAULT 'native' COMMENT '应用类型（web/native/spa/service）',
+  redirect_uris TEXT NOT NULL COMMENT '允许的 redirect_uri，空格分隔',
+  post_logout_redirect_uris TEXT NOT NULL COMMENT '允许的登出回跳地址，空格分隔',
+  scopes VARCHAR(255) NOT NULL DEFAULT 'openid profile email' COMMENT '允许的 scopes，空格分隔',
+  audiences VARCHAR(255) NOT NULL DEFAULT 'ksuser-api' COMMENT '允许的 audiences，空格分隔',
+  require_pkce TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否强制 PKCE',
+  is_first_party TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否内部一方应用',
+  is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '客户端状态',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_oidc_clients_client_id (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='内部 OIDC 客户端注册表';
 
 
 -- ==========================================================

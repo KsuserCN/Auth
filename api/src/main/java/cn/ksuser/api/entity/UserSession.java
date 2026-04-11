@@ -2,6 +2,7 @@ package cn.ksuser.api.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "user_sessions")
@@ -33,6 +34,18 @@ public class UserSession {
     @Column(name = "session_version", nullable = false)
     private Integer sessionVersion = 0;
 
+    @Column(name = "session_sid", length = 64, nullable = false)
+    private String sessionSid;
+
+    @Column(name = "auth_time")
+    private LocalDateTime authTime;
+
+    @Column(name = "auth_method", length = 32)
+    private String authMethod;
+
+    @Column(name = "last_mfa_verified_at")
+    private LocalDateTime lastMfaVerifiedAt;
+
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
@@ -55,12 +68,15 @@ public class UserSession {
     }
 
     public UserSession(User user, byte[] refreshTokenVerifier, String verifierAlgo, LocalDateTime expiresAt) {
+        LocalDateTime now = LocalDateTime.now();
         this.user = user;
         this.refreshTokenVerifier = refreshTokenVerifier;
         this.verifierAlgo = verifierAlgo;
-        this.createdAt = LocalDateTime.now();
+        this.createdAt = now;
         this.expiresAt = expiresAt;
         this.sessionVersion = 0;
+        this.sessionSid = UUID.randomUUID().toString().replace("-", "");
+        this.authTime = now;
     }
 
     // Getters and Setters
@@ -126,6 +142,38 @@ public class UserSession {
 
     public void setSessionVersion(Integer sessionVersion) {
         this.sessionVersion = sessionVersion;
+    }
+
+    public String getSessionSid() {
+        return sessionSid;
+    }
+
+    public void setSessionSid(String sessionSid) {
+        this.sessionSid = sessionSid;
+    }
+
+    public LocalDateTime getAuthTime() {
+        return authTime;
+    }
+
+    public void setAuthTime(LocalDateTime authTime) {
+        this.authTime = authTime;
+    }
+
+    public String getAuthMethod() {
+        return authMethod;
+    }
+
+    public void setAuthMethod(String authMethod) {
+        this.authMethod = authMethod;
+    }
+
+    public LocalDateTime getLastMfaVerifiedAt() {
+        return lastMfaVerifiedAt;
+    }
+
+    public void setLastMfaVerifiedAt(LocalDateTime lastMfaVerifiedAt) {
+        this.lastMfaVerifiedAt = lastMfaVerifiedAt;
     }
 
     public String getIpAddress() {

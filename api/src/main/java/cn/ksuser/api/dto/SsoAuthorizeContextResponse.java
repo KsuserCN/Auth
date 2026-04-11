@@ -2,23 +2,21 @@ package cn.ksuser.api.dto;
 
 import java.util.List;
 
-public class Oauth2AuthorizeContextResponse {
+public class SsoAuthorizeContextResponse {
     private String clientId;
-    private String appName;
+    private String clientName;
     private String logoUrl;
-    private String contactInfo;
     private String redirectUri;
     private List<String> requestedScopes;
 
-    public Oauth2AuthorizeContextResponse() {
+    public SsoAuthorizeContextResponse() {
     }
 
-    public Oauth2AuthorizeContextResponse(String clientId, String appName, String logoUrl, String contactInfo,
-                                          String redirectUri, List<String> requestedScopes) {
+    public SsoAuthorizeContextResponse(String clientId, String clientName, String logoUrl, String redirectUri,
+                                       List<String> requestedScopes) {
         this.clientId = clientId;
-        this.appName = appName;
+        this.clientName = clientName;
         this.logoUrl = logoUrl;
-        this.contactInfo = contactInfo;
         this.redirectUri = redirectUri;
         this.requestedScopes = requestedScopes;
     }
@@ -31,12 +29,12 @@ public class Oauth2AuthorizeContextResponse {
         this.clientId = clientId;
     }
 
-    public String getAppName() {
-        return appName;
+    public String getClientName() {
+        return clientName;
     }
 
-    public void setAppName(String appName) {
-        this.appName = appName;
+    public void setClientName(String clientName) {
+        this.clientName = clientName;
     }
 
     public String getLogoUrl() {
@@ -45,14 +43,6 @@ public class Oauth2AuthorizeContextResponse {
 
     public void setLogoUrl(String logoUrl) {
         this.logoUrl = logoUrl;
-    }
-
-    public String getContactInfo() {
-        return contactInfo;
-    }
-
-    public void setContactInfo(String contactInfo) {
-        this.contactInfo = contactInfo;
     }
 
     public String getRedirectUri() {
@@ -70,5 +60,4 @@ public class Oauth2AuthorizeContextResponse {
     public void setRequestedScopes(List<String> requestedScopes) {
         this.requestedScopes = requestedScopes;
     }
-
 }

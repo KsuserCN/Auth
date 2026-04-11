@@ -9,10 +9,10 @@ public class Oauth2AppCreateResponse extends Oauth2AppResponse {
     public Oauth2AppCreateResponse() {
     }
 
-    public Oauth2AppCreateResponse(String appId, String appName, String redirectUri, String contactInfo,
+    public Oauth2AppCreateResponse(String appId, String appName, String logoUrl, String redirectUri, String contactInfo,
                                    List<String> scopes, LocalDateTime createdAt, LocalDateTime updatedAt,
                                    String appSecret) {
-        super(appId, appName, redirectUri, contactInfo, scopes, createdAt, updatedAt);
+        super(appId, appName, logoUrl, redirectUri, contactInfo, scopes, createdAt, updatedAt);
         this.appSecret = appSecret;
     }
 

@@ -44,13 +44,16 @@ public class UserSessionService {
         byte[] tokenVerifier = hashedToken.getBytes(StandardCharsets.UTF_8);
 
         long expirationMs = jwtUtil.getRefreshTokenExpirationTime();
-        LocalDateTime expiresAt = LocalDateTime.now().plus(Duration.ofMillis(expirationMs));
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = now.plus(Duration.ofMillis(expirationMs));
 
         UserSession session = new UserSession(user, tokenVerifier, "argon2id", expiresAt);
         session.setSessionVersion(0);
+        session.setAuthTime(now);
+        session.setAuthMethod("unknown");
         session.setIpAddress(ipAddress);
         session.setUserAgent(userAgent);
-        session.setLastSeenAt(LocalDateTime.now());
+        session.setLastSeenAt(now);
 
         if (ipAddress != null) {
             String location = ipLocationService.getIpLocation(ipAddress);
