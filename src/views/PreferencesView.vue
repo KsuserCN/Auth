@@ -225,6 +225,8 @@ watch(dailyNewsEmailEnabled, async (value, prev) => {
 }
 
 .theme-option {
+  --theme-active-bg: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-bg-color) 100%);
+  --theme-active-ring: var(--el-color-primary-light-9);
   position: relative;
   cursor: pointer;
   border: 2px solid var(--el-border-color-light);
@@ -242,8 +244,8 @@ watch(dailyNewsEmailEnabled, async (value, prev) => {
 
 .theme-option.active {
   border-color: var(--el-color-primary);
-  background: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-bg-color) 100%);
-  box-shadow: 0 0 0 3px var(--el-color-primary-light-9);
+  background: var(--theme-active-bg);
+  box-shadow: 0 0 0 3px var(--theme-active-ring);
 }
 
 .option-inner {
@@ -388,5 +390,13 @@ watch(dailyNewsEmailEnabled, async (value, prev) => {
   .theme-grid {
     grid-template-columns: 1fr;
   }
+}
+</style>
+
+<style>
+html.dark .theme-option,
+:root.dark .theme-option {
+  --theme-active-bg: rgba(255, 185, 15, 0.08);
+  --theme-active-ring: rgba(255, 185, 15, 0.2);
 }
 </style>

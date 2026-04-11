@@ -288,6 +288,12 @@ onMounted(async () => {
   --surface-subtle: var(--el-fill-color-extra-light);
   --brand-soft: var(--el-color-primary-light-9);
   --brand-border: var(--el-color-primary-light-7);
+  --hero-score-bg: linear-gradient(
+    140deg,
+    var(--el-color-primary) 0%,
+    var(--el-color-primary-light-3) 100%
+  );
+  --hero-score-border: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -346,11 +352,8 @@ onMounted(async () => {
 
 .hero-card {
   border-radius: 16px;
-  border: 1px solid var(--brand-border);
-  background: linear-gradient(140deg,
-      var(--surface-soft) 0%,
-      var(--brand-soft) 55%,
-      var(--surface-subtle) 100%);
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
   overflow: hidden;
 }
 
@@ -390,10 +393,8 @@ onMounted(async () => {
   height: 62px;
   padding: 0 12px;
   border-radius: 14px;
-  background: linear-gradient(140deg,
-      var(--el-color-primary) 0%,
-      var(--el-color-primary-light-3) 100%);
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 28%, transparent);
+  background: var(--hero-score-bg);
+  border: 1px solid var(--hero-score-border);
   color: #fff;
   display: grid;
   place-items: center;
@@ -626,5 +627,15 @@ onMounted(async () => {
     text-align: left;
   }
 
+}
+</style>
+
+<style>
+html.dark .overview-page,
+:root.dark .overview-page {
+  --brand-soft: rgba(255, 185, 15, 0.08);
+  --brand-border: rgba(255, 185, 15, 0.3);
+  --hero-score-bg: #ffb90f;
+  --hero-score-border: rgba(255, 185, 15, 0.45);
 }
 </style>
