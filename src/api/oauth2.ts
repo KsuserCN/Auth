@@ -48,6 +48,7 @@ export interface OAuth2AuthorizeContext {
   contactInfo: string
   redirectUri: string
   requestedScopes: OAuth2Scope[]
+  alreadyAuthorized: boolean
 }
 
 export interface OAuth2AuthorizeApproveRequest {
@@ -60,6 +61,17 @@ export interface OAuth2AuthorizeApproveRequest {
 
 export interface OAuth2AuthorizeApproveResponse {
   redirectUrl: string
+}
+
+export interface OAuth2AuthorizedApp {
+  appId: string
+  appName: string
+  logoUrl?: string
+  contactInfo: string
+  redirectUri: string
+  scopes: OAuth2Scope[]
+  authorizedAt: string
+  lastAuthorizedAt: string
 }
 
 export const getOAuth2Apps = async (): Promise<OAuth2AppsOverview> => {
@@ -121,4 +133,13 @@ export const approveOAuth2Authorize = async (
 ): Promise<OAuth2AuthorizeApproveResponse> => {
   const response = await request.post<any>('/oauth2/authorize/approve', data)
   return response.data as OAuth2AuthorizeApproveResponse
+}
+
+export const getOAuth2Authorizations = async (): Promise<OAuth2AuthorizedApp[]> => {
+  const response = await request.get<any>('/oauth2/authorizations')
+  return response.data as OAuth2AuthorizedApp[]
+}
+
+export const revokeOAuth2Authorization = async (appId: string): Promise<void> => {
+  await request.delete(`/oauth2/authorizations/${encodeURIComponent(appId)}`)
 }

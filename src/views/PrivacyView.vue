@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="privacy-page" v-loading="loading">
     <div class="content-header">
       <div>
         <h1 class="page-title">隐私与数据</h1>
@@ -7,99 +7,286 @@
       </div>
     </div>
 
+    <div class="overview-grid">
+      <el-card class="overview-card" shadow="never">
+        <div class="overview-label">Ksuser 应用</div>
+        <div class="overview-value">{{ ssoApps.length }}</div>
+        <div class="overview-desc">已授权的站内应用，下次同范围授权会直接回调</div>
+      </el-card>
+
+      <el-card class="overview-card" shadow="never">
+        <div class="overview-label">第三方应用</div>
+        <div class="overview-value">{{ oauthApps.length }}</div>
+        <div class="overview-desc">已授权的外部 OAuth2 应用，可随时撤销</div>
+      </el-card>
+    </div>
+
     <el-row :gutter="16">
       <el-col :xs="24" :lg="12">
         <el-card class="card" shadow="never">
           <div class="card-title">
-            <el-icon>
-              <Share />
-            </el-icon>
-            <span>授权应用</span>
+            <el-icon><Monitor /></el-icon>
+            <span>Ksuser 应用</span>
           </div>
-          <p class="card-desc">您已授权以下应用访问您的账户信息</p>
+          <p class="card-desc">这些应用属于 Ksuser 体系内服务，已授权后再次发起同范围授权时会自动回调。</p>
 
-          <div class="app-list">
-            <div v-for="app in apps" :key="app.id" class="app-item">
+          <div v-if="ssoApps.length" class="app-list">
+            <div v-for="app in ssoApps" :key="app.clientId" class="app-item">
               <div class="app-left">
-                <div class="app-avatar">
-                  <el-avatar :size="48" :src="app.avatar" />
-                </div>
+                <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">
+                  {{ app.clientName.slice(0, 1).toUpperCase() }}
+                </el-avatar>
                 <div class="app-info">
-                  <div class="app-name">{{ app.name }}</div>
-                  <div class="app-perm">已访问：{{ app.permissions }}</div>
-                  <div class="app-time">授权于：{{ app.authorizedAt }}</div>
+                  <div class="app-name-row">
+                    <span class="app-name">{{ app.clientName }}</span>
+                    <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
+                  </div>
+                  <div class="scope-list">
+                    <el-tag
+                      v-for="scope in app.scopes"
+                      :key="`${app.clientId}-${scope}`"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ ssoScopeLabel(scope) }}
+                    </el-tag>
+                  </div>
+                  <div class="app-meta">首次授权：{{ formatDateTime(app.authorizedAt) }}</div>
+                  <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
+                  <div class="app-meta mono">回调：{{ app.redirectUri }}</div>
                 </div>
               </div>
-              <el-button text type="danger" size="small">撤销</el-button>
+
+              <el-popconfirm
+                title="撤销该 Ksuser 应用授权？"
+                description="撤销后，下次登录该应用需要重新确认授权。"
+                confirm-button-text="撤销"
+                cancel-button-text="取消"
+                @confirm="handleRevokeSso(app.clientId)"
+              >
+                <template #reference>
+                  <el-button text type="danger" size="small" :loading="revokingId === `sso:${app.clientId}`">
+                    撤销
+                  </el-button>
+                </template>
+              </el-popconfirm>
             </div>
           </div>
+
+          <el-empty v-else description="暂无已授权的 Ksuser 应用" />
         </el-card>
       </el-col>
 
       <el-col :xs="24" :lg="12">
         <el-card class="card" shadow="never">
           <div class="card-title">
-            <el-icon>
-              <Download />
-            </el-icon>
-            <span>数据管理</span>
+            <el-icon><Share /></el-icon>
+            <span>第三方应用</span>
           </div>
-          <p class="card-desc">导出或删除您的账户数据</p>
+          <p class="card-desc">这些应用通过 Ksuser OAuth2.0 访问您的公开资料。撤销后将无法继续使用现有授权。</p>
 
-          <div class="data-actions">
-            <el-alert title="数据安全" type="warning" description="请妥善保管已导出的数据，不要与他人分享。" :closable="false"
-              class="action-alert" />
-
-            <div class="action-item">
-              <div class="action-info">
-                <div class="action-title">下载您的数据</div>
-                <div class="action-desc">获取您账户的完整数据备份（JSON 格式）</div>
+          <div v-if="oauthApps.length" class="app-list">
+            <div v-for="app in oauthApps" :key="app.appId" class="app-item">
+              <div class="app-left">
+                <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">
+                  {{ app.appName.slice(0, 1).toUpperCase() }}
+                </el-avatar>
+                <div class="app-info">
+                  <div class="app-name-row">
+                    <span class="app-name">{{ app.appName }}</span>
+                    <el-tag size="small" type="info" effect="plain">Third-party</el-tag>
+                  </div>
+                  <div class="scope-list">
+                    <el-tag
+                      v-for="scope in app.scopes"
+                      :key="`${app.appId}-${scope}`"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ oauthScopeLabel(scope) }}
+                    </el-tag>
+                  </div>
+                  <div class="app-meta">开发者：{{ app.contactInfo }}</div>
+                  <div class="app-meta">首次授权：{{ formatDateTime(app.authorizedAt) }}</div>
+                  <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
+                  <div class="app-meta mono">回调：{{ app.redirectUri }}</div>
+                </div>
               </div>
-              <el-button type="primary" plain>下载</el-button>
-            </div>
 
-            <el-divider />
-
-            <div class="action-item">
-              <div class="action-info">
-                <div class="action-title">删除账户</div>
-                <div class="action-desc danger">此操作不可撤销，请谨慎选择</div>
-              </div>
-              <el-popconfirm title="确认删除账户？" description="删除后所有数据将被永久清除，此操作无法撤销。" confirm-button-text="我已理解，删除"
-                cancel-button-text="取消" @confirm="handleDeleteAccount">
+              <el-popconfirm
+                title="撤销该第三方应用授权？"
+                description="撤销后，该应用需要重新请求授权才能再次访问您的账号信息。"
+                confirm-button-text="撤销"
+                cancel-button-text="取消"
+                @confirm="handleRevokeOauth(app.appId)"
+              >
                 <template #reference>
-                  <el-button type="danger" plain>删除</el-button>
+                  <el-button text type="danger" size="small" :loading="revokingId === `oauth:${app.appId}`">
+                    撤销
+                  </el-button>
                 </template>
               </el-popconfirm>
             </div>
           </div>
+
+          <el-empty v-else description="暂无已授权的第三方应用" />
         </el-card>
       </el-col>
     </el-row>
+
+    <el-card class="card data-card" shadow="never">
+      <div class="card-title">
+        <el-icon><Download /></el-icon>
+        <span>数据管理</span>
+      </div>
+      <p class="card-desc">导出或删除您的账户数据</p>
+
+      <div class="data-actions">
+        <el-alert
+          title="数据安全"
+          type="warning"
+          description="请妥善保管已导出的数据，不要与他人分享。"
+          :closable="false"
+          class="action-alert"
+        />
+
+        <div class="action-item">
+          <div class="action-info">
+            <div class="action-title">下载您的数据</div>
+            <div class="action-desc">获取您账户的完整数据备份（JSON 格式）</div>
+          </div>
+          <el-button type="primary" plain>下载</el-button>
+        </div>
+
+        <el-divider />
+
+        <div class="action-item">
+          <div class="action-info">
+            <div class="action-title">删除账户</div>
+            <div class="action-desc danger">此操作不可撤销，请谨慎选择</div>
+          </div>
+          <el-popconfirm
+            title="确认删除账户？"
+            description="删除后所有数据将被永久清除，此操作无法撤销。"
+            confirm-button-text="我已理解，删除"
+            cancel-button-text="取消"
+            @confirm="handleDeleteAccount"
+          >
+            <template #reference>
+              <el-button type="danger" plain>删除</el-button>
+            </template>
+          </el-popconfirm>
+        </div>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Share, Download } from '@element-plus/icons-vue'
+import { Download, Monitor, Share } from '@element-plus/icons-vue'
+import {
+  getOAuth2Authorizations,
+  revokeOAuth2Authorization,
+  type OAuth2AuthorizedApp,
+  type OAuth2Scope,
+} from '@/api/oauth2'
+import {
+  getSSOAuthorizations,
+  revokeSSOAuthorization,
+  type SSOAuthorizedClient,
+  type SSOScope,
+} from '@/api/sso'
 
-const apps = ref([
-  { id: 1, name: 'GitHub', avatar: 'https://avatars.githubusercontent.com/u/1?v=4', permissions: '用户信息、邮箱', authorizedAt: '2024-01-15' },
-  { id: 2, name: 'Google', avatar: 'https://www.google.com/favicon.ico', permissions: '用户信息、日历', authorizedAt: '2024-01-10' },
-])
+const loading = ref(false)
+const revokingId = ref('')
+const oauthApps = ref<OAuth2AuthorizedApp[]>([])
+const ssoApps = ref<SSOAuthorizedClient[]>([])
+
+const oauthScopeLabel = (scope: OAuth2Scope) => {
+  if (scope === 'email') return '邮箱地址'
+  return '昵称与头像'
+}
+
+const ssoScopeLabel = (scope: SSOScope) => {
+  if (scope === 'openid') return '基础身份标识'
+  if (scope === 'email') return '邮箱地址'
+  return '昵称与头像'
+}
+
+const formatDateTime = (value: string) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const loadAuthorizations = async () => {
+  loading.value = true
+  try {
+    const [oauth, sso] = await Promise.all([getOAuth2Authorizations(), getSSOAuthorizations()])
+    oauthApps.value = oauth
+    ssoApps.value = sso
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '加载授权应用失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleRevokeOauth = async (appId: string) => {
+  revokingId.value = `oauth:${appId}`
+  try {
+    await revokeOAuth2Authorization(appId)
+    oauthApps.value = oauthApps.value.filter((item) => item.appId !== appId)
+    ElMessage.success('第三方应用授权已撤销')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '撤销第三方应用失败')
+  } finally {
+    revokingId.value = ''
+  }
+}
+
+const handleRevokeSso = async (clientId: string) => {
+  revokingId.value = `sso:${clientId}`
+  try {
+    await revokeSSOAuthorization(clientId)
+    ssoApps.value = ssoApps.value.filter((item) => item.clientId !== clientId)
+    ElMessage.success('Ksuser 应用授权已撤销')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '撤销 Ksuser 应用失败')
+  } finally {
+    revokingId.value = ''
+  }
+}
 
 const handleDeleteAccount = () => {
   ElMessage.warning('账户删除功能需要额外验证，请查收您的邮件')
 }
+
+onMounted(() => {
+  void loadAuthorizations()
+})
 </script>
 
 <style scoped>
+.privacy-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .content-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
 }
 
 .page-title {
@@ -110,30 +297,59 @@ const handleDeleteAccount = () => {
 }
 
 .page-subtitle {
-  margin: 6px 0 0 0;
+  margin: 6px 0 0;
   font-size: 14px;
   color: var(--el-text-color-secondary);
 }
 
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card,
 .card {
-  border-radius: 16px;
+  border-radius: 18px;
   border: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.92)),
+    var(--el-bg-color);
+}
+
+.overview-label {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.overview-value {
+  margin-top: 8px;
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.overview-desc {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
 }
 
 .card-title {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
   margin-bottom: 8px;
   font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
 .card-desc {
-  margin: 0 0 16px 0;
+  margin: 0 0 16px;
   font-size: 14px;
+  line-height: 1.7;
   color: var(--el-text-color-secondary);
 }
 
@@ -144,53 +360,77 @@ const handleDeleteAccount = () => {
 }
 
 .app-item {
-  padding: 12px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  transition: all 0.2s ease;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.74);
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .app-item:hover {
-  background: var(--el-fill-color-light);
   border-color: var(--el-color-primary-light-5);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
 }
 
 .app-left {
   display: flex;
-  align-items: center;
   gap: 12px;
+  min-width: 0;
   flex: 1;
 }
 
-.app-avatar :deep(.el-avatar) {
-  border-radius: 8px;
+.app-avatar {
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #1f9d6c, #3dbb88);
+  color: #fff;
+  font-weight: 700;
 }
 
 .app-info {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
+  gap: 6px;
+}
+
+.app-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .app-name {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--el-text-color-primary);
 }
 
-.app-perm {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+.scope-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
-.app-time {
-  font-size: 11px;
-  color: var(--el-text-color-disabled);
+.app-meta {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.data-card {
+  margin-top: 4px;
 }
 
 .data-actions {
@@ -204,13 +444,13 @@ const handleDeleteAccount = () => {
 }
 
 .action-item {
-  padding: 12px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
 }
 
 .action-info {
@@ -218,10 +458,10 @@ const handleDeleteAccount = () => {
 }
 
 .action-title {
+  margin-bottom: 4px;
   font-size: 14px;
   font-weight: 500;
   color: var(--el-text-color-primary);
-  margin-bottom: 4px;
 }
 
 .action-desc {
@@ -235,5 +475,19 @@ const handleDeleteAccount = () => {
 
 :deep(.el-divider--horizontal) {
   margin: 8px 0;
+}
+
+@media (max-width: 900px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-item,
+  .action-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 </style>

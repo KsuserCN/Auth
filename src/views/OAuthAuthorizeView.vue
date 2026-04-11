@@ -16,6 +16,11 @@
         <p>正在校验客户端与回调地址...</p>
       </div>
 
+      <div v-else-if="autoRedirecting" class="state-panel">
+        <el-icon class="spin-icon"><Loading /></el-icon>
+        <p>检测到该应用已授权，正在直接回调...</p>
+      </div>
+
       <div v-else-if="errorMessage" class="state-panel error-panel">
         <el-icon><CircleCloseFilled /></el-icon>
         <p>{{ errorMessage }}</p>
@@ -95,6 +100,7 @@ type NormalizedAuthorizeContext = {
   contactInfo?: string
   redirectUri: string
   requestedScopes: string[]
+  alreadyAuthorized: boolean
 }
 
 const route = useRoute()
@@ -104,6 +110,7 @@ const { user } = storeToRefs(userStore)
 
 const loading = ref(true)
 const approving = ref(false)
+const autoRedirecting = ref(false)
 const errorMessage = ref('')
 const context = ref<NormalizedAuthorizeContext | null>(null)
 
@@ -201,6 +208,11 @@ const loadContext = async () => {
   }
 
   try {
+    const authenticated = await ensureAuthenticated()
+    if (!authenticated) {
+      return
+    }
+
     if (mode.value === 'sso') {
       const response = await getSSOAuthorizeContext({
         clientId,
@@ -217,6 +229,7 @@ const loadContext = async () => {
         logoUrl: response.logoUrl,
         redirectUri: response.redirectUri,
         requestedScopes: response.requestedScopes,
+        alreadyAuthorized: response.alreadyAuthorized,
       }
     } else {
       const response = await getOAuth2AuthorizeContext({
@@ -232,22 +245,27 @@ const loadContext = async () => {
         contactInfo: response.contactInfo,
         redirectUri: response.redirectUri,
         requestedScopes: response.requestedScopes,
+        alreadyAuthorized: response.alreadyAuthorized,
       }
     }
 
-    const authenticated = await ensureAuthenticated()
-    if (!authenticated) {
+    if (context.value?.alreadyAuthorized) {
+      loading.value = false
+      autoRedirecting.value = true
+      await handleApprove(true)
       return
     }
   } catch (error) {
     errorMessage.value =
       error instanceof Error ? error.message : '授权请求无效，请联系应用开发者检查配置。'
   } finally {
-    loading.value = false
+    if (!autoRedirecting.value) {
+      loading.value = false
+    }
   }
 }
 
-const handleApprove = async () => {
+const handleApprove = async (silent = false) => {
   if (!context.value) {
     return
   }
@@ -279,6 +297,12 @@ const handleApprove = async () => {
     window.location.replace(response.redirectUrl)
   } catch (error) {
     const message = error instanceof Error ? error.message : '授权失败，请稍后重试'
+    autoRedirecting.value = false
+    loading.value = false
+    if (silent) {
+      errorMessage.value = `${message}，请手动确认一次授权。`
+      return
+    }
     ElMessage.error(message)
   } finally {
     approving.value = false

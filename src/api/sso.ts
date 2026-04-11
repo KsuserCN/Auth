@@ -47,6 +47,7 @@ export interface SSOAuthorizeContext {
   logoUrl?: string
   redirectUri: string
   requestedScopes: SSOScope[]
+  alreadyAuthorized: boolean
 }
 
 export interface SSOAuthorizeApproveRequest {
@@ -62,6 +63,16 @@ export interface SSOAuthorizeApproveRequest {
 
 export interface SSOAuthorizeApproveResponse {
   redirectUrl: string
+}
+
+export interface SSOAuthorizedClient {
+  clientId: string
+  clientName: string
+  logoUrl?: string
+  redirectUri: string
+  scopes: SSOScope[]
+  authorizedAt: string
+  lastAuthorizedAt: string
 }
 
 export const getSSOClients = async (): Promise<SSOClientsOverview> => {
@@ -129,4 +140,13 @@ export const approveSSOAuthorize = async (
 ): Promise<SSOAuthorizeApproveResponse> => {
   const response = await request.post<any>('/sso/authorize/approve', data)
   return response.data as SSOAuthorizeApproveResponse
+}
+
+export const getSSOAuthorizations = async (): Promise<SSOAuthorizedClient[]> => {
+  const response = await request.get<any>('/sso/authorizations')
+  return response.data as SSOAuthorizedClient[]
+}
+
+export const revokeSSOAuthorization = async (clientId: string): Promise<void> => {
+  await request.delete(`/sso/authorizations/${encodeURIComponent(clientId)}`)
 }
