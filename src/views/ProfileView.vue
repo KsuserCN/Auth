@@ -385,6 +385,7 @@ const form = reactive({
 
 const verificationLabel = computed(() => {
   const type = user.value?.verificationType
+  if (type === 'admin') return '管理员认证'
   if (type === 'enterprise') return '企业认证'
   if (type === 'personal') return '个人认证'
   return '未认证'
@@ -392,6 +393,7 @@ const verificationLabel = computed(() => {
 
 const verificationTagType = computed(() => {
   const type = user.value?.verificationType
+  if (type === 'admin') return 'danger'
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'
   return 'info'

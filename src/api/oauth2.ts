@@ -7,6 +7,7 @@ export type OAuth2Scope = 'profile' | 'email'
 export interface OAuth2App {
   appId: string
   appName: string
+  logoUrl?: string
   redirectUri: string
   contactInfo: string
   scopes: OAuth2Scope[]
@@ -43,10 +44,10 @@ export interface CreateOAuth2AppResponse extends OAuth2App {
 export interface OAuth2AuthorizeContext {
   clientId: string
   appName: string
+  logoUrl?: string
   contactInfo: string
   redirectUri: string
   requestedScopes: OAuth2Scope[]
-  oidcRequest: boolean
 }
 
 export interface OAuth2AuthorizeApproveRequest {
@@ -55,9 +56,6 @@ export interface OAuth2AuthorizeApproveRequest {
   responseType: 'code'
   scope?: string
   state?: string
-  nonce?: string
-  codeChallenge?: string
-  codeChallengeMethod?: 'S256'
 }
 
 export interface OAuth2AuthorizeApproveResponse {
@@ -91,14 +89,21 @@ export const updateOAuth2App = async (
   return (response as unknown as ApiResponse<OAuth2App>).data
 }
 
+export const uploadOAuth2AppLogo = async (appId: string, file: Blob): Promise<OAuth2App> => {
+  const formData = new FormData()
+  formData.append('file', file, 'logo.png')
+  const response = await request.post<ApiResponse<OAuth2App>>(
+    `/oauth2/apps/${encodeURIComponent(appId)}/logo`,
+    formData,
+  )
+  return (response as unknown as ApiResponse<OAuth2App>).data
+}
+
 export const getOAuth2AuthorizeContext = async (params: {
   clientId: string
   redirectUri: string
   responseType: string
   scope?: string
-  nonce?: string
-  codeChallenge?: string
-  codeChallengeMethod?: 'S256'
 }): Promise<OAuth2AuthorizeContext> => {
   const response = await request.get<any>('/oauth2/authorize/context', {
     params: {
@@ -106,9 +111,6 @@ export const getOAuth2AuthorizeContext = async (params: {
       redirect_uri: params.redirectUri,
       response_type: params.responseType,
       scope: params.scope,
-      nonce: params.nonce,
-      code_challenge: params.codeChallenge,
-      code_challenge_method: params.codeChallengeMethod,
     },
   })
   return response.data as OAuth2AuthorizeContext

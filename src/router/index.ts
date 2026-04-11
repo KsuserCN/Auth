@@ -111,6 +111,11 @@ const router = createRouter({
       component: () => import('../views/OAuthAuthorizeView.vue'),
     },
     {
+      path: '/sso/authorize',
+      name: 'sso-authorize',
+      component: () => import('../views/OAuthAuthorizeView.vue'),
+    },
+    {
       path: '/oauth/qq/callback',
       name: 'qq-callback',
       meta: { provider: 'qq' },

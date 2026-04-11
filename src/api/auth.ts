@@ -11,7 +11,7 @@ export interface User {
   settings?: UserSettings
 }
 
-export type VerificationType = 'none' | 'personal' | 'enterprise'
+export type VerificationType = 'none' | 'personal' | 'enterprise' | 'admin'
 
 // 用户详细信息类型
 export interface UserDetails extends User {

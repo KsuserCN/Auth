@@ -30,11 +30,8 @@
           <el-divider direction="vertical" />
           <!-- 加载中：显示骨架屏 -->
           <div v-if="loading" class="user-skeleton">
-            <el-skeleton-item
-              variant="text"
-              class="skeleton-avatar"
-              style="width: 32px; height: 32px; min-width: 32px"
-            />
+            <el-skeleton-item variant="text" class="skeleton-avatar"
+              style="width: 32px; height: 32px; min-width: 32px" />
             <div class="skeleton-text">
               <el-skeleton-item variant="text" style="width: 80px; height: 16px" />
               <el-skeleton-item variant="text" style="width: 140px; height: 14px" />
@@ -48,13 +45,8 @@
             <div class="user-meta">
               <div class="user-name">
                 {{ user?.username || '未登录' }}
-                <el-tag
-                  v-if="verificationLabel"
-                  size="small"
-                  effect="plain"
-                  :type="verificationTagType"
-                  class="verify-tag"
-                >
+                <el-tag v-if="verificationLabel" size="small" effect="plain" :type="verificationTagType"
+                  class="verify-tag">
                   {{ verificationLabel }}
                 </el-tag>
               </div>
@@ -120,14 +112,8 @@
           </el-menu>
 
           <div class="side-footer">
-            <el-button
-              class="logout-btn"
-              type="danger"
-              plain
-              :loading="logoutLoading"
-              :disabled="logoutLoading"
-              @click="handleLogout"
-            >
+            <el-button class="logout-btn" type="danger" plain :loading="logoutLoading" :disabled="logoutLoading"
+              @click="handleLogout">
               <el-icon>
                 <SwitchButton />
               </el-icon>
@@ -190,6 +176,7 @@ const currentThemeIcon = computed(() => {
 
 const verificationLabel = computed(() => {
   const type = user.value?.verificationType
+  if (type === 'admin') return '管理员'
   if (type === 'enterprise') return '企业认证'
   if (type === 'personal') return '个人认证'
   return ''
@@ -197,6 +184,7 @@ const verificationLabel = computed(() => {
 
 const verificationTagType = computed(() => {
   const type = user.value?.verificationType
+  if (type === 'admin') return 'danger'
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'
   return 'info'
@@ -390,6 +378,7 @@ onMounted(() => {
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;

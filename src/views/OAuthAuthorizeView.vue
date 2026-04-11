@@ -7,15 +7,13 @@
       </div>
 
       <div class="title-area">
-        <h1 class="title">应用授权确认</h1>
-        <p class="subtitle">
-          {{ context?.oidcRequest ? '确认后将签发授权码，应用可继续换取 Access Token 与 ID Token。' : '确认后将向第三方应用签发一次性授权码。' }}
-        </p>
+        <h1 class="title">{{ pageTitle }}</h1>
+        <p class="subtitle">{{ pageSubtitle }}</p>
       </div>
 
       <div v-if="loading" class="state-panel">
         <el-icon class="spin-icon"><Loading /></el-icon>
-        <p>正在校验应用与回调地址...</p>
+        <p>正在校验客户端与回调地址...</p>
       </div>
 
       <div v-else-if="errorMessage" class="state-panel error-panel">
@@ -25,12 +23,19 @@
       </div>
 
       <div v-else-if="context && user" class="authorize-content">
+        <div class="client-logo-box">
+          <img v-if="context.logoUrl" :src="context.logoUrl" alt="Client Logo" class="client-logo" />
+          <div v-else class="client-logo client-logo-fallback">
+            {{ context.appName.slice(0, 1).toUpperCase() }}
+          </div>
+        </div>
+
         <div class="summary-box">
           <div class="summary-row">
-            <span class="summary-label">应用名称</span>
+            <span class="summary-label">{{ mode === 'sso' ? '客户端名称' : '应用名称' }}</span>
             <span class="summary-value">{{ context.appName }}</span>
           </div>
-          <div class="summary-row">
+          <div v-if="context.contactInfo" class="summary-row">
             <span class="summary-label">开发者联系方式</span>
             <span class="summary-value">{{ context.contactInfo }}</span>
           </div>
@@ -45,14 +50,15 @@
         </div>
 
         <div class="permission-box">
-          <div class="permission-title">本次授权后应用可获取：</div>
+          <div class="permission-title">本次授权后客户端可获取：</div>
           <ul class="permission-list">
-            <li>`openid` 与 `unionid`</li>
-            <li v-if="context.oidcRequest">`sub` 与 `id_token`（OIDC 标准身份断言）</li>
-            <li v-if="!context.requestedScopes.length">仅基础身份标识，不额外读取昵称或邮箱</li>
+            <li v-if="mode === 'oauth'">`openid` 与 `unionid`</li>
+            <li v-if="mode === 'sso'">`sub`、`access_token` 与 `id_token`</li>
+            <li v-if="!context.requestedScopes.length">仅基础身份标识</li>
             <li v-for="scope in context.requestedScopes" :key="scope">
               {{ scopeDescription(scope) }}
             </li>
+            <li v-if="mode === 'sso' && requestParams.codeChallenge">本次请求启用了 PKCE 校验</li>
           </ul>
         </div>
 
@@ -70,10 +76,26 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CircleCloseFilled, Loading } from '@element-plus/icons-vue'
-import { approveOAuth2Authorize, getOAuth2AuthorizeContext, type OAuth2AuthorizeContext } from '@/api/oauth2'
+import {
+  approveOAuth2Authorize,
+  getOAuth2AuthorizeContext,
+} from '@/api/oauth2'
+import {
+  approveSSOAuthorize,
+  getSSOAuthorizeContext,
+} from '@/api/sso'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { getStoredAccessToken } from '@/utils/authSession'
+
+type NormalizedAuthorizeContext = {
+  clientId: string
+  appName: string
+  logoUrl?: string
+  contactInfo?: string
+  redirectUri: string
+  requestedScopes: string[]
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -83,7 +105,17 @@ const { user } = storeToRefs(userStore)
 const loading = ref(true)
 const approving = ref(false)
 const errorMessage = ref('')
-const context = ref<OAuth2AuthorizeContext | null>(null)
+const context = ref<NormalizedAuthorizeContext | null>(null)
+
+const mode = computed<'oauth' | 'sso'>(() => (route.path.startsWith('/sso/') ? 'sso' : 'oauth'))
+
+const pageTitle = computed(() => (mode.value === 'sso' ? 'SSO 授权确认' : 'OAuth2.0 授权确认'))
+
+const pageSubtitle = computed(() =>
+  mode.value === 'sso'
+    ? '确认后将签发 SSO 授权码，客户端可继续换取 Access Token 与 ID Token。'
+    : '确认后将向第三方应用签发一次性授权码。'
+)
 
 const requestParams = computed(() => {
   const clientId = typeof route.query.client_id === 'string' ? route.query.client_id.trim() : ''
@@ -100,7 +132,6 @@ const requestParams = computed(() => {
     typeof route.query.code_challenge_method === 'string'
       ? route.query.code_challenge_method.trim().toUpperCase()
       : ''
-  const normalizedCodeChallengeMethod = codeChallengeMethod === 'S256' ? ('S256' as const) : undefined
 
   return {
     clientId,
@@ -110,13 +141,15 @@ const requestParams = computed(() => {
     state,
     nonce: nonce || undefined,
     codeChallenge: codeChallenge || undefined,
-    codeChallengeMethod: normalizedCodeChallengeMethod,
+    codeChallengeMethod: codeChallengeMethod === 'S256' ? ('S256' as const) : undefined,
   }
 })
 
-const scopeDescription = (scope: 'profile' | 'email') => {
+const scopeDescription = (scope: string) => {
   if (scope === 'email') return '邮箱地址'
-  return '昵称与头像'
+  if (scope === 'profile') return '昵称与头像'
+  if (scope === 'openid') return '基础身份标识'
+  return scope
 }
 
 const buildDeniedRedirect = () => {
@@ -158,23 +191,50 @@ const ensureAuthenticated = async () => {
 }
 
 const loadContext = async () => {
-  const { clientId, redirectUri, responseType, scope } = requestParams.value
+  const { clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod } =
+    requestParams.value
+
   if (!clientId || !redirectUri || !responseType) {
-    errorMessage.value = '授权链接缺少必要参数，请联系应用开发者检查 client_id、redirect_uri 与 response_type。'
+    errorMessage.value = '授权链接缺少必要参数，请检查 client_id、redirect_uri 与 response_type。'
     loading.value = false
     return
   }
 
   try {
-    context.value = await getOAuth2AuthorizeContext({
-      clientId,
-      redirectUri,
-      responseType,
-      scope,
-      nonce: requestParams.value.nonce,
-      codeChallenge: requestParams.value.codeChallenge,
-      codeChallengeMethod: requestParams.value.codeChallengeMethod,
-    })
+    if (mode.value === 'sso') {
+      const response = await getSSOAuthorizeContext({
+        clientId,
+        redirectUri,
+        responseType,
+        scope,
+        nonce,
+        codeChallenge,
+        codeChallengeMethod,
+      })
+      context.value = {
+        clientId: response.clientId,
+        appName: response.clientName,
+        logoUrl: response.logoUrl,
+        redirectUri: response.redirectUri,
+        requestedScopes: response.requestedScopes,
+      }
+    } else {
+      const response = await getOAuth2AuthorizeContext({
+        clientId,
+        redirectUri,
+        responseType,
+        scope,
+      })
+      context.value = {
+        clientId: response.clientId,
+        appName: response.appName,
+        logoUrl: response.logoUrl,
+        contactInfo: response.contactInfo,
+        redirectUri: response.redirectUri,
+        requestedScopes: response.requestedScopes,
+      }
+    }
+
     const authenticated = await ensureAuthenticated()
     if (!authenticated) {
       return
@@ -194,15 +254,27 @@ const handleApprove = async () => {
 
   approving.value = true
   try {
+    if (mode.value === 'sso') {
+      const response = await approveSSOAuthorize({
+        clientId: requestParams.value.clientId,
+        redirectUri: requestParams.value.redirectUri,
+        responseType: 'code',
+        scope: requestParams.value.scope,
+        state: requestParams.value.state,
+        nonce: requestParams.value.nonce,
+        codeChallenge: requestParams.value.codeChallenge,
+        codeChallengeMethod: requestParams.value.codeChallengeMethod,
+      })
+      window.location.replace(response.redirectUrl)
+      return
+    }
+
     const response = await approveOAuth2Authorize({
       clientId: requestParams.value.clientId,
       redirectUri: requestParams.value.redirectUri,
       responseType: 'code',
       scope: requestParams.value.scope,
       state: requestParams.value.state,
-      nonce: requestParams.value.nonce,
-      codeChallenge: requestParams.value.codeChallenge,
-      codeChallengeMethod: requestParams.value.codeChallengeMethod,
     })
     window.location.replace(response.redirectUrl)
   } catch (error) {
@@ -261,12 +333,17 @@ onMounted(() => {
 }
 
 .brand-logo {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
+}
+
+.brand-text {
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .title-area {
-  margin: 18px 0 20px;
+  margin: 22px 0 24px;
 }
 
 .title {
@@ -276,18 +353,20 @@ onMounted(() => {
 }
 
 .subtitle {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   color: var(--el-text-color-secondary);
+  line-height: 1.7;
 }
 
 .state-panel {
-  min-height: 240px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  color: var(--el-text-color-secondary);
+  gap: 12px;
+  padding: 32px 18px;
+  border-radius: 18px;
+  background: var(--el-fill-color-extra-light);
+  color: var(--el-text-color-regular);
 }
 
 .error-panel {
@@ -304,49 +383,73 @@ onMounted(() => {
   gap: 18px;
 }
 
+.client-logo-box {
+  display: flex;
+  justify-content: center;
+}
+
+.client-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--el-border-color-light);
+}
+
+.client-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(140deg, #1f9d6c 0%, #2fbf7d 100%);
+  border-color: transparent;
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+}
+
 .summary-box,
 .permission-box {
   padding: 18px;
   border-radius: 18px;
-  background: var(--el-fill-color-blank);
   border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-extra-light);
 }
 
 .summary-row {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 16px;
+  padding: 10px 0;
 }
 
 .summary-row + .summary-row {
-  margin-top: 14px;
+  border-top: 1px dashed var(--el-border-color);
 }
 
 .summary-label {
-  font-size: 12px;
+  width: 108px;
+  flex-shrink: 0;
   color: var(--el-text-color-secondary);
 }
 
 .summary-value {
   color: var(--el-text-color-primary);
-  line-height: 1.6;
   word-break: break-all;
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .permission-title {
   font-weight: 600;
   color: var(--el-text-color-primary);
-  margin-bottom: 12px;
 }
 
 .permission-list {
-  margin: 0;
+  margin: 12px 0 0;
   padding-left: 18px;
-  color: var(--el-text-color-primary);
+  color: var(--el-text-color-regular);
   line-height: 1.8;
 }
 
@@ -360,26 +463,24 @@ onMounted(() => {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
 }
 
 @media (max-width: 768px) {
-  .authorize-page {
-    padding: 16px;
-  }
-
   .authorize-card {
     padding: 22px;
   }
 
+  .summary-row,
   .action-row {
-    flex-direction: column-reverse;
+    flex-direction: column;
   }
 
-  .action-row :deep(.el-button) {
-    width: 100%;
+  .summary-label {
+    width: auto;
   }
 }
 </style>
