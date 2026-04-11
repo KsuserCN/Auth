@@ -4,14 +4,17 @@ import cn.ksuser.api.dto.Oauth2AppCreateRequest;
 import cn.ksuser.api.dto.Oauth2AppCreateResponse;
 import cn.ksuser.api.dto.Oauth2AppResponse;
 import cn.ksuser.api.dto.Oauth2AppUpdateRequest;
+import cn.ksuser.api.dto.Oauth2AuthorizedAppResponse;
 import cn.ksuser.api.dto.Oauth2AppsOverviewResponse;
 import cn.ksuser.api.dto.Oauth2AuthorizeApproveResponse;
 import cn.ksuser.api.dto.Oauth2AuthorizeContextResponse;
 import cn.ksuser.api.dto.Oauth2AuthorizeRequest;
 import cn.ksuser.api.entity.Oauth2Application;
 import cn.ksuser.api.entity.User;
+import cn.ksuser.api.entity.UserOauth2Authorization;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.Oauth2ApplicationRepository;
+import cn.ksuser.api.repository.UserOauth2AuthorizationRepository;
 import cn.ksuser.api.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +23,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.crypto.Mac;
@@ -28,6 +32,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -48,6 +53,7 @@ public class Oauth2PlatformService {
     private static final Set<String> SUPPORTED_SCOPES = Set.of("profile", "email");
 
     private final Oauth2ApplicationRepository applicationRepository;
+    private final UserOauth2AuthorizationRepository authorizationRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
@@ -65,11 +71,13 @@ public class Oauth2PlatformService {
     private long authorizationCodeExpirationSeconds;
 
     public Oauth2PlatformService(Oauth2ApplicationRepository applicationRepository,
+                                 UserOauth2AuthorizationRepository authorizationRepository,
                                  UserRepository userRepository,
                                  PasswordEncoder passwordEncoder,
                                  StringRedisTemplate redisTemplate,
                                  Oauth2TokenService oauth2TokenService) {
         this.applicationRepository = applicationRepository;
+        this.authorizationRepository = authorizationRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.redisTemplate = redisTemplate;
@@ -150,23 +158,26 @@ public class Oauth2PlatformService {
         return toAppResponse(applicationRepository.save(application));
     }
 
-    public Oauth2AuthorizeContextResponse buildAuthorizeContext(String clientId, String redirectUri,
+    public Oauth2AuthorizeContextResponse buildAuthorizeContext(User user, String clientId, String redirectUri,
                                                                 String responseType, String scope) {
         validateResponseType(responseType);
         Oauth2Application application = findActiveApplication(clientId, HttpStatus.BAD_REQUEST);
         validateRedirectUriMatches(application, redirectUri);
+        List<String> requestedScopes = resolveRequestedScopes(application, scope);
         return new Oauth2AuthorizeContextResponse(
             application.getAppId(),
             application.getAppName(),
             application.getLogoUrl(),
             application.getContactInfo(),
             application.getRedirectUri(),
-            resolveRequestedScopes(application, scope)
+            requestedScopes,
+            hasExistingAuthorization(user, application.getAppId(), requestedScopes)
         );
     }
 
     public Oauth2AuthorizeApproveResponse approveAuthorization(User user, Oauth2AuthorizeRequest request) {
         Oauth2AuthorizeContextResponse context = buildAuthorizeContext(
+            user,
             request == null ? null : request.getClientId(),
             request == null ? null : request.getRedirectUri(),
             request == null ? null : request.getResponseType(),
@@ -174,6 +185,7 @@ public class Oauth2PlatformService {
         );
 
         Oauth2Application application = findActiveApplication(context.getClientId(), HttpStatus.BAD_REQUEST);
+        recordAuthorization(user, application, context.getRequestedScopes(), context.getRedirectUri());
         String code = generateOpaqueValue("kscode_", 32);
         String normalizedState = request == null ? null : normalizeOptional(request.getState());
         AuthorizationCodePayload payload = new AuthorizationCodePayload(
@@ -192,6 +204,18 @@ public class Oauth2PlatformService {
             .toUriString();
 
         return new Oauth2AuthorizeApproveResponse(redirectUrl);
+    }
+
+    public List<Oauth2AuthorizedAppResponse> listAuthorizations(User user) {
+        return authorizationRepository.findAllByUserIdOrderByLastAuthorizedAtDesc(user.getId()).stream()
+            .map(this::toAuthorizedAppResponse)
+            .toList();
+    }
+
+    @Transactional
+    public void revokeAuthorization(User user, String appId) {
+        String normalizedAppId = normalizeRequired(appId, "AppID 不能为空");
+        authorizationRepository.deleteByUserIdAndAppId(user.getId(), normalizedAppId);
     }
 
     public Map<String, Object> exchangeAuthorizationCode(String grantType, String code, String clientId,
@@ -430,6 +454,55 @@ public class Oauth2PlatformService {
             application.getCreatedAt(),
             application.getUpdatedAt()
         );
+    }
+
+    private Oauth2AuthorizedAppResponse toAuthorizedAppResponse(UserOauth2Authorization authorization) {
+        Oauth2Application application = applicationRepository.findByAppId(authorization.getAppId()).orElse(null);
+        String appName = application != null ? application.getAppName() : authorization.getAppName();
+        String logoUrl = application != null ? application.getLogoUrl() : authorization.getLogoUrl();
+        String contactInfo = application != null ? application.getContactInfo() : authorization.getContactInfo();
+        String redirectUri = application != null ? application.getRedirectUri() : authorization.getRedirectUri();
+        return new Oauth2AuthorizedAppResponse(
+            authorization.getAppId(),
+            appName,
+            logoUrl,
+            contactInfo,
+            redirectUri,
+            parseScopes(authorization.getScopes()),
+            authorization.getAuthorizedAt(),
+            authorization.getLastAuthorizedAt()
+        );
+    }
+
+    private boolean hasExistingAuthorization(User user, String appId, List<String> requestedScopes) {
+        if (user == null) {
+            return false;
+        }
+        return authorizationRepository.findByUserIdAndAppId(user.getId(), appId)
+            .map(record -> new LinkedHashSet<>(parseScopes(record.getScopes())))
+            .map(grantedScopes -> grantedScopes.containsAll(requestedScopes))
+            .orElse(false);
+    }
+
+    private void recordAuthorization(User user, Oauth2Application application, List<String> requestedScopes,
+                                     String redirectUri) {
+        UserOauth2Authorization record = authorizationRepository.findByUserIdAndAppId(user.getId(), application.getAppId())
+            .orElseGet(UserOauth2Authorization::new);
+        LocalDateTime now = LocalDateTime.now();
+        if (record.getId() == null) {
+            record.setUserId(user.getId());
+            record.setAppId(application.getAppId());
+            record.setAuthorizedAt(now);
+        }
+        LinkedHashSet<String> grantedScopes = new LinkedHashSet<>(parseScopes(record.getScopes()));
+        grantedScopes.addAll(requestedScopes);
+        record.setAppName(application.getAppName());
+        record.setLogoUrl(application.getLogoUrl());
+        record.setContactInfo(application.getContactInfo());
+        record.setRedirectUri(redirectUri);
+        record.setScopes(joinScopes(orderScopes(grantedScopes)));
+        record.setLastAuthorizedAt(now);
+        authorizationRepository.save(record);
     }
 
     private String generateUniqueAppId() {

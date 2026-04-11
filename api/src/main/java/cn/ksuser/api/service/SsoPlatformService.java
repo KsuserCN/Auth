@@ -3,6 +3,7 @@ package cn.ksuser.api.service;
 import cn.ksuser.api.dto.SsoAuthorizeApproveResponse;
 import cn.ksuser.api.dto.SsoAuthorizeContextResponse;
 import cn.ksuser.api.dto.SsoAuthorizeRequest;
+import cn.ksuser.api.dto.SsoAuthorizedClientResponse;
 import cn.ksuser.api.dto.SsoClientCreateRequest;
 import cn.ksuser.api.dto.SsoClientCreateResponse;
 import cn.ksuser.api.dto.SsoClientResponse;
@@ -10,8 +11,10 @@ import cn.ksuser.api.dto.SsoClientUpdateRequest;
 import cn.ksuser.api.dto.SsoClientsOverviewResponse;
 import cn.ksuser.api.entity.OidcClient;
 import cn.ksuser.api.entity.User;
+import cn.ksuser.api.entity.UserSsoAuthorization;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.OidcClientRepository;
+import cn.ksuser.api.repository.UserSsoAuthorizationRepository;
 import cn.ksuser.api.repository.UserRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +23,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.crypto.Mac;
@@ -28,6 +32,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
@@ -48,6 +53,7 @@ public class SsoPlatformService {
     private static final Set<String> SUPPORTED_SCOPES = Set.of("openid", "profile", "email");
 
     private final OidcClientRepository oidcClientRepository;
+    private final UserSsoAuthorizationRepository authorizationRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
@@ -71,11 +77,13 @@ public class SsoPlatformService {
     private String authorizationEndpoint;
 
     public SsoPlatformService(OidcClientRepository oidcClientRepository,
+                              UserSsoAuthorizationRepository authorizationRepository,
                               UserRepository userRepository,
                               PasswordEncoder passwordEncoder,
                               StringRedisTemplate redisTemplate,
                               SsoTokenService ssoTokenService) {
         this.oidcClientRepository = oidcClientRepository;
+        this.authorizationRepository = authorizationRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.redisTemplate = redisTemplate;
@@ -168,7 +176,7 @@ public class SsoPlatformService {
         return toClientResponse(oidcClientRepository.save(client));
     }
 
-    public SsoAuthorizeContextResponse buildAuthorizeContext(String clientId, String redirectUri,
+    public SsoAuthorizeContextResponse buildAuthorizeContext(User user, String clientId, String redirectUri,
                                                              String responseType, String scope,
                                                              String nonce, String codeChallenge,
                                                              String codeChallengeMethod) {
@@ -183,12 +191,14 @@ public class SsoPlatformService {
             client.getClientName(),
             client.getLogoUrl(),
             normalizeAndValidateRedirectUri(redirectUri),
-            requestedScopes
+            requestedScopes,
+            hasExistingAuthorization(user, client.getClientId(), requestedScopes)
         );
     }
 
     public SsoAuthorizeApproveResponse approveAuthorization(User user, SsoAuthorizeRequest request) {
         SsoAuthorizeContextResponse context = buildAuthorizeContext(
+            user,
             request == null ? null : request.getClientId(),
             request == null ? null : request.getRedirectUri(),
             request == null ? null : request.getResponseType(),
@@ -201,6 +211,7 @@ public class SsoPlatformService {
         String code = generateOpaqueValue("ssocode_", 32);
         String normalizedState = normalizeOptional(request == null ? null : request.getState());
         OidcClient client = findActiveClient(context.getClientId(), HttpStatus.BAD_REQUEST);
+        recordAuthorization(user, client, context.getRequestedScopes(), context.getRedirectUri());
         AuthorizationCodePayload payload = new AuthorizationCodePayload(
             user.getId(),
             client.getClientId(),
@@ -218,6 +229,18 @@ public class SsoPlatformService {
             .build(true)
             .toUriString();
         return new SsoAuthorizeApproveResponse(redirectUrl);
+    }
+
+    public List<SsoAuthorizedClientResponse> listAuthorizations(User user) {
+        return authorizationRepository.findAllByUserIdOrderByLastAuthorizedAtDesc(user.getId()).stream()
+            .map(this::toAuthorizedClientResponse)
+            .toList();
+    }
+
+    @Transactional
+    public void revokeAuthorization(User user, String clientId) {
+        String normalizedClientId = normalizeRequired(clientId, "ClientID 不能为空");
+        authorizationRepository.deleteByUserIdAndClientId(user.getId(), normalizedClientId);
     }
 
     public Map<String, Object> exchangeAuthorizationCode(String grantType, String code, String clientId,
@@ -537,6 +560,50 @@ public class SsoPlatformService {
             client.getCreatedAt(),
             client.getUpdatedAt()
         );
+    }
+
+    private SsoAuthorizedClientResponse toAuthorizedClientResponse(UserSsoAuthorization authorization) {
+        OidcClient client = oidcClientRepository.findByClientId(authorization.getClientId()).orElse(null);
+        String clientName = client != null ? client.getClientName() : authorization.getClientName();
+        String logoUrl = client != null ? client.getLogoUrl() : authorization.getLogoUrl();
+        return new SsoAuthorizedClientResponse(
+            authorization.getClientId(),
+            clientName,
+            logoUrl,
+            authorization.getRedirectUri(),
+            orderScopes(Oauth2ScopeUtil.parseScopeSet(authorization.getScopes())),
+            authorization.getAuthorizedAt(),
+            authorization.getLastAuthorizedAt()
+        );
+    }
+
+    private boolean hasExistingAuthorization(User user, String clientId, List<String> requestedScopes) {
+        if (user == null) {
+            return false;
+        }
+        return authorizationRepository.findByUserIdAndClientId(user.getId(), clientId)
+            .map(record -> Oauth2ScopeUtil.parseScopeSet(record.getScopes()))
+            .map(grantedScopes -> grantedScopes.containsAll(requestedScopes))
+            .orElse(false);
+    }
+
+    private void recordAuthorization(User user, OidcClient client, List<String> requestedScopes, String redirectUri) {
+        UserSsoAuthorization record = authorizationRepository.findByUserIdAndClientId(user.getId(), client.getClientId())
+            .orElseGet(UserSsoAuthorization::new);
+        LocalDateTime now = LocalDateTime.now();
+        if (record.getId() == null) {
+            record.setUserId(user.getId());
+            record.setClientId(client.getClientId());
+            record.setAuthorizedAt(now);
+        }
+        LinkedHashSet<String> grantedScopes = new LinkedHashSet<>(Oauth2ScopeUtil.parseScopeSet(record.getScopes()));
+        grantedScopes.addAll(requestedScopes);
+        record.setClientName(client.getClientName());
+        record.setLogoUrl(client.getLogoUrl());
+        record.setRedirectUri(redirectUri);
+        record.setScopes(joinValues(orderScopes(grantedScopes)));
+        record.setLastAuthorizedAt(now);
+        authorizationRepository.save(record);
     }
 
     private void storeAuthorizationCode(String code, AuthorizationCodePayload payload) {

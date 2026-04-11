@@ -124,9 +124,11 @@ public class Oauth2PlatformController {
         @RequestParam(name = "client_id") String clientId,
         @RequestParam(name = "redirect_uri") String redirectUri,
         @RequestParam(name = "response_type") String responseType,
-        @RequestParam(name = "scope", required = false) String scope) {
+        @RequestParam(name = "scope", required = false) String scope,
+        Authentication authentication) {
+        User user = resolveUser(authentication);
         Oauth2AuthorizeContextResponse response = oauth2PlatformService.buildAuthorizeContext(
-            clientId, redirectUri, responseType, scope
+            user, clientId, redirectUri, responseType, scope
         );
         return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", response));
     }
@@ -138,6 +140,21 @@ public class Oauth2PlatformController {
         User user = requireUser(authentication);
         Oauth2AuthorizeApproveResponse response = oauth2PlatformService.approveAuthorization(user, request);
         return ResponseEntity.ok(new ApiResponse<>(200, "授权成功", response));
+    }
+
+    @GetMapping("/authorizations")
+    public ResponseEntity<ApiResponse<java.util.List<Oauth2AuthorizedAppResponse>>> listAuthorizations(
+        Authentication authentication) {
+        User user = requireUser(authentication);
+        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", oauth2PlatformService.listAuthorizations(user)));
+    }
+
+    @DeleteMapping("/authorizations/{appId}")
+    public ResponseEntity<ApiResponse<Void>> revokeAuthorization(@PathVariable String appId,
+                                                                 Authentication authentication) {
+        User user = requireUser(authentication);
+        oauth2PlatformService.revokeAuthorization(user, appId);
+        return ResponseEntity.ok(new ApiResponse<>(200, "撤销成功"));
     }
 
     @PostMapping("/token")
@@ -197,6 +214,14 @@ public class Oauth2PlatformController {
         String uuid = authentication.getPrincipal().toString();
         return userService.findByUuid(uuid)
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "用户不存在"));
+    }
+
+    private User resolveUser(Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return null;
+        }
+        String uuid = authentication.getPrincipal().toString();
+        return userService.findByUuid(uuid).orElse(null);
     }
 
     private String extractBearerToken(String authorizationHeader, String queryToken) {

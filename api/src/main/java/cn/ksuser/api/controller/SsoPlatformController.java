@@ -5,6 +5,7 @@ import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.SsoAuthorizeApproveResponse;
 import cn.ksuser.api.dto.SsoAuthorizeContextResponse;
 import cn.ksuser.api.dto.SsoAuthorizeRequest;
+import cn.ksuser.api.dto.SsoAuthorizedClientResponse;
 import cn.ksuser.api.dto.SsoClientCreateRequest;
 import cn.ksuser.api.dto.SsoClientCreateResponse;
 import cn.ksuser.api.dto.SsoClientResponse;
@@ -41,6 +42,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -144,9 +146,11 @@ public class SsoPlatformController {
         @RequestParam(name = "scope", required = false) String scope,
         @RequestParam(name = "nonce", required = false) String nonce,
         @RequestParam(name = "code_challenge", required = false) String codeChallenge,
-        @RequestParam(name = "code_challenge_method", required = false) String codeChallengeMethod) {
+        @RequestParam(name = "code_challenge_method", required = false) String codeChallengeMethod,
+        Authentication authentication) {
+        User user = resolveUser(authentication);
         return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.buildAuthorizeContext(
-            clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod
+            user, clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod
         )));
     }
 
@@ -155,6 +159,21 @@ public class SsoPlatformController {
                                                                                          Authentication authentication) {
         User user = requireUser(authentication);
         return ResponseEntity.ok(new ApiResponse<>(200, "授权成功", ssoPlatformService.approveAuthorization(user, request)));
+    }
+
+    @GetMapping("/authorizations")
+    public ResponseEntity<ApiResponse<List<SsoAuthorizedClientResponse>>> listAuthorizations(
+        Authentication authentication) {
+        User user = requireUser(authentication);
+        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.listAuthorizations(user)));
+    }
+
+    @DeleteMapping("/authorizations/{clientId}")
+    public ResponseEntity<ApiResponse<Void>> revokeAuthorization(@PathVariable String clientId,
+                                                                 Authentication authentication) {
+        User user = requireUser(authentication);
+        ssoPlatformService.revokeAuthorization(user, clientId);
+        return ResponseEntity.ok(new ApiResponse<>(200, "撤销成功"));
     }
 
     @PostMapping("/token")
@@ -211,6 +230,14 @@ public class SsoPlatformController {
         String uuid = authentication.getPrincipal().toString();
         return userService.findByUuid(uuid)
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "用户不存在"));
+    }
+
+    private User resolveUser(Authentication authentication) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return null;
+        }
+        String uuid = authentication.getPrincipal().toString();
+        return userService.findByUuid(uuid).orElse(null);
     }
 
     private String extractBearerToken(String authorizationHeader, String queryToken) {

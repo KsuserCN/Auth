@@ -7,6 +7,9 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS user_sso_authorizations;
+DROP TABLE IF EXISTS user_oauth2_authorizations;
+DROP TABLE IF EXISTS oidc_clients;
 DROP TABLE IF EXISTS oauth2_applications;
 DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
@@ -123,6 +126,33 @@ CREATE TABLE oauth2_applications (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
   COMMENT='开发者 OAuth2 应用表';
+
+DROP TABLE IF EXISTS user_oauth2_authorizations;
+CREATE TABLE user_oauth2_authorizations (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '用户 OAuth2 授权记录主键ID',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '关联 users.id',
+  app_id VARCHAR(64) NOT NULL COMMENT '已授权 AppID',
+  app_name VARCHAR(100) NOT NULL COMMENT '授权时的应用名称快照',
+  logo_url VARCHAR(255) DEFAULT NULL COMMENT '授权时的应用 Logo 快照',
+  contact_info VARCHAR(120) NOT NULL COMMENT '授权时的开发者联系方式',
+  redirect_uri VARCHAR(500) NOT NULL COMMENT '最近一次授权使用的回调地址',
+  scopes VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户已授予该应用的 scope 并集',
+  authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次授权时间',
+  last_authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一次授权时间',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_oauth2_authorizations_user_app (user_id, app_id),
+  KEY idx_user_oauth2_authorizations_user (user_id),
+  CONSTRAINT fk_user_oauth2_authorizations_user
+    FOREIGN KEY (user_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户对第三方 OAuth2 应用的授权记录表';
 
 
 
@@ -271,6 +301,32 @@ CREATE TABLE oidc_clients (
   UNIQUE KEY uk_oidc_clients_client_id (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='内部 OIDC 客户端注册表';
+
+DROP TABLE IF EXISTS user_sso_authorizations;
+CREATE TABLE user_sso_authorizations (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '用户 SSO 授权记录主键ID',
+  user_id BIGINT UNSIGNED NOT NULL COMMENT '关联 users.id',
+  client_id VARCHAR(128) NOT NULL COMMENT '已授权 ClientID',
+  client_name VARCHAR(120) NOT NULL COMMENT '授权时的客户端名称快照',
+  logo_url VARCHAR(255) DEFAULT NULL COMMENT '授权时的客户端 Logo 快照',
+  redirect_uri VARCHAR(500) NOT NULL COMMENT '最近一次授权使用的回调地址',
+  scopes VARCHAR(255) NOT NULL DEFAULT 'openid' COMMENT '用户已授予该客户端的 scope 并集',
+  authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次授权时间',
+  last_authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一次授权时间',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+             ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_sso_authorizations_user_client (user_id, client_id),
+  KEY idx_user_sso_authorizations_user (user_id),
+  CONSTRAINT fk_user_sso_authorizations_user
+    FOREIGN KEY (user_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户对 Ksuser SSO 应用的授权记录表';
 
 
 -- ==========================================================

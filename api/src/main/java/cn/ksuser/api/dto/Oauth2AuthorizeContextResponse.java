@@ -9,18 +9,21 @@ public class Oauth2AuthorizeContextResponse {
     private String contactInfo;
     private String redirectUri;
     private List<String> requestedScopes;
+    private boolean alreadyAuthorized;
 
     public Oauth2AuthorizeContextResponse() {
     }
 
     public Oauth2AuthorizeContextResponse(String clientId, String appName, String logoUrl, String contactInfo,
-                                          String redirectUri, List<String> requestedScopes) {
+                                          String redirectUri, List<String> requestedScopes,
+                                          boolean alreadyAuthorized) {
         this.clientId = clientId;
         this.appName = appName;
         this.logoUrl = logoUrl;
         this.contactInfo = contactInfo;
         this.redirectUri = redirectUri;
         this.requestedScopes = requestedScopes;
+        this.alreadyAuthorized = alreadyAuthorized;
     }
 
     public String getClientId() {
@@ -69,6 +72,14 @@ public class Oauth2AuthorizeContextResponse {
 
     public void setRequestedScopes(List<String> requestedScopes) {
         this.requestedScopes = requestedScopes;
+    }
+
+    public boolean isAlreadyAuthorized() {
+        return alreadyAuthorized;
+    }
+
+    public void setAlreadyAuthorized(boolean alreadyAuthorized) {
+        this.alreadyAuthorized = alreadyAuthorized;
     }
 
 }

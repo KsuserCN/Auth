@@ -8,17 +8,19 @@ public class SsoAuthorizeContextResponse {
     private String logoUrl;
     private String redirectUri;
     private List<String> requestedScopes;
+    private boolean alreadyAuthorized;
 
     public SsoAuthorizeContextResponse() {
     }
 
     public SsoAuthorizeContextResponse(String clientId, String clientName, String logoUrl, String redirectUri,
-                                       List<String> requestedScopes) {
+                                       List<String> requestedScopes, boolean alreadyAuthorized) {
         this.clientId = clientId;
         this.clientName = clientName;
         this.logoUrl = logoUrl;
         this.redirectUri = redirectUri;
         this.requestedScopes = requestedScopes;
+        this.alreadyAuthorized = alreadyAuthorized;
     }
 
     public String getClientId() {
@@ -59,5 +61,13 @@ public class SsoAuthorizeContextResponse {
 
     public void setRequestedScopes(List<String> requestedScopes) {
         this.requestedScopes = requestedScopes;
+    }
+
+    public boolean isAlreadyAuthorized() {
+        return alreadyAuthorized;
+    }
+
+    public void setAlreadyAuthorized(boolean alreadyAuthorized) {
+        this.alreadyAuthorized = alreadyAuthorized;
     }
 }
