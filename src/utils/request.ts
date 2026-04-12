@@ -273,6 +273,15 @@ const getCookieValue = (name: string): string => {
 // 请求拦截器
 request.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    if (config.data instanceof FormData && config.headers) {
+      const headers = config.headers as Record<string, unknown> & {
+        setContentType?: (value?: string) => void
+      }
+      headers.setContentType?.(undefined)
+      delete headers['Content-Type']
+      delete headers['content-type']
+    }
+
     const token = getStoredAccessToken()
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
