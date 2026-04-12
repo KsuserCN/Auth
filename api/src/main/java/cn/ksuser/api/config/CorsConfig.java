@@ -65,7 +65,8 @@ public class CorsConfig {
         // 指定哪些响应头可以暴露给客户端
         config.setExposedHeaders(Arrays.asList(
             "Authorization",
-            "Content-Type"
+            "Content-Type",
+            "X-CSRF-TOKEN"
         ));
         
         // 允许凭证（cookies、authorization等）

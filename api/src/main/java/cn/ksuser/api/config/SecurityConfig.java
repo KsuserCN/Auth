@@ -20,21 +20,34 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RequestMappingHandlerMapping handlerMapping;
+    private final AppProperties appProperties;
 
     public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, 
-                          @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
+                          @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping,
+                          AppProperties appProperties) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.handlerMapping = handlerMapping;
+        this.appProperties = appProperties;
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfTokenRepository.setCookieCustomizer((builder) -> {
+            builder.path("/");
+            builder.secure(!appProperties.isDebug());
+            if (!appProperties.isDebug()) {
+                builder.domain("ksuser.cn");
+            }
+        });
+
         http
             .cors(cors -> {})
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/", "/auth/health", "/auth/health/",
+                    "/auth/csrf-token", "/auth/csrf-token/",
                     "/.well-known/openid-configuration",
                     "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
                     "/auth/login-with-code", "/auth/login-with-code/",
@@ -91,7 +104,7 @@ public class SecurityConfig {
             )
             .csrf(csrf -> csrf
                 // 使用 Cookie CSRF Token Repository，但改为标准 Spring 配置
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRepository(csrfTokenRepository)
                 // CSRF Token 在 Cookie 中的名称
                 .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
                 // 只为查询接口排除 CSRF 检查

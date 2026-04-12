@@ -38,6 +38,7 @@ import java.util.List;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 import cn.ksuser.api.service.MfaService;
 import cn.ksuser.api.dto.MfaChallengeResponse;
@@ -106,19 +107,18 @@ public class AuthController {
      */
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<Void>> health(HttpServletRequest request, HttpServletResponse response) {
-        // 触发 CSRF Token 生成与下发
-        // CsrfTokenRequestAttributeHandler 会自动将 token 添加到 Cookie 中
-        org.springframework.security.web.csrf.CsrfToken csrf = 
-            (org.springframework.security.web.csrf.CsrfToken) request.getAttribute(
-                org.springframework.security.web.csrf.CsrfToken.class.getName());
-        if (csrf != null) {
-            // 主动调用 getToken() 确保 token 被生成并通过 Cookie 下发
-            csrf.getToken();
-            // 对于 SameSite 为非 Strict 的情况，需要确保 token 在 response 中被设置
-            response.addHeader("X-CSRF-TOKEN", csrf.getToken());
-        }
+        writeCsrfToken(request, response);
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "服务正常"));
+    }
+
+    @GetMapping("/csrf-token")
+    public ResponseEntity<ApiResponse<Map<String, String>>> csrfToken(
+        HttpServletRequest request,
+        HttpServletResponse response
+    ) {
+        String token = writeCsrfToken(request, response);
+        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", Map.of("csrfToken", token == null ? "" : token)));
     }
 
     /**
@@ -2142,6 +2142,19 @@ public class AuthController {
             return bearerToken.substring(7);
         }
         return null;
+    }
+
+    private String writeCsrfToken(HttpServletRequest request, HttpServletResponse response) {
+        org.springframework.security.web.csrf.CsrfToken csrf =
+            (org.springframework.security.web.csrf.CsrfToken) request.getAttribute(
+                org.springframework.security.web.csrf.CsrfToken.class.getName());
+        if (csrf == null) {
+            return null;
+        }
+
+        String token = csrf.getToken();
+        response.addHeader("X-CSRF-TOKEN", token);
+        return token;
     }
 
     private Long getCurrentSessionId(HttpServletRequest request) {

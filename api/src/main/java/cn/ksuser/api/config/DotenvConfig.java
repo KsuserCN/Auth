@@ -3,9 +3,13 @@ package cn.ksuser.api.config;
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.annotation.Configuration;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 /**
  * .env 文件加载器配置
- * 在应用启动时加载项目根目录的 .env 文件
+ * 在应用启动时按 KSUSER_ENV 加载项目根目录的 .env.<env> 文件
  */
 @Configuration
 public class DotenvConfig {
@@ -16,29 +20,59 @@ public class DotenvConfig {
      */
     static {
         try {
-            // 尝试从项目根目录加载 .env 文件
+            String envName = resolveEnvName();
+            Path rootDir = resolveRootDir();
+            Path envFile = rootDir.resolve(".env." + envName);
+
             Dotenv dotenv = Dotenv.configure()
-                    .directory(".")  // 项目根目录
-                    .ignoreIfMissing()  // 如果 .env 文件不存在，不报错
+                    .directory(rootDir.toString())
+                    .filename(envFile.getFileName().toString())
+                    .ignoreIfMissing()
                     .load();
 
-            // 将 .env 中的所有配置加载到系统环境变量
-            // 这样 Spring Boot 的 ${VAR_NAME} 占位符就能读取这些值
             dotenv.entries().forEach(entry -> {
                 String key = entry.getKey();
                 String value = entry.getValue();
 
-                // 只在环境变量中不存在时才设置
-                // 这样命令行或系统环境变量可以覆盖 .env 文件
-                if (System.getenv(key) == null) {
+                if (System.getenv(key) == null && System.getProperty(key) == null) {
                     System.setProperty(key, value);
                 }
             });
 
-            System.out.println("[Ksuser Auth] .env 文件已加载成功");
+            System.out.println("[Ksuser Auth] Loaded env file: " + envFile);
         } catch (Exception e) {
-            System.out.println("[Ksuser Auth] 未找到 .env 文件或加载失败: " + e.getMessage());
-            System.out.println("[Ksuser Auth] 如需使用 .env 文件，请复制 .env.example 到 .env 并填写配置");
+            System.out.println("[Ksuser Auth] Failed to load env file: " + e.getMessage());
         }
+    }
+
+    private static String resolveEnvName() {
+        String envName = System.getenv("KSUSER_ENV");
+        if (envName == null || envName.isBlank()) {
+            envName = System.getProperty("KSUSER_ENV");
+        }
+        if (envName == null || envName.isBlank()) {
+            return "production";
+        }
+        return envName.trim();
+    }
+
+    private static Path resolveRootDir() {
+        String explicitRoot = System.getenv("KSUSER_ROOT");
+        if (explicitRoot == null || explicitRoot.isBlank()) {
+            explicitRoot = System.getProperty("KSUSER_ROOT");
+        }
+        if (explicitRoot != null && !explicitRoot.isBlank()) {
+            return Paths.get(explicitRoot).toAbsolutePath().normalize();
+        }
+
+        Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        while (current != null) {
+            if (Files.isDirectory(current.resolve("auth"))
+                && Files.isDirectory(current.resolve("api"))) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
     }
 }
