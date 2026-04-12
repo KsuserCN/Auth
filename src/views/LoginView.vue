@@ -36,57 +36,74 @@
 
       <!-- 右侧：表单内容 -->
       <div class="login-right" :class="{ 'is-bootstrapping': loginBootstrapping }">
-        <div v-if="loginBootstrapping" class="bootstrap-state">
-          <div class="bootstrap-skeleton">
-            <el-skeleton-item variant="image" class="bootstrap-skeleton-hero" />
-            <div class="bootstrap-skeleton-copy">
-              <el-skeleton-item variant="text" class="bootstrap-skeleton-title" />
-              <el-skeleton-item variant="text" class="bootstrap-skeleton-line" />
-              <el-skeleton-item variant="text" class="bootstrap-skeleton-line short" />
-            </div>
-          </div>
-          <h2 class="bootstrap-title">{{ loginBootstrapTitle }}</h2>
-          <p class="bootstrap-description">{{ loginBootstrapDescription }}</p>
-        </div>
-
-        <Transition v-else :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
-          mode="out-in">
-          <!-- 第一步：邮箱输入 -->
-          <div v-if="step === 'email'" class="step-container" key="email">
-            <h2 class="step-title">开始登录</h2>
-            <p class="step-subtitle">输入您的邮箱地址</p>
-
-            <el-form ref="emailFormRef" :model="emailInput" :rules="emailRules" label-position="top">
-              <el-form-item prop="email">
-                <el-input v-model="emailInput.email" type="email" placeholder="邮箱地址" @keyup.enter="goToNextStep"
-                  autocomplete="username email" autofocus />
-              </el-form-item>
-            </el-form>
-
-            <div class="step-actions">
-              <el-button class="next-btn" @click="goToNextStep" :loading="validateLoading">
-                下一步
-              </el-button>
-            </div>
-
-            <div class="create-account">
-              还没有账号？<router-link to="/register" class="link">创建账号</router-link>
-            </div>
-
-            <div v-if="desktopBridgeReady" class="desktop-bridge-card">
-              <div class="desktop-bridge-copy">
-                <div class="desktop-bridge-title">检测到桌面端已登录</div>
-                <div class="desktop-bridge-user">
-                  {{ desktopBridgeUser?.username || desktopBridgeUser?.email }}
-                  <span v-if="desktopBridgeUser?.email"> · {{ desktopBridgeUser?.email }}</span>
+        <el-skeleton :loading="loginBootstrapping" animated>
+          <template #template>
+            <div class="bootstrap-state">
+              <div class="bootstrap-skeleton">
+                <el-skeleton-item variant="image" class="bootstrap-skeleton-hero" />
+                <div class="bootstrap-skeleton-copy">
+                  <el-skeleton-item variant="text" class="bootstrap-skeleton-title" />
+                  <el-skeleton-item variant="text" class="bootstrap-skeleton-line" />
+                  <el-skeleton-item variant="text" class="bootstrap-skeleton-line short" />
                 </div>
               </div>
-              <el-button class="desktop-bridge-btn" type="primary" plain @click="handleDesktopBridgeLogin"
-                :loading="desktopBridgeLoginLoading">
-                使用桌面端登录
-              </el-button>
+              <h2 class="bootstrap-title">{{ loginBootstrapTitle }}</h2>
+              <p class="bootstrap-description">{{ loginBootstrapDescription }}</p>
             </div>
-          </div>
+          </template>
+
+          <template #default>
+            <Transition
+              :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+              mode="out-in"
+            >
+              <!-- 第一步：邮箱输入 -->
+              <div v-if="step === 'email'" class="step-container" key="email">
+                <h2 class="step-title">开始登录</h2>
+                <p class="step-subtitle">输入您的邮箱地址</p>
+
+                <el-form ref="emailFormRef" :model="emailInput" :rules="emailRules" label-position="top">
+                  <el-form-item prop="email">
+                    <el-input
+                      v-model="emailInput.email"
+                      type="email"
+                      placeholder="邮箱地址"
+                      @keyup.enter="goToNextStep"
+                      autocomplete="username email"
+                      autofocus
+                    />
+                  </el-form-item>
+                </el-form>
+
+                <div class="step-actions">
+                  <el-button class="next-btn" @click="goToNextStep" :loading="validateLoading">
+                    下一步
+                  </el-button>
+                </div>
+
+                <div class="create-account">
+                  还没有账号？<router-link to="/register" class="link">创建账号</router-link>
+                </div>
+
+                <div v-if="desktopBridgeReady" class="desktop-bridge-card">
+                  <div class="desktop-bridge-copy">
+                    <div class="desktop-bridge-title">检测到桌面端已登录</div>
+                    <div class="desktop-bridge-user">
+                      {{ desktopBridgeUser?.username || desktopBridgeUser?.email }}
+                      <span v-if="desktopBridgeUser?.email"> · {{ desktopBridgeUser?.email }}</span>
+                    </div>
+                  </div>
+                  <el-button
+                    class="desktop-bridge-btn"
+                    type="primary"
+                    plain
+                    @click="handleDesktopBridgeLogin"
+                    :loading="desktopBridgeLoginLoading"
+                  >
+                    使用桌面端登录
+                  </el-button>
+                </div>
+              </div>
 
           <!-- 第二步：选择登录方式 -->
           <div v-else-if="step === 'method'" class="step-container" key="method"
@@ -304,32 +321,38 @@
           </div>
         </Transition>
 
-        <div v-if="!loginBootstrapping && step === 'email'" class="extra-login">
-          <div class="extra-title">其他登录方式</div>
-          <div class="extra-actions">
-            <div class="extra-icons">
-              <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
-                <i class="fa-brands fa-weixin" aria-hidden="true"></i>
-              </button>
-              <button class="icon-btn" @click="handleQQLogin" aria-label="QQ 登录" type="button">
-                <i class="fa-brands fa-qq" aria-hidden="true"></i>
-              </button>
-              <button class="icon-btn" @click="handleGithubLogin" aria-label="Github 登录" type="button">
-                <i class="fa-brands fa-github" aria-hidden="true"></i>
-              </button>
-              <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
-                <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
-              </button>
-              <button class="icon-btn" @click="handleGoogleLogin" aria-label="Google 登录" type="button">
-                <i class="fa-brands fa-google" aria-hidden="true"></i>
-              </button>
+            <div v-if="step === 'email'" class="extra-login">
+              <div class="extra-title">其他登录方式</div>
+              <div class="extra-actions">
+                <div class="extra-icons">
+                  <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
+                    <i class="fa-brands fa-weixin" aria-hidden="true"></i>
+                  </button>
+                  <button class="icon-btn" @click="handleQQLogin" aria-label="QQ 登录" type="button">
+                    <i class="fa-brands fa-qq" aria-hidden="true"></i>
+                  </button>
+                  <button class="icon-btn" @click="handleGithubLogin" aria-label="Github 登录" type="button">
+                    <i class="fa-brands fa-github" aria-hidden="true"></i>
+                  </button>
+                  <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
+                    <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
+                  </button>
+                  <button class="icon-btn" @click="handleGoogleLogin" aria-label="Google 登录" type="button">
+                    <i class="fa-brands fa-google" aria-hidden="true"></i>
+                  </button>
+                </div>
+                <el-button
+                  class="extra-btn"
+                  :loading="passkeyLoading"
+                  :disabled="!isPasskeySupported"
+                  @click="handlePasskeyLogin"
+                >
+                  {{ isPasskeySupported ? 'Passkey 登录' : 'Passkey 不可用' }}
+                </el-button>
+              </div>
             </div>
-            <el-button class="extra-btn" :loading="passkeyLoading" :disabled="!isPasskeySupported"
-              @click="handlePasskeyLogin">
-              {{ isPasskeySupported ? 'Passkey 登录' : 'Passkey 不可用' }}
-            </el-button>
-          </div>
-        </div>
+          </template>
+        </el-skeleton>
       </div>
     </div>
   </div>
