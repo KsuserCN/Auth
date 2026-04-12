@@ -979,9 +979,10 @@ public class AuthController {
         }
 
         String target = requestBody == null ? null : requestBody.getTarget();
+        String purpose = requestBody == null ? null : requestBody.getPurpose();
         try {
             SessionTransferService.SessionTransferPayload payload =
-                sessionTransferService.createTransfer(user.getId(), target);
+                sessionTransferService.createTransfer(user.getId(), target, purpose);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "跨端票据已创建",
                     new SessionTransferResponse(payload.getTransferCode(), SessionTransferService.DEFAULT_TTL_SECONDS)));
@@ -1003,16 +1004,15 @@ public class AuthController {
             HttpServletRequest request,
             HttpServletResponse response) {
         long startTime = System.currentTimeMillis();
-        String bridgeLoginMethod = resolveBridgeLoginMethod(requestBody == null ? null : requestBody.getTarget());
 
         if (requestBody == null || requestBody.getTransferCode() == null || requestBody.getTransferCode().isBlank()) {
-            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "empty_transfer_code", startTime);
+            sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, "empty_transfer_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "transferCode 不能为空"));
         }
 
         if (requestBody.getTarget() == null || requestBody.getTarget().isBlank()) {
-            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "empty_transfer_target", startTime);
+            sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, "empty_transfer_target", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "target 不能为空"));
         }
@@ -1020,9 +1020,12 @@ public class AuthController {
         try {
             SessionTransferService.SessionTransferPayload payload =
                 sessionTransferService.consumeTransfer(requestBody.getTransferCode(), requestBody.getTarget());
+            String bridgeLoginMethod = resolveBridgeLoginMethod(requestBody.getTarget());
             User user = userService.findById(payload.getUserId()).orElse(null);
             if (user == null) {
-                sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "user_not_found", startTime);
+                if (payload.shouldAuditAsBridgeLogin()) {
+                    sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "user_not_found", startTime);
+                }
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(401, "用户不存在"));
             }
@@ -1030,16 +1033,18 @@ public class AuthController {
             String clientIp = rateLimitService.getClientIp(request);
             String userAgent = request.getHeader("User-Agent");
             TokenResponse tokenResponse = issueSessionToken(user, clientIp, userAgent, response);
-            sensitiveLogUtil.logLogin(request, user.getId(), bridgeLoginMethod, true, null, startTime);
+            if (payload.shouldAuditAsBridgeLogin()) {
+                sensitiveLogUtil.logLogin(request, user.getId(), bridgeLoginMethod, true, null, startTime);
+            }
 
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "跨端登录成功", tokenResponse));
         } catch (IllegalArgumentException e) {
-            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, e.getMessage(), startTime);
+            sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, e.getMessage()));
         } catch (IllegalStateException e) {
-            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, e.getMessage(), startTime);
+            sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "跨端登录失败"));
         }

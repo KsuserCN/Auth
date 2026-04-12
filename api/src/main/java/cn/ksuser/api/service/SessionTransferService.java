@@ -13,6 +13,9 @@ public class SessionTransferService {
 
     public static final String TARGET_WEB = "web";
     public static final String TARGET_DESKTOP = "desktop";
+    public static final String PURPOSE_BRIDGE_LOGIN = "bridge_login";
+    public static final String PURPOSE_SESSION_SYNC = "session_sync";
+    public static final String PURPOSE_AUTH_BRIDGE_INTERNAL = "auth_bridge_internal";
     public static final long DEFAULT_TTL_SECONDS = 90L;
     private static final String REDIS_PREFIX = "auth:session-transfer:";
 
@@ -37,13 +40,37 @@ public class SessionTransferService {
     }
 
     public SessionTransferPayload createTransfer(Long userId, String target) {
+        return createTransfer(userId, target, null);
+    }
+
+    public String normalizePurpose(String rawPurpose) {
+        if (rawPurpose == null) {
+            return PURPOSE_BRIDGE_LOGIN;
+        }
+
+        String purpose = rawPurpose.trim().toLowerCase();
+        if (purpose.isEmpty()) {
+            return PURPOSE_BRIDGE_LOGIN;
+        }
+
+        if (PURPOSE_BRIDGE_LOGIN.equals(purpose)
+            || PURPOSE_SESSION_SYNC.equals(purpose)
+            || PURPOSE_AUTH_BRIDGE_INTERNAL.equals(purpose)) {
+            return purpose;
+        }
+
+        return PURPOSE_BRIDGE_LOGIN;
+    }
+
+    public SessionTransferPayload createTransfer(Long userId, String target, String purpose) {
         String normalizedTarget = normalizeTarget(target);
         if (normalizedTarget == null) {
             throw new IllegalArgumentException("target 只能是 web 或 desktop");
         }
+        String normalizedPurpose = normalizePurpose(purpose);
 
         String transferCode = generateTransferCode();
-        SessionTransferPayload payload = new SessionTransferPayload(userId, normalizedTarget);
+        SessionTransferPayload payload = new SessionTransferPayload(userId, normalizedTarget, normalizedPurpose);
 
         try {
             String value = objectMapper.writeValueAsString(payload);
@@ -82,6 +109,7 @@ public class SessionTransferService {
             if (payload.getUserId() == null) {
                 throw new IllegalArgumentException("跨端票据数据无效");
             }
+            payload.setPurpose(normalizePurpose(payload.getPurpose()));
             return payload;
         } catch (IllegalArgumentException e) {
             throw e;
@@ -103,6 +131,7 @@ public class SessionTransferService {
     public static class SessionTransferPayload {
         private Long userId;
         private String target;
+        private String purpose;
         private String transferCode;
 
         public SessionTransferPayload() {
@@ -111,6 +140,12 @@ public class SessionTransferService {
         public SessionTransferPayload(Long userId, String target) {
             this.userId = userId;
             this.target = target;
+        }
+
+        public SessionTransferPayload(Long userId, String target, String purpose) {
+            this.userId = userId;
+            this.target = target;
+            this.purpose = purpose;
         }
 
         public Long getUserId() {
@@ -135,6 +170,18 @@ public class SessionTransferService {
 
         public void setTransferCode(String transferCode) {
             this.transferCode = transferCode;
+        }
+
+        public String getPurpose() {
+            return purpose;
+        }
+
+        public void setPurpose(String purpose) {
+            this.purpose = purpose;
+        }
+
+        public boolean shouldAuditAsBridgeLogin() {
+            return PURPOSE_BRIDGE_LOGIN.equals(purpose);
         }
 
         public SessionTransferPayload withTransferCode(String code) {
