@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 public class SensitiveLogService {
 
     private static final Logger logger = LoggerFactory.getLogger(SensitiveLogService.class);
+    private static final int USER_LOG_RETENTION_LIMIT = 200;
 
     @Autowired
     private UserSensitiveLogRepository logRepository;
@@ -101,6 +102,18 @@ public class SensitiveLogService {
             logger.debug("Sensitive operation log saved: userId={}, operation={}", 
                          log.getUserId(), log.getOperationType());
 
+            // 保留每个用户最近 N 条敏感操作日志（避免无限增长）
+            if (log.getUserId() != null) {
+                try {
+                    int deleted = logRepository.trimUserLogsToLimit(log.getUserId(), USER_LOG_RETENTION_LIMIT);
+                    if (deleted > 0) {
+                        logger.debug("Trimmed sensitive logs: userId={}, deleted={}", log.getUserId(), deleted);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to trim sensitive logs", e);
+                }
+            }
+
                 // 敏感操作邮件通知（跳过以 _MFA 结尾的中间步骤，避免重复通知）
                 if (log.getUserId() != null) {
                     String op = log.getOperationType();
@@ -176,6 +189,18 @@ public class SensitiveLogService {
             }
 
             logRepository.save(log);
+
+            // 保留每个用户最近 N 条敏感操作日志（避免无限增长）
+            if (log.getUserId() != null) {
+                try {
+                    int deleted = logRepository.trimUserLogsToLimit(log.getUserId(), USER_LOG_RETENTION_LIMIT);
+                    if (deleted > 0) {
+                        logger.debug("Trimmed sensitive logs: userId={}, deleted={}", log.getUserId(), deleted);
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to trim sensitive logs", e);
+                }
+            }
 
                 // 敏感操作邮件通知（跳过以 _MFA 结尾的中间步骤，避免重复通知）
                 if (log.getUserId() != null) {

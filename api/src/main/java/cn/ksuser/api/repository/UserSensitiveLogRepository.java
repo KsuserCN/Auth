@@ -5,14 +5,18 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveLog, Long> {
+
+    int countByUserId(Long userId);
 
     Page<UserSensitiveLog> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
@@ -69,4 +73,29 @@ public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveL
      * 查询用户5分钟内的操作记录
      */
     List<UserSensitiveLog> findByUserIdAndCreatedAtAfter(Long userId, LocalDateTime createdAt);
+
+    /**
+     * 将指定用户的敏感操作日志裁剪到最多保留 keep 条（保留最新的记录）。
+     * <p>
+     * 使用单条 SQL 完成裁剪，避免高并发下出现“多删”或“漏删”。
+     */
+    @Modifying
+    @Transactional
+    @Query(
+        value = """
+            DELETE FROM user_sensitive_logs
+            WHERE user_id = :userId
+              AND id NOT IN (
+                SELECT id FROM (
+                  SELECT id
+                  FROM user_sensitive_logs
+                  WHERE user_id = :userId
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT :keep
+                ) t
+              )
+            """,
+        nativeQuery = true
+    )
+    int trimUserLogsToLimit(@Param("userId") Long userId, @Param("keep") int keep);
 }
