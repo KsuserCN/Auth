@@ -18,33 +18,41 @@
 - `ENABLE_TOTP` - 启用TOTP
 - `DISABLE_TOTP` - 禁用TOTP
 
-## 登录方式 (login_method)
+## 登录方式 (`loginMethod` / `loginMethods`)
 
-当操作类型为 `LOGIN` 时，会记录具体的登录方式：
+当操作类型为 `LOGIN` 时：
+
+- `loginMethod` 保留原始字符串，兼容旧前端。
+- `loginMethods` 返回规范化后的 token 数组，前端应优先使用该字段渲染标签。
 
 ### 基础登录方式（无MFA）
 - `PASSWORD` - 密码登录（无MFA）
 - `EMAIL_CODE` - 邮箱验证码登录（无MFA）
 - `PASSKEY` - Passkey登录（无MFA）
+- `QQ` - QQ 登录
+- `GITHUB` - GitHub 登录
+- `MICROSOFT` - Microsoft 登录
+- `GOOGLE` - Google 登录
+- `WECHAT` - 微信登录
+- `BRIDGE_FROM_DESKTOP` - 当前网页登录态来自电脑端桥接
+- `BRIDGE_FROM_WEB` - 当前电脑端登录态来自网页登录桥接
 
-### MFA登录方式（需要或已完成二步验证）
+### MFA 登录方式（已进入二步验证并给出最终结果）
 - `["password", "mfa"]` - 密码 + TOTP二步验证登录
 - `["email", "mfa"]` - 邮箱验证码 + TOTP二步验证登录
 - `["passkey", "mfa"]` - Passkey + TOTP二步验证登录
+- `["google", "mfa"]` - Google + MFA 登录
+- `["microsoft", "mfa"]` - Microsoft + MFA 登录
+- `["github", "mfa"]` - GitHub + MFA 登录
+- `["qq", "mfa"]` - QQ + MFA 登录
 
-### MFA登录流程说明
+### MFA 记录规则
 
-当用户启用了MFA（TOTP二步验证）后，登录流程会分为两个阶段：
+当用户启用了 MFA 后，敏感操作日志只记录一次最终登录结果：
 
-**阶段1：第一因素验证** - 记录 `_MFA` 后缀的登录方式
-- 用户完成密码/验证码/Passkey验证
-- 系统记录日志：`PASSWORD_MFA`、`EMAIL_CODE_MFA` 或 `PASSKEY_MFA`
-- 状态：`SUCCESS`（表示第一因素验证通过，等待TOTP验证）
-
-**阶段2：TOTP验证** - 再次记录 `_MFA` 后缀的登录方式
-- 用户输入TOTP验证码
-- 系统记录日志：相同的 `_MFA` 登录方式
-- 状态：`SUCCESS`（TOTP验证通过）或 `FAILURE`（TOTP验证失败）
+- 第一因素通过、但尚未完成 MFA 时，不再写入单独的成功日志。
+- MFA 最终成功时，记录一条 `LOGIN` 成功日志，例如 `["google", "mfa"]`。
+- MFA 最终失败时，记录一条 `LOGIN` 失败日志，例如 `["password", "mfa"]` + 失败原因。
 
 **示例：密码+MFA完整登录**
 ```json
@@ -52,7 +60,8 @@
   {
     "id": 124,
     "operationType": "LOGIN",
-    "loginMethod": ["password", "mfa"],
+    "loginMethod": "[password, mfa]",
+    "loginMethods": ["PASSWORD", "MFA"],
     "result": "SUCCESS",
     "failureReason": null,
     "createdAt": "2026-02-09T10:00:00",
@@ -67,11 +76,16 @@
 ```javascript
 const LOGIN_METHOD_TEXT = {
   'PASSWORD': '密码登录',
-  'PASSWORD_MFA': '密码 + 二步验证',
   'EMAIL_CODE': '验证码登录',
-  'EMAIL_CODE_MFA': '验证码 + 二步验证',
   'PASSKEY': 'Passkey登录',
-  'PASSKEY_MFA': 'Passkey + 二步验证'
+  'QQ': 'QQ',
+  'GITHUB': 'GitHub',
+  'MICROSOFT': 'Microsoft',
+  'GOOGLE': 'Google',
+  'WECHAT': '微信',
+  'MFA': 'MFA',
+  'BRIDGE_FROM_DESKTOP': '电脑端桥接',
+  'BRIDGE_FROM_WEB': '网页端桥接'
 };
 ```
 
@@ -79,11 +93,16 @@ const LOGIN_METHOD_TEXT = {
 ```javascript
 const LOGIN_METHOD_ICON = {
   'PASSWORD': '🔑',
-  'PASSWORD_MFA': '🔑🛡️',
   'EMAIL_CODE': '📧',
-  'EMAIL_CODE_MFA': '📧🛡️',
   'PASSKEY': '🔐',
-  'PASSKEY_MFA': '🔐🛡️'
+  'QQ': '💬',
+  'GITHUB': '🐙',
+  'MICROSOFT': '🪟',
+  'GOOGLE': '🔎',
+  'WECHAT': '💚',
+  'MFA': '🛡️',
+  'BRIDGE_FROM_DESKTOP': '🖥️',
+  'BRIDGE_FROM_WEB': '🌐'
 };
 ```
 
@@ -125,7 +144,8 @@ Authorization: Bearer <access_token>
       {
         "id": 123,
         "operationType": "LOGIN",
-        "loginMethod": "PASSWORD",
+        "loginMethod": "[google, mfa]",
+        "loginMethods": ["GOOGLE", "MFA"],
         "ipAddress": "203.208.60.1",
         "ipLocation": "广东省深圳市",
         "browser": "Chrome 120",
@@ -225,7 +245,8 @@ curl -X GET "https://api.example.com/auth/sensitive-logs?operationType=LOGIN&res
 |------|------|------|
 | id | Long | 日志ID |
 | operationType | String | 操作类型 |
-| loginMethod | String | 登录方式（仅登录操作有值） |
+| loginMethod | String | 登录方式原始值（仅登录操作有值，兼容旧前端） |
+| loginMethods | Array<String> | 登录方式规范化 token 列表，前端应优先使用 |
 | ipAddress | String | 客户端IP地址 |
 | ipLocation | String | IP属地（如：广东省深圳市） |
 | browser | String | 浏览器信息 |
@@ -244,7 +265,7 @@ curl -X GET "https://api.example.com/auth/sensitive-logs?operationType=LOGIN&res
 系统会在以下操作中自动记录敏感操作日志：
 
 1. **注册** - 用户注册时自动记录
-2. **登录** - 所有登录方式（密码、验证码、Passkey等）都会记录
+2. **登录** - 所有登录方式（密码、验证码、Passkey、第三方 OAuth、桥接登录等）都会记录
 3. **敏感操作认证** - 进行敏感操作前的身份验证
 4. **修改密码** - 修改密码操作
 5. **修改邮箱** - 绑定或修改邮箱操作
@@ -257,6 +278,7 @@ curl -X GET "https://api.example.com/auth/sensitive-logs?operationType=LOGIN&res
 - 解析User-Agent获取浏览器和设备信息
 - 计算操作耗时
 - 评估风险等级
+- 对登录方式做规范化拆分，便于前端展示 provider / MFA / bridge 标签
 
 ## 状态码
 

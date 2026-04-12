@@ -1,13 +1,16 @@
 package cn.ksuser.api.dto;
 
 import cn.ksuser.api.entity.UserSensitiveLog;
+import cn.ksuser.api.util.SensitiveLogLoginMethodUtil;
 import java.time.LocalDateTime;
+import java.util.List;
 
 public class SensitiveLogResponse {
 
     private Long id;
     private String operationType;
     private String loginMethod;
+    private List<String> loginMethods;
     private String ipAddress;
     private String ipLocation;
     private String browser;
@@ -28,6 +31,7 @@ public class SensitiveLogResponse {
         this.id = log.getId();
         this.operationType = log.getOperationType();
         this.loginMethod = log.getLoginMethod();
+        this.loginMethods = SensitiveLogLoginMethodUtil.parseTokens(log.getLoginMethod());
         this.ipAddress = log.getIpAddress();
         this.ipLocation = log.getIpLocation();
         this.browser = log.getBrowser();
@@ -65,6 +69,14 @@ public class SensitiveLogResponse {
 
     public void setLoginMethod(String loginMethod) {
         this.loginMethod = loginMethod;
+    }
+
+    public List<String> getLoginMethods() {
+        return loginMethods;
+    }
+
+    public void setLoginMethods(List<String> loginMethods) {
+        this.loginMethods = loginMethods;
     }
 
     public String getIpAddress() {

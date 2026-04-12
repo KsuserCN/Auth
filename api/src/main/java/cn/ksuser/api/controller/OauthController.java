@@ -634,8 +634,6 @@ public class OauthController {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
                         String challengeId = mfaService.createChallenge(userEntity.getId(), clientIpReq, userAgentReq,
                             "qq", new HashSet<>(mfaMethods));
-                        // 记录为 QQ_MFA，表示需要 MFA 验证
-                        sensitiveLogUtil.logLogin(request, userEntity.getId(), "QQ_MFA", true, null, startTime);
                         java.util.Map<String,Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
                         resp.put("method", mfaMethods.get(0));
@@ -1084,7 +1082,6 @@ public class OauthController {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
                         String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
                             "github", new HashSet<>(mfaMethods));
-                        sensitiveLogUtil.logLogin(request, user.getId(), "GITHUB_MFA", true, null, startTime);
                         java.util.Map<String,Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
                         resp.put("method", mfaMethods.get(0));
@@ -1368,7 +1365,6 @@ public class OauthController {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
                         String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
                             "google", new HashSet<>(mfaMethods));
-                        sensitiveLogUtil.logLogin(request, user.getId(), "GOOGLE_MFA", true, null, startTime);
                         java.util.Map<String, Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
                         resp.put("method", mfaMethods.get(0));
@@ -1880,7 +1876,6 @@ public class OauthController {
                         String userAgentReq = rateLimitService.getClientUserAgent(request);
                         String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
                             "microsoft", new HashSet<>(mfaMethods));
-                        sensitiveLogUtil.logLogin(request, user.getId(), "MICROSOFT_MFA", true, null, startTime);
                         java.util.Map<String, Object> resp = new java.util.HashMap<>();
                         resp.put("challengeId", challengeId);
                         resp.put("method", mfaMethods.get(0));

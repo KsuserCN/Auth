@@ -559,8 +559,6 @@ public class AuthController {
             String userAgent = request.getHeader("User-Agent");
             String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent,
                     "email", new HashSet<>(mfaMethods));
-            // 记录为 EMAIL_CODE_MFA，表示需要MFA验证
-            sensitiveLogUtil.logLogin(request, user.getId(), "EMAIL_CODE_MFA", true, null, startTime);
             // 不创建会话、不返回 token，告知前端需要 TOTP 验证
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(201, "需要 MFA 验证",
@@ -647,8 +645,6 @@ public class AuthController {
             String userAgent = request.getHeader("User-Agent");
             String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent,
                     "password", new HashSet<>(mfaMethods));
-            // 记录为需要MFA验证
-            sensitiveLogUtil.logLogin(request, user.getId(), "PASSWORD_MFA", true, null, startTime);
             return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(201, "需要 MFA 验证",
                         new MfaChallengeResponse(challengeId, mfaMethods.get(0), mfaMethods)));
@@ -1006,12 +1002,17 @@ public class AuthController {
             @RequestBody SessionTransferExchangeRequest requestBody,
             HttpServletRequest request,
             HttpServletResponse response) {
+        long startTime = System.currentTimeMillis();
+        String bridgeLoginMethod = resolveBridgeLoginMethod(requestBody == null ? null : requestBody.getTarget());
+
         if (requestBody == null || requestBody.getTransferCode() == null || requestBody.getTransferCode().isBlank()) {
+            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "empty_transfer_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "transferCode 不能为空"));
         }
 
         if (requestBody.getTarget() == null || requestBody.getTarget().isBlank()) {
+            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "empty_transfer_target", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, "target 不能为空"));
         }
@@ -1021,6 +1022,7 @@ public class AuthController {
                 sessionTransferService.consumeTransfer(requestBody.getTransferCode(), requestBody.getTarget());
             User user = userService.findById(payload.getUserId()).orElse(null);
             if (user == null) {
+                sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "user_not_found", startTime);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(401, "用户不存在"));
             }
@@ -1028,13 +1030,16 @@ public class AuthController {
             String clientIp = rateLimitService.getClientIp(request);
             String userAgent = request.getHeader("User-Agent");
             TokenResponse tokenResponse = issueSessionToken(user, clientIp, userAgent, response);
+            sensitiveLogUtil.logLogin(request, user.getId(), bridgeLoginMethod, true, null, startTime);
 
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "跨端登录成功", tokenResponse));
         } catch (IllegalArgumentException e) {
+            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, e.getMessage()));
         } catch (IllegalStateException e) {
+            sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "跨端登录失败"));
         }
@@ -2151,6 +2156,18 @@ public class AuthController {
         return new TokenResponse(accessToken);
     }
 
+    private String resolveBridgeLoginMethod(String target) {
+        if (target == null || target.isBlank()) {
+            return "BRIDGE";
+        }
+
+        return switch (target.trim().toLowerCase(Locale.ROOT)) {
+            case "web" -> "BRIDGE_FROM_DESKTOP";
+            case "desktop" -> "BRIDGE_FROM_WEB";
+            default -> "BRIDGE";
+        };
+    }
+
     // ==================== Passkey (WebAuthn) 端点 ====================
 
     /**
@@ -2297,7 +2314,6 @@ public class AuthController {
                 List<String> mfaMethods = List.of("totp");
                 String challenge = mfaService.createChallenge(user.getId(), clientIp, userAgent,
                         "passkey", new HashSet<>(mfaMethods));
-                sensitiveLogUtil.logLogin(httpRequest, user.getId(), "PASSKEY_MFA", true, null, startTime);
                 return ResponseEntity.status(HttpStatus.CREATED)
                     .body(new ApiResponse<>(201, "需要 MFA 验证",
                             new MfaChallengeResponse(challenge, "totp", mfaMethods)));
