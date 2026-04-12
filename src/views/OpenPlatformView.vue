@@ -16,7 +16,7 @@
               {{ verificationLabel }}
             </el-tag>
           </div>
-          <div class="summary-desc">个人、企业、管理员认证账号都可以创建 OAuth2.0 应用。</div>
+          <div class="summary-desc">仅个人/企业认证可以创建OAuth应用</div>
         </el-card>
       </el-col>
 
@@ -27,7 +27,7 @@
             <span class="summary-number">{{ oauthOverview?.currentCount ?? 0 }}</span>
             <span class="summary-total">/ {{ oauthOverview?.maxApps ?? 5 }}</span>
           </div>
-          <div class="summary-desc">面向第三方站点接入，支持 `profile`、`email` 授权。</div>
+          <div class="summary-desc">OAuth2.0协议，支持精细权限控制</div>
         </el-card>
       </el-col>
 
@@ -38,7 +38,7 @@
             <span class="summary-number">{{ ssoOverview?.currentCount ?? 0 }}</span>
             <span class="summary-total">/ {{ ssoOverview?.maxClients ?? 20 }}</span>
           </div>
-          <div class="summary-desc">仅管理员可创建，独立走 `openid`、`id_token` 与 PKCE 能力。</div>
+          <div class="summary-desc">仅管理员可创建，拥有 `openid`、`id_token` 与 PKCE 等能力</div>
         </el-card>
       </el-col>
     </el-row>
@@ -55,7 +55,7 @@
         <div class="section-header">
           <div>
             <div class="section-title">OAuth2.0 应用</div>
-            <div class="section-subtitle">第三方应用通过 `/oauth2/*` 完成授权、换 token 与 userinfo。</div>
+            <!-- <div class="section-subtitle">第三方应用通过 `/oauth2/*` 完成授权、换 token 与 userinfo。</div> -->
           </div>
           <div class="section-actions">
             <el-button text @click="loadOAuthApps" :loading="oauthLoading">刷新</el-button>
@@ -71,55 +71,27 @@
       <el-empty v-else-if="!oauthOverview?.apps.length" description="还没有创建任何 OAuth2.0 应用" />
 
       <div v-else class="app-list">
-        <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item">
-          <div class="app-head">
-            <div class="app-title-wrap">
-              <el-avatar shape="square" :size="46" :src="app.logoUrl || ''" class="app-logo">
-                {{ app.appName.slice(0, 1).toUpperCase() }}
-              </el-avatar>
-              <div>
-                <div class="app-name">{{ app.appName }}</div>
-                <div class="app-id">{{ app.appId }}</div>
-              </div>
-            </div>
-            <div class="app-actions">
-              <el-button text @click="triggerLogoSelect('oauth', app.appId)">上传 Logo</el-button>
-              <el-button text @click="openOAuthEditDialog(app)">编辑</el-button>
-              <el-popconfirm title="确认删除应用？" description="删除后该应用将无法继续进行 OAuth 授权。" confirm-button-text="删除"
-                cancel-button-text="取消" @confirm="handleOAuthDelete(app.appId)">
-                <template #reference>
-                  <el-button text type="danger">删除</el-button>
-                </template>
-              </el-popconfirm>
+        <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item app-item--compact">
+          <div class="app-title-wrap" role="button" tabindex="0" @click="openOAuthDetailDialog(app.appId)"
+            @keydown.enter.prevent="openOAuthDetailDialog(app.appId)">
+            <el-avatar shape="square" :size="46" :src="app.logoUrl || ''"
+              :class="['app-logo', { 'app-logo--image': !!app.logoUrl }]">
+              {{ app.appName.slice(0, 1).toUpperCase() }}
+            </el-avatar>
+            <div class="app-title-body">
+              <div class="app-name">{{ app.appName }}</div>
+              <div class="app-id">AppID: {{ app.appId }}</div>
             </div>
           </div>
 
-          <div class="app-meta-grid">
-            <div class="meta-item">
-              <span class="meta-label">回调地址</span>
-              <span class="meta-value mono">{{ app.redirectUri }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">联系方式</span>
-              <span class="meta-value">{{ app.contactInfo }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">权限范围</span>
-              <div class="meta-scopes">
-                <el-tag v-if="!app.scopes.length" size="small" effect="plain">仅基础标识</el-tag>
-                <el-tag v-for="scope in app.scopes" :key="scope" size="small" effect="plain">
-                  {{ oauthScopeLabel(scope) }}
-                </el-tag>
-              </div>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">创建时间</span>
-              <span class="meta-value">{{ formatDateTime(app.createdAt) }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">最后更新</span>
-              <span class="meta-value">{{ formatDateTime(app.updatedAt) }}</span>
-            </div>
+          <div class="app-item-actions">
+            <el-button size="small" @click="openOAuthDetailDialog(app.appId)">查看</el-button>
+            <el-popconfirm title="确认删除应用？" description="删除后该应用将无法继续进行 OAuth 授权。" confirm-button-text="删除"
+              cancel-button-text="取消" @confirm="handleOAuthDelete(app.appId)">
+              <template #reference>
+                <el-button size="small" type="danger" plain>删除</el-button>
+              </template>
+            </el-popconfirm>
           </div>
         </div>
       </div>
@@ -130,7 +102,7 @@
         <div class="section-header">
           <div>
             <div class="section-title">SSO 内部服务应用</div>
-            <div class="section-subtitle">内部客户端通过 `/sso/*` 与 `/.well-known/openid-configuration` 接入。</div>
+            <!-- <div class="section-subtitle">内部客户端通过 `/sso/*` 与 `/.well-known/openid-configuration` 接入。</div> -->
           </div>
           <div class="section-actions">
             <el-button text @click="loadSSOClients" :loading="ssoLoading">刷新</el-button>
@@ -147,95 +119,165 @@
       <el-empty v-else-if="ssoOverview && !ssoOverview.admin" description="当前账号不是管理员，无法查看或创建 SSO 内部服务应用" />
 
       <div v-else class="app-list">
-        <div v-for="client in ssoOverview?.clients" :key="client.clientId" class="app-item">
-          <div class="app-head">
-            <div class="app-title-wrap">
-              <el-avatar shape="square" :size="46" :src="client.logoUrl || ''" class="app-logo">
-                {{ client.clientName.slice(0, 1).toUpperCase() }}
-              </el-avatar>
-              <div>
-                <div class="app-name">{{ client.clientName }}</div>
-                <div class="app-id">{{ client.clientId }}</div>
-              </div>
-            </div>
-            <div class="app-actions">
-              <el-button text @click="triggerLogoSelect('sso', client.clientId)">上传 Logo</el-button>
-              <el-button text @click="openSSOEditDialog(client)">编辑</el-button>
-              <el-popconfirm title="确认删除 SSO 应用？" description="删除后该客户端将无法继续完成内部单点登录。" confirm-button-text="删除"
-                cancel-button-text="取消" @confirm="handleSSODelete(client.clientId)">
-                <template #reference>
-                  <el-button text type="danger">删除</el-button>
-                </template>
-              </el-popconfirm>
+        <div v-for="client in ssoOverview?.clients" :key="client.clientId" class="app-item app-item--compact">
+          <div class="app-title-wrap" role="button" tabindex="0" @click="openSSODetailDialog(client.clientId)"
+            @keydown.enter.prevent="openSSODetailDialog(client.clientId)">
+            <el-avatar shape="square" :size="46" :src="client.logoUrl || ''"
+              :class="['app-logo', { 'app-logo--image': !!client.logoUrl }]">
+              {{ client.clientName.slice(0, 1).toUpperCase() }}
+            </el-avatar>
+            <div class="app-title-body">
+              <div class="app-name">{{ client.clientName }}</div>
+              <div class="app-id">ClientID: {{ client.clientId }}</div>
             </div>
           </div>
 
-          <div class="app-meta-grid">
-            <div class="meta-item meta-item-full">
-              <span class="meta-label">回调地址</span>
-              <div class="meta-stack">
-                <code v-for="uri in client.redirectUris" :key="uri" class="stack-code">{{ uri }}</code>
-              </div>
-            </div>
-            <div class="meta-item" v-if="client.postLogoutRedirectUris.length">
-              <span class="meta-label">登出回调</span>
-              <div class="meta-stack">
-                <code v-for="uri in client.postLogoutRedirectUris" :key="uri" class="stack-code">
-              {{ uri }}
-            </code>
-              </div>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Audience</span>
-              <div class="meta-stack">
-                <code v-for="audience in client.audiences" :key="audience" class="stack-code">
-              {{ audience }}
-            </code>
-              </div>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">权限范围</span>
-              <div class="meta-scopes">
-                <el-tag v-for="scope in client.scopes" :key="scope" size="small" effect="plain">
-                  {{ scope }}
-                </el-tag>
-                <el-tag v-if="client.requirePkce" size="small" type="success" effect="plain">
-                  PKCE Required
-                </el-tag>
-              </div>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">创建时间</span>
-              <span class="meta-value">{{ formatDateTime(client.createdAt) }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">最后更新</span>
-              <span class="meta-value">{{ formatDateTime(client.updatedAt) }}</span>
-            </div>
+          <div class="app-item-actions">
+            <el-button size="small" @click="openSSODetailDialog(client.clientId)">查看</el-button>
+            <el-popconfirm title="确认删除 SSO 应用？" description="删除后该客户端将无法继续完成内部单点登录。" confirm-button-text="删除"
+              cancel-button-text="取消" @confirm="handleSSODelete(client.clientId)">
+              <template #reference>
+                <el-button size="small" type="danger" plain>删除</el-button>
+              </template>
+            </el-popconfirm>
           </div>
         </div>
       </div>
     </el-card>
 
-    <el-dialog v-model="oauthCreateDialogVisible" title="创建 OAuth2.0 应用" width="620px">
-      <el-form ref="oauthCreateFormRef" :model="oauthCreateForm" :rules="oauthCreateRules" label-position="top">
-        <el-form-item label="应用名称" prop="appName">
-          <el-input v-model="oauthCreateForm.appName" maxlength="100" placeholder="例如：Ksuser Demo" />
-        </el-form-item>
+    <el-dialog v-model="oauthDetailDialogVisible" title="OAuth2.0 应用详情" width="760px" @closed="resetOAuthDetailDialog">
+      <div v-if="oauthDetailApp" class="detail-shell">
+        <div class="detail-head">
+          <div class="detail-title">
+            <el-avatar shape="square" :size="56" :src="oauthDetailApp.logoUrl || ''"
+              :class="['app-logo', 'detail-logo', { 'app-logo--image': !!oauthDetailApp.logoUrl }]">
+              {{ oauthDetailApp.appName.slice(0, 1).toUpperCase() }}
+            </el-avatar>
+            <div>
+              <div class="detail-name">{{ oauthDetailApp.appName }}</div>
+              <div class="detail-subrow">
+                <span class="detail-mono">AppID: {{ oauthDetailApp.appId }}</span>
+                <el-button text size="small" @click="copyText(oauthDetailApp.appId)">复制</el-button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <el-button size="small" @click="triggerLogoSelect('oauth', oauthDetailApp.appId)">上传 Logo</el-button>
+            <el-button size="small" type="primary" @click="openOAuthEditDialog(oauthDetailApp)">编辑</el-button>
+          </div>
+        </div>
+
+        <el-descriptions class="detail-desc" :column="1" border>
+          <el-descriptions-item label="回调地址">
+            <div class="detail-code-row">
+              <code class="detail-code">{{ oauthDetailApp.redirectUri }}</code>
+              <el-button text size="small" @click="copyText(oauthDetailApp.redirectUri)">复制</el-button>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="联系方式">{{ oauthDetailApp.contactInfo }}</el-descriptions-item>
+          <el-descriptions-item label="权限范围">
+            <div class="meta-scopes">
+              <el-tag v-if="!oauthDetailApp.scopes.length" size="small" effect="plain">仅基础标识</el-tag>
+              <el-tag v-for="scope in oauthDetailApp.scopes" :key="scope" size="small" effect="plain">
+                {{ oauthScopeLabel(scope) }}
+              </el-tag>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatDateTime(oauthDetailApp.createdAt) }}</el-descriptions-item>
+          <el-descriptions-item label="最后更新">{{ formatDateTime(oauthDetailApp.updatedAt) }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-empty v-else description="应用不存在或已被删除" />
+    </el-dialog>
+
+    <el-dialog v-model="ssoDetailDialogVisible" title="SSO 应用详情" width="760px" @closed="resetSSODetailDialog">
+      <div v-if="ssoDetailClient" class="detail-shell">
+        <div class="detail-head">
+          <div class="detail-title">
+            <el-avatar shape="square" :size="56" :src="ssoDetailClient.logoUrl || ''"
+              :class="['app-logo', 'detail-logo', { 'app-logo--image': !!ssoDetailClient.logoUrl }]">
+              {{ ssoDetailClient.clientName.slice(0, 1).toUpperCase() }}
+            </el-avatar>
+            <div>
+              <div class="detail-name">{{ ssoDetailClient.clientName }}</div>
+              <div class="detail-subrow">
+                <span class="detail-mono">ClientID: {{ ssoDetailClient.clientId }}</span>
+                <el-button text size="small" @click="copyText(ssoDetailClient.clientId)">复制</el-button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <el-button size="small" @click="triggerLogoSelect('sso', ssoDetailClient.clientId)">上传 Logo</el-button>
+            <el-button size="small" type="primary" @click="openSSOEditDialog(ssoDetailClient)">编辑</el-button>
+          </div>
+        </div>
+
+        <el-descriptions class="detail-desc" :column="1" border>
+          <el-descriptions-item label="回调地址">
+            <div class="detail-stack">
+              <div v-for="uri in ssoDetailClient.redirectUris" :key="uri" class="detail-code-row">
+                <code class="detail-code">{{ uri }}</code>
+                <el-button text size="small" @click="copyText(uri)">复制</el-button>
+              </div>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="ssoDetailClient.postLogoutRedirectUris.length" label="登出回调">
+            <div class="detail-stack">
+              <div v-for="uri in ssoDetailClient.postLogoutRedirectUris" :key="uri" class="detail-code-row">
+                <code class="detail-code">{{ uri }}</code>
+                <el-button text size="small" @click="copyText(uri)">复制</el-button>
+              </div>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="Audience">
+            <div class="detail-stack">
+              <div v-for="audience in ssoDetailClient.audiences" :key="audience" class="detail-code-row">
+                <code class="detail-code">{{ audience }}</code>
+                <el-button text size="small" @click="copyText(audience)">复制</el-button>
+              </div>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="权限范围">
+            <div class="meta-scopes">
+              <el-tag v-for="scope in ssoDetailClient.scopes" :key="scope" size="small" effect="plain">
+                {{ scope }}
+              </el-tag>
+              <el-tag v-if="ssoDetailClient.requirePkce" size="small" type="success" effect="plain">
+                PKCE Required
+              </el-tag>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatDateTime(ssoDetailClient.createdAt) }}</el-descriptions-item>
+          <el-descriptions-item label="最后更新">{{ formatDateTime(ssoDetailClient.updatedAt) }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-empty v-else description="应用不存在或已被删除" />
+    </el-dialog>
+
+    <el-dialog v-model="oauthCreateDialogVisible" class="app-dialog" title="创建 OAuth2.0 应用" width="620px">
+      <el-form ref="oauthCreateFormRef" class="app-dialog-form" :model="oauthCreateForm" :rules="oauthCreateRules"
+        label-position="top">
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="应用名称" prop="appName">
+              <el-input v-model="oauthCreateForm.appName" maxlength="100" placeholder="例如：Ksuser Demo" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="联系方式" prop="contactInfo">
+              <el-input v-model="oauthCreateForm.contactInfo" maxlength="120" placeholder="邮箱 / 工单地址 / 说明" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="回调地址" prop="redirectUri">
-          <el-input v-model="oauthCreateForm.redirectUri"
-            placeholder="https://example.com/oauth/callback 或 http://localhost:3000/callback" />
-        </el-form-item>
-
-        <el-form-item label="联系方式" prop="contactInfo">
-          <el-input v-model="oauthCreateForm.contactInfo" maxlength="120" placeholder="邮箱、工单地址或开发者说明" />
+          <el-input v-model="oauthCreateForm.redirectUri" placeholder="https://example.com/oauth/callback 或 http://localhost:3000/callback" />
         </el-form-item>
 
         <el-form-item label="可授权范围" prop="scopes">
           <el-checkbox-group v-model="oauthCreateForm.scopes">
-            <el-checkbox label="profile">获取昵称与头像</el-checkbox>
-            <el-checkbox label="email">获取邮箱</el-checkbox>
+            <el-checkbox label="profile">昵称与头像</el-checkbox>
+            <el-checkbox label="email">邮箱</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
@@ -268,26 +310,40 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="ssoCreateDialogVisible" title="创建 SSO 内部服务应用" width="680px">
-      <el-form ref="ssoCreateFormRef" :model="ssoCreateForm" :rules="ssoRules" label-position="top">
-        <el-form-item label="客户端名称" prop="clientName">
-          <el-input v-model="ssoCreateForm.clientName" maxlength="120" placeholder="例如：Ksuser Admin Console" />
-        </el-form-item>
+    <el-dialog v-model="ssoCreateDialogVisible" class="app-dialog" title="创建 SSO 内部服务应用" width="720px">
+      <el-form ref="ssoCreateFormRef" class="app-dialog-form" :model="ssoCreateForm" :rules="ssoRules"
+        label-position="top">
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="16">
+            <el-form-item label="客户端名称" prop="clientName">
+              <el-input v-model="ssoCreateForm.clientName" maxlength="120" placeholder="例如：Ksuser Admin Console" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="8">
+            <el-form-item label="PKCE">
+              <el-switch v-model="ssoCreateForm.requirePkce" inline-prompt active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="回调地址" prop="redirectUrisText">
           <el-input v-model="ssoCreateForm.redirectUrisText" type="textarea" :rows="4"
             placeholder="每行一个回调地址，仅支持 https:// 或 http://localhost" />
         </el-form-item>
 
-        <el-form-item label="登出回调地址" prop="postLogoutRedirectUrisText">
-          <el-input v-model="ssoCreateForm.postLogoutRedirectUrisText" type="textarea" :rows="3"
-            placeholder="可选，每行一个" />
-        </el-form-item>
-
-        <el-form-item label="Audience" prop="audiencesText">
-          <el-input v-model="ssoCreateForm.audiencesText" type="textarea" :rows="2"
-            placeholder="每行一个 audience，例如 ksuser-auth" />
-        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="Audience" prop="audiencesText">
+              <el-input v-model="ssoCreateForm.audiencesText" type="textarea" :rows="2" placeholder="每行一个，例如 ksuser-auth" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="登出回调地址" prop="postLogoutRedirectUrisText">
+              <el-input v-model="ssoCreateForm.postLogoutRedirectUrisText" type="textarea" :rows="2"
+                placeholder="可选，每行一个" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="可授权范围" prop="scopes">
           <el-checkbox-group v-model="ssoCreateForm.scopes">
@@ -295,10 +351,6 @@
             <el-checkbox label="profile">昵称与头像</el-checkbox>
             <el-checkbox label="email">邮箱</el-checkbox>
           </el-checkbox-group>
-        </el-form-item>
-
-        <el-form-item label="PKCE">
-          <el-switch v-model="ssoCreateForm.requirePkce" inline-prompt active-text="开启" inactive-text="关闭" />
         </el-form-item>
       </el-form>
 
@@ -414,7 +466,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import {
   createOAuth2App,
@@ -450,12 +502,16 @@ const oauthCreateDialogVisible = ref(false)
 const oauthEditDialogVisible = ref(false)
 const ssoCreateDialogVisible = ref(false)
 const ssoEditDialogVisible = ref(false)
+const oauthDetailDialogVisible = ref(false)
+const ssoDetailDialogVisible = ref(false)
 const secretDialogVisible = ref(false)
 const logoCropDialogVisible = ref(false)
 const logoUploading = ref(false)
 
 const oauthOverview = ref<OAuth2AppsOverview | null>(null)
 const ssoOverview = ref<SSOClientsOverview | null>(null)
+const oauthDetailAppId = ref('')
+const ssoDetailClientId = ref('')
 const oauthCreatedApp = ref<CreateOAuth2AppResponse | null>(null)
 const ssoCreatedClient = ref<CreateSSOClientResponse | null>(null)
 
@@ -699,6 +755,7 @@ const loadOAuthApps = async () => {
   oauthLoading.value = true
   try {
     oauthOverview.value = await getOAuth2Apps()
+    ensureOAuthDetailExists()
   } finally {
     oauthLoading.value = false
   }
@@ -708,9 +765,56 @@ const loadSSOClients = async () => {
   ssoLoading.value = true
   try {
     ssoOverview.value = await getSSOClients()
+    ensureSSODetailExists()
   } finally {
     ssoLoading.value = false
   }
+}
+
+const oauthDetailApp = computed(() => {
+  const appId = oauthDetailAppId.value
+  if (!appId) return null
+  return oauthOverview.value?.apps.find((app) => app.appId === appId) ?? null
+})
+
+const ssoDetailClient = computed(() => {
+  const clientId = ssoDetailClientId.value
+  if (!clientId) return null
+  return ssoOverview.value?.clients.find((client) => client.clientId === clientId) ?? null
+})
+
+const ensureOAuthDetailExists = () => {
+  if (!oauthDetailDialogVisible.value || !oauthDetailAppId.value) return
+  if (!oauthDetailApp.value) {
+    oauthDetailDialogVisible.value = false
+    oauthDetailAppId.value = ''
+  }
+}
+
+const ensureSSODetailExists = () => {
+  if (!ssoDetailDialogVisible.value || !ssoDetailClientId.value) return
+  if (!ssoDetailClient.value) {
+    ssoDetailDialogVisible.value = false
+    ssoDetailClientId.value = ''
+  }
+}
+
+const openOAuthDetailDialog = (appId: string) => {
+  oauthDetailAppId.value = appId
+  oauthDetailDialogVisible.value = true
+}
+
+const openSSODetailDialog = (clientId: string) => {
+  ssoDetailClientId.value = clientId
+  ssoDetailDialogVisible.value = true
+}
+
+const resetOAuthDetailDialog = () => {
+  oauthDetailAppId.value = ''
+}
+
+const resetSSODetailDialog = () => {
+  ssoDetailClientId.value = ''
 }
 
 const openOAuthCreateDialog = () => {
@@ -852,6 +956,14 @@ const handleSSODelete = async (clientId: string) => {
   ElMessage.success('SSO 应用已删除')
   await loadSSOClients()
 }
+
+watch(oauthDetailDialogVisible, (visible) => {
+  if (visible) ensureOAuthDetailExists()
+})
+
+watch(ssoDetailDialogVisible, (visible) => {
+  if (visible) ensureSSODetailExists()
+})
 
 const triggerLogoSelect = (targetType: 'oauth' | 'sso', targetId: string) => {
   logoUploadTargetType.value = targetType
@@ -1111,7 +1223,12 @@ onBeforeUnmount(() => {
 }
 
 .summary-card {
-  min-height: 168px;
+  min-height: 142px;
+  background: var(--el-bg-color-overlay);
+}
+
+.summary-card :deep(.el-card__body) {
+  padding: 16px;
 }
 
 .summary-label {
@@ -1128,11 +1245,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .summary-number {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 700;
   color: var(--el-text-color-primary);
 }
@@ -1179,16 +1296,43 @@ onBeforeUnmount(() => {
 }
 
 .app-item {
-  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-extra-light);
+  background: var(--el-bg-color-overlay);
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.app-item:hover {
+  border-color: var(--el-border-color);
+  background: var(--el-fill-color-light);
 }
 
 .app-title-wrap {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.app-title-wrap[role='button'] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.app-title-wrap[role='button']:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.app-title-body {
+  min-width: 0;
 }
 
 .app-logo {
@@ -1200,23 +1344,24 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.app-logo--image {
+  background: transparent;
+  color: var(--el-text-color-primary);
+  border: 1px solid var(--el-border-color-lighter);
+}
+
 .app-logo :deep(img) {
   object-fit: contain;
   background: transparent;
-}
-
-.app-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
 }
 
 .app-name {
   font-size: 18px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-id {
@@ -1227,10 +1372,104 @@ onBeforeUnmount(() => {
   word-break: break-all;
 }
 
-.app-actions {
+.app-item-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.detail-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detail-logo {
+  border-radius: 14px;
+}
+
+.detail-name {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--el-text-color-primary);
+}
+
+.detail-subrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.detail-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  word-break: break-all;
+}
+
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.detail-desc :deep(.el-descriptions__label) {
+  width: 120px;
+}
+
+.detail-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.detail-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  word-break: break-all;
+}
+
+.detail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-dialog :deep(.el-dialog__body) {
+  padding: 18px 20px 4px;
+}
+
+.app-dialog :deep(.el-dialog__footer) {
+  padding: 12px 20px 18px;
+}
+
+.app-dialog-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.app-dialog-form :deep(.el-form-item__label) {
+  padding-bottom: 6px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 
 .app-meta-grid {
@@ -1405,13 +1644,19 @@ onBeforeUnmount(() => {
 @media (max-width: 768px) {
 
   .section-header,
-  .app-head,
+  .app-item,
+  .detail-head,
   .secret-value {
     flex-direction: column;
     align-items: stretch;
   }
 
   .section-actions {
+    justify-content: flex-start;
+  }
+
+  .app-item-actions,
+  .detail-actions {
     justify-content: flex-start;
   }
 }
