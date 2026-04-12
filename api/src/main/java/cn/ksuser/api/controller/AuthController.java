@@ -442,6 +442,9 @@ public class AuthController {
                 .body(new ApiResponse<>(409, "邮箱已存在"));
         }
 
+        // 为新用户初始化默认 settings，避免后续首次设置时出现数据缺失带来的不稳定行为
+        getOrCreateUserSettings(result.getUser().getId());
+
         // 生成 Token
         String refreshToken = jwtUtil.generateRefreshToken(result.getUser().getUuid());
 
@@ -2113,27 +2116,16 @@ public class AuthController {
      * 设置 RefreshToken Cookie (包含 SameSite=Strict CSRF 保护)
      */
     private void setRefreshTokenCookie(HttpServletResponse response, String token) {
-        Cookie cookie = new Cookie("refreshToken", token);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(!appProperties.isDebug());
-        cookie.setPath("/");
-        if (token != null && !token.isEmpty()) {
-            cookie.setMaxAge(604800); // 7天
-        } else {
-            cookie.setMaxAge(0); // 清除 cookie
-        }
-        response.addCookie(cookie);
-        
-        // 添加 SameSite=Strict 属性用于 CSRF 保护
-        // 由于 javax.servlet.http.Cookie 不直接支持 SameSite，通过 Set-Cookie 响应头设置
-        String sameSiteValue = "SameSite=Strict";
-        String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
-            token != null ? token : "",
-            cookie.getSecure() ? "Secure; " : "",
-            sameSiteValue,
-            cookie.getMaxAge()
-        );
-        response.addHeader("Set-Cookie", setCookieHeader);
+        boolean hasToken = token != null && !token.isEmpty();
+        org.springframework.http.ResponseCookie responseCookie = org.springframework.http.ResponseCookie
+            .from("refreshToken", hasToken ? token : "")
+            .httpOnly(true)
+            .secure(!appProperties.isDebug())
+            .path("/")
+            .maxAge(hasToken ? 604800 : 0)
+            .sameSite("Strict")
+            .build();
+        response.addHeader("Set-Cookie", responseCookie.toString());
     }
 
     private String getAccessToken(HttpServletRequest request) {

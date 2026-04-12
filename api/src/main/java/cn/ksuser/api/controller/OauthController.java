@@ -652,21 +652,8 @@ public class OauthController {
                     int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
                     String accessTokenLocal = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
-                    // 设置 refreshToken Cookie（复制 AuthController 的实现）
-                    jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("refreshToken", refreshToken);
-                    cookie.setHttpOnly(true);
-                    cookie.setSecure(!appProperties.isDebug());
-                    cookie.setPath("/");
-                    cookie.setMaxAge(604800);
-                    response.addCookie(cookie);
-                    String sameSiteValue = "SameSite=Strict";
-                    String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
-                        refreshToken != null ? refreshToken : "",
-                        cookie.getSecure() ? "Secure; " : "",
-                        sameSiteValue,
-                        cookie.getMaxAge()
-                    );
-                    response.addHeader("Set-Cookie", setCookieHeader);
+                    // 设置 refreshToken Cookie
+                    setRefreshTokenCookie(response, refreshToken);
 
                     // 更新最后登录时间
                     acct.setLastLoginAt(java.time.LocalDateTime.now());
@@ -806,6 +793,9 @@ public class OauthController {
 
         User newUser = regResult.getUser();
 
+        // 为新注册用户初始化默认 settings，确保后续设置相关接口有稳定初始数据
+        getOrCreateUserSettings(newUser.getId());
+
         // 绑定 openid
         UserOauthAccount acct = new UserOauthAccount();
         acct.setProvider("qq");
@@ -825,20 +815,7 @@ public class OauthController {
         String accessTokenLocal = jwtUtil.generateAccessToken(newUser.getUuid(), session.getId(), sessionVersion);
 
         // 设置 refreshToken Cookie
-        jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(!appProperties.isDebug());
-        cookie.setPath("/");
-        cookie.setMaxAge(604800);
-        response.addCookie(cookie);
-        String sameSiteValue = "SameSite=Strict";
-        String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
-            refreshToken != null ? refreshToken : "",
-            cookie.getSecure() ? "Secure; " : "",
-            sameSiteValue,
-            cookie.getMaxAge()
-        );
-        response.addHeader("Set-Cookie", setCookieHeader);
+        setRefreshTokenCookie(response, refreshToken);
 
         // 记录登录日志
         sensitiveLogUtil.logLogin(request, newUser.getId(), "QQ", true, null, System.currentTimeMillis());
@@ -1101,20 +1078,7 @@ public class OauthController {
                     String accessTokenLocal = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
                     // 设置 refreshToken Cookie
-                    jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("refreshToken", refreshToken);
-                    cookie.setHttpOnly(true);
-                    cookie.setSecure(!appProperties.isDebug());
-                    cookie.setPath("/");
-                    cookie.setMaxAge(604800);
-                    response.addCookie(cookie);
-                    String sameSiteValue = "SameSite=Strict";
-                    String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
-                        refreshToken != null ? refreshToken : "",
-                        cookie.getSecure() ? "Secure; " : "",
-                        sameSiteValue,
-                        cookie.getMaxAge()
-                    );
-                    response.addHeader("Set-Cookie", setCookieHeader);
+                    setRefreshTokenCookie(response, refreshToken);
 
                     // 更新最后登录时间
                     acct.setLastLoginAt(java.time.LocalDateTime.now());
@@ -1382,20 +1346,7 @@ public class OauthController {
                     int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
                     String accessTokenLocal = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
-                    jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("refreshToken", refreshToken);
-                    cookie.setHttpOnly(true);
-                    cookie.setSecure(!appProperties.isDebug());
-                    cookie.setPath("/");
-                    cookie.setMaxAge(604800);
-                    response.addCookie(cookie);
-                    String sameSiteValue = "SameSite=Strict";
-                    String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
-                        refreshToken != null ? refreshToken : "",
-                        cookie.getSecure() ? "Secure; " : "",
-                        sameSiteValue,
-                        cookie.getMaxAge()
-                    );
-                    response.addHeader("Set-Cookie", setCookieHeader);
+                    setRefreshTokenCookie(response, refreshToken);
 
                     acct.setLastLoginAt(java.time.LocalDateTime.now());
                     oauthRepo.save(acct);
@@ -1893,20 +1844,7 @@ public class OauthController {
                     int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
                     String accessTokenLocal = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
 
-                    jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("refreshToken", refreshToken);
-                    cookie.setHttpOnly(true);
-                    cookie.setSecure(!appProperties.isDebug());
-                    cookie.setPath("/");
-                    cookie.setMaxAge(604800);
-                    response.addCookie(cookie);
-                    String sameSiteValue = "SameSite=Strict";
-                    String setCookieHeader = String.format("refreshToken=%s; Path=/; HttpOnly; %s%s; Max-Age=%d",
-                        refreshToken != null ? refreshToken : "",
-                        cookie.getSecure() ? "Secure; " : "",
-                        sameSiteValue,
-                        cookie.getMaxAge()
-                    );
-                    response.addHeader("Set-Cookie", setCookieHeader);
+                    setRefreshTokenCookie(response, refreshToken);
 
                     acct.setLastLoginAt(java.time.LocalDateTime.now());
                     oauthRepo.save(acct);
@@ -2183,6 +2121,21 @@ public class OauthController {
         return null;
     }
 
+    private UserSettings getOrCreateUserSettings(Long userId) {
+        return userSettingsRepository.findByUserId(userId)
+            .orElseGet(() -> {
+                UserSettings settings = new UserSettings();
+                settings.setUserId(userId);
+                settings.setMfaEnabled(false);
+                settings.setDetectUnusualLogin(true);
+                settings.setNotifySensitiveActionEmail(true);
+                settings.setSubscribeNewsEmail(false);
+                settings.setPreferredMfaMethod("totp");
+                settings.setPreferredSensitiveMethod("password");
+                return userSettingsRepository.save(settings);
+            });
+    }
+
     private List<String> resolveOauthMfaMethods(Long userId) {
         List<String> methods = new java.util.ArrayList<>();
         if (totpService.isTotpEnabled(userId)) {
@@ -2216,5 +2169,18 @@ public class OauthController {
             return 0;
         }
         return "totp".equals(method) ? 1 : 2;
+    }
+
+    private void setRefreshTokenCookie(HttpServletResponse response, String token) {
+        boolean hasToken = token != null && !token.isEmpty();
+        org.springframework.http.ResponseCookie responseCookie = org.springframework.http.ResponseCookie
+            .from("refreshToken", hasToken ? token : "")
+            .httpOnly(true)
+            .secure(!appProperties.isDebug())
+            .path("/")
+            .maxAge(hasToken ? 604800 : 0)
+            .sameSite("Strict")
+            .build();
+        response.addHeader("Set-Cookie", responseCookie.toString());
     }
 }
