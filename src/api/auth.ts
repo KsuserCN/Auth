@@ -344,6 +344,7 @@ export const refreshAccessToken = async (): Promise<{ accessToken: string }> => 
 }
 
 export type SessionTransferTarget = 'web' | 'desktop'
+export type SessionTransferPurpose = 'bridge_login' | 'session_sync' | 'auth_bridge_internal'
 
 export interface SessionTransferResponse {
   transferCode: string
@@ -352,10 +353,11 @@ export interface SessionTransferResponse {
 
 export const createSessionTransfer = async (
   target: SessionTransferTarget,
+  purpose?: SessionTransferPurpose,
 ): Promise<SessionTransferResponse> => {
   const response = await request.post<ApiResponse<SessionTransferResponse>>(
     '/auth/session-transfer/create',
-    { target },
+    purpose ? { target, purpose } : { target },
   )
   return response.data as unknown as SessionTransferResponse
 }

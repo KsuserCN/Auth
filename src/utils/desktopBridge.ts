@@ -166,7 +166,7 @@ export const syncCurrentWebSessionToDesktop = async (): Promise<boolean> => {
       return false
     }
 
-    const transfer = await createSessionTransfer('desktop')
+    const transfer = await createSessionTransfer('desktop', 'session_sync')
     await requestBridge(
       '/ksuser-auth/bridge/import',
       {

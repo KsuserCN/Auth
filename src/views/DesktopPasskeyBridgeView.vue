@@ -275,7 +275,7 @@ const createDesktopTransferCode = async (nextAccessToken: string): Promise<strin
 
   try {
     setStoredAccessToken(nextAccessToken)
-    const transfer = await createSessionTransfer('desktop')
+    const transfer = await createSessionTransfer('desktop', 'auth_bridge_internal')
     return transfer.transferCode
   } finally {
     if (currentAccessToken) {
