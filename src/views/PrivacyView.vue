@@ -33,7 +33,11 @@
           <div v-if="ssoApps.length" class="app-list">
             <div v-for="app in ssoApps" :key="app.clientId" class="app-item">
               <div class="app-left">
-                <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">
+                <el-avatar
+                  :size="48"
+                  :src="app.logoUrl"
+                  :class="['app-avatar', { 'app-avatar--image': !!app.logoUrl }]"
+                >
                   {{ app.clientName.slice(0, 1).toUpperCase() }}
                 </el-avatar>
                 <div class="app-info">
@@ -41,35 +45,26 @@
                     <span class="app-name">{{ app.clientName }}</span>
                     <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
                   </div>
-                  <div class="scope-list">
-                    <el-tag
-                      v-for="scope in app.scopes"
-                      :key="`${app.clientId}-${scope}`"
-                      size="small"
-                      effect="plain"
-                    >
-                      {{ ssoScopeLabel(scope) }}
-                    </el-tag>
-                  </div>
-                  <div class="app-meta">首次授权：{{ formatDateTime(app.authorizedAt) }}</div>
                   <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
-                  <div class="app-meta mono">回调：{{ app.redirectUri }}</div>
                 </div>
               </div>
 
-              <el-popconfirm
-                title="撤销该 Ksuser 应用授权？"
-                description="撤销后，下次登录该应用需要重新确认授权。"
-                confirm-button-text="撤销"
-                cancel-button-text="取消"
-                @confirm="handleRevokeSso(app.clientId)"
-              >
-                <template #reference>
-                  <el-button text type="danger" size="small" :loading="revokingId === `sso:${app.clientId}`">
-                    撤销
-                  </el-button>
-                </template>
-              </el-popconfirm>
+              <div class="app-actions">
+                <el-button size="small" @click="openSsoDetailDialog(app.clientId)">详情</el-button>
+                <el-popconfirm
+                  title="撤销该 Ksuser 应用授权？"
+                  description="撤销后，下次登录该应用需要重新确认授权。"
+                  confirm-button-text="撤销"
+                  cancel-button-text="取消"
+                  @confirm="handleRevokeSso(app.clientId)"
+                >
+                  <template #reference>
+                    <el-button type="danger" plain size="small" :loading="revokingId === `sso:${app.clientId}`">
+                      撤销
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
             </div>
           </div>
 
@@ -88,44 +83,46 @@
           <div v-if="oauthApps.length" class="app-list">
             <div v-for="app in oauthApps" :key="app.appId" class="app-item">
               <div class="app-left">
-                <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">
+                <el-avatar
+                  :size="48"
+                  :src="app.logoUrl"
+                  :class="['app-avatar', { 'app-avatar--image': !!app.logoUrl }]"
+                >
                   {{ app.appName.slice(0, 1).toUpperCase() }}
                 </el-avatar>
                 <div class="app-info">
                   <div class="app-name-row">
                     <span class="app-name">{{ app.appName }}</span>
-                    <el-tag size="small" type="info" effect="plain">Third-party</el-tag>
-                  </div>
-                  <div class="scope-list">
+                    <el-tag size="small" type="info" effect="plain">{{ creatorNameLabel(app.creatorName) }}</el-tag>
                     <el-tag
-                      v-for="scope in app.scopes"
-                      :key="`${app.appId}-${scope}`"
+                      v-if="app.creatorVerificationType"
                       size="small"
+                      :type="verificationTagType(app.creatorVerificationType)"
                       effect="plain"
                     >
-                      {{ oauthScopeLabel(scope) }}
+                      {{ verificationLabel(app.creatorVerificationType) }}
                     </el-tag>
                   </div>
-                  <div class="app-meta">开发者：{{ app.contactInfo }}</div>
-                  <div class="app-meta">首次授权：{{ formatDateTime(app.authorizedAt) }}</div>
                   <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
-                  <div class="app-meta mono">回调：{{ app.redirectUri }}</div>
                 </div>
               </div>
 
-              <el-popconfirm
-                title="撤销该第三方应用授权？"
-                description="撤销后，该应用需要重新请求授权才能再次访问您的账号信息。"
-                confirm-button-text="撤销"
-                cancel-button-text="取消"
-                @confirm="handleRevokeOauth(app.appId)"
-              >
-                <template #reference>
-                  <el-button text type="danger" size="small" :loading="revokingId === `oauth:${app.appId}`">
-                    撤销
-                  </el-button>
-                </template>
-              </el-popconfirm>
+              <div class="app-actions">
+                <el-button size="small" @click="openOauthDetailDialog(app.appId)">详情</el-button>
+                <el-popconfirm
+                  title="撤销该第三方应用授权？"
+                  description="撤销后，该应用需要重新请求授权才能再次访问您的账号信息。"
+                  confirm-button-text="撤销"
+                  cancel-button-text="取消"
+                  @confirm="handleRevokeOauth(app.appId)"
+                >
+                  <template #reference>
+                    <el-button type="danger" plain size="small" :loading="revokingId === `oauth:${app.appId}`">
+                      撤销
+                    </el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
             </div>
           </div>
 
@@ -133,6 +130,109 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <el-dialog
+      v-model="ssoDetailDialogVisible"
+      class="detail-dialog"
+      title="应用详情"
+      width="720px"
+      @closed="resetSsoDetailDialog"
+    >
+      <div v-if="ssoDetailApp" class="detail-shell">
+        <div class="detail-head">
+          <div class="detail-title">
+            <el-avatar
+              :size="56"
+              :src="ssoDetailApp.logoUrl"
+              :class="['app-avatar', 'detail-avatar', { 'app-avatar--image': !!ssoDetailApp.logoUrl }]"
+            >
+              {{ ssoDetailApp.clientName.slice(0, 1).toUpperCase() }}
+            </el-avatar>
+            <div>
+              <div class="detail-name">{{ ssoDetailApp.clientName }}</div>
+              <div class="detail-sub">最近授权：{{ formatDateTime(ssoDetailApp.lastAuthorizedAt) }}</div>
+            </div>
+          </div>
+          <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
+        </div>
+
+        <el-descriptions class="detail-desc" :column="1" border>
+          <el-descriptions-item label="网站">{{ extractWebsite(ssoDetailApp.redirectUri) }}</el-descriptions-item>
+          <el-descriptions-item label="首次授权">{{ formatDateTime(ssoDetailApp.authorizedAt) }}</el-descriptions-item>
+          <el-descriptions-item label="权限范围">
+            <div class="scope-list">
+              <el-tag
+                v-for="scope in ssoDetailApp.scopes"
+                :key="`${ssoDetailApp.clientId}-${scope}`"
+                size="small"
+                effect="plain"
+              >
+                {{ ssoScopeLabel(scope) }}
+              </el-tag>
+            </div>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-empty v-else description="应用不存在或已被撤销" />
+    </el-dialog>
+
+    <el-dialog
+      v-model="oauthDetailDialogVisible"
+      class="detail-dialog"
+      title="应用详情"
+      width="720px"
+      @closed="resetOauthDetailDialog"
+    >
+      <div v-if="oauthDetailApp" class="detail-shell">
+        <div class="detail-head">
+          <div class="detail-title">
+            <el-avatar
+              :size="56"
+              :src="oauthDetailApp.logoUrl"
+              :class="['app-avatar', 'detail-avatar', { 'app-avatar--image': !!oauthDetailApp.logoUrl }]"
+            >
+              {{ oauthDetailApp.appName.slice(0, 1).toUpperCase() }}
+            </el-avatar>
+            <div>
+              <div class="detail-name">{{ oauthDetailApp.appName }}</div>
+              <div class="detail-sub">最近授权：{{ formatDateTime(oauthDetailApp.lastAuthorizedAt) }}</div>
+            </div>
+          </div>
+          <div class="detail-tags">
+            <el-tag size="small" type="info" effect="plain">
+              {{ creatorNameLabel(oauthDetailApp.creatorName) }}
+            </el-tag>
+            <el-tag
+              v-if="oauthDetailApp.creatorVerificationType"
+              size="small"
+              :type="verificationTagType(oauthDetailApp.creatorVerificationType)"
+              effect="plain"
+            >
+              {{ verificationLabel(oauthDetailApp.creatorVerificationType) }}
+            </el-tag>
+          </div>
+        </div>
+
+        <el-descriptions class="detail-desc" :column="1" border>
+          <el-descriptions-item label="网站">{{ extractWebsite(oauthDetailApp.redirectUri) }}</el-descriptions-item>
+          <el-descriptions-item label="开发者">{{ oauthDetailApp.contactInfo }}</el-descriptions-item>
+          <el-descriptions-item label="首次授权">{{ formatDateTime(oauthDetailApp.authorizedAt) }}</el-descriptions-item>
+          <el-descriptions-item label="权限范围">
+            <div class="scope-list">
+              <el-tag
+                v-for="scope in oauthDetailApp.scopes"
+                :key="`${oauthDetailApp.appId}-${scope}`"
+                size="small"
+                effect="plain"
+              >
+                {{ oauthScopeLabel(scope) }}
+              </el-tag>
+            </div>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-empty v-else description="应用不存在或已被撤销" />
+    </el-dialog>
 
     <el-card class="card data-card" shadow="never">
       <div class="card-title">
@@ -191,9 +291,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Monitor, Share } from '@element-plus/icons-vue'
+import type { VerificationType } from '@/api/auth'
 import {
   getOAuth2Authorizations,
   revokeOAuth2Authorization,
@@ -216,6 +317,10 @@ const oauthApps = ref<OAuth2AuthorizedApp[]>([])
 const ssoApps = ref<SSOAuthorizedClient[]>([])
 const downloading = ref(false)
 const sensitiveDialogVisible = ref(false)
+const ssoDetailDialogVisible = ref(false)
+const oauthDetailDialogVisible = ref(false)
+const ssoDetailClientId = ref('')
+const oauthDetailAppId = ref('')
 let pendingSensitiveAction: (() => Promise<void>) | null = null
 
 const oauthScopeLabel = (scope: OAuth2Scope) => {
@@ -227,6 +332,25 @@ const ssoScopeLabel = (scope: SSOScope) => {
   if (scope === 'openid') return '基础身份标识'
   if (scope === 'email') return '邮箱地址'
   return '昵称与头像'
+}
+
+const creatorNameLabel = (value?: string) => {
+  const normalized = value?.trim()
+  return normalized ? normalized : 'Third-party'
+}
+
+const verificationLabel = (type?: VerificationType) => {
+  if (type === 'admin') return '管理员'
+  if (type === 'enterprise') return '企业认证'
+  if (type === 'personal') return '个人认证'
+  return '未认证'
+}
+
+const verificationTagType = (type?: VerificationType) => {
+  if (type === 'admin') return 'danger'
+  if (type === 'enterprise') return 'warning'
+  if (type === 'personal') return 'success'
+  return 'info'
 }
 
 const formatDateTime = (value: string) => {
@@ -242,12 +366,62 @@ const formatDateTime = (value: string) => {
   }).format(date)
 }
 
+const extractWebsite = (redirectUri: string) => {
+  const raw = redirectUri?.trim() || ''
+  if (!raw) return '-'
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '-'
+    return url.host || '-'
+  } catch {
+    return '-'
+  }
+}
+
+const ssoDetailApp = computed(() => {
+  const clientId = ssoDetailClientId.value
+  if (!clientId) return null
+  return ssoApps.value.find((item) => item.clientId === clientId) ?? null
+})
+
+const oauthDetailApp = computed(() => {
+  const appId = oauthDetailAppId.value
+  if (!appId) return null
+  return oauthApps.value.find((item) => item.appId === appId) ?? null
+})
+
+const openSsoDetailDialog = (clientId: string) => {
+  ssoDetailClientId.value = clientId
+  ssoDetailDialogVisible.value = true
+}
+
+const openOauthDetailDialog = (appId: string) => {
+  oauthDetailAppId.value = appId
+  oauthDetailDialogVisible.value = true
+}
+
+const resetSsoDetailDialog = () => {
+  ssoDetailClientId.value = ''
+}
+
+const resetOauthDetailDialog = () => {
+  oauthDetailAppId.value = ''
+}
+
 const loadAuthorizations = async () => {
   loading.value = true
   try {
     const [oauth, sso] = await Promise.all([getOAuth2Authorizations(), getSSOAuthorizations()])
     oauthApps.value = oauth
     ssoApps.value = sso
+    if (ssoDetailDialogVisible.value && ssoDetailClientId.value && !ssoDetailApp.value) {
+      resetSsoDetailDialog()
+      ssoDetailDialogVisible.value = false
+    }
+    if (oauthDetailDialogVisible.value && oauthDetailAppId.value && !oauthDetailApp.value) {
+      resetOauthDetailDialog()
+      oauthDetailDialogVisible.value = false
+    }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '加载授权应用失败')
   } finally {
@@ -425,6 +599,12 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
 }
 
+.detail-tags {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .app-list {
   display: flex;
   flex-direction: column;
@@ -433,7 +613,7 @@ onMounted(() => {
 
 .app-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 14px;
@@ -464,6 +644,17 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.app-avatar--image {
+  background: transparent;
+  color: var(--el-text-color-primary);
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.app-avatar :deep(img) {
+  object-fit: contain;
+  background: transparent;
+}
+
 .app-info {
   min-width: 0;
   display: flex;
@@ -482,6 +673,16 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .scope-list {
@@ -499,6 +700,46 @@ onMounted(() => {
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.detail-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detail-avatar {
+  border-radius: 14px;
+}
+
+.detail-name {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--el-text-color-primary);
+}
+
+.detail-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.detail-desc :deep(.el-descriptions__label) {
+  width: 120px;
 }
 
 .data-card {
@@ -561,6 +802,10 @@ onMounted(() => {
   .action-item {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .app-actions {
+    justify-content: flex-start;
   }
 }
 </style>

@@ -67,6 +67,8 @@ export interface OAuth2AuthorizedApp {
   appId: string
   appName: string
   logoUrl?: string
+  creatorName?: string
+  creatorVerificationType?: VerificationType
   contactInfo: string
   redirectUri: string
   scopes: OAuth2Scope[]
