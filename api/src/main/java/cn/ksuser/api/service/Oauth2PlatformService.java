@@ -462,10 +462,18 @@ public class Oauth2PlatformService {
         String logoUrl = application != null ? application.getLogoUrl() : authorization.getLogoUrl();
         String contactInfo = application != null ? application.getContactInfo() : authorization.getContactInfo();
         String redirectUri = application != null ? application.getRedirectUri() : authorization.getRedirectUri();
+        User creator = null;
+        if (application != null && application.getOwnerUserId() != null) {
+            creator = userRepository.findById(application.getOwnerUserId()).orElse(null);
+        }
+        String creatorName = creator != null ? normalizeOptional(creator.getUsername()) : null;
+        String creatorVerificationType = creator != null ? normalizeOptional(creator.getVerificationType()) : null;
         return new Oauth2AuthorizedAppResponse(
             authorization.getAppId(),
             appName,
             logoUrl,
+            creatorName,
+            creatorVerificationType,
             contactInfo,
             redirectUri,
             parseScopes(authorization.getScopes()),

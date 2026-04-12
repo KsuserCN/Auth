@@ -7,6 +7,8 @@ public class Oauth2AuthorizedAppResponse {
     private String appId;
     private String appName;
     private String logoUrl;
+    private String creatorName;
+    private String creatorVerificationType;
     private String contactInfo;
     private String redirectUri;
     private List<String> scopes;
@@ -22,6 +24,21 @@ public class Oauth2AuthorizedAppResponse {
         this.appId = appId;
         this.appName = appName;
         this.logoUrl = logoUrl;
+        this.contactInfo = contactInfo;
+        this.redirectUri = redirectUri;
+        this.scopes = scopes;
+        this.authorizedAt = authorizedAt;
+        this.lastAuthorizedAt = lastAuthorizedAt;
+    }
+
+    public Oauth2AuthorizedAppResponse(String appId, String appName, String logoUrl, String creatorName,
+                                       String creatorVerificationType, String contactInfo, String redirectUri,
+                                       List<String> scopes, LocalDateTime authorizedAt, LocalDateTime lastAuthorizedAt) {
+        this.appId = appId;
+        this.appName = appName;
+        this.logoUrl = logoUrl;
+        this.creatorName = creatorName;
+        this.creatorVerificationType = creatorVerificationType;
         this.contactInfo = contactInfo;
         this.redirectUri = redirectUri;
         this.scopes = scopes;
@@ -51,6 +68,22 @@ public class Oauth2AuthorizedAppResponse {
 
     public void setLogoUrl(String logoUrl) {
         this.logoUrl = logoUrl;
+    }
+
+    public String getCreatorName() {
+        return creatorName;
+    }
+
+    public void setCreatorName(String creatorName) {
+        this.creatorName = creatorName;
+    }
+
+    public String getCreatorVerificationType() {
+        return creatorVerificationType;
+    }
+
+    public void setCreatorVerificationType(String creatorVerificationType) {
+        this.creatorVerificationType = creatorVerificationType;
     }
 
     public String getContactInfo() {

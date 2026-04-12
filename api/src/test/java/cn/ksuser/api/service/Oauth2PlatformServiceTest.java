@@ -4,6 +4,7 @@ import cn.ksuser.api.entity.Oauth2Application;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.Oauth2ApplicationRepository;
+import cn.ksuser.api.repository.UserOauth2AuthorizationRepository;
 import cn.ksuser.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.when;
 class Oauth2PlatformServiceTest {
 
     private Oauth2ApplicationRepository applicationRepository;
+    private UserOauth2AuthorizationRepository authorizationRepository;
     private UserRepository userRepository;
     private PasswordEncoder passwordEncoder;
     private StringRedisTemplate redisTemplate;
@@ -37,6 +39,7 @@ class Oauth2PlatformServiceTest {
     @BeforeEach
     void setUp() {
         applicationRepository = mock(Oauth2ApplicationRepository.class);
+        authorizationRepository = mock(UserOauth2AuthorizationRepository.class);
         userRepository = mock(UserRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
         redisTemplate = mock(StringRedisTemplate.class);
@@ -47,6 +50,7 @@ class Oauth2PlatformServiceTest {
 
         service = new Oauth2PlatformService(
             applicationRepository,
+            authorizationRepository,
             userRepository,
             passwordEncoder,
             redisTemplate,
