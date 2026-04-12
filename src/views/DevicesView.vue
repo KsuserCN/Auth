@@ -104,40 +104,37 @@
       </el-col>
     </el-row>
 
-    <!-- 危险区域 -->
-    <el-row :gutter="16" class="row-gap">
-      <el-col :xs="24">
-        <el-card class="card danger-card" shadow="never">
-          <div class="card-title">
-            <el-icon>
-              <WarningFilled />
-            </el-icon>
-            <span>危险区域</span>
-          </div>
-          <div class="danger-content">
-            <div class="danger-info">
-              <h3 class="danger-title">从所有设备退出登录</h3>
-              <p class="danger-desc">
-                这将撤销您在所有设备上的登录状态，包括当前设备。您需要重新登录才能继续使用。
-              </p>
-            </div>
-            <el-button type="danger" plain @click="handleLogoutAll" :loading="logoutAllLoading">
-              退出所有设备
-            </el-button>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-  </div>
-</template>
+	    <!-- 危险区域 -->
+	    <el-row :gutter="16" class="row-gap">
+	      <el-col :xs="24">
+	        <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
+	          <div class="danger-zone-item">
+	            <div class="danger-zone-item-left">
+	              <div class="danger-zone-item-title">从所有设备退出登录</div>
+	              <p class="danger-zone-item-desc">
+	                这将撤销您在所有设备上的登录状态，包括当前设备。您需要重新登录才能继续使用。
+	              </p>
+	            </div>
+	            <div class="danger-zone-item-right">
+	              <el-button type="danger" plain @click="handleLogoutAll" :loading="logoutAllLoading">
+	                退出所有设备
+	              </el-button>
+	            </div>
+	          </div>
+	        </DangerZoneCard>
+	      </el-col>
+	    </el-row>
+	  </div>
+	</template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Monitor, Cellphone, Iphone, Refresh, WarningFilled } from '@element-plus/icons-vue'
-import { getSessions, revokeSession, logoutAll, type SessionItem } from '@/api/auth'
-import { useRouter } from 'vue-router'
-import { clearAuthSession } from '@/utils/authSession'
+	import { ElMessage, ElMessageBox } from 'element-plus'
+	import { Monitor, Cellphone, Iphone, Refresh, WarningFilled } from '@element-plus/icons-vue'
+	import { getSessions, revokeSession, logoutAll, type SessionItem } from '@/api/auth'
+	import { useRouter } from 'vue-router'
+	import { clearAuthSession } from '@/utils/authSession'
+	import DangerZoneCard from '@/components/DangerZoneCard.vue'
 
 const router = useRouter()
 const sessions = ref<SessionItem[]>([])
@@ -393,44 +390,5 @@ onMounted(() => {
   margin-top: 16px;
 }
 
-.danger-card {
-  border-color: var(--el-color-danger-light-7);
-  background: var(--el-color-danger-light-9);
-}
-
-.danger-card .card-title {
-  color: var(--el-color-danger);
-}
-
-.danger-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.danger-info {
-  flex: 1;
-}
-
-.danger-title {
-  margin: 0 0 8px 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.danger-desc {
-  margin: 0;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.6;
-}
-
-@media (max-width: 768px) {
-  .danger-content {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-}
-</style>
+	
+	</style>

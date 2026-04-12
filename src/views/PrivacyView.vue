@@ -234,11 +234,11 @@
       <el-empty v-else description="应用不存在或已被撤销" />
     </el-dialog>
 
-    <el-card class="card data-card" shadow="never">
-      <div class="card-title">
-        <el-icon><Download /></el-icon>
-        <span>数据管理</span>
-      </div>
+	    <el-card class="card data-card" shadow="never">
+	      <div class="card-title">
+	        <el-icon><Download /></el-icon>
+	        <span>数据管理</span>
+	      </div>
       <p class="card-desc">导出或删除您的账户数据</p>
 
       <div class="data-actions">
@@ -250,37 +250,41 @@
           class="action-alert"
         />
 
-        <div class="action-item">
-          <div class="action-info">
-            <div class="action-title">下载您的数据</div>
-            <div class="action-desc">获取您账户的完整数据备份（JSON 格式）</div>
-          </div>
-          <el-button type="primary" plain :loading="downloading" @click="handleDownloadData">
-            下载
-          </el-button>
-        </div>
-
-        <el-divider />
-
-        <div class="action-item">
-          <div class="action-info">
-            <div class="action-title">删除账户</div>
-            <div class="action-desc danger">此操作不可撤销，请谨慎选择</div>
-          </div>
-          <el-popconfirm
-            title="确认删除账户？"
-            description="删除后所有数据将被永久清除，此操作无法撤销。"
-            confirm-button-text="我已理解，删除"
-            cancel-button-text="取消"
-            @confirm="handleDeleteAccount"
-          >
-            <template #reference>
-              <el-button type="danger" plain>删除</el-button>
-            </template>
-          </el-popconfirm>
-        </div>
-      </div>
-    </el-card>
+	        <div class="action-item">
+	          <div class="action-info">
+	            <div class="action-title">下载您的数据</div>
+	            <div class="action-desc">获取您账户的完整数据备份（JSON 格式）</div>
+	          </div>
+	          <el-button type="primary" plain :loading="downloading" @click="handleDownloadData">
+	            下载
+	          </el-button>
+	        </div>
+	      </div>
+	    </el-card>
+	
+	    <div class="danger-zone-section">
+	      <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
+	        <div class="danger-zone-item">
+	          <div class="danger-zone-item-left">
+	            <div class="danger-zone-item-title danger">删除账户</div>
+	            <p class="danger-zone-item-desc">删除后所有数据将被永久清除，此操作无法撤销。</p>
+	          </div>
+	          <div class="danger-zone-item-right">
+	            <el-popconfirm
+	              title="确认删除账户？"
+	              description="删除后所有数据将被永久清除，此操作无法撤销。"
+	              confirm-button-text="我已理解，删除"
+	              cancel-button-text="取消"
+	              @confirm="handleDeleteAccount"
+	            >
+	              <template #reference>
+	                <el-button type="danger" plain>删除</el-button>
+	              </template>
+	            </el-popconfirm>
+	          </div>
+	        </div>
+	      </DangerZoneCard>
+	    </div>
 
     <SensitiveVerificationDialog
       v-model="sensitiveDialogVisible"
@@ -291,9 +295,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Download, Monitor, Share } from '@element-plus/icons-vue'
+	import { computed, onMounted, ref } from 'vue'
+	import { ElMessage } from 'element-plus'
+	import { Download, Monitor, Share, WarningFilled } from '@element-plus/icons-vue'
 import type { VerificationType } from '@/api/auth'
 import {
   getOAuth2Authorizations,
@@ -309,7 +313,8 @@ import {
 } from '@/api/sso'
 import { checkSensitiveVerification } from '@/api/auth'
 import { downloadPrivacyExportFile, fetchPrivacyExportData } from '@/api/privacyExport'
-import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+	import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+	import DangerZoneCard from '@/components/DangerZoneCard.vue'
 
 const loading = ref(false)
 const revokingId = ref('')
@@ -744,6 +749,10 @@ onMounted(() => {
 
 .data-card {
   margin-top: 4px;
+}
+
+.danger-zone-section {
+  margin-top: 16px;
 }
 
 .data-actions {

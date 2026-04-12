@@ -239,31 +239,21 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" class="row-gap">
-      <el-col :xs="24">
-        <el-card class="card card-danger" shadow="never">
-          <div class="card-title danger-title">
-            <el-icon>
-              <Delete />
-            </el-icon>
-            <span>危险操作区域</span>
-          </div>
-          <div class="danger-zone">
-            <div class="danger-item">
-              <div class="item-left">
-                <div class="item-header">
-                  <span class="item-title danger">注销账号</span>
-                </div>
-                <p class="item-desc">永久删除您的账号和所有相关数据。此操作不可逆转。</p>
-              </div>
-              <div class="item-right">
-                <el-button type="danger" plain size="small" @click="handleDeleteAccount">注销</el-button>
-              </div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+	    <el-row :gutter="16" class="row-gap">
+	      <el-col :xs="24">
+	        <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
+	          <div class="danger-zone-item">
+	            <div class="danger-zone-item-left">
+	              <div class="danger-zone-item-title danger">注销账号</div>
+	              <p class="danger-zone-item-desc">永久删除您的账号和所有相关数据。此操作不可逆转。</p>
+	            </div>
+	            <div class="danger-zone-item-right">
+	              <el-button type="danger" plain size="small" @click="handleDeleteAccount">注销</el-button>
+	            </div>
+	          </div>
+	        </DangerZoneCard>
+	      </el-col>
+	    </el-row>
 
     <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
       @cancel="handleSensitiveVerificationCancel" />
@@ -274,12 +264,13 @@
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import {
-  Key,
-  Lock,
-  Delete,
-  Document,
-} from '@element-plus/icons-vue'
+	import {
+	  Key,
+	  Lock,
+	  Delete,
+	  Document,
+	  WarningFilled,
+	} from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
   getPasskeyList,
@@ -291,7 +282,8 @@ import {
   type SensitiveLoginMethod,
   type SensitiveOperationType,
 } from '@/api/auth'
-import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+	import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+	import DangerZoneCard from '@/components/DangerZoneCard.vue'
 
 const router = useRouter()
 
@@ -698,10 +690,6 @@ const handleSensitiveVerificationCancel = () => {
   background: var(--el-bg-color);
 }
 
-.card-danger {
-  border-color: #f56c6c;
-  background: var(--el-bg-color);
-}
 
 .card-title {
   display: flex;
@@ -729,19 +717,12 @@ const handleSensitiveVerificationCancel = () => {
   gap: 8px;
 }
 
-.card-title.danger-title {
-  color: #f56c6c;
-}
 
 .security-list {
   display: flex;
   flex-direction: column;
 }
 
-.danger-zone {
-  display: flex;
-  flex-direction: column;
-}
 
 .security-item {
   padding: 16px 0;
@@ -750,12 +731,6 @@ const handleSensitiveVerificationCancel = () => {
   justify-content: space-between;
 }
 
-.danger-item {
-  padding: 16px 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
 
 .item-left {
   flex: 1;
@@ -781,9 +756,6 @@ const handleSensitiveVerificationCancel = () => {
   color: var(--el-text-color-primary);
 }
 
-.item-title.danger {
-  color: #f56c6c;
-}
 
 .item-desc {
   margin: 0;
