@@ -48,7 +48,7 @@
                   </div>
                   <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
                 </div>
-                <span class="upload-tip">点击上传头像（最大 3MB，支持裁剪）</span>
+                <span class="upload-tip">点击上传头像（最大 3MB）</span>
               </div>
             </div>
 
@@ -385,7 +385,7 @@ const form = reactive({
 
 const verificationLabel = computed(() => {
   const type = user.value?.verificationType
-  if (type === 'admin') return '管理员认证'
+  if (type === 'admin') return '管理员'
   if (type === 'enterprise') return '企业认证'
   if (type === 'personal') return '个人认证'
   return '未认证'

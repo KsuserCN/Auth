@@ -3,7 +3,7 @@
     <div class="content-header card-like">
       <div class="header-main">
         <h1 class="page-title">账号概览</h1>
-        <p class="page-subtitle">一眼看清账号状态与关键入口</p>
+        <p class="page-subtitle">在这里查看你的账号整体评分与常用入口</p>
       </div>
       <el-button class="primary-btn" :loading="refreshing" @click="refreshOverview">
         <el-icon>
@@ -204,28 +204,28 @@ const securityLevelTagType = computed(() => {
 })
 
 const securityHint = computed(() => {
-  if (securityScore.value >= 80) return '关键防护已就位，建议定期检查登录设备。'
-  if (securityScore.value >= 50) return '基础防护已开启，建议补全 Passkey 或 TOTP。'
-  return '建议尽快开启 MFA 并完善登录防护。'
+  if (securityScore.value >= 80) return '关键防护已就位，建议定期检查登录设备'
+  if (securityScore.value >= 50) return '基础防护已开启，建议补全 Passkey 或 TOTP'
+  return '建议尽快开启 MFA 并完善登录防护'
 })
 
 const securityChecklist = computed(() => {
   return [
     {
       title: '开启两步验证',
-      desc: mfaEnabled.value ? '已开启，登录将触发额外验证。' : '建议立即开启，降低账号被盗风险。',
+      desc: mfaEnabled.value ? '已开启，登录将触发额外验证' : '建议立即开启，降低账号被盗风险',
       done: mfaEnabled.value,
       path: '/home/security',
     },
     {
       title: '配置 Passkey',
-      desc: passkeyCount.value > 0 ? `已配置 ${passkeyCount.value} 个 Passkey。` : '尚未配置，建议添加设备级凭据。',
+      desc: passkeyCount.value > 0 ? `已配置 ${passkeyCount.value} 个 Passkey` : '尚未配置，建议添加设备级凭据',
       done: passkeyCount.value > 0,
       path: '/home/login-options',
     },
     {
       title: '启用 TOTP 动态码',
-      desc: totpEnabled.value ? '已启用动态码校验。' : '未启用，建议作为备用 MFA 方式。',
+      desc: totpEnabled.value ? '已启用动态码校验' : '未启用，建议作为备用 MFA 方式',
       done: totpEnabled.value,
       path: '/home/login-options',
     },
@@ -258,11 +258,11 @@ const loadOverview = async () => {
     }
 
     if (hasPartialError) {
-      errorText.value = '部分概览信息暂不可用，已展示可加载的数据。'
+      errorText.value = '部分概览信息暂不可用，已展示可加载的数据'
     }
   } catch (error) {
     console.error('Load overview failed:', error)
-    errorText.value = '概览信息加载失败，请稍后重试。'
+    errorText.value = '概览信息加载失败，请稍后重试'
   }
 }
 
@@ -288,11 +288,9 @@ onMounted(async () => {
   --surface-subtle: var(--el-fill-color-extra-light);
   --brand-soft: var(--el-color-primary-light-9);
   --brand-border: var(--el-color-primary-light-7);
-  --hero-score-bg: linear-gradient(
-    140deg,
-    var(--el-color-primary) 0%,
-    var(--el-color-primary-light-3) 100%
-  );
+  --hero-score-bg: linear-gradient(140deg,
+      var(--el-color-primary) 0%,
+      var(--el-color-primary-light-3) 100%);
   --hero-score-border: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
   display: flex;
   flex-direction: column;

@@ -101,7 +101,7 @@
             <el-icon>
               <Cpu />
             </el-icon>
-            <span>Passkey 管理</span>
+            <span>通行密钥(Passkey) 管理</span>
             <el-button type="primary" plain size="small" @click="handleAddPasskey" :loading="addLoading"
               style="margin-left: auto">
               添加 Passkey
@@ -162,7 +162,7 @@
           <el-icon>
             <Lock />
           </el-icon>
-          <span>双因素认证 (TOTP)</span>
+          <span>身份验证器(Authenticator) 管理</span>
           <el-tag class="totp-header-tag" :type="totpEnabled ? 'success' : 'info'" size="small" effect="light">
             {{ totpEnabled ? '已开启防护' : '未开启防护' }}
           </el-tag>

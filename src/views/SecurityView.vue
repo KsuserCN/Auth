@@ -22,7 +22,7 @@
                 <div class="item-header">
                   <span class="item-title">邮箱验证码</span>
                 </div>
-                <p class="item-desc">使用发送到您邮箱的验证码进行登录</p>
+                <p class="item-desc">使用发送到您邮箱的验证码进行两步验证</p>
               </div>
               <div class="item-right">
                 <el-tag type="success">已启用</el-tag>
@@ -33,9 +33,9 @@
             <div class="security-item">
               <div class="item-left">
                 <div class="item-header">
-                  <span class="item-title">Passkey（生物识别）</span>
+                  <span class="item-title">通行密钥(Passkey)</span>
                 </div>
-                <p class="item-desc">使用生物识别或设备密码进行快速安全登录</p>
+                <p class="item-desc">使用生物识别或设备密码进行两步验证</p>
               </div>
               <div class="item-right">
                 <el-tag v-if="passkeyLoading" type="info">检测中</el-tag>
@@ -50,9 +50,9 @@
             <div class="security-item">
               <div class="item-left">
                 <div class="item-header">
-                  <span class="item-title">TOTP 动态验证码</span>
+                  <span class="item-title">身份验证器(Authenticator)</span>
                 </div>
-                <p class="item-desc">使用身份验证器生成的动态验证码进行登录</p>
+                <p class="item-desc">使用身份验证器生成的动态验证码进行两步验证</p>
               </div>
               <div class="item-right">
                 <el-tag v-if="totpLoading" type="info">检测中</el-tag>

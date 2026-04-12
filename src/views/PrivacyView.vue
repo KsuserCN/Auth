@@ -11,13 +11,13 @@
       <el-card class="overview-card" shadow="never">
         <div class="overview-label">Ksuser 应用</div>
         <div class="overview-value">{{ ssoApps.length }}</div>
-        <div class="overview-desc">已授权的站内应用，下次同范围授权会直接回调</div>
+        <div class="overview-desc">Ksuser内部应用，用于证明您的身份</div>
       </el-card>
 
       <el-card class="overview-card" shadow="never">
         <div class="overview-label">第三方应用</div>
         <div class="overview-value">{{ oauthApps.length }}</div>
-        <div class="overview-desc">已授权的外部 OAuth2 应用，可随时撤销</div>
+        <div class="overview-desc">第三方外部应用，用于第三方网站登录</div>
       </el-card>
     </div>
 
@@ -28,7 +28,7 @@
             <el-icon><Monitor /></el-icon>
             <span>Ksuser 应用</span>
           </div>
-          <p class="card-desc">这些应用属于 Ksuser 体系内服务，已授权后再次发起同范围授权时会自动回调。</p>
+          <p class="card-desc">已授权后再次发起同范围授权时会自动回调</p>
 
           <div v-if="ssoApps.length" class="app-list">
             <div v-for="app in ssoApps" :key="app.clientId" class="app-item">
@@ -78,7 +78,7 @@
             <el-icon><Share /></el-icon>
             <span>第三方应用</span>
           </div>
-          <p class="card-desc">这些应用通过 Ksuser OAuth2.0 访问您的公开资料。撤销后将无法继续使用现有授权。</p>
+          <p class="card-desc">这些应用通过 Ksuser OAuth2.0 访问您的公开资料，撤销后将无法继续使用现有授权</p>
 
           <div v-if="oauthApps.length" class="app-list">
             <div v-for="app in oauthApps" :key="app.appId" class="app-item">
@@ -261,7 +261,7 @@
 	        </div>
 	      </div>
 	    </el-card>
-	
+
 	    <div class="danger-zone-section">
 	      <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
 	        <div class="danger-zone-item">
