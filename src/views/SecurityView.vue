@@ -309,6 +309,15 @@ const geoLoginEnabled = ref(false)
 const sensitiveEmailEnabled = ref(false)
 const settingsReady = ref(false)
 const settingsUpdating = ref(false)
+const settingsRollbackGuard = ref<{
+  mfaEnabled: boolean
+  detectUnusualLogin: boolean
+  notifySensitiveActionEmail: boolean
+}>({
+  mfaEnabled: false,
+  detectUnusualLogin: false,
+  notifySensitiveActionEmail: false,
+})
 const sensitiveLogs = ref<SensitiveLogItem[]>([])
 const sensitiveLogsLoading = ref(false)
 const sensitiveLogsTotal = ref(0)
@@ -604,12 +613,17 @@ const handleSortChange = (payload: { prop: string; order: string }) => {
 }
 
 const updateSetting = async (field: 'mfaEnabled' | 'detectUnusualLogin' | 'notifySensitiveActionEmail', value: boolean, rollback: () => void) => {
+  if (settingsRollbackGuard.value[field]) {
+    settingsRollbackGuard.value[field] = false
+    return
+  }
   if (!settingsReady.value || settingsUpdating.value) return
   settingsUpdating.value = true
   try {
     await updateUserSetting({ field, value })
   } catch (error) {
     console.error('Update setting failed:', error)
+    settingsRollbackGuard.value[field] = true
     rollback()
   } finally {
     settingsUpdating.value = false

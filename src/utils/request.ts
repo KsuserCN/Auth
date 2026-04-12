@@ -3,6 +3,10 @@ import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'a
 import { ElMessage } from 'element-plus'
 import { clearAuthSession, getStoredAccessToken, setStoredAccessToken } from '@/utils/authSession'
 
+type RetryableRequestConfig = InternalAxiosRequestConfig & {
+  _refreshRetried?: boolean
+}
+
 // API 响应格式
 export interface ApiResponse<T = any> {
   code: number
@@ -338,7 +342,7 @@ request.interceptors.response.use(
 
     // 401 未授权 - AccessToken 过期或无效
     if (status === 401) {
-      const originalRequest = config
+      const originalRequest = config as RetryableRequestConfig
 
       // 如果是登录相关接口（登录、刷新等）返回 401，直接返回错误，不尝试刷新
       const authEndpoints = [
@@ -358,12 +362,23 @@ request.interceptors.response.use(
         return Promise.reject(new Error(errorMsg))
       }
 
+      // 同一个请求最多只做一次 refresh + retry，避免认证异常时无限重放
+      if (originalRequest._refreshRetried) {
+        const errorMsg = data?.msg || '登录状态已失效，请重新登录'
+        clearAuthSession()
+        ElMessage.error(errorMsg)
+        return Promise.reject(new Error(errorMsg))
+      }
+      originalRequest._refreshRetried = true
+
       // 如果正在刷新 Token，将请求加入队列
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           subscribeTokenRefresh(
             (token: string) => {
-              originalRequest.headers.Authorization = `Bearer ${token}`
+              if (originalRequest.headers) {
+                originalRequest.headers.Authorization = `Bearer ${token}`
+              }
               resolve(request(originalRequest))
             },
             (refreshError: Error) => {
@@ -382,7 +397,9 @@ request.interceptors.response.use(
         onRefreshed(newToken)
 
         // 用新 Token 重试原请求
-        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+        }
         return request(originalRequest)
       } catch (refreshError) {
         isRefreshing = false
