@@ -3,7 +3,7 @@
     <div class="content-header">
       <div>
         <h1 class="page-title">开放平台</h1>
-        <p class="page-subtitle">OAuth2.0 与 SSO 内部服务已分离管理</p>
+        <p class="page-subtitle">提供第三方多服务连接能力</p>
       </div>
     </div>
 
