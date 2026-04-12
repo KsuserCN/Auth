@@ -179,19 +179,28 @@
             <el-table-column label="操作" min-width="180">
               <template #default="{ row }">
                 <div class="log-primary">
-                  <span class="log-title">{{ getOperationLabel(row.operationType) }}</span>
-                  <el-tag v-if="row.loginMethod" size="small" effect="plain">
-                    {{ getLoginMethodLabel(row.loginMethod) }}
+                  <span class="log-title">{{ getOperationTitle(row.operationType) }}</span>
+                  <el-tag
+                    v-for="(tag, idx) in getOperationTags(row)"
+                    :key="`${row.id}-${idx}-${tag}`"
+                    size="small"
+                    effect="plain"
+                  >
+                    {{ tag }}
                   </el-tag>
                 </div>
               </template>
             </el-table-column>
             <el-table-column label="结果" min-width="120">
               <template #default="{ row }">
-                <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
-                  {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
-                </el-tag>
-                <span v-if="row.failureReason" class="log-sub">{{ row.failureReason }}</span>
+                <div class="log-secondary">
+                  <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
+                    {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
+                  </el-tag>
+                  <span v-if="row.result === 'FAILURE'" class="log-sub">
+                    {{ row.failureReason || '未知原因' }}
+                  </span>
+                </div>
               </template>
             </el-table-column>
             <el-table-column label="位置 / IP" min-width="160">
@@ -335,10 +344,21 @@ const operationTypeLabels: Record<SensitiveOperationType, string> = {
 const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
   PASSWORD: '密码登录',
   PASSWORD_MFA: '密码+二步验证',
+  EMAIL: '验证码登录',
   EMAIL_CODE: '验证码登录',
   EMAIL_CODE_MFA: '验证码+二步验证',
   PASSKEY: 'Passkey登录',
   PASSKEY_MFA: 'Passkey+二步验证',
+  QQ: 'QQ',
+  GITHUB: 'GitHub',
+  MICROSOFT: 'Microsoft',
+  GOOGLE: 'Google',
+  WECHAT: '微信',
+  WEIXIN: '微信',
+  MFA: 'MFA',
+  BRIDGE: '桥接登录',
+  BRIDGE_FROM_DESKTOP: '电脑端桥接',
+  BRIDGE_FROM_WEB: '网页端桥接',
 }
 
 const formatSensitiveTime = (value?: string | null) => {
@@ -358,44 +378,83 @@ const getOperationLabel = (op: unknown) => {
   return operationTypeLabels[(op as SensitiveOperationType)] || String(op ?? '-')
 }
 
-const getLoginMethodLabel = (m: unknown) => {
-  if (typeof m !== 'string') {
-    return loginMethodLabels[(m as SensitiveLoginMethod)] || String(m ?? '-')
+const normalizeLoginTokenLabel = (token: string) => {
+  const key = token.trim().toUpperCase()
+  if (!key) return ''
+  if (key === 'PASSKEY') return 'Passkey'
+  if (key === 'MFA') return 'MFA'
+  if (key === 'PASSWORD') return '密码'
+  if (key === 'EMAIL') return '验证码'
+  if (key === 'EMAIL_CODE') return '验证码'
+  if (key === 'TOTP') return 'TOTP'
+  if (key === 'GOOGLE') return 'Google'
+  if (key === 'GITHUB') return 'GitHub'
+  if (key === 'MICROSOFT') return 'Microsoft'
+  if (key === 'QQ') return 'QQ'
+  if (key === 'WECHAT' || key === 'WEIXIN') return '微信'
+  if (key === 'BRIDGE') return '桥接登录'
+  if (key === 'BRIDGE_FROM_DESKTOP') return '电脑端桥接'
+  if (key === 'BRIDGE_FROM_WEB') return '网页端桥接'
+  return token.trim()
+}
+
+const getLoginMethodTags = (row: SensitiveLogItem): string[] => {
+  const fromArray = Array.isArray(row.loginMethods)
+    ? row.loginMethods
+      .map((item) => normalizeLoginTokenLabel(String(item)))
+      .filter(Boolean)
+    : []
+  if (fromArray.length > 0) {
+    return [...new Set(fromArray)]
   }
 
-  const raw = m.trim()
+  const m = row.loginMethod
+  if (m == null) return []
+
+  const raw = String(m).trim()
+  if (!raw) return []
+  if (raw.toLowerCase() === 'null') return []
+
   const normalized = raw.toUpperCase()
 
+  // Old backend format: "PASSKEY_MFA"
   if (normalized in loginMethodLabels) {
-    return loginMethodLabels[normalized as SensitiveLoginMethod]
+    const tokens: string[] = []
+    if (normalized.endsWith('_MFA')) {
+      tokens.push(normalized.slice(0, -4))
+      tokens.push('MFA')
+    } else {
+      tokens.push(normalized)
+    }
+    return tokens.map(normalizeLoginTokenLabel).filter(Boolean)
   }
 
-  // New backend format: "[password, mfa]" (string containing a list)
+  // New backend format: "[passkey, mfa]"
   if (raw.startsWith('[') && raw.endsWith(']')) {
-    const methods = raw
+    return raw
       .slice(1, -1)
       .split(',')
-      .map((item) => item.trim())
+      .map((item) => normalizeLoginTokenLabel(item))
       .filter(Boolean)
-
-    if (methods.length > 0) {
-      return methods
-        .map((item) => {
-          const key = item.toUpperCase()
-          if (key in loginMethodLabels) {
-            return loginMethodLabels[key as SensitiveLoginMethod]
-          }
-          if (key === 'MFA') return '二步验证'
-          if (key === 'PASSWORD') return '密码登录'
-          if (key === 'EMAIL_CODE') return '验证码登录'
-          if (key === 'PASSKEY') return 'Passkey登录'
-          return item
-        })
-        .join(' + ')
-    }
   }
 
-  return raw || '-'
+  return [normalizeLoginTokenLabel(raw)].filter(Boolean)
+}
+
+const getOperationTitle = (op: unknown) => {
+  const key = String(op ?? '').toUpperCase()
+  if (key === 'LOGIN') return '登录'
+  if (key === 'REGISTER') return '注册'
+  return '敏感操作'
+}
+
+const getOperationTags = (row: SensitiveLogItem): string[] => {
+  const op = String(row.operationType).toUpperCase()
+  if (op === 'REGISTER') return []
+  if (op === 'LOGIN') {
+    return getLoginMethodTags(row)
+  }
+  return [getOperationLabel(row.operationType)]
 }
 
 const getRiskTagType = (score: number) => {
@@ -432,6 +491,9 @@ const getDeviceIconClass = (deviceType?: string | null) => {
 
 const getBrowserIconClass = (browser?: string | null) => {
   const value = (browser || '').toLowerCase()
+  // Custom desktop/mobile client UA
+  if (value.includes('ksuserauthdesktop')) return 'fa-solid fa-desktop'
+  if (value.includes('ksuserauthmobile')) return 'fa-solid fa-mobile-screen-button'
   if (value.includes('edge') || value.includes('edg')) return 'fa-brands fa-edge'
   if (value.includes('chrome')) return 'fa-brands fa-chrome'
   if (value.includes('safari')) return 'fa-brands fa-safari'

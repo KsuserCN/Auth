@@ -537,15 +537,27 @@ export type SensitiveOperationType =
 export type SensitiveLoginMethod =
   | 'PASSWORD'
   | 'PASSWORD_MFA'
+  | 'EMAIL'
   | 'EMAIL_CODE'
   | 'EMAIL_CODE_MFA'
   | 'PASSKEY'
   | 'PASSKEY_MFA'
+  | 'QQ'
+  | 'GITHUB'
+  | 'MICROSOFT'
+  | 'GOOGLE'
+  | 'WECHAT'
+  | 'WEIXIN'
+  | 'MFA'
+  | 'BRIDGE'
+  | 'BRIDGE_FROM_DESKTOP'
+  | 'BRIDGE_FROM_WEB'
 
 export interface SensitiveLogItem {
   id: number
   operationType: SensitiveOperationType
   loginMethod: SensitiveLoginMethod | string | null
+  loginMethods?: Array<SensitiveLoginMethod | string>
   ipAddress: string
   ipLocation: string | null
   browser: string | null
