@@ -339,7 +339,11 @@ export const renamePasskey = async (passkeyId: number, newName: string): Promise
  * POST /auth/refresh
  */
 export const refreshAccessToken = async (): Promise<{ accessToken: string }> => {
-  const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/refresh')
+  const response = await request.post<ApiResponse<{ accessToken: string }>>(
+    '/auth/refresh',
+    {},
+    { _skipAuthRefresh: true, _suppressErrorToast: true } as any,
+  )
   return response.data as unknown as { accessToken: string }
 }
 
