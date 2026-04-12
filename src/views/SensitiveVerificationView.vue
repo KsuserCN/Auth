@@ -58,9 +58,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
               <!-- 邮箱验证码验证 -->
@@ -79,9 +77,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
               <!-- Passkey 验证 -->
@@ -101,9 +97,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
               <!-- TOTP 验证 -->
@@ -122,9 +116,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
             </div>
 
@@ -327,7 +319,6 @@ import {
   Lightning,
   Key,
   Message,
-  Loading,
   Refresh,
 } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
@@ -1045,20 +1036,6 @@ const handlePasskeyVerify = async () => {
   pointer-events: none;
 }
 
-.loading-icon {
-  animation: rotate 1s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .method-icon {
   color: var(--el-color-primary);
   flex-shrink: 0;
@@ -1085,6 +1062,13 @@ const handlePasskeyVerify = async () => {
   color: var(--el-text-color-secondary);
   flex-shrink: 0;
   font-size: 20px;
+}
+
+.method-arrow-skeleton {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 /* 验证码操作 */

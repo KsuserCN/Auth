@@ -1,5 +1,5 @@
 <template>
-  <div class="privacy-page" v-loading="loading">
+  <div class="privacy-page">
     <div class="content-header">
       <div>
         <h1 class="page-title">隐私与数据</h1>
@@ -7,7 +7,16 @@
       </div>
     </div>
 
-    <div class="overview-grid">
+    <div v-if="loading" class="overview-grid">
+      <el-card v-for="index in 2" :key="index" class="overview-card" shadow="never">
+        <div class="privacy-overview-skeleton">
+          <el-skeleton-item variant="text" class="privacy-overview-label" />
+          <el-skeleton-item variant="text" class="privacy-overview-value" />
+          <el-skeleton-item variant="text" class="privacy-overview-desc" />
+        </div>
+      </el-card>
+    </div>
+    <div v-else class="overview-grid">
       <el-card class="overview-card" shadow="never">
         <div class="overview-label">Ksuser 应用</div>
         <div class="overview-value">{{ ssoApps.length }}</div>
@@ -21,7 +30,35 @@
       </el-card>
     </div>
 
-    <el-row :gutter="16">
+    <el-row v-if="loading" :gutter="16">
+      <el-col v-for="index in 2" :key="index" :xs="24" :lg="12">
+        <el-card class="card" shadow="never">
+          <div class="privacy-card-skeleton">
+            <div class="privacy-card-skeleton-head">
+              <el-skeleton-item variant="circle" class="privacy-title-icon" />
+              <div class="privacy-title-copy">
+                <el-skeleton-item variant="text" class="privacy-title-line" />
+                <el-skeleton-item variant="text" class="privacy-title-subline" />
+              </div>
+            </div>
+            <div v-for="row in 3" :key="row" class="privacy-app-skeleton">
+              <div class="privacy-app-skeleton-main">
+                <el-skeleton-item variant="circle" class="privacy-app-avatar" />
+                <div class="privacy-app-copy">
+                  <el-skeleton-item variant="text" class="privacy-app-title" />
+                  <el-skeleton-item variant="text" class="privacy-app-meta" />
+                </div>
+              </div>
+              <div class="privacy-app-actions">
+                <el-skeleton-item variant="button" class="privacy-action-btn" />
+                <el-skeleton-item variant="button" class="privacy-action-btn" />
+              </div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+    <el-row v-else :gutter="16">
       <el-col :xs="24" :lg="12">
         <el-card class="card" shadow="never">
           <div class="card-title">
@@ -585,6 +622,115 @@ onMounted(() => {
   font-size: 13px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+.privacy-overview-skeleton,
+.privacy-card-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.privacy-overview-skeleton {
+  gap: 10px;
+}
+
+.privacy-overview-label {
+  width: 96px;
+  height: 14px;
+}
+
+.privacy-overview-value {
+  width: 54px;
+  height: 36px;
+}
+
+.privacy-overview-desc {
+  width: 80%;
+  height: 14px;
+}
+
+.privacy-card-skeleton {
+  gap: 14px;
+}
+
+.privacy-card-skeleton-head,
+.privacy-app-skeleton,
+.privacy-app-skeleton-main,
+.privacy-app-actions {
+  display: flex;
+  align-items: center;
+}
+
+.privacy-card-skeleton-head {
+  gap: 10px;
+}
+
+.privacy-title-copy,
+.privacy-app-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.privacy-title-icon,
+.privacy-app-avatar {
+  flex-shrink: 0;
+}
+
+.privacy-title-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.privacy-title-line {
+  width: 120px;
+  height: 16px;
+}
+
+.privacy-title-subline {
+  width: 260px;
+  max-width: 80%;
+  height: 14px;
+}
+
+.privacy-app-skeleton {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--privacy-item-bg);
+}
+
+.privacy-app-avatar {
+  width: 48px;
+  height: 48px;
+}
+
+.privacy-app-copy {
+  min-width: 0;
+}
+
+.privacy-app-title {
+  width: 180px;
+  max-width: 100%;
+  height: 16px;
+}
+
+.privacy-app-meta {
+  width: 220px;
+  max-width: 100%;
+  height: 13px;
+}
+
+.privacy-app-actions {
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.privacy-action-btn {
+  width: 58px;
+  height: 28px;
 }
 
 .card-title {

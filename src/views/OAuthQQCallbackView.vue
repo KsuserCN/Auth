@@ -16,10 +16,12 @@
 
       <div class="state-shell" :class="`state-${state}`">
         <div v-if="state === 'processing'" class="state-block processing">
-          <div class="icon-ring ring-loading">
-            <el-icon class="state-icon loading-icon">
-              <Loading />
-            </el-icon>
+          <div class="processing-skeleton">
+            <el-skeleton-item variant="image" class="processing-skeleton-hero" />
+            <div class="processing-skeleton-copy">
+              <el-skeleton-item variant="text" class="processing-skeleton-line" />
+              <el-skeleton-item variant="text" class="processing-skeleton-line short" />
+            </div>
           </div>
           <p class="state-title">正在验证身份信息</p>
           <p class="state-description">系统正在确认授权参数并安全登录您的账号。</p>
@@ -76,7 +78,6 @@ import {
   ArrowLeft,
   CircleCheckFilled,
   CircleCloseFilled,
-  Loading,
   RefreshRight,
 } from '@element-plus/icons-vue'
 import {
@@ -527,6 +528,36 @@ onMounted(() => {
   text-align: center;
 }
 
+.processing-skeleton {
+  width: min(220px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.processing-skeleton-hero {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+}
+
+.processing-skeleton-copy {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.processing-skeleton-line {
+  width: 100%;
+  height: 14px;
+}
+
+.processing-skeleton-line.short {
+  width: 72%;
+}
+
 .icon-ring {
   width: 82px;
   height: 82px;
@@ -534,11 +565,6 @@ onMounted(() => {
   place-items: center;
   border-radius: 50%;
   border: 1px solid transparent;
-}
-
-.ring-loading {
-  border-color: color-mix(in srgb, var(--cb-highlight) 26%, transparent 74%);
-  background: color-mix(in srgb, var(--cb-highlight) 12%, transparent 88%);
 }
 
 .ring-success {
@@ -553,11 +579,6 @@ onMounted(() => {
 
 .state-icon {
   font-size: 44px;
-}
-
-.loading-icon {
-  color: var(--cb-highlight);
-  animation: rotate 1s linear infinite;
 }
 
 .success-icon {
@@ -645,13 +666,4 @@ onMounted(() => {
   }
 }
 
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
 </style>

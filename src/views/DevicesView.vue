@@ -27,12 +27,32 @@
             </el-tag>
           </div>
 
+          <div v-if="loading" class="table-skeleton">
+            <div class="table-skeleton-header">
+              <el-skeleton-item variant="text" class="skeleton-head-lg" />
+              <el-skeleton-item variant="text" class="skeleton-head-sm" />
+              <el-skeleton-item variant="text" class="skeleton-head-md" />
+              <el-skeleton-item variant="text" class="skeleton-head-xs" />
+            </div>
+            <div v-for="index in 4" :key="index" class="table-skeleton-row">
+              <div class="table-skeleton-device">
+                <el-skeleton-item variant="circle" class="skeleton-device-icon" />
+                <div class="table-skeleton-device-meta">
+                  <el-skeleton-item variant="text" class="skeleton-device-title" />
+                  <el-skeleton-item variant="text" class="skeleton-device-subtitle" />
+                </div>
+              </div>
+              <el-skeleton-item variant="text" class="skeleton-cell-sm" />
+              <el-skeleton-item variant="text" class="skeleton-cell-md" />
+              <el-skeleton-item variant="text" class="skeleton-cell-xs" />
+            </div>
+          </div>
           <el-table
+            v-else
             :data="sessions"
             class="modern-table"
             size="small"
-            v-loading="loading"
-            :empty-text="loading ? '加载中...' : '暂无设备'"
+            empty-text="暂无设备"
           >
             <el-table-column label="设备" min-width="220">
               <template #default="{ row }">
@@ -316,6 +336,77 @@ onMounted(() => {
   border-radius: 8px;
 }
 
+.table-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.table-skeleton-header,
+.table-skeleton-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 2.4fr) minmax(100px, 1fr) minmax(130px, 1.1fr) 84px;
+  gap: 16px;
+  align-items: center;
+}
+
+.table-skeleton-header {
+  padding-bottom: 8px;
+}
+
+.table-skeleton-row {
+  padding: 14px 0;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.table-skeleton-device {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.table-skeleton-device-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.skeleton-device-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.skeleton-head-lg,
+.skeleton-device-title {
+  width: 72%;
+  height: 14px;
+}
+
+.skeleton-head-md,
+.skeleton-cell-md {
+  width: 78%;
+  height: 14px;
+}
+
+.skeleton-head-sm,
+.skeleton-cell-sm {
+  width: 64%;
+  height: 14px;
+}
+
+.skeleton-head-xs,
+.skeleton-cell-xs {
+  width: 52px;
+  height: 14px;
+}
+
+.skeleton-device-subtitle {
+  width: 88%;
+  height: 12px;
+}
+
 .device-cell {
   display: flex;
   align-items: center;
@@ -388,6 +479,18 @@ onMounted(() => {
 
 .row-gap {
   margin-top: 16px;
+}
+
+@media (max-width: 768px) {
+  .table-skeleton-header,
+  .table-skeleton-row {
+    grid-template-columns: 1.8fr 0.9fr 1fr;
+  }
+
+  .table-skeleton-header > :last-child,
+  .table-skeleton-row > :last-child {
+    display: none;
+  }
 }
 
 	

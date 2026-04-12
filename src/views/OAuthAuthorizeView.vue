@@ -12,12 +12,26 @@
       </div>
 
       <div v-if="loading" class="state-panel">
-        <el-icon class="spin-icon"><Loading /></el-icon>
+        <div class="state-skeleton">
+          <el-skeleton-item variant="image" class="state-skeleton-hero" />
+          <div class="state-skeleton-copy">
+            <el-skeleton-item variant="text" class="state-skeleton-title" />
+            <el-skeleton-item variant="text" class="state-skeleton-line" />
+            <el-skeleton-item variant="text" class="state-skeleton-line short" />
+          </div>
+        </div>
         <p>正在校验客户端与回调地址...</p>
       </div>
 
       <div v-else-if="autoRedirecting" class="state-panel">
-        <el-icon class="spin-icon"><Loading /></el-icon>
+        <div class="state-skeleton">
+          <el-skeleton-item variant="image" class="state-skeleton-hero" />
+          <div class="state-skeleton-copy">
+            <el-skeleton-item variant="text" class="state-skeleton-title" />
+            <el-skeleton-item variant="text" class="state-skeleton-line" />
+            <el-skeleton-item variant="text" class="state-skeleton-line short" />
+          </div>
+        </div>
         <p>检测到该应用已授权，正在直接回调...</p>
       </div>
 
@@ -80,7 +94,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CircleCloseFilled, Loading } from '@element-plus/icons-vue'
+import { CircleCloseFilled } from '@element-plus/icons-vue'
 import {
   approveOAuth2Authorize,
   getOAuth2AuthorizeContext,
@@ -393,12 +407,43 @@ onMounted(() => {
   color: var(--el-text-color-regular);
 }
 
-.error-panel {
-  color: var(--el-color-danger);
+.state-skeleton {
+  width: min(280px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
-.spin-icon {
-  animation: spin 1s linear infinite;
+.state-skeleton-hero {
+  width: 92px;
+  height: 92px;
+  border-radius: 22px;
+}
+
+.state-skeleton-copy {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.state-skeleton-title {
+  width: 58%;
+  height: 16px;
+}
+
+.state-skeleton-line {
+  width: 100%;
+  height: 14px;
+}
+
+.state-skeleton-line.short {
+  width: 76%;
+}
+
+.error-panel {
+  color: var(--el-color-danger);
 }
 
 .authorize-content {
@@ -481,16 +526,6 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @media (max-width: 768px) {

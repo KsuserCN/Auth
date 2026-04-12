@@ -30,9 +30,7 @@
                 <el-icon v-if="!emailLoading" class="row-arrow">
                   <ArrowRight />
                 </el-icon>
-                <el-icon v-else class="row-arrow loading-icon" :size="16">
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="row-arrow-skeleton" />
               </div>
             </div>
 
@@ -49,9 +47,7 @@
                 <el-icon v-if="!passwordLoading" class="row-arrow">
                   <ArrowRight />
                 </el-icon>
-                <el-icon v-else class="row-arrow loading-icon" :size="16">
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="row-arrow-skeleton" />
               </div>
             </div>
           </div>
@@ -107,11 +103,20 @@
               添加 Passkey
             </el-button>
           </div>
-          <div v-if="passkeyLoading" class="passkey-loading">
-            <el-icon class="loading-icon">
-              <Loading />
-            </el-icon>
-            <span>加载中...</span>
+          <div v-if="passkeyLoading" class="panel-skeleton">
+            <div v-for="index in 3" :key="index" class="panel-skeleton-row">
+              <div class="panel-skeleton-main">
+                <el-skeleton-item variant="circle" class="panel-skeleton-icon" />
+                <div class="panel-skeleton-copy">
+                  <el-skeleton-item variant="text" class="panel-skeleton-title" />
+                  <el-skeleton-item variant="text" class="panel-skeleton-meta" />
+                </div>
+              </div>
+              <div class="panel-skeleton-actions">
+                <el-skeleton-item variant="button" class="panel-skeleton-btn" />
+                <el-skeleton-item variant="button" class="panel-skeleton-btn" />
+              </div>
+            </div>
           </div>
           <div v-else-if="passkeyList.length === 0" class="passkey-empty">
             <p>您还没有添加任何 Passkey</p>
@@ -167,11 +172,17 @@
             {{ totpEnabled ? '已开启防护' : '未开启防护' }}
           </el-tag>
         </div>
-        <div v-if="!totpStatusFetched" class="passkey-loading">
-          <el-icon class="loading-icon">
-            <Loading />
-          </el-icon>
-          <span>加载中...</span>
+        <div v-if="!totpStatusFetched" class="totp-skeleton">
+          <el-skeleton-item variant="text" class="totp-skeleton-title" />
+          <el-skeleton-item variant="text" class="totp-skeleton-desc" />
+          <div class="totp-skeleton-metrics">
+            <el-skeleton-item variant="text" class="totp-skeleton-metric" />
+            <el-skeleton-item variant="text" class="totp-skeleton-metric" />
+          </div>
+          <div class="totp-skeleton-actions">
+            <el-skeleton-item variant="text" class="totp-skeleton-action" />
+            <el-skeleton-item variant="text" class="totp-skeleton-action" />
+          </div>
         </div>
         <div v-else class="totp-panel">
           <div class="totp-hero" :class="{ enabled: totpEnabled }">
@@ -249,11 +260,11 @@
 
   <!-- 恢复码列表弹窗 -->
   <el-dialog v-model="showRecoveryCodesDialog" title="恢复码列表" width="420px">
-    <div v-if="recoveryCodesLoading" class="dialog-loading">
-      <el-icon class="loading-icon" :size="32">
-        <Loading />
-      </el-icon>
-      <p>加载中...</p>
+    <div v-if="recoveryCodesLoading" class="dialog-skeleton">
+      <el-skeleton-item variant="text" class="dialog-skeleton-alert" />
+      <div class="dialog-skeleton-grid">
+        <el-skeleton-item v-for="index in 8" :key="index" variant="text" class="dialog-skeleton-code" />
+      </div>
     </div>
     <div v-else>
       <el-alert title="请妥善保管您的恢复码，每个码只能使用一次" type="warning" :closable="false" style="margin-bottom: 16px" />
@@ -280,11 +291,11 @@
 
   <!-- 新恢复码弹窗 -->
   <el-dialog v-model="showRegenerateDialog" title="新的恢复码" width="450px" :close-on-click-modal="false">
-    <div v-if="regenerateLoading" class="dialog-loading">
-      <el-icon class="loading-icon" :size="32">
-        <Loading />
-      </el-icon>
-      <p>正在生成...</p>
+    <div v-if="regenerateLoading" class="dialog-skeleton">
+      <el-skeleton-item variant="text" class="dialog-skeleton-alert" />
+      <div class="dialog-skeleton-grid">
+        <el-skeleton-item v-for="index in 8" :key="index" variant="text" class="dialog-skeleton-code" />
+      </div>
     </div>
     <div v-else>
       <el-alert title="新的恢复码已生成！请立即保存，关闭后将无法再次查看完整的恢复码。" type="success" :closable="false" style="margin-bottom: 16px" />
@@ -317,7 +328,6 @@ import {
   Lock,
   Message,
   ArrowRight,
-  Loading,
   Cpu,
   Share,
 } from '@element-plus/icons-vue'
@@ -1126,19 +1136,11 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
   opacity: 0.7;
 }
 
-.loading-icon {
-  animation: rotate 1s linear infinite;
-  color: var(--el-color-primary);
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
+.row-arrow-skeleton {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 .row-gap {
@@ -1146,13 +1148,109 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
 }
 
 /* Passkey 管理样式 */
-.passkey-loading {
+.panel-skeleton,
+.totp-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-skeleton {
+  gap: 12px;
+}
+
+.panel-skeleton-row,
+.panel-skeleton-main,
+.panel-skeleton-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+}
+
+.panel-skeleton-row {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-light);
+}
+
+.panel-skeleton-main {
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-skeleton-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.panel-skeleton-copy {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  padding: 32px 0;
-  color: var(--el-text-color-secondary);
+  flex: 1;
+}
+
+.panel-skeleton-title {
+  width: 180px;
+  max-width: 100%;
+  height: 15px;
+}
+
+.panel-skeleton-meta {
+  width: 220px;
+  max-width: 100%;
+  height: 13px;
+}
+
+.panel-skeleton-actions {
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.panel-skeleton-btn {
+  width: 52px;
+  height: 28px;
+}
+
+.totp-skeleton {
+  gap: 14px;
+}
+
+.totp-skeleton-title {
+  width: 180px;
+  height: 16px;
+}
+
+.totp-skeleton-desc {
+  width: 72%;
+  height: 14px;
+}
+
+.totp-skeleton-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.totp-skeleton-metric {
+  width: 100%;
+  height: 56px;
+  border-radius: 10px;
+}
+
+.totp-skeleton-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.totp-skeleton-action {
+  width: 100%;
+  height: 52px;
+  border-radius: 10px;
 }
 
 .passkey-empty {
@@ -1384,17 +1482,28 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
   flex-shrink: 0;
 }
 
-.dialog-loading {
+.dialog-skeleton {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 0;
-  color: var(--el-text-color-secondary);
+  gap: 16px;
+  padding: 8px 0;
 }
 
-.dialog-loading p {
-  margin-top: 12px;
+.dialog-skeleton-alert {
+  width: 88%;
+  height: 16px;
+}
+
+.dialog-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.dialog-skeleton-code {
+  width: 100%;
+  height: 40px;
+  border-radius: 4px;
 }
 
 .recovery-codes-grid {

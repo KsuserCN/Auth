@@ -37,9 +37,14 @@
       <!-- 右侧：表单内容 -->
       <div class="login-right" :class="{ 'is-bootstrapping': loginBootstrapping }">
         <div v-if="loginBootstrapping" class="bootstrap-state">
-          <el-icon class="bootstrap-spinner" :size="32">
-            <Loading />
-          </el-icon>
+          <div class="bootstrap-skeleton">
+            <el-skeleton-item variant="image" class="bootstrap-skeleton-hero" />
+            <div class="bootstrap-skeleton-copy">
+              <el-skeleton-item variant="text" class="bootstrap-skeleton-title" />
+              <el-skeleton-item variant="text" class="bootstrap-skeleton-line" />
+              <el-skeleton-item variant="text" class="bootstrap-skeleton-line short" />
+            </div>
+          </div>
           <h2 class="bootstrap-title">{{ loginBootstrapTitle }}</h2>
           <p class="bootstrap-description">{{ loginBootstrapDescription }}</p>
         </div>
@@ -107,9 +112,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
               <!-- 邮箱验证码登录 -->
@@ -125,9 +128,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
               <!-- Passkey 登录 -->
@@ -210,9 +211,7 @@
                 <el-icon class="method-arrow" v-if="!methodSelecting">
                   <ArrowRight />
                 </el-icon>
-                <el-icon class="method-arrow loading-icon" v-else>
-                  <Loading />
-                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
               <div class="method-option" @click="!methodSelecting && selectMfaMethod('passkey')" :class="{
@@ -346,7 +345,6 @@ import {
   Lightning,
   Key,
   Message,
-  Loading,
   Refresh,
 } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
@@ -1437,9 +1435,39 @@ onBeforeUnmount(() => {
   padding: 48px 24px;
 }
 
-.bootstrap-spinner {
-  color: var(--el-color-primary);
-  animation: rotateBootstrap 1s linear infinite;
+.bootstrap-skeleton {
+  width: min(320px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.bootstrap-skeleton-hero {
+  width: 108px;
+  height: 108px;
+  border-radius: 24px;
+}
+
+.bootstrap-skeleton-copy {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bootstrap-skeleton-title {
+  width: 56%;
+  height: 18px;
+}
+
+.bootstrap-skeleton-line {
+  width: 100%;
+  height: 14px;
+}
+
+.bootstrap-skeleton-line.short {
+  width: 74%;
 }
 
 .bootstrap-title {
@@ -1561,16 +1589,6 @@ onBeforeUnmount(() => {
 
   to {
     opacity: 1;
-  }
-}
-
-@keyframes rotateBootstrap {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -1773,20 +1791,6 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.loading-icon {
-  animation: rotate 1s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .method-icon {
   color: var(--el-color-primary);
   flex-shrink: 0;
@@ -1813,6 +1817,13 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
   flex-shrink: 0;
   font-size: 20px;
+}
+
+.method-arrow-skeleton {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
 }
 
 /* 验证码操作 */

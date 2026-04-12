@@ -61,7 +61,14 @@
       </div>
 
       <div v-else class="pending-block">
-        <el-icon class="spinning"><Loading /></el-icon>
+        <div class="pending-skeleton">
+          <el-skeleton-item variant="image" class="pending-skeleton-hero" />
+          <div class="pending-skeleton-copy">
+            <el-skeleton-item variant="text" class="pending-skeleton-title" />
+            <el-skeleton-item variant="text" class="pending-skeleton-line" />
+            <el-skeleton-item variant="text" class="pending-skeleton-line short" />
+          </div>
+        </div>
         <div>
           <strong>{{ pendingTitle }}</strong>
           <p>{{ pendingDescription }}</p>
@@ -80,7 +87,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { CircleCheckFilled, Loading } from '@element-plus/icons-vue'
+import { CircleCheckFilled } from '@element-plus/icons-vue'
 import {
   createSessionTransfer,
   getPasskeyAuthenticationOptions,
@@ -667,12 +674,42 @@ onBeforeUnmount(() => {
   margin-bottom: 6px;
 }
 
-.result-block.success {
-  color: #0b7a37;
+.pending-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
 }
 
-.spinning {
-  animation: spin 1s linear infinite;
+.pending-skeleton-hero {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+}
+
+.pending-skeleton-copy {
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pending-skeleton-title {
+  width: 72%;
+  height: 14px;
+}
+
+.pending-skeleton-line {
+  width: 100%;
+  height: 12px;
+}
+
+.pending-skeleton-line.short {
+  width: 82%;
+}
+
+.result-block.success {
+  color: #0b7a37;
 }
 
 .totp-panel {
@@ -708,12 +745,4 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 </style>
