@@ -19,6 +19,8 @@ import com.webauthn4j.data.attestation.authenticator.COSEKey;
 import com.webauthn4j.data.client.Origin;
 import com.webauthn4j.data.client.challenge.DefaultChallenge;
 import com.webauthn4j.server.ServerProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -44,6 +46,7 @@ import java.util.concurrent.TimeUnit;
  */
 @Service
 public class PasskeyService {
+    private static final Logger log = LoggerFactory.getLogger(PasskeyService.class);
     private static final String PASSKEY_REGISTRATION_CHALLENGE_PREFIX = "passkey:reg:challenge:";
     private static final String PASSKEY_AUTHENTICATION_CHALLENGE_PREFIX = "passkey:auth:challenge:";
     private static final String PASSKEY_SENSITIVE_CHALLENGE_PREFIX = "passkey:sensitive:challenge:";
@@ -172,7 +175,7 @@ public class PasskeyService {
 
         // 构建 ServerProperty（包含 origin, rpId, challenge）
         ServerProperty serverProperty = new ServerProperty(
-                Origin.create(getEffectiveOrigin()),
+                getEffectiveOrigins(),
                 getEffectiveRpId(),
                 new DefaultChallenge(Base64.getUrlDecoder().decode(storedChallenge)),
                 null // tokenBindingId (通常为 null)
@@ -309,7 +312,7 @@ public class PasskeyService {
 
         // 构建 ServerProperty
         ServerProperty serverProperty = new ServerProperty(
-                Origin.create(getEffectiveOrigin()),
+                getEffectiveOrigins(),
                 getEffectiveRpId(),
                 new DefaultChallenge(Base64.getUrlDecoder().decode(storedChallenge)),
                 null
@@ -439,7 +442,7 @@ public class PasskeyService {
 
         // 构建 ServerProperty
         ServerProperty serverProperty = new ServerProperty(
-                Origin.create(getEffectiveOrigin()),
+                getEffectiveOrigins(),
                 getEffectiveRpId(),
                 new DefaultChallenge(Base64.getUrlDecoder().decode(storedChallenge)),
                 null
@@ -587,22 +590,85 @@ public class PasskeyService {
     }
 
     /**
-     * 获取有效的 Origin（根据 debug 标志切换）
+     * 获取有效 Origin 集合（Web + Android）
      */
-    private String getEffectiveOrigin() {
-        if (appProperties.isDebug()) {
-            return "http://localhost:5173";
+    private Set<Origin> getEffectiveOrigins() {
+        Set<Origin> origins = new LinkedHashSet<>();
+
+        String webOrigin = appProperties.getPasskey().getOrigin();
+        if (webOrigin != null && !webOrigin.isBlank()) {
+            origins.add(Origin.create(webOrigin.trim()));
+        } else if (appProperties.isDebug()) {
+            origins.add(Origin.create("http://localhost:5173"));
+        } else {
+            origins.add(Origin.create("https://auth.ksuser.cn"));
         }
-        return "https://auth.ksuser.cn";
+
+        List<String> configuredAndroidOrigins = appProperties.getPasskey().getAndroidOrigins();
+        if (configuredAndroidOrigins != null) {
+            for (String origin : configuredAndroidOrigins) {
+                if (origin == null || origin.isBlank()) {
+                    continue;
+                }
+                origins.add(Origin.create(origin.trim()));
+            }
+        }
+
+        List<String> fingerprints = appProperties.getPasskey().getAndroidCertSha256Fingerprints();
+        if (fingerprints != null) {
+            for (String fingerprint : fingerprints) {
+                String androidOrigin = buildAndroidOriginFromFingerprint(fingerprint);
+                if (androidOrigin != null) {
+                    origins.add(Origin.create(androidOrigin));
+                }
+            }
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Passkey allowed origins: {}", origins);
+        }
+        return origins;
     }
 
     /**
      * 获取有效的 RP ID
      */
     private String getEffectiveRpId() {
+        String configuredRpId = appProperties.getPasskey().getRpId();
+        if (configuredRpId != null && !configuredRpId.isBlank()) {
+            return configuredRpId.trim();
+        }
         if (appProperties.isDebug()) {
             return "localhost";
         }
         return "auth.ksuser.cn";
+    }
+
+    private String buildAndroidOriginFromFingerprint(String fingerprint) {
+        if (fingerprint == null || fingerprint.isBlank()) {
+            return null;
+        }
+        String trimmed = fingerprint.trim();
+        if (trimmed.startsWith("android:apk-key-hash:")) {
+            return trimmed;
+        }
+
+        String normalizedHex = trimmed.replace(":", "").replace("-", "").replaceAll("\\s+", "");
+        if (!normalizedHex.matches("(?i)[0-9a-f]{64}")) {
+            log.warn("Ignore invalid PASSKEY_ANDROID_CERT_SHA256_FINGERPRINTS value: {}", fingerprint);
+            return null;
+        }
+        byte[] digest = hexToBytes(normalizedHex);
+        String base64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+        return "android:apk-key-hash:" + base64Url;
+    }
+
+    private byte[] hexToBytes(String hex) {
+        int len = hex.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
+        }
+        return data;
     }
 }

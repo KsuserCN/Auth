@@ -319,6 +319,8 @@ public class AppProperties {
         private String rpName = "KSUser Auth API";
         private String rpId = "localhost";
         private String origin = "http://localhost:5173";
+        private java.util.List<String> androidOrigins = new java.util.ArrayList<>();
+        private java.util.List<String> androidCertSha256Fingerprints = new java.util.ArrayList<>();
         private String attestation = "none";
         private String userVerification = "preferred";
         private String residentKey = "preferred";
@@ -346,6 +348,22 @@ public class AppProperties {
 
         public void setOrigin(String origin) {
             this.origin = origin;
+        }
+
+        public java.util.List<String> getAndroidOrigins() {
+            return androidOrigins;
+        }
+
+        public void setAndroidOrigins(java.util.List<String> androidOrigins) {
+            this.androidOrigins = androidOrigins;
+        }
+
+        public java.util.List<String> getAndroidCertSha256Fingerprints() {
+            return androidCertSha256Fingerprints;
+        }
+
+        public void setAndroidCertSha256Fingerprints(java.util.List<String> androidCertSha256Fingerprints) {
+            this.androidCertSha256Fingerprints = androidCertSha256Fingerprints;
         }
 
         public String getAttestation() {
