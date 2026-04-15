@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.get_login_creds",
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "cn.ksuser.auth.android",
+      "sha256_cert_fingerprints": [
+        "92:4D:95:F0:A6:40:57:32:91:E9:A8:83:91:ED:85:52:E4:2A:4A:B5:98:43:12:F7:FA:75:53:70:5F:34:0F:AB"
+      ]
+    }
+  }
+]
