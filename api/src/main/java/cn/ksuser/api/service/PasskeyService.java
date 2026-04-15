@@ -617,8 +617,8 @@ public class PasskeyService {
         List<String> fingerprints = appProperties.getPasskey().getAndroidCertSha256Fingerprints();
         if (fingerprints != null) {
             for (String fingerprint : fingerprints) {
-                String androidOrigin = buildAndroidOriginFromFingerprint(fingerprint);
-                if (androidOrigin != null) {
+                Set<String> androidOrigins = buildAndroidOriginsFromFingerprint(fingerprint);
+                for (String androidOrigin : androidOrigins) {
                     origins.add(Origin.create(androidOrigin));
                 }
             }
@@ -644,23 +644,28 @@ public class PasskeyService {
         return "auth.ksuser.cn";
     }
 
-    private String buildAndroidOriginFromFingerprint(String fingerprint) {
+    private Set<String> buildAndroidOriginsFromFingerprint(String fingerprint) {
+        Set<String> result = new LinkedHashSet<>();
         if (fingerprint == null || fingerprint.isBlank()) {
-            return null;
+            return result;
         }
         String trimmed = fingerprint.trim();
         if (trimmed.startsWith("android:apk-key-hash:")) {
-            return trimmed;
+            result.add(trimmed);
+            return result;
         }
 
         String normalizedHex = trimmed.replace(":", "").replace("-", "").replaceAll("\\s+", "");
         if (!normalizedHex.matches("(?i)[0-9a-f]{64}")) {
             log.warn("Ignore invalid PASSKEY_ANDROID_CERT_SHA256_FINGERPRINTS value: {}", fingerprint);
-            return null;
+            return result;
         }
         byte[] digest = hexToBytes(normalizedHex);
         String base64Url = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
-        return "android:apk-key-hash:" + base64Url;
+        String base64Std = Base64.getEncoder().withoutPadding().encodeToString(digest);
+        result.add("android:apk-key-hash:" + base64Url);
+        result.add("android:apk-key-hash:" + base64Std);
+        return result;
     }
 
     private byte[] hexToBytes(String hex) {
