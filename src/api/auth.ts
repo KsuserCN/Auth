@@ -29,9 +29,11 @@ export interface UserSettings {
   detectUnusualLogin: boolean
   notifySensitiveActionEmail: boolean
   subscribeNewsEmail: boolean
-  preferredMfaMethod?: 'totp' | 'passkey'
+  preferredMfaMethod?: MFAMethod
   preferredSensitiveMethod?: 'password' | 'email-code' | 'passkey' | 'totp'
 }
+
+export type MFAMethod = 'totp' | 'passkey' | 'qr'
 
 // 登录响应类型
 export interface LoginResponse {
@@ -42,8 +44,8 @@ export interface LoginResponse {
 // MFA 验证挑战响应
 export interface MFAChallenge {
   challengeId: string
-  method: 'totp' | 'passkey'
-  methods?: Array<'totp' | 'passkey'>
+  method: MFAMethod
+  methods?: MFAMethod[]
 }
 
 // TOTP 验证请求
@@ -377,6 +379,53 @@ export const exchangeSessionTransfer = async (
   return response.data as unknown as LoginResponse
 }
 
+export interface QrChallengeInitResponse {
+  challengeId: string
+  pollToken: string
+  qrText: string
+  expiresInSeconds: number
+}
+
+export interface QrChallengeStatusResponse {
+  status: 'pending' | 'approved' | 'rejected' | 'expired'
+  expiresInSeconds: number
+  transferCode?: string
+  mfaChallengeId?: string
+  method?: MFAMethod
+  methods?: MFAMethod[]
+  verified?: boolean
+}
+
+export const initQrLogin = async (): Promise<QrChallengeInitResponse> => {
+  const response = await request.post<ApiResponse<QrChallengeInitResponse>>('/auth/qr/login/init', {})
+  return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
+}
+
+export const initQrMfa = async (mfaChallengeId: string): Promise<QrChallengeInitResponse> => {
+  const response = await request.post<ApiResponse<QrChallengeInitResponse>>('/auth/qr/mfa/init', {
+    mfaChallengeId,
+  })
+  return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
+}
+
+export const initQrSensitive = async (): Promise<QrChallengeInitResponse> => {
+  const response = await request.post<ApiResponse<QrChallengeInitResponse>>(
+    '/auth/qr/sensitive/init',
+    {},
+  )
+  return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
+}
+
+export const pollQrStatus = async (
+  challengeId: string,
+  pollToken: string,
+): Promise<QrChallengeStatusResponse> => {
+  const response = await request.get<ApiResponse<QrChallengeStatusResponse>>('/auth/qr/status', {
+    params: { challengeId, pollToken },
+  })
+  return (response as unknown as ApiResponse<QrChallengeStatusResponse>).data
+}
+
 // ========== 获取用户信息 ==========
 
 /**
@@ -519,7 +568,7 @@ export interface SensitiveVerificationStatus {
   verified: boolean
   remainingSeconds: number
   preferredMethod?: 'password' | 'email-code' | 'passkey' | 'totp'
-  methods?: Array<'password' | 'email-code' | 'passkey' | 'totp'>
+  methods?: Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>
 }
 
 export const checkSensitiveVerification = async (): Promise<SensitiveVerificationStatus> => {
@@ -548,6 +597,8 @@ export type SensitiveLoginMethod =
   | 'EMAIL_CODE_MFA'
   | 'PASSKEY'
   | 'PASSKEY_MFA'
+  | 'QR'
+  | 'QR_MFA'
   | 'QQ'
   | 'GITHUB'
   | 'MICROSOFT'
@@ -952,8 +1003,8 @@ export interface OAuthLoginCallbackResponse {
   message?: string
   // MFA 场景 (HTTP 201)
   challengeId?: string
-  method?: 'totp' | 'passkey'
-  methods?: Array<'totp' | 'passkey'>
+  method?: MFAMethod
+  methods?: MFAMethod[]
 }
 
 export interface OAuthBindCallbackResponse {

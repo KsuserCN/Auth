@@ -100,6 +100,25 @@
                 <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
               </div>
 
+              <!-- 手机扫码验证 -->
+              <div
+                class="method-option"
+                @click="!methodSelecting && selectMethod('qr')"
+                :class="{ 'is-disabled': methodSelecting || !isMethodSelectable('qr') }"
+              >
+                <el-icon class="method-icon" :size="28">
+                  <Message />
+                </el-icon>
+                <div class="method-info">
+                  <h3>使用手机扫码验证</h3>
+                  <p>使用已登录手机端扫码完成验证</p>
+                </div>
+                <el-icon class="method-arrow" v-if="!methodSelecting">
+                  <ArrowRight />
+                </el-icon>
+                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+              </div>
+
               <!-- TOTP 验证 -->
               <div
                 class="method-option"
@@ -242,6 +261,36 @@
             </div>
           </div>
 
+          <!-- 第二步：扫码验证 -->
+          <div v-else-if="step === 'qr'" class="step-container" key="qr">
+            <h2 class="step-title">手机扫码验证</h2>
+            <p class="step-subtitle">请使用已登录手机端扫描二维码完成身份验证</p>
+
+            <div
+              v-if="canChooseSensitiveMethod()"
+              class="switch-method-section"
+              @click="backToMethod"
+            >
+              <el-icon class="switch-method-icon">
+                <Refresh />
+              </el-icon>
+              <span>选择其他验证方式</span>
+            </div>
+
+            <div class="qr-card">
+              <img v-if="qrCodeImage" :src="qrCodeImage" alt="敏感验证扫码二维码" class="qr-image" />
+              <div v-else class="qr-placeholder">正在生成二维码...</div>
+              <p class="qr-meta">剩余有效期：{{ Math.max(qrExpiresInSeconds, 0) }} 秒</p>
+            </div>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMethod">返回</el-button>
+              <el-button class="next-btn" @click="refreshQrVerification" :loading="qrRefreshing">
+                刷新二维码
+              </el-button>
+            </div>
+          </div>
+
           <!-- 第二步：TOTP 验证 -->
           <div v-else-if="step === 'totp'" class="step-container" key="totp">
             <h2 class="step-title">TOTP 验证</h2>
@@ -313,6 +362,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
+import QRCode from 'qrcode'
 import {
   ArrowRight,
   Lock,
@@ -327,10 +377,13 @@ import { getStoredAccessToken } from '@/utils/authSession'
 import { useUserStore } from '@/stores/user'
 import {
   checkSensitiveVerification,
-  verifySensitiveOperation,
-  sendSensitiveVerificationCode,
   getPasskeySensitiveVerificationOptions,
+  initQrSensitive,
+  pollQrStatus,
+  sendSensitiveVerificationCode,
+  type QrChallengeStatusResponse,
   verifyPasskeySensitiveOperation,
+  verifySensitiveOperation,
 } from '@/api/auth'
 import {
   isWebAuthnSupported,
@@ -347,12 +400,15 @@ const codeFormRef = ref<FormInstance>()
 const totpFormRef = ref<FormInstance>()
 
 // 流程步骤
-const step = ref<'method' | 'password' | 'email-code' | 'passkey' | 'totp'>('method')
+const step = ref<'method' | 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>('method')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['method', 'password', 'email-code', 'passkey', 'totp']
+const stepOrder = ['method', 'password', 'email-code', 'passkey', 'totp', 'qr']
 
-const updateStep = (newStep: 'method' | 'password' | 'email-code' | 'passkey' | 'totp') => {
+const updateStep = (newStep: 'method' | 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
+  if (newStep !== 'qr') {
+    cleanupQrPolling()
+  }
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -437,13 +493,15 @@ const passwordLoading = ref(false)
 const codeLoading = ref(false)
 const passkeyLoading = ref(false)
 const totpLoading = ref(false)
+const qrRefreshing = ref(false)
 const methodSelecting = ref(false)
 
-const availableMethods = ref<Array<'password' | 'email-code' | 'passkey' | 'totp'>>([
+const availableMethods = ref<Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>>([
   'password',
   'email-code',
   'passkey',
   'totp',
+  'qr',
 ])
 
 // Passkey 支持检测
@@ -453,6 +511,11 @@ const isPasskeySupported = ref(false)
 const codeCountdown = ref(0)
 const canResendCode = ref(false)
 let codeCountdownTimer: number | null = null
+const qrCodeImage = ref('')
+const qrChallengeId = ref('')
+const qrPollToken = ref('')
+const qrExpiresInSeconds = ref(0)
+let qrPollingTimer: number | null = null
 
 const ensureAuthenticated = () => {
   const token = getStoredAccessToken()
@@ -481,16 +544,24 @@ onMounted(async () => {
       return
     }
 
-    const methods = status.methods ?? ['password', 'email-code', 'passkey', 'totp']
-    availableMethods.value = methods.filter(
-      (item): item is 'password' | 'email-code' | 'passkey' | 'totp' =>
-        item === 'password' || item === 'email-code' || item === 'passkey' || item === 'totp',
+    const methods = status.methods ?? ['password', 'email-code', 'passkey', 'totp', 'qr']
+    const sanitizedMethods = methods.filter(
+      (item): item is 'password' | 'email-code' | 'passkey' | 'totp' | 'qr' =>
+        item === 'password' ||
+        item === 'email-code' ||
+        item === 'passkey' ||
+        item === 'totp' ||
+        item === 'qr',
     )
+    availableMethods.value = [...new Set([...sanitizedMethods, 'qr'])] as Array<
+      'password' | 'email-code' | 'passkey' | 'totp' | 'qr'
+    >
 
     const preferredMethod = status.preferredMethod
     const defaultMethod = [preferredMethod, ...availableMethods.value].find(
-      (item) => item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp'),
-    ) as 'password' | 'email-code' | 'passkey' | 'totp' | undefined
+      (item) =>
+        item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'),
+    ) as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr' | undefined
 
     if (defaultMethod) {
       await selectMethod(defaultMethod)
@@ -500,26 +571,26 @@ onMounted(async () => {
   }
 })
 
-const isMethodAvailable = (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
+const isMethodAvailable = (method: 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
   return availableMethods.value.includes(method)
 }
 
-const isMethodSelectable = (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
+const isMethodSelectable = (method: 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
   if (!isMethodAvailable(method)) return false
   if (method === 'passkey' && !isPasskeySupported.value) return false
   return true
 }
 
 const canChooseSensitiveMethod = () => {
-  const selectableCount = ['password', 'email-code', 'passkey', 'totp'].filter((item) =>
-    isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp'),
+  const selectableCount = ['password', 'email-code', 'passkey', 'totp', 'qr'].filter((item) =>
+    isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'),
   ).length
 
   return selectableCount > 1
 }
 
 // 选择验证方式
-const selectMethod = async (method: 'password' | 'email-code' | 'passkey' | 'totp') => {
+const selectMethod = async (method: 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
   if (methodSelecting.value) return
   if (!isMethodSelectable(method)) {
     ElMessage.error('当前不可使用该验证方式')
@@ -540,6 +611,8 @@ const selectMethod = async (method: 'password' | 'email-code' | 'passkey' | 'tot
     } else if (method === 'totp') {
       await new Promise((resolve) => setTimeout(resolve, 200))
       updateStep('totp')
+    } else if (method === 'qr') {
+      await startQrVerification()
     }
   } finally {
     methodSelecting.value = false
@@ -552,6 +625,75 @@ const backToMethod = () => {
   totpInput.value.code = ''
   totpMode.value = 'totp'
   cleanupCodeCountdown()
+  cleanupQrPolling()
+  qrCodeImage.value = ''
+  qrChallengeId.value = ''
+  qrPollToken.value = ''
+  qrExpiresInSeconds.value = 0
+}
+
+const handleQrStatusApproved = async (status: QrChallengeStatusResponse) => {
+  if (!status.verified) {
+    ElMessage.error('扫码验证结果无效，请重试')
+    return
+  }
+  ElMessage.success('验证成功')
+  const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
+  router.push(returnTo)
+}
+
+const pollQrVerification = async () => {
+  if (!qrChallengeId.value || !qrPollToken.value) return
+  try {
+    const status = await pollQrStatus(qrChallengeId.value, qrPollToken.value)
+    qrExpiresInSeconds.value = status.expiresInSeconds || 0
+    if (status.status === 'pending') return
+
+    cleanupQrPolling()
+    if (status.status === 'approved') {
+      await handleQrStatusApproved(status)
+      return
+    }
+    if (status.status === 'rejected') {
+      ElMessage.error('扫码请求已被拒绝，请刷新二维码')
+      return
+    }
+    ElMessage.warning('二维码已过期，请刷新二维码')
+  } catch (error) {
+    cleanupQrPolling()
+    console.error('QR sensitive polling failed:', error)
+  }
+}
+
+const startQrPolling = () => {
+  cleanupQrPolling()
+  qrPollingTimer = window.setInterval(() => {
+    void pollQrVerification()
+  }, 2000)
+  void pollQrVerification()
+}
+
+const startQrVerification = async () => {
+  if (!ensureAuthenticated()) return
+  try {
+    qrRefreshing.value = true
+    const payload = await initQrSensitive()
+    qrChallengeId.value = payload.challengeId
+    qrPollToken.value = payload.pollToken
+    qrExpiresInSeconds.value = payload.expiresInSeconds
+    qrCodeImage.value = await QRCode.toDataURL(payload.qrText, { width: 220, margin: 1 })
+    updateStep('qr')
+    startQrPolling()
+  } catch (error) {
+    console.error('Init QR sensitive verification failed:', error)
+    ElMessage.error('初始化扫码验证失败，请重试')
+  } finally {
+    qrRefreshing.value = false
+  }
+}
+
+const refreshQrVerification = async () => {
+  await startQrVerification()
 }
 
 const handleTotpInput = (value: string) => {
@@ -707,8 +849,16 @@ const cleanupCodeCountdown = () => {
   }
 }
 
+const cleanupQrPolling = () => {
+  if (qrPollingTimer !== null) {
+    clearInterval(qrPollingTimer)
+    qrPollingTimer = null
+  }
+}
+
 onBeforeUnmount(() => {
   cleanupCodeCountdown()
+  cleanupQrPolling()
 })
 
 // Passkey 验证
@@ -1190,6 +1340,45 @@ const handlePasskeyVerify = async () => {
   line-height: 1.6;
 }
 
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  background: var(--el-fill-color-lighter);
+}
+
+.qr-image {
+  width: 220px;
+  height: 220px;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.qr-placeholder {
+  width: 220px;
+  height: 220px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.qr-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
 /* 选择其他验证方式容器 */
 .switch-method-section {
   display: flex;
@@ -1358,6 +1547,12 @@ const handlePasskeyVerify = async () => {
 
   .method-option {
     padding: 12px;
+  }
+
+  .qr-image,
+  .qr-placeholder {
+    width: 180px;
+    height: 180px;
   }
 }
 </style>

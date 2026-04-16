@@ -113,6 +113,7 @@
                 @change="handlePreferredMfaMethodChange">
                 <el-option label="Passkey" value="passkey" :disabled="!passkeyEnabled" />
                 <el-option label="TOTP" value="totp" :disabled="!totpEnabled" />
+                <el-option label="手机扫码" value="qr" />
               </el-select>
             </div>
 
@@ -301,9 +302,9 @@ const totpEnabled = ref(false)
 const passkeyLoading = ref(true)
 const totpLoading = ref(true)
 const mfaEnabled = ref(false)
-const preferredMfaMethod = ref<'totp' | 'passkey'>('totp')
+const preferredMfaMethod = ref<'totp' | 'passkey' | 'qr'>('totp')
 const preferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp'>('password')
-const committedPreferredMfaMethod = ref<'totp' | 'passkey'>('totp')
+const committedPreferredMfaMethod = ref<'totp' | 'passkey' | 'qr'>('totp')
 const committedPreferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp'>('password')
 const geoLoginEnabled = ref(false)
 const sensitiveEmailEnabled = ref(false)
@@ -358,6 +359,8 @@ const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
   EMAIL_CODE_MFA: '验证码+二步验证',
   PASSKEY: 'Passkey登录',
   PASSKEY_MFA: 'Passkey+二步验证',
+  QR: '扫码登录',
+  QR_MFA: '扫码+二步验证',
   QQ: 'QQ',
   GITHUB: 'GitHub',
   MICROSOFT: 'Microsoft',
@@ -396,6 +399,7 @@ const normalizeLoginTokenLabel = (token: string) => {
   if (key === 'EMAIL') return '验证码'
   if (key === 'EMAIL_CODE') return '验证码'
   if (key === 'TOTP') return 'TOTP'
+  if (key === 'QR') return '扫码'
   if (key === 'GOOGLE') return 'Google'
   if (key === 'GITHUB') return 'GitHub'
   if (key === 'MICROSOFT') return 'Microsoft'
@@ -650,7 +654,7 @@ const updateStringSetting = async (
   }
 }
 
-const handlePreferredMfaMethodChange = async (value: 'totp' | 'passkey') => {
+const handlePreferredMfaMethodChange = async (value: 'totp' | 'passkey' | 'qr') => {
   if (!mfaEnabled.value) {
     ElMessage.warning('请先开启 MFA')
     return

@@ -210,10 +210,30 @@
             </div>
           </div>
 
+          <!-- 第三步：手机扫码登录 -->
+          <div v-else-if="step === 'qr-login'" class="step-container" key="qr-login">
+            <h2 class="step-title">手机扫码登录</h2>
+            <p class="step-subtitle">请使用已登录手机端扫描二维码完成登录</p>
+
+            <div class="qr-card">
+              <img v-if="qrCodeImage" :src="qrCodeImage" alt="扫码登录二维码" class="qr-image" />
+              <div v-else class="qr-placeholder">正在生成二维码...</div>
+              <p class="qr-meta">剩余有效期：{{ Math.max(qrExpiresInSeconds, 0) }} 秒</p>
+              <p class="qr-tip">若账号开启了 MFA，扫码后还需在网页端完成其他 MFA 验证。</p>
+            </div>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="updateStep('email')">返回</el-button>
+              <el-button class="next-btn" @click="refreshQrChallenge" :loading="qrRefreshing">
+                刷新二维码
+              </el-button>
+            </div>
+          </div>
+
           <!-- 第四步：选择 MFA 验证方式 -->
           <div v-else-if="step === 'mfa-method'" class="step-container" key="mfa-method">
             <h2 class="step-title">选择二次验证方式</h2>
-            <p class="step-subtitle">请选择 TOTP 或 Passkey 完成 MFA 验证</p>
+            <p class="step-subtitle">请选择 TOTP、Passkey 或手机扫码完成 MFA 验证</p>
 
             <div class="method-list">
               <div class="method-option" @click="!methodSelecting && selectMfaMethod('totp')"
@@ -246,6 +266,20 @@
                   <ArrowRight />
                 </el-icon>
               </div>
+
+              <div class="method-option" @click="!methodSelecting && selectMfaMethod('qr')"
+                :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('qr') }">
+                <el-icon class="method-icon" :size="28">
+                  <Message />
+                </el-icon>
+                <div class="method-info">
+                  <h3>使用手机扫码验证</h3>
+                  <p>使用已登录手机端扫描二维码完成二次验证</p>
+                </div>
+                <el-icon class="method-arrow" v-if="!methodSelecting">
+                  <ArrowRight />
+                </el-icon>
+              </div>
             </div>
 
             <div class="step-actions">
@@ -273,6 +307,25 @@
               <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
               <el-button class="next-btn" @click="handlePasskeyMfaVerify" :loading="passkeyLoading">
                 {{ passkeyLoading ? '验证中...' : '验证身份' }}
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 第四步：扫码 MFA 验证 -->
+          <div v-else-if="step === 'mfa-qr'" class="step-container" key="mfa-qr">
+            <h2 class="step-title">手机扫码二次验证</h2>
+            <p class="step-subtitle">请使用已登录手机端扫描二维码完成二次验证</p>
+
+            <div class="qr-card">
+              <img v-if="qrCodeImage" :src="qrCodeImage" alt="MFA 扫码二维码" class="qr-image" />
+              <div v-else class="qr-placeholder">正在生成二维码...</div>
+              <p class="qr-meta">剩余有效期：{{ Math.max(qrExpiresInSeconds, 0) }} 秒</p>
+            </div>
+
+            <div class="step-actions">
+              <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
+              <el-button class="next-btn" @click="refreshQrChallenge" :loading="qrRefreshing">
+                刷新二维码
               </el-button>
             </div>
           </div>
@@ -325,6 +378,9 @@
               <div class="extra-title">其他登录方式</div>
               <div class="extra-actions">
                 <div class="extra-icons">
+                  <button class="icon-btn" @click="handleQrLoginInit" aria-label="二维码登录" type="button">
+                    <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+                  </button>
                   <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
                     <i class="fa-brands fa-weixin" aria-hidden="true"></i>
                   </button>
@@ -334,9 +390,9 @@
                   <button class="icon-btn" @click="handleGithubLogin" aria-label="Github 登录" type="button">
                     <i class="fa-brands fa-github" aria-hidden="true"></i>
                   </button>
-                  <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
+                  <!-- <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
                     <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
-                  </button>
+                  </button> -->
                   <button class="icon-btn" @click="handleGoogleLogin" aria-label="Google 登录" type="button">
                     <i class="fa-brands fa-google" aria-hidden="true"></i>
                   </button>
@@ -362,6 +418,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
+import QRCode from 'qrcode'
 import {
   ArrowRight,
   Lock,
@@ -385,9 +442,14 @@ import {
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
   exchangeSessionTransfer,
+  initQrLogin,
+  initQrMfa,
+  pollQrStatus,
   refreshAccessToken,
+  type MFAMethod,
   type MFAChallenge,
   type LoginResponse,
+  type QrChallengeStatusResponse,
 } from '@/api/auth'
 import {
   exchangeDesktopSessionToWeb,
@@ -418,15 +480,45 @@ const route = useRoute()
 
 // 流程步骤
 const step = ref<
-  'email' | 'method' | 'password' | 'email-code' | 'mfa-method' | 'mfa-passkey' | 'totp'
+  | 'email'
+  | 'method'
+  | 'password'
+  | 'email-code'
+  | 'qr-login'
+  | 'mfa-method'
+  | 'mfa-passkey'
+  | 'mfa-qr'
+  | 'totp'
 >('email')
 const stepDirection = ref<'forward' | 'backward'>('forward')
 
-const stepOrder = ['email', 'method', 'password', 'email-code', 'mfa-method', 'mfa-passkey', 'totp']
+const stepOrder = [
+  'email',
+  'method',
+  'password',
+  'email-code',
+  'qr-login',
+  'mfa-method',
+  'mfa-passkey',
+  'mfa-qr',
+  'totp',
+]
 
 const updateStep = (
-  newStep: 'email' | 'method' | 'password' | 'email-code' | 'mfa-method' | 'mfa-passkey' | 'totp',
+  newStep:
+    | 'email'
+    | 'method'
+    | 'password'
+    | 'email-code'
+    | 'qr-login'
+    | 'mfa-method'
+    | 'mfa-passkey'
+    | 'mfa-qr'
+    | 'totp',
 ) => {
+  if (newStep !== 'qr-login' && newStep !== 'mfa-qr') {
+    cleanupQrPolling()
+  }
   const currentIndex = stepOrder.indexOf(step.value)
   const newIndex = stepOrder.indexOf(newStep)
   stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
@@ -526,9 +618,25 @@ const totpLoading = ref(false)
 // MFA 相关状态
 const mfaChallenge = ref<MFAChallenge | null>(null)
 const mfaSource = ref<
-  'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null
+  | 'password'
+  | 'email-code'
+  | 'passkey'
+  | 'qr-login'
+  | 'qq'
+  | 'github'
+  | 'microsoft'
+  | 'google'
+  | null
 >(null)
-const mfaMethods = ref<Array<'totp' | 'passkey'>>([])
+const mfaMethods = ref<MFAMethod[]>([])
+
+const qrCodeImage = ref('')
+const qrExpiresInSeconds = ref(0)
+const qrRefreshing = ref(false)
+const qrChallengeId = ref('')
+const qrPollToken = ref('')
+const qrMode = ref<'login' | 'mfa' | null>(null)
+let qrPollingTimer: number | null = null
 
 // 验证码倒计时
 const codeCountdown = ref(0)
@@ -583,24 +691,167 @@ const persistCurrentPostLoginRedirect = () => {
 const normalizeMfaMethods = (
   methods: MFAChallenge['methods'],
   fallbackMethod: MFAChallenge['method'],
-): Array<'totp' | 'passkey'> => {
+): MFAMethod[] => {
   const normalized = (methods ?? []).filter(
-    (item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey',
+    (item): item is MFAMethod => item === 'totp' || item === 'passkey' || item === 'qr',
   )
 
   if (normalized.length > 0) {
     return [...new Set(normalized)]
   }
 
-  return fallbackMethod === 'passkey' ? ['passkey'] : ['totp']
+  return fallbackMethod === 'passkey' || fallbackMethod === 'qr' ? [fallbackMethod] : ['totp']
 }
 
 const canChooseMfaMethod = () => {
-  return (
-    mfaMethods.value.includes('totp') &&
-    mfaMethods.value.includes('passkey') &&
-    isPasskeySupported.value
+  const selectable = mfaMethods.value.filter((method) => {
+    if (method === 'passkey') {
+      return isPasskeySupported.value
+    }
+    return true
+  })
+  return selectable.length > 1
+}
+
+const cleanupQrPolling = () => {
+  if (qrPollingTimer !== null) {
+    clearInterval(qrPollingTimer)
+    qrPollingTimer = null
+  }
+}
+
+const buildMfaChallengeFromStatus = (status: QrChallengeStatusResponse): MFAChallenge | null => {
+  if (!status.mfaChallengeId) {
+    return null
+  }
+
+  const normalizedMethods = (status.methods ?? []).filter(
+    (item): item is MFAMethod => item === 'totp' || item === 'passkey' || item === 'qr',
   )
+  const fallbackMethod: MFAMethod =
+    status.method === 'passkey' || status.method === 'qr' ? status.method : 'totp'
+
+  return {
+    challengeId: status.mfaChallengeId,
+    method: fallbackMethod,
+    methods: normalizedMethods.length > 0 ? normalizedMethods : [fallbackMethod],
+  }
+}
+
+const handleQrApproved = async (status: QrChallengeStatusResponse) => {
+  if (qrMode.value === 'login') {
+    if (status.transferCode) {
+      const response = await exchangeSessionTransfer(status.transferCode, 'web')
+      const desktopSynced = await finalizeWebLogin({
+        accessToken: response.accessToken,
+        user: response.user,
+      })
+      ElMessage.success(desktopSynced ? '扫码登录成功，已同步到桌面端' : '扫码登录成功')
+      await navigateAfterLogin()
+      return
+    }
+
+    const nextMfa = buildMfaChallengeFromStatus(status)
+    if (nextMfa) {
+      startMfaFlow(nextMfa, 'qr-login')
+      return
+    }
+
+    ElMessage.error('扫码登录结果无效，请重试')
+    return
+  }
+
+  if (qrMode.value === 'mfa') {
+    if (!status.transferCode) {
+      ElMessage.error('扫码 MFA 结果无效，请重试')
+      return
+    }
+    const response = await exchangeSessionTransfer(status.transferCode, 'web')
+    const desktopSynced = await finalizeWebLogin({
+      accessToken: response.accessToken,
+      user: response.user,
+    })
+    ElMessage.success(desktopSynced ? '扫码 MFA 验证成功，已同步到桌面端' : '扫码 MFA 验证成功')
+    await navigateAfterLogin()
+  }
+}
+
+const pollQrChallenge = async () => {
+  if (!qrChallengeId.value || !qrPollToken.value) return
+
+  try {
+    const status = await pollQrStatus(qrChallengeId.value, qrPollToken.value)
+    qrExpiresInSeconds.value = status.expiresInSeconds || 0
+
+    if (status.status === 'pending') {
+      return
+    }
+
+    cleanupQrPolling()
+
+    if (status.status === 'approved') {
+      await handleQrApproved(status)
+      return
+    }
+    if (status.status === 'rejected') {
+      ElMessage.error('扫码请求已被拒绝，请刷新二维码后重试')
+      return
+    }
+    ElMessage.warning('二维码已过期，请刷新二维码')
+  } catch (error) {
+    cleanupQrPolling()
+    console.error('QR polling failed:', error)
+  }
+}
+
+const startQrPolling = () => {
+  cleanupQrPolling()
+  qrPollingTimer = window.setInterval(() => {
+    void pollQrChallenge()
+  }, 2000)
+  void pollQrChallenge()
+}
+
+const initQrFlow = async (mode: 'login' | 'mfa') => {
+  try {
+    qrRefreshing.value = true
+    qrMode.value = mode
+
+    const payload =
+      mode === 'login'
+        ? await initQrLogin()
+        : await initQrMfa((mfaChallenge.value?.challengeId || '').trim())
+
+    qrChallengeId.value = payload.challengeId
+    qrPollToken.value = payload.pollToken
+    qrExpiresInSeconds.value = payload.expiresInSeconds
+    qrCodeImage.value = await QRCode.toDataURL(payload.qrText, { width: 240, margin: 1 })
+
+    updateStep(mode === 'login' ? 'qr-login' : 'mfa-qr')
+    startQrPolling()
+  } catch (error) {
+    console.error('Init QR flow failed:', error)
+    ElMessage.error(mode === 'login' ? '初始化扫码登录失败，请重试' : '初始化扫码 MFA 失败，请重试')
+  } finally {
+    qrRefreshing.value = false
+  }
+}
+
+const refreshQrChallenge = async () => {
+  if (!qrMode.value) return
+  await initQrFlow(qrMode.value)
+}
+
+const handleQrLoginInit = async () => {
+  await initQrFlow('login')
+}
+
+const startQrMfaFlow = async () => {
+  if (!mfaChallenge.value?.challengeId) {
+    ElMessage.error('MFA 挑战信息丢失')
+    return
+  }
+  await initQrFlow('mfa')
 }
 
 const handleTotpInput = (value: string) => {
@@ -623,7 +874,16 @@ const setTotpMode = (mode: 'totp' | 'recovery') => {
 
 const startMfaFlow = (
   challenge: MFAChallenge,
-  source: 'password' | 'email-code' | 'passkey' | 'qq' | 'github' | 'microsoft' | 'google' | null,
+  source:
+    | 'password'
+    | 'email-code'
+    | 'passkey'
+    | 'qr-login'
+    | 'qq'
+    | 'github'
+    | 'microsoft'
+    | 'google'
+    | null,
 ) => {
   mfaChallenge.value = challenge
   mfaSource.value = source
@@ -633,6 +893,7 @@ const startMfaFlow = (
 
   const passkeyAvailable = mfaMethods.value.includes('passkey') && isPasskeySupported.value
   const totpAvailable = mfaMethods.value.includes('totp')
+  const qrAvailable = mfaMethods.value.includes('qr')
 
   if (challenge.method === 'passkey' && passkeyAvailable) {
     updateStep('mfa-passkey')
@@ -644,6 +905,11 @@ const startMfaFlow = (
     return
   }
 
+  if (challenge.method === 'qr' && qrAvailable) {
+    void startQrMfaFlow()
+    return
+  }
+
   if (passkeyAvailable) {
     updateStep('mfa-passkey')
     return
@@ -651,6 +917,11 @@ const startMfaFlow = (
 
   if (totpAvailable) {
     updateStep('totp')
+    return
+  }
+
+  if (qrAvailable) {
+    void startQrMfaFlow()
     return
   }
 
@@ -674,7 +945,8 @@ onMounted(() => {
   const mfaFrom = route.query.mfaFrom
 
   if (typeof challengeId === 'string' && challengeId.trim()) {
-    const normalizedMethod: 'totp' | 'passkey' = method === 'passkey' ? 'passkey' : 'totp'
+    const normalizedMethod: MFAMethod =
+      method === 'passkey' || method === 'qr' ? method : 'totp'
     const queryMethods = typeof methods === 'string' ? methods.split(',') : []
     const challenge: MFAChallenge = {
       challengeId: challengeId.trim(),
@@ -682,7 +954,8 @@ onMounted(() => {
       methods:
         queryMethods.length > 0
           ? queryMethods.filter(
-            (item): item is 'totp' | 'passkey' => item === 'totp' || item === 'passkey',
+            (item): item is MFAMethod =>
+              item === 'totp' || item === 'passkey' || item === 'qr',
           )
           : undefined,
     }
@@ -1152,7 +1425,7 @@ const handleGoogleLogin = async () => {
 
 // ===== 第四步：TOTP 验证 =====
 
-const selectMfaMethod = async (method: 'totp' | 'passkey') => {
+const selectMfaMethod = async (method: MFAMethod) => {
   if (methodSelecting.value) return
 
   methodSelecting.value = true
@@ -1173,6 +1446,15 @@ const selectMfaMethod = async (method: 'totp' | 'passkey') => {
         return
       }
       updateStep('mfa-passkey')
+      return
+    }
+
+    if (method === 'qr') {
+      if (!mfaMethods.value.includes('qr')) {
+        ElMessage.error('当前不可使用扫码验证')
+        return
+      }
+      await startQrMfaFlow()
       return
     }
 
@@ -1296,6 +1578,11 @@ const backToMFASource = () => {
   mfaChallenge.value = null
   mfaSource.value = null
   mfaMethods.value = []
+  qrMode.value = null
+  qrChallengeId.value = ''
+  qrPollToken.value = ''
+  qrCodeImage.value = ''
+  qrExpiresInSeconds.value = 0
   totpInput.value.code = ''
   totpMode.value = 'totp'
 
@@ -1310,6 +1597,9 @@ const backToMFASource = () => {
     case 'passkey':
       // Passkey 登录没有中间步骤，直接返回到 email
       emailInput.value.email = ''
+      updateStep('email')
+      break
+    case 'qr-login':
       updateStep('email')
       break
     default:
@@ -1369,6 +1659,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   cleanupCodeCountdown()
+  cleanupQrPolling()
   window.removeEventListener('keypress', handleKeyPress)
 })
 </script>
@@ -2093,6 +2384,52 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-regular);
 }
 
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  background: var(--el-fill-color-lighter);
+}
+
+.qr-image {
+  width: 220px;
+  height: 220px;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.qr-placeholder {
+  width: 220px;
+  height: 220px;
+  border-radius: 10px;
+  border: 1px dashed var(--el-border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.qr-meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.qr-tip {
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  text-align: center;
+}
+
 /* 选择其他验证方式容器 */
 .switch-method-section {
   display: flex;
@@ -2307,6 +2644,12 @@ onBeforeUnmount(() => {
 
   .method-info p {
     font-size: 12px;
+  }
+
+  .qr-image,
+  .qr-placeholder {
+    width: 180px;
+    height: 180px;
   }
 }
 </style>
