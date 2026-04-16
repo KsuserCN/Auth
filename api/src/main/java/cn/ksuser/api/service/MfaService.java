@@ -63,7 +63,7 @@ public class MfaService {
                 continue;
             }
             String value = method.trim().toLowerCase();
-            if ("totp".equals(value) || "passkey".equals(value)) {
+            if ("totp".equals(value) || "passkey".equals(value) || "qr".equals(value)) {
                 normalized.add(value);
             }
         }

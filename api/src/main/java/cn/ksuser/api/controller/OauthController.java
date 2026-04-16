@@ -2144,6 +2144,7 @@ public class OauthController {
         if (!userPasskeyRepository.findByUserId(userId).isEmpty()) {
             methods.add("passkey");
         }
+        methods.add("qr");
 
         String preferredMfaMethod = userSettingsRepository.findByUserId(userId)
             .map(UserSettings::getPreferredMfaMethod)
@@ -2158,7 +2159,7 @@ public class OauthController {
             return "totp";
         }
         String normalized = raw.trim().toLowerCase(Locale.ROOT);
-        return ("totp".equals(normalized) || "passkey".equals(normalized)) ? normalized : "totp";
+        return ("totp".equals(normalized) || "passkey".equals(normalized) || "qr".equals(normalized)) ? normalized : "totp";
     }
 
     private int methodPriority(String method, String preferred) {
@@ -2168,7 +2169,12 @@ public class OauthController {
         if (preferred != null && method.equals(preferred)) {
             return 0;
         }
-        return "totp".equals(method) ? 1 : 2;
+        return switch (method) {
+            case "totp" -> 1;
+            case "passkey" -> 2;
+            case "qr" -> 3;
+            default -> 10;
+        };
     }
 
     private void setRefreshTokenCookie(HttpServletResponse response, String token) {

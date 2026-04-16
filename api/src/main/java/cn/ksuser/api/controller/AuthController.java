@@ -33,12 +33,14 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import cn.ksuser.api.service.MfaService;
 import cn.ksuser.api.dto.MfaChallengeResponse;
@@ -52,6 +54,7 @@ import java.util.UUID;
 public class AuthController {
     private static final long AVATAR_MAX_SIZE_BYTES = 3L * 1024 * 1024;
     private static final String AVATAR_STORAGE_DIR = "static/avatars";
+    private static final String QR_TEXT_PREFIX = "KSUSER-AUTH-QR:";
 
     private final UserService userService;
     private final UserSessionService userSessionService;
@@ -70,6 +73,7 @@ public class AuthController {
     private final MfaService mfaService;
     private final SensitiveLogUtil sensitiveLogUtil;
     private final SessionTransferService sessionTransferService;
+    private final QrChallengeService qrChallengeService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
@@ -79,7 +83,8 @@ public class AuthController {
                           TotpService totpService, EncryptionUtil encryptionUtil,
                           UserSettingsRepository userSettingsRepository, MfaService mfaService,
                           SensitiveLogUtil sensitiveLogUtil,
-                          SessionTransferService sessionTransferService) {
+                          SessionTransferService sessionTransferService,
+                          QrChallengeService qrChallengeService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -97,6 +102,7 @@ public class AuthController {
         this.mfaService = mfaService;
         this.sensitiveLogUtil = sensitiveLogUtil;
         this.sessionTransferService = sessionTransferService;
+        this.qrChallengeService = qrChallengeService;
     }
 
     /**
@@ -1051,6 +1057,280 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "跨端登录失败"));
         }
+    }
+
+
+    @PostMapping("/qr/login/init")
+    public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrLogin(HttpServletRequest request) {
+        String webIp = rateLimitService.getClientIp(request);
+        QrChallengeService.QrChallengePayload payload =
+            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.LOGIN, null, null, webIp);
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+    }
+
+    @PostMapping("/qr/mfa/init")
+    public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrMfa(
+            @RequestBody QrMfaInitRequest requestBody,
+            HttpServletRequest request) {
+        if (requestBody == null || requestBody.getMfaChallengeId() == null || requestBody.getMfaChallengeId().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "mfaChallengeId 不能为空"));
+        }
+
+        String mfaChallengeId = requestBody.getMfaChallengeId().trim();
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = request.getHeader("User-Agent");
+        Long userId = mfaService.verifyChallenge(mfaChallengeId, clientIp, userAgent);
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "mfaChallengeId 无效或已过期"));
+        }
+        if (!mfaService.isMethodAllowed(mfaChallengeId, "qr")) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "当前 challenge 不允许使用扫码验证"));
+        }
+
+        QrChallengeService.QrChallengePayload payload =
+            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.MFA, userId, mfaChallengeId, clientIp);
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+    }
+
+    @PostMapping("/qr/sensitive/init")
+    public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrSensitive(
+            Authentication authentication,
+            HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        String webIp = rateLimitService.getClientIp(request);
+        QrChallengeService.QrChallengePayload payload = qrChallengeService.createChallenge(
+            QrChallengeService.ChallengeType.SENSITIVE,
+            user.getId(),
+            null,
+            webIp
+        );
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+    }
+
+    @PostMapping("/qr/approve")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> approveQrChallenge(
+            @RequestBody QrApproveRequest requestBody,
+            Authentication authentication,
+            HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+        if (requestBody == null || requestBody.getApproveCode() == null || requestBody.getApproveCode().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "approveCode 不能为空"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        QrChallengeService.QrChallengePayload challenge =
+            qrChallengeService.getByApproveCode(requestBody.getApproveCode().trim());
+        if (challenge == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "二维码挑战不存在或已过期"));
+        }
+        if (!QrChallengeService.ChallengeStatus.PENDING.value().equals(challenge.getStatus())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "二维码挑战状态不可用"));
+        }
+
+        QrChallengeService.ChallengeType challengeType = QrChallengeService.ChallengeType.fromValue(challenge.getType());
+        if (challengeType == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "二维码挑战类型无效"));
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        try {
+            if (challengeType == QrChallengeService.ChallengeType.LOGIN) {
+                UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+                boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
+                if (mfaEnabled) {
+                    List<String> followUpMethods = resolveMfaMethods(user, true, false);
+                    if (followUpMethods.isEmpty()) {
+                        qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                            Map.of("reason", "未配置可用的非扫码 MFA 方式"));
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(new ApiResponse<>(400, "当前账号未配置可用的非扫码 MFA 方式"));
+                    }
+
+                    String mfaChallengeId = mfaService.createChallenge(
+                        user.getId(),
+                        challenge.getWebIp(),
+                        "qr-login",
+                        "qr",
+                        new HashSet<>(followUpMethods)
+                    );
+                    result.put("mfaChallengeId", mfaChallengeId);
+                    result.put("method", followUpMethods.get(0));
+                    result.put("methods", followUpMethods);
+                } else {
+                    SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
+                        user.getId(),
+                        SessionTransferService.TARGET_WEB,
+                        SessionTransferService.PURPOSE_BRIDGE_LOGIN
+                    );
+                    result.put("transferCode", transferPayload.getTransferCode());
+                }
+            } else if (challengeType == QrChallengeService.ChallengeType.MFA) {
+                if (challenge.getRequestedUserId() == null || !challenge.getRequestedUserId().equals(user.getId())) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "二维码挑战用户不匹配"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ApiResponse<>(403, "二维码挑战用户不匹配"));
+                }
+                if (challenge.getMfaChallengeId() == null || challenge.getMfaChallengeId().isBlank()) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "mfaChallengeId 缺失"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "mfaChallengeId 缺失"));
+                }
+
+                Long challengeUserId = mfaService.verifyChallenge(
+                    challenge.getMfaChallengeId(),
+                    challenge.getWebIp(),
+                    "qr-mfa"
+                );
+                if (challengeUserId == null) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "mfaChallengeId 无效或已过期"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "mfaChallengeId 无效或已过期"));
+                }
+                if (!challengeUserId.equals(user.getId())) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "MFA 挑战用户不匹配"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ApiResponse<>(403, "MFA 挑战用户不匹配"));
+                }
+                if (!mfaService.isMethodAllowed(challenge.getMfaChallengeId(), "qr")) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "当前 challenge 不允许使用扫码验证"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "当前 challenge 不允许使用扫码验证"));
+                }
+
+                mfaService.consumeChallenge(challenge.getMfaChallengeId());
+                SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
+                    user.getId(),
+                    SessionTransferService.TARGET_WEB,
+                    SessionTransferService.PURPOSE_BRIDGE_LOGIN
+                );
+                result.put("transferCode", transferPayload.getTransferCode());
+                result.put("verified", true);
+            } else if (challengeType == QrChallengeService.ChallengeType.SENSITIVE) {
+                if (challenge.getRequestedUserId() == null || !challenge.getRequestedUserId().equals(user.getId())) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "二维码挑战用户不匹配"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new ApiResponse<>(403, "二维码挑战用户不匹配"));
+                }
+                if (challenge.getWebIp() == null || challenge.getWebIp().isBlank()) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "二维码挑战缺少 webIp"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(new ApiResponse<>(400, "二维码挑战无效"));
+                }
+
+                sensitiveOperationService.markVerifiedOnce(user.getUuid(), challenge.getWebIp());
+                result.put("verified", true);
+            }
+
+            qrChallengeService.approveChallenge(challenge.getChallengeId(), user.getId(), result);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "二维码挑战已授权", result));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "二维码挑战授权失败"));
+        }
+    }
+
+    @GetMapping("/qr/status")
+    public ResponseEntity<ApiResponse<QrChallengeStatusResponse>> getQrChallengeStatus(
+            @RequestParam String challengeId,
+            @RequestParam String pollToken) {
+        if (challengeId == null || challengeId.isBlank() || pollToken == null || pollToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 与 pollToken 不能为空"));
+        }
+
+        QrChallengeService.QrChallengePayload challenge = qrChallengeService.getByChallengeId(challengeId.trim());
+        if (challenge == null) {
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "二维码挑战已过期", new QrChallengeStatusResponse("expired", 0L)));
+        }
+
+        if (!pollToken.trim().equals(challenge.getPollToken())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "pollToken 无效"));
+        }
+
+        long expiresInSeconds = qrChallengeService.getRemainingSeconds(challenge.getChallengeId());
+        if (expiresInSeconds <= 0) {
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "二维码挑战已过期", new QrChallengeStatusResponse("expired", 0L)));
+        }
+
+        String status = challenge.getStatus() == null ? "pending" : challenge.getStatus();
+        QrChallengeStatusResponse statusResponse = new QrChallengeStatusResponse(status, expiresInSeconds);
+
+        Map<String, Object> result = challenge.getResult();
+        if (result != null) {
+            Object transferCode = result.get("transferCode");
+            if (transferCode instanceof String value && !value.isBlank()) {
+                statusResponse.setTransferCode(value);
+            }
+            Object mfaChallengeId = result.get("mfaChallengeId");
+            if (mfaChallengeId instanceof String value && !value.isBlank()) {
+                statusResponse.setMfaChallengeId(value);
+            }
+            Object method = result.get("method");
+            if (method instanceof String value && !value.isBlank()) {
+                statusResponse.setMethod(value);
+            }
+            Object methods = result.get("methods");
+            if (methods instanceof List<?> values) {
+                List<String> normalizedMethods = values.stream()
+                    .filter(item -> item != null && !String.valueOf(item).isBlank())
+                    .map(String::valueOf)
+                    .toList();
+                if (!normalizedMethods.isEmpty()) {
+                    statusResponse.setMethods(normalizedMethods);
+                }
+            }
+            Object verified = result.get("verified");
+            if (verified instanceof Boolean value) {
+                statusResponse.setVerified(value);
+            }
+        }
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "查询成功", statusResponse));
     }
 
     /**
@@ -2178,6 +2458,18 @@ public class AuthController {
         };
     }
 
+
+    private QrChallengeInitResponse toQrInitResponse(QrChallengeService.QrChallengePayload payload) {
+        long expiresInSeconds = qrChallengeService.getRemainingSeconds(payload.getChallengeId());
+        long ttl = expiresInSeconds > 0 ? expiresInSeconds : QrChallengeService.DEFAULT_TTL_SECONDS;
+        return new QrChallengeInitResponse(
+            payload.getChallengeId(),
+            payload.getPollToken(),
+            QR_TEXT_PREFIX + payload.getApproveCode(),
+            ttl
+        );
+    }
+
     // ==================== Passkey (WebAuthn) 端点 ====================
 
     /**
@@ -2315,18 +2607,20 @@ public class AuthController {
                     .body(new ApiResponse<>(401, "Passkey 验证失败"));
             }
 
-            // Passkey 作为一因子登录时，仅允许 TOTP 作为二因子
+            // Passkey 作为一因子登录时，允许 TOTP/二维码等非 Passkey 二因子
             UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
             boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
             String clientIp = rateLimitService.getClientIp(httpRequest);
             String userAgent = httpRequest.getHeader("User-Agent");
-            if (mfaEnabled && totpService.isTotpEnabled(user.getId())) {
-                List<String> mfaMethods = List.of("totp");
-                String challenge = mfaService.createChallenge(user.getId(), clientIp, userAgent,
-                        "passkey", new HashSet<>(mfaMethods));
-                return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ApiResponse<>(201, "需要 MFA 验证",
-                            new MfaChallengeResponse(challenge, "totp", mfaMethods)));
+            if (mfaEnabled) {
+                List<String> mfaMethods = resolveMfaMethods(user, false, true);
+                if (!mfaMethods.isEmpty()) {
+                    String challenge = mfaService.createChallenge(user.getId(), clientIp, userAgent,
+                            "passkey", new HashSet<>(mfaMethods));
+                    return ResponseEntity.status(HttpStatus.CREATED)
+                        .body(new ApiResponse<>(201, "需要 MFA 验证",
+                                new MfaChallengeResponse(challenge, mfaMethods.get(0), mfaMethods)));
+                }
             }
 
             // 生成 Token
@@ -2543,6 +2837,10 @@ public class AuthController {
     }
 
     private List<String> resolveMfaMethods(User user, boolean passkeyAllowed) {
+        return resolveMfaMethods(user, passkeyAllowed, true);
+    }
+
+    private List<String> resolveMfaMethods(User user, boolean passkeyAllowed, boolean qrAllowed) {
         List<String> methods = new ArrayList<>();
         if (totpService.isTotpEnabled(user.getId())) {
             methods.add("totp");
@@ -2550,12 +2848,17 @@ public class AuthController {
         if (passkeyAllowed && !passkeyService.getUserPasskeys(user.getId()).isEmpty()) {
             methods.add("passkey");
         }
+        if (qrAllowed) {
+            methods.add("qr");
+        }
+
         String preferredMfaMethod = userSettingsRepository.findByUserId(user.getId())
             .map(UserSettings::getPreferredMfaMethod)
             .orElse("totp");
+        String normalizedPreferred = normalizeMfaPreference(preferredMfaMethod);
         methods.sort((a, b) -> Integer.compare(
-            methodPriority(a, normalizeMfaPreference(preferredMfaMethod)),
-            methodPriority(b, normalizeMfaPreference(preferredMfaMethod))
+            methodPriority(a, normalizedPreferred),
+            methodPriority(b, normalizedPreferred)
         ));
         return methods;
     }
@@ -2604,7 +2907,7 @@ public class AuthController {
             return "totp";
         }
         String normalized = raw.trim().toLowerCase(Locale.ROOT);
-        return ("totp".equals(normalized) || "passkey".equals(normalized)) ? normalized : "totp";
+        return ("totp".equals(normalized) || "passkey".equals(normalized) || "qr".equals(normalized)) ? normalized : "totp";
     }
 
     private String normalizeSensitiveMethod(String raw) {
@@ -2634,8 +2937,9 @@ public class AuthController {
         return switch (method) {
             case "totp" -> 1;
             case "passkey" -> 2;
-            case "password" -> 3;
-            case "email-code" -> 4;
+            case "qr" -> 3;
+            case "password" -> 4;
+            case "email-code" -> 5;
             default -> 10;
         };
     }
