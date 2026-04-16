@@ -349,7 +349,7 @@ export const refreshAccessToken = async (): Promise<{ accessToken: string }> => 
   return response.data as unknown as { accessToken: string }
 }
 
-export type SessionTransferTarget = 'web' | 'desktop'
+export type SessionTransferTarget = 'web' | 'desktop' | 'mobile'
 export type SessionTransferPurpose = 'bridge_login' | 'session_sync' | 'auth_bridge_internal'
 
 export interface SessionTransferResponse {
@@ -609,6 +609,7 @@ export type SensitiveLoginMethod =
   | 'BRIDGE'
   | 'BRIDGE_FROM_DESKTOP'
   | 'BRIDGE_FROM_WEB'
+  | 'BRIDGE_TO_MOBILE'
 
 export interface SensitiveLogItem {
   id: number

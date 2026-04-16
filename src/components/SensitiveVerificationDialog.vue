@@ -114,9 +114,12 @@ import {
 } from '@/api/auth'
 import { extractAuthenticationData, getPasskeyCredential, isWebAuthnSupported } from '@/utils/webauthn'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean
-}>()
+  disableQrMethod?: boolean
+}>(), {
+  disableQrMethod: false,
+})
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
@@ -219,6 +222,7 @@ const canResendCode = ref(false)
 let codeCountdownTimer: number | null = null
 
 const isMethodSelectable = (method: 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
+  if (props.disableQrMethod && method === 'qr') return false
   if (!availableMethods.value.includes(method)) return false
   if (method === 'passkey' && !passkeySupported.value) return false
   return true
@@ -266,8 +270,13 @@ const initDialog = async () => {
       allMethods.includes(item),
     )
 
-    // 如果后端仅返回单一偏好方式，仍保留前端多方式选择，避免用户被锁死在一种方式。
-    const mergedMethods = [...new Set([...(sanitizedMethods.length > 1 ? sanitizedMethods : allMethods), 'qr'])]
+    const fallbackMethods = props.disableQrMethod
+      ? allMethods.filter((item) => item !== 'qr')
+      : allMethods
+    const mergedMethodsBase = sanitizedMethods.length > 1 ? sanitizedMethods : fallbackMethods
+    const mergedMethods = props.disableQrMethod
+      ? mergedMethodsBase.filter((item) => item !== 'qr')
+      : [...new Set([...mergedMethodsBase, 'qr'])]
     availableMethods.value = mergedMethods as Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>
 
     // 默认进入偏好方式，同时保留返回入口让用户切换其他方式。

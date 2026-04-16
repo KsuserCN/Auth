@@ -371,6 +371,7 @@ const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
   BRIDGE: '桥接登录',
   BRIDGE_FROM_DESKTOP: '电脑端桥接',
   BRIDGE_FROM_WEB: '网页端桥接',
+  BRIDGE_TO_MOBILE: '桥接到手机端',
 }
 
 const formatSensitiveTime = (value?: string | null) => {
@@ -408,6 +409,7 @@ const normalizeLoginTokenLabel = (token: string) => {
   if (key === 'BRIDGE') return '桥接登录'
   if (key === 'BRIDGE_FROM_DESKTOP') return '电脑端桥接'
   if (key === 'BRIDGE_FROM_WEB') return '网页端桥接'
+  if (key === 'BRIDGE_TO_MOBILE') return '桥接到手机端'
   return token.trim()
 }
 

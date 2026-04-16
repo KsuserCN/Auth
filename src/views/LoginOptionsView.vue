@@ -53,9 +53,9 @@
           </div>
         </el-card>
       </el-col>
-    </el-row>
+  </el-row>
 
-    <el-row :gutter="16" class="row-gap">
+  <el-row :gutter="16" class="row-gap">
       <el-col :xs="24" :lg="24">
         <el-card class="card" shadow="never">
           <div class="card-title">
@@ -314,8 +314,12 @@
     </template>
   </el-dialog>
 
-  <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
-    @cancel="handleSensitiveVerificationCancel" />
+  <SensitiveVerificationDialog
+    v-model="sensitiveDialogVisible"
+    :disable-qr-method="sensitiveDialogDisableQr"
+    @success="handleSensitiveVerificationSuccess"
+    @cancel="handleSensitiveVerificationCancel"
+  />
 </template>
 
 <script setup lang="ts">
@@ -352,7 +356,9 @@ import {
   getOAuthAccountsStatus,
   type OAuthAccountStatusItem,
 } from '@/api/auth'
-import { isWebAuthnSupported } from '@/utils/webauthn'
+import {
+  isWebAuthnSupported,
+} from '@/utils/webauthn'
 import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const router = useRouter()
@@ -398,6 +404,7 @@ const showRegenerateDialog = ref(false)
 const newRecoveryCodes = ref<string[]>([])
 const regenerateLoading = ref(false)
 const sensitiveDialogVisible = ref(false)
+const sensitiveDialogDisableQr = ref(false)
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 
 onMounted(async () => {
@@ -613,21 +620,28 @@ const handleChangePassword = async () => {
   }
 }
 
-const runWithSensitiveVerification = async (action: () => Promise<void>) => {
+const runWithSensitiveVerification = async (
+  action: () => Promise<void>,
+  options?: { disableQrMethod?: boolean },
+) => {
+  const disableQrMethod = options?.disableQrMethod ?? false
   try {
     const status = await checkSensitiveVerification()
     if (status.verified) {
+      sensitiveDialogDisableQr.value = false
       await action()
       return
     }
 
     ElMessage.info('需要验证身份')
     pendingSensitiveAction = action
+    sensitiveDialogDisableQr.value = disableQrMethod
     sensitiveDialogVisible.value = true
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
     ElMessage.info('需要验证身份')
     pendingSensitiveAction = action
+    sensitiveDialogDisableQr.value = disableQrMethod
     sensitiveDialogVisible.value = true
   }
 }
@@ -635,6 +649,7 @@ const runWithSensitiveVerification = async (action: () => Promise<void>) => {
 const handleSensitiveVerificationSuccess = async () => {
   const action = pendingSensitiveAction
   pendingSensitiveAction = null
+  sensitiveDialogDisableQr.value = false
   if (!action) return
 
   try {
@@ -646,6 +661,7 @@ const handleSensitiveVerificationSuccess = async () => {
 
 const handleSensitiveVerificationCancel = () => {
   pendingSensitiveAction = null
+  sensitiveDialogDisableQr.value = false
 }
 
 const handleEnableTotp = async () => {

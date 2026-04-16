@@ -112,6 +112,7 @@
           </el-menu>
 
           <div class="side-footer">
+            <MobileBridgeQrSidebarAction />
             <el-button class="logout-btn" type="danger" plain :loading="logoutLoading" :disabled="logoutLoading"
               @click="handleLogout">
               <el-icon>
@@ -153,6 +154,7 @@ import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { clearAuthSession } from '@/utils/authSession'
+import MobileBridgeQrSidebarAction from '@/components/MobileBridgeQrSidebarAction.vue'
 
 const userStore = useUserStore()
 const { user, loading } = storeToRefs(userStore)
@@ -447,6 +449,9 @@ onMounted(() => {
 .side-footer {
   margin-top: auto;
   padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .logout-btn {
