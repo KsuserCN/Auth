@@ -20,16 +20,28 @@ public class QrChallengeService {
     private static final String APPROVE_PREFIX = "auth:qr:approve:";
 
     private final StringRedisTemplate redisTemplate;
+    private final IpLocationService ipLocationService;
+    private final UserAgentParserService userAgentParserService;
     private final ObjectMapper objectMapper;
     private final SecureRandom secureRandom;
 
-    public QrChallengeService(StringRedisTemplate redisTemplate) {
+    public QrChallengeService(
+            StringRedisTemplate redisTemplate,
+            IpLocationService ipLocationService,
+            UserAgentParserService userAgentParserService) {
         this.redisTemplate = redisTemplate;
+        this.ipLocationService = ipLocationService;
+        this.userAgentParserService = userAgentParserService;
         this.objectMapper = new ObjectMapper();
         this.secureRandom = new SecureRandom();
     }
 
-    public QrChallengePayload createChallenge(ChallengeType type, Long requestedUserId, String mfaChallengeId, String webIp) {
+    public QrChallengePayload createChallenge(
+            ChallengeType type,
+            Long requestedUserId,
+            String mfaChallengeId,
+            String webIp,
+            String userAgent) {
         long now = Instant.now().getEpochSecond();
         QrChallengePayload payload = new QrChallengePayload();
         payload.setChallengeId(UUID.randomUUID().toString());
@@ -40,6 +52,12 @@ public class QrChallengeService {
         payload.setRequestedUserId(requestedUserId);
         payload.setMfaChallengeId(mfaChallengeId);
         payload.setWebIp(webIp);
+        payload.setUserAgent(userAgent);
+        payload.setIpLocation(ipLocationService.getIpLocation(webIp));
+        UserAgentParserService.UserAgentInfo uaInfo = userAgentParserService.parse(userAgent);
+        payload.setBrowser(uaInfo.getBrowser());
+        payload.setSystem(userAgentParserService.normalizeSystemLabel(uaInfo.getDeviceType()));
+        payload.setClientName(userAgentParserService.describeClientSource(uaInfo));
         payload.setCreatedAt(now);
         payload.setUpdatedAt(now);
 
@@ -196,6 +214,11 @@ public class QrChallengeService {
         private Long requestedUserId;
         private String mfaChallengeId;
         private String webIp;
+        private String ipLocation;
+        private String userAgent;
+        private String browser;
+        private String system;
+        private String clientName;
         private Map<String, Object> result;
         private Long approvedByUserId;
         private Long createdAt;
@@ -264,6 +287,46 @@ public class QrChallengeService {
 
         public void setWebIp(String webIp) {
             this.webIp = webIp;
+        }
+
+        public String getIpLocation() {
+            return ipLocation;
+        }
+
+        public void setIpLocation(String ipLocation) {
+            this.ipLocation = ipLocation;
+        }
+
+        public String getUserAgent() {
+            return userAgent;
+        }
+
+        public void setUserAgent(String userAgent) {
+            this.userAgent = userAgent;
+        }
+
+        public String getBrowser() {
+            return browser;
+        }
+
+        public void setBrowser(String browser) {
+            this.browser = browser;
+        }
+
+        public String getSystem() {
+            return system;
+        }
+
+        public void setSystem(String system) {
+            this.system = system;
+        }
+
+        public String getClientName() {
+            return clientName;
+        }
+
+        public void setClientName(String clientName) {
+            this.clientName = clientName;
         }
 
         public Map<String, Object> getResult() {

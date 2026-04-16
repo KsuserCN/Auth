@@ -52,6 +52,7 @@ public class SecurityConfig {
                     "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
                     "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/session-transfer/exchange", "/auth/session-transfer/exchange/",
+                    "/auth/qr/preview", "/auth/qr/preview/",
                     "/auth/qr/login/init", "/auth/qr/login/init/",
                     "/auth/qr/mfa/init", "/auth/qr/mfa/init/",
                     "/auth/qr/status", "/auth/qr/status/",

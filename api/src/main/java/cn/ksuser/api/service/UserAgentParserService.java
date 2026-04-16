@@ -155,6 +155,10 @@ public class UserAgentParserService {
         return deviceType;
     }
 
+    public String normalizeSystemLabel(String deviceType) {
+        return normalizeDeviceLabel(deviceType);
+    }
+
     /**
      * User-Agent解析结果
      */

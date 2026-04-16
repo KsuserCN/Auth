@@ -21,11 +21,18 @@ public class SessionTransferService {
     private static final String REDIS_PREFIX = "auth:session-transfer:";
 
     private final StringRedisTemplate redisTemplate;
+    private final IpLocationService ipLocationService;
+    private final UserAgentParserService userAgentParserService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public SessionTransferService(StringRedisTemplate redisTemplate) {
+    public SessionTransferService(
+            StringRedisTemplate redisTemplate,
+            IpLocationService ipLocationService,
+            UserAgentParserService userAgentParserService) {
         this.redisTemplate = redisTemplate;
+        this.ipLocationService = ipLocationService;
+        this.userAgentParserService = userAgentParserService;
     }
 
     public String normalizeTarget(String rawTarget) {
@@ -43,7 +50,7 @@ public class SessionTransferService {
     }
 
     public SessionTransferPayload createTransfer(Long userId, String target) {
-        return createTransfer(userId, target, null);
+        return createTransfer(userId, target, null, null, null);
     }
 
     public String normalizePurpose(String rawPurpose) {
@@ -66,6 +73,15 @@ public class SessionTransferService {
     }
 
     public SessionTransferPayload createTransfer(Long userId, String target, String purpose) {
+        return createTransfer(userId, target, purpose, null, null);
+    }
+
+    public SessionTransferPayload createTransfer(
+            Long userId,
+            String target,
+            String purpose,
+            String requesterIp,
+            String requesterUserAgent) {
         String normalizedTarget = normalizeTarget(target);
         if (normalizedTarget == null) {
             throw new IllegalArgumentException("target 只能是 web、desktop 或 mobile");
@@ -74,6 +90,13 @@ public class SessionTransferService {
 
         String transferCode = generateTransferCode();
         SessionTransferPayload payload = new SessionTransferPayload(userId, normalizedTarget, normalizedPurpose);
+        payload.setRequesterIp(requesterIp);
+        payload.setRequesterIpLocation(ipLocationService.getIpLocation(requesterIp));
+        payload.setRequesterUserAgent(requesterUserAgent);
+        UserAgentParserService.UserAgentInfo uaInfo = userAgentParserService.parse(requesterUserAgent);
+        payload.setRequesterBrowser(uaInfo.getBrowser());
+        payload.setRequesterSystem(userAgentParserService.normalizeSystemLabel(uaInfo.getDeviceType()));
+        payload.setRequesterClientName(userAgentParserService.describeClientSource(uaInfo));
 
         try {
             String value = objectMapper.writeValueAsString(payload);
@@ -121,6 +144,34 @@ public class SessionTransferService {
         }
     }
 
+    public SessionTransferPayload getTransfer(String transferCode) {
+        if (transferCode == null || transferCode.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            String payloadJson = redisTemplate.opsForValue().get(redisKey(transferCode.trim()));
+            if (payloadJson == null || payloadJson.isBlank()) {
+                return null;
+            }
+            SessionTransferPayload payload = objectMapper.readValue(payloadJson, SessionTransferPayload.class);
+            payload.setPurpose(normalizePurpose(payload.getPurpose()));
+            return payload;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public long getRemainingSeconds(String transferCode) {
+        if (transferCode == null || transferCode.isBlank()) {
+            return -1;
+        }
+        Long expire = redisTemplate.getExpire(redisKey(transferCode.trim()), java.util.concurrent.TimeUnit.SECONDS);
+        if (expire == null || expire < 0) {
+            return -1;
+        }
+        return expire;
+    }
+
     private String redisKey(String transferCode) {
         return REDIS_PREFIX + transferCode;
     }
@@ -136,6 +187,12 @@ public class SessionTransferService {
         private String target;
         private String purpose;
         private String transferCode;
+        private String requesterIp;
+        private String requesterIpLocation;
+        private String requesterUserAgent;
+        private String requesterBrowser;
+        private String requesterSystem;
+        private String requesterClientName;
 
         public SessionTransferPayload() {
         }
@@ -190,6 +247,54 @@ public class SessionTransferService {
         public SessionTransferPayload withTransferCode(String code) {
             this.transferCode = code;
             return this;
+        }
+
+        public String getRequesterIp() {
+            return requesterIp;
+        }
+
+        public void setRequesterIp(String requesterIp) {
+            this.requesterIp = requesterIp;
+        }
+
+        public String getRequesterIpLocation() {
+            return requesterIpLocation;
+        }
+
+        public void setRequesterIpLocation(String requesterIpLocation) {
+            this.requesterIpLocation = requesterIpLocation;
+        }
+
+        public String getRequesterUserAgent() {
+            return requesterUserAgent;
+        }
+
+        public void setRequesterUserAgent(String requesterUserAgent) {
+            this.requesterUserAgent = requesterUserAgent;
+        }
+
+        public String getRequesterBrowser() {
+            return requesterBrowser;
+        }
+
+        public void setRequesterBrowser(String requesterBrowser) {
+            this.requesterBrowser = requesterBrowser;
+        }
+
+        public String getRequesterSystem() {
+            return requesterSystem;
+        }
+
+        public void setRequesterSystem(String requesterSystem) {
+            this.requesterSystem = requesterSystem;
+        }
+
+        public String getRequesterClientName() {
+            return requesterClientName;
+        }
+
+        public void setRequesterClientName(String requesterClientName) {
+            this.requesterClientName = requesterClientName;
         }
     }
 }

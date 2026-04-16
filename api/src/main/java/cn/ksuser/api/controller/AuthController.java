@@ -974,7 +974,8 @@ public class AuthController {
     @PostMapping("/session-transfer/create")
     public ResponseEntity<ApiResponse<SessionTransferResponse>> createSessionTransfer(
             @RequestBody(required = false) SessionTransferCreateRequest requestBody,
-            Authentication authentication) {
+            Authentication authentication,
+            HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, "未登录"));
@@ -989,9 +990,11 @@ public class AuthController {
 
         String target = requestBody == null ? null : requestBody.getTarget();
         String purpose = requestBody == null ? null : requestBody.getPurpose();
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
         try {
             SessionTransferService.SessionTransferPayload payload =
-                sessionTransferService.createTransfer(user.getId(), target, purpose);
+                sessionTransferService.createTransfer(user.getId(), target, purpose, clientIp, userAgent);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "跨端票据已创建",
                     new SessionTransferResponse(payload.getTransferCode(), SessionTransferService.DEFAULT_TTL_SECONDS)));
@@ -1063,8 +1066,9 @@ public class AuthController {
     @PostMapping("/qr/login/init")
     public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrLogin(HttpServletRequest request) {
         String webIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
         QrChallengeService.QrChallengePayload payload =
-            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.LOGIN, null, null, webIp);
+            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.LOGIN, null, null, webIp, userAgent);
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
     }
@@ -1092,7 +1096,7 @@ public class AuthController {
         }
 
         QrChallengeService.QrChallengePayload payload =
-            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.MFA, userId, mfaChallengeId, clientIp);
+            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.MFA, userId, mfaChallengeId, clientIp, userAgent);
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
     }
@@ -1114,14 +1118,64 @@ public class AuthController {
         }
 
         String webIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
         QrChallengeService.QrChallengePayload payload = qrChallengeService.createChallenge(
             QrChallengeService.ChallengeType.SENSITIVE,
             user.getId(),
             null,
-            webIp
+            webIp,
+            userAgent
         );
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+    }
+
+    @GetMapping("/qr/preview")
+    public ResponseEntity<ApiResponse<QrScanPreviewResponse>> getQrScanPreview(
+            @RequestParam(required = false) String approveCode,
+            @RequestParam(required = false) String transferCode) {
+        if ((approveCode == null || approveCode.isBlank()) && (transferCode == null || transferCode.isBlank())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "approveCode 或 transferCode 不能为空"));
+        }
+
+        if (approveCode != null && !approveCode.isBlank()) {
+            QrChallengeService.QrChallengePayload challenge = qrChallengeService.getByApproveCode(approveCode.trim());
+            if (challenge == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "二维码挑战不存在或已过期"));
+            }
+            long expiresInSeconds = qrChallengeService.getRemainingSeconds(challenge.getChallengeId());
+            QrScanPreviewResponse response = new QrScanPreviewResponse(
+                "approve_" + (challenge.getType() == null ? "login" : challenge.getType()),
+                challenge.getClientName(),
+                challenge.getBrowser(),
+                challenge.getSystem(),
+                challenge.getWebIp(),
+                challenge.getIpLocation(),
+                expiresInSeconds > 0 ? expiresInSeconds : 0L
+            );
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "获取成功", response));
+        }
+
+        SessionTransferService.SessionTransferPayload payload = sessionTransferService.getTransfer(transferCode.trim());
+        if (payload == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "跨端票据不存在或已过期"));
+        }
+        long expiresInSeconds = sessionTransferService.getRemainingSeconds(transferCode.trim());
+        QrScanPreviewResponse response = new QrScanPreviewResponse(
+            "transfer",
+            payload.getRequesterClientName(),
+            payload.getRequesterBrowser(),
+            payload.getRequesterSystem(),
+            payload.getRequesterIp(),
+            payload.getRequesterIpLocation(),
+            expiresInSeconds > 0 ? expiresInSeconds : 0L
+        );
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "获取成功", response));
     }
 
     @PostMapping("/qr/approve")
@@ -1190,7 +1244,9 @@ public class AuthController {
                     SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
                         user.getId(),
                         SessionTransferService.TARGET_WEB,
-                        SessionTransferService.PURPOSE_BRIDGE_LOGIN
+                        SessionTransferService.PURPOSE_BRIDGE_LOGIN,
+                        challenge.getWebIp(),
+                        challenge.getUserAgent()
                     );
                     result.put("transferCode", transferPayload.getTransferCode());
                 }
@@ -1236,7 +1292,9 @@ public class AuthController {
                 SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
                     user.getId(),
                     SessionTransferService.TARGET_WEB,
-                    SessionTransferService.PURPOSE_BRIDGE_LOGIN
+                    SessionTransferService.PURPOSE_BRIDGE_LOGIN,
+                    challenge.getWebIp(),
+                    challenge.getUserAgent()
                 );
                 result.put("transferCode", transferPayload.getTransferCode());
                 result.put("verified", true);
