@@ -1,10 +1,12 @@
 import AuthenticationServices
 import Cocoa
 import FlutterMacOS
+import LocalAuthentication
 
 class MainFlutterWindow: NSWindow {
   private var passkeyBridge: PasskeyBridge?
   private var appMenuBridge: AppMenuBridge?
+  private var localAuthBridge: LocalAuthBridge?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -23,6 +25,7 @@ class MainFlutterWindow: NSWindow {
       windowProvider: { [weak self] in self }
     )
     appMenuBridge = AppMenuBridge(messenger: flutterViewController.engine.binaryMessenger)
+    localAuthBridge = LocalAuthBridge(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
   }
@@ -41,6 +44,72 @@ private final class AppMenuBridge {
 
   func send(command: String) {
     channel.invokeMethod(command, arguments: nil)
+  }
+}
+
+private final class LocalAuthBridge {
+  private let channel: FlutterMethodChannel
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "ksuser/local_auth", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      self?.handle(call, result: result)
+    }
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "isAvailable":
+      result(isLocalAuthAvailable())
+    case "authenticate":
+      let arguments = call.arguments as? [String: Any]
+      let normalizedReason = (arguments?["reason"] as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      let reason = (normalizedReason?.isEmpty == false)
+        ? (normalizedReason ?? "请先验证身份")
+        : "请先验证身份"
+      authenticate(reason: reason, result: result)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func isLocalAuthAvailable() -> Bool {
+    let context = LAContext()
+    var error: NSError?
+    return context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
+  }
+
+  private func authenticate(reason: String, result: @escaping FlutterResult) {
+    let context = LAContext()
+    var error: NSError?
+    guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+      let message = error?.localizedDescription ?? "当前设备不支持本地认证"
+      result(FlutterError(code: "not_available", message: message, details: nil))
+      return
+    }
+
+    context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) { success, authError in
+      DispatchQueue.main.async {
+        if success {
+          result(true)
+          return
+        }
+
+        if let nsError = authError as NSError? {
+          if nsError.code == LAError.userCancel.rawValue
+            || nsError.code == LAError.systemCancel.rawValue
+            || nsError.code == LAError.appCancel.rawValue {
+            result(FlutterError(code: "canceled", message: "用户取消了本地认证", details: nil))
+            return
+          }
+          result(FlutterError(code: "failed", message: nsError.localizedDescription, details: nil))
+          return
+        }
+
+        result(FlutterError(code: "failed", message: "本地认证失败", details: nil))
+      }
+    }
   }
 }
 

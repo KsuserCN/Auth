@@ -353,6 +353,7 @@ enum MfaMode { code, recoveryCode, passkey }
 enum SensitiveVerificationMethod { password, emailCode, totp, passkey }
 
 const MethodChannel _passkeyChannel = MethodChannel('ksuser/passkey');
+const MethodChannel _localAuthChannel = MethodChannel('ksuser/local_auth');
 const MethodChannel _appMenuChannel = MethodChannel('ksuser/app_menu');
 
 void showAppMessage(
@@ -374,6 +375,179 @@ void showAppMessage(
         backgroundColor: error ? Colors.red.shade700 : null,
       ),
     );
+}
+
+String buildMobileTransferQrText(String transferCode) {
+  return 'KSUSER-AUTH-XFER:v1:${transferCode.trim()}';
+}
+
+String buildRemoteQrCodeImageUrl(String text) {
+  return 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=0&data=${Uri.encodeComponent(text)}';
+}
+
+Future<void> showMobileBridgeQrDialog(
+  BuildContext context,
+  AppController controller, {
+  String localAuthReason = '请先完成身份验证后再展示手机登录二维码',
+}) async {
+  final bool available = await LocalAuthPlatform.isAvailable();
+  if (!available) {
+    throw ApiException('当前设备不支持系统本地认证');
+  }
+
+  await LocalAuthPlatform.authenticate(reason: localAuthReason);
+  if (!context.mounted) {
+    return;
+  }
+
+  String qrImageUrl = '';
+  int expiresInSeconds = 0;
+  bool busy = false;
+  String? errorText;
+  bool initialized = false;
+  Timer? countdownTimer;
+
+  Future<void> refreshTicket(void Function(void Function()) setState) async {
+    setState(() {
+      busy = true;
+      errorText = null;
+    });
+    try {
+      final SessionTransferTicket ticket = await controller
+          .createSessionTransferTicket(target: 'mobile');
+      countdownTimer?.cancel();
+      countdownTimer = null;
+      final String qrText = buildMobileTransferQrText(ticket.transferCode);
+      setState(() {
+        qrImageUrl = buildRemoteQrCodeImageUrl(qrText);
+        expiresInSeconds = ticket.expiresInSeconds;
+      });
+      countdownTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+        if (expiresInSeconds <= 0) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          expiresInSeconds -= 1;
+        });
+      });
+    } catch (error) {
+      setState(() {
+        errorText = error.toString();
+      });
+    } finally {
+      setState(() {
+        busy = false;
+      });
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return StatefulBuilder(
+        builder:
+            (BuildContext dialogContext, void Function(void Function()) setState) {
+              if (!initialized) {
+                initialized = true;
+                unawaited(refreshTicket(setState));
+              }
+              return AlertDialog(
+                title: const Text('手机扫码登录'),
+                content: SizedBox(
+                  width: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      if (errorText != null && errorText!.isNotEmpty) ...<Widget>[
+                        Text(
+                          errorText!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (busy && qrImageUrl.isEmpty)
+                        const SizedBox(
+                          height: 240,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (qrImageUrl.isNotEmpty)
+                        Center(
+                          child: Image.network(
+                            qrImageUrl,
+                            width: 240,
+                            height: 240,
+                            errorBuilder:
+                                (BuildContext context, Object error, StackTrace? stack) {
+                              return Container(
+                                width: 240,
+                                height: 240,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                  ),
+                                ),
+                                child: const Text('二维码加载失败，请刷新'),
+                              );
+                            },
+                          ),
+                        )
+                      else
+                        Container(
+                          width: 240,
+                          height: 240,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.black.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: const Text('正在生成二维码...'),
+                        ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '剩余有效期：${max(expiresInSeconds, 0)} 秒',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        '二维码一次性有效，过期后请刷新。',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('关闭'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: busy ? null : () => unawaited(refreshTicket(setState)),
+                    icon: busy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: const Text('刷新二维码'),
+                  ),
+                ],
+              );
+            },
+      );
+    },
+  );
+
+  countdownTimer?.cancel();
 }
 
 Future<void> showDesktopSettingsDialog(
@@ -548,6 +722,44 @@ class PasskeyPlatform {
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
           : 'Passkey 验证失败';
+      throw ApiException(message);
+    }
+  }
+}
+
+class LocalAuthPlatform {
+  static Future<bool> isAvailable() async {
+    if (!Platform.isMacOS) {
+      return false;
+    }
+    try {
+      return await _localAuthChannel.invokeMethod<bool>('isAvailable') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  static Future<void> authenticate({required String reason}) async {
+    if (!Platform.isMacOS) {
+      throw ApiException('当前平台暂不支持系统本地认证');
+    }
+
+    try {
+      final bool ok = await _localAuthChannel.invokeMethod<bool>('authenticate', <String, dynamic>{
+            'reason': reason,
+          }) ??
+          false;
+      if (!ok) {
+        throw ApiException('本地认证未通过');
+      }
+    } on PlatformException catch (error) {
+      final String code = error.code.trim();
+      if (code == 'canceled') {
+        throw ApiException('用户取消了本地认证');
+      }
+      final String message = error.message?.trim().isNotEmpty == true
+          ? error.message!.trim()
+          : '本地认证失败';
       throw ApiException(message);
     }
   }
@@ -2724,6 +2936,61 @@ class DesktopWorkspace extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
+                                if (extended)
+                                  Text(
+                                    '跨端联通',
+                                    style: TextStyle(
+                                      color: sidebarSubtitleColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                if (extended) const SizedBox(height: 10),
+                                if (extended)
+                                  FilledButton.icon(
+                                    onPressed: () async {
+                                      try {
+                                        await showMobileBridgeQrDialog(
+                                          context,
+                                          controller,
+                                        );
+                                      } catch (error) {
+                                        if (context.mounted) {
+                                          showAppMessage(
+                                            context,
+                                            error.toString(),
+                                            error: true,
+                                          );
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.qr_code_rounded),
+                                    label: const Text('手机扫码登录'),
+                                  )
+                                else
+                                  Tooltip(
+                                    message: '手机扫码登录',
+                                    child: IconButton.filled(
+                                      onPressed: () async {
+                                        try {
+                                          await showMobileBridgeQrDialog(
+                                            context,
+                                            controller,
+                                          );
+                                        } catch (error) {
+                                          if (context.mounted) {
+                                            showAppMessage(
+                                              context,
+                                              error.toString(),
+                                              error: true,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(Icons.qr_code_rounded),
+                                    ),
+                                  ),
+                                const SizedBox(height: 12),
                                 if (extended)
                                   Text(
                                     '账户操作',
@@ -5799,6 +6066,12 @@ String loginMethodLabel(String? loginMethod) {
     'EMAIL_CODE_MFA': '验证码 + 二步验证',
     'PASSKEY': 'Passkey 登录',
     'PASSKEY_MFA': 'Passkey + 二步验证',
+    'QR': '扫码登录',
+    'QR_MFA': '扫码 + 二步验证',
+    'BRIDGE': '桥接登录',
+    'BRIDGE_FROM_DESKTOP': '电脑端桥接',
+    'BRIDGE_FROM_WEB': '网页端桥接',
+    'BRIDGE_TO_MOBILE': '桥接到手机端',
   };
   return labels[loginMethod] ?? (loginMethod ?? '通用操作');
 }
