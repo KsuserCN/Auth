@@ -2454,6 +2454,7 @@ public class AuthController {
         return switch (target.trim().toLowerCase(Locale.ROOT)) {
             case "web" -> "BRIDGE_FROM_DESKTOP";
             case "desktop" -> "BRIDGE_FROM_WEB";
+            case "mobile" -> "BRIDGE_TO_MOBILE";
             default -> "BRIDGE";
         };
     }

@@ -13,6 +13,7 @@ public class SessionTransferService {
 
     public static final String TARGET_WEB = "web";
     public static final String TARGET_DESKTOP = "desktop";
+    public static final String TARGET_MOBILE = "mobile";
     public static final String PURPOSE_BRIDGE_LOGIN = "bridge_login";
     public static final String PURPOSE_SESSION_SYNC = "session_sync";
     public static final String PURPOSE_AUTH_BRIDGE_INTERNAL = "auth_bridge_internal";
@@ -33,7 +34,9 @@ public class SessionTransferService {
         }
 
         String target = rawTarget.trim().toLowerCase();
-        if (TARGET_WEB.equals(target) || TARGET_DESKTOP.equals(target)) {
+        if (TARGET_WEB.equals(target)
+            || TARGET_DESKTOP.equals(target)
+            || TARGET_MOBILE.equals(target)) {
             return target;
         }
         return null;
@@ -65,7 +68,7 @@ public class SessionTransferService {
     public SessionTransferPayload createTransfer(Long userId, String target, String purpose) {
         String normalizedTarget = normalizeTarget(target);
         if (normalizedTarget == null) {
-            throw new IllegalArgumentException("target 只能是 web 或 desktop");
+            throw new IllegalArgumentException("target 只能是 web、desktop 或 mobile");
         }
         String normalizedPurpose = normalizePurpose(purpose);
 
@@ -84,7 +87,7 @@ public class SessionTransferService {
     public SessionTransferPayload consumeTransfer(String transferCode, String target) {
         String normalizedTarget = normalizeTarget(target);
         if (normalizedTarget == null) {
-            throw new IllegalArgumentException("target 只能是 web 或 desktop");
+            throw new IllegalArgumentException("target 只能是 web、desktop 或 mobile");
         }
         if (transferCode == null || transferCode.trim().isEmpty()) {
             throw new IllegalArgumentException("transferCode 不能为空");
