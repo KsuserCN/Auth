@@ -8,6 +8,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('Ksuser Auth 统一认证中心'), findsOneWidget);
+    expect(find.text('二维码登录'), findsOneWidget);
   });
 
   testWidgets('desktop workspace renders with sidebar content', (
@@ -69,9 +70,7 @@ void main() {
     });
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: DesktopWorkspace(controller: controller),
-      ),
+      MaterialApp(home: DesktopWorkspace(controller: controller)),
     );
     await tester.pumpAndSettle();
 

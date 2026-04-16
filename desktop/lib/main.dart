@@ -422,7 +422,9 @@ Future<void> showMobileBridgeQrDialog(
         qrImageUrl = buildRemoteQrCodeImageUrl(qrText);
         expiresInSeconds = ticket.expiresInSeconds;
       });
-      countdownTimer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+      countdownTimer = Timer.periodic(const Duration(seconds: 1), (
+        Timer timer,
+      ) {
         if (expiresInSeconds <= 0) {
           timer.cancel();
           return;
@@ -447,7 +449,10 @@ Future<void> showMobileBridgeQrDialog(
     builder: (BuildContext dialogContext) {
       return StatefulBuilder(
         builder:
-            (BuildContext dialogContext, void Function(void Function()) setState) {
+            (
+              BuildContext dialogContext,
+              void Function(void Function()) setState,
+            ) {
               if (!initialized) {
                 initialized = true;
                 unawaited(refreshTicket(setState));
@@ -460,7 +465,8 @@ Future<void> showMobileBridgeQrDialog(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
-                      if (errorText != null && errorText!.isNotEmpty) ...<Widget>[
+                      if (errorText != null &&
+                          errorText!.isNotEmpty) ...<Widget>[
                         Text(
                           errorText!,
                           style: const TextStyle(color: Colors.red),
@@ -479,21 +485,29 @@ Future<void> showMobileBridgeQrDialog(
                             width: 240,
                             height: 240,
                             errorBuilder:
-                                (BuildContext context, Object error, StackTrace? stack) {
-                              return Container(
-                                width: 240,
-                                height: 240,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withValues(alpha: 0.03),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: Colors.black.withValues(alpha: 0.08),
-                                  ),
-                                ),
-                                child: const Text('二维码加载失败，请刷新'),
-                              );
-                            },
+                                (
+                                  BuildContext context,
+                                  Object error,
+                                  StackTrace? stack,
+                                ) {
+                                  return Container(
+                                    width: 240,
+                                    height: 240,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.03,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.08,
+                                        ),
+                                      ),
+                                    ),
+                                    child: const Text('二维码加载失败，请刷新'),
+                                  );
+                                },
                           ),
                         )
                       else
@@ -530,7 +544,9 @@ Future<void> showMobileBridgeQrDialog(
                     child: const Text('关闭'),
                   ),
                   FilledButton.tonalIcon(
-                    onPressed: busy ? null : () => unawaited(refreshTicket(setState)),
+                    onPressed: busy
+                        ? null
+                        : () => unawaited(refreshTicket(setState)),
                     icon: busy
                         ? const SizedBox(
                             width: 16,
@@ -548,6 +564,294 @@ Future<void> showMobileBridgeQrDialog(
   );
 
   countdownTimer?.cancel();
+}
+
+Future<void> showDesktopLoginQrDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  String qrImageUrl = '';
+  String challengeId = '';
+  String pollToken = '';
+  int expiresInSeconds = 0;
+  String? errorText;
+  bool refreshing = false;
+  bool initialized = false;
+  bool completed = false;
+  Timer? countdownTimer;
+  Timer? pollingTimer;
+
+  Future<void> stopPolling() async {
+    countdownTimer?.cancel();
+    countdownTimer = null;
+    pollingTimer?.cancel();
+    pollingTimer = null;
+  }
+
+  MFAChallenge? buildMfaChallengeFromStatus(QrChallengeStatus status) {
+    if (status.mfaChallengeId == null || status.mfaChallengeId!.isEmpty) {
+      return null;
+    }
+    final List<String> normalizedMethods = status.methods
+        .where(
+          (String method) =>
+              method == 'totp' || method == 'passkey' || method == 'qr',
+        )
+        .toList();
+    final String fallbackMethod =
+        status.method == 'passkey' || status.method == 'qr'
+        ? status.method!
+        : 'totp';
+    return MFAChallenge(
+      challengeId: status.mfaChallengeId!,
+      method: fallbackMethod,
+      methods: normalizedMethods.isNotEmpty
+          ? normalizedMethods
+          : <String>[fallbackMethod],
+    );
+  }
+
+  Future<void> handleApprovedStatus(
+    BuildContext dialogContext,
+    QrChallengeStatus status,
+  ) async {
+    await stopPolling();
+    completed = true;
+    if (status.transferCode != null && status.transferCode!.isNotEmpty) {
+      await controller.importSessionTransferTicket(status.transferCode!);
+      if (dialogContext.mounted) {
+        Navigator.of(dialogContext).pop();
+      }
+      return;
+    }
+
+    final MFAChallenge? nextMfa = buildMfaChallengeFromStatus(status);
+    if (nextMfa != null) {
+      controller.pendingMfaChallenge = nextMfa;
+      controller.notifyListeners();
+      if (dialogContext.mounted) {
+        Navigator.of(dialogContext).pop();
+      }
+      return;
+    }
+
+    throw ApiException('扫码登录结果无效，请重试');
+  }
+
+  Future<void> pollStatus(
+    BuildContext dialogContext,
+    void Function(void Function()) setState,
+  ) async {
+    if (challengeId.isEmpty || pollToken.isEmpty || completed) {
+      return;
+    }
+    try {
+      final QrChallengeStatus status = await controller.pollQrStatus(
+        challengeId: challengeId,
+        pollToken: pollToken,
+      );
+      if (!dialogContext.mounted) {
+        return;
+      }
+      setState(() {
+        expiresInSeconds = status.expiresInSeconds;
+      });
+      if (status.status == 'pending') {
+        return;
+      }
+      if (status.status == 'approved') {
+        await handleApprovedStatus(dialogContext, status);
+        return;
+      }
+      await stopPolling();
+      if (!dialogContext.mounted) {
+        return;
+      }
+      setState(() {
+        if (status.status == 'rejected') {
+          errorText = '扫码请求已被拒绝，请刷新二维码后重试';
+        } else {
+          errorText = '二维码已过期，请刷新二维码';
+        }
+      });
+    } catch (error) {
+      await stopPolling();
+      if (!dialogContext.mounted) {
+        return;
+      }
+      setState(() {
+        errorText = error.toString();
+      });
+    }
+  }
+
+  Future<void> refreshChallenge(
+    BuildContext dialogContext,
+    void Function(void Function()) setState,
+  ) async {
+    setState(() {
+      refreshing = true;
+      errorText = null;
+    });
+    try {
+      final QrLoginChallenge challenge = await controller.initQrLogin();
+      await stopPolling();
+      if (!dialogContext.mounted) {
+        return;
+      }
+      setState(() {
+        challengeId = challenge.challengeId;
+        pollToken = challenge.pollToken;
+        qrImageUrl = buildRemoteQrCodeImageUrl(challenge.qrText);
+        expiresInSeconds = challenge.expiresInSeconds;
+      });
+      countdownTimer = Timer.periodic(const Duration(seconds: 1), (
+        Timer timer,
+      ) {
+        if (expiresInSeconds <= 0) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          expiresInSeconds -= 1;
+        });
+      });
+      pollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(pollStatus(dialogContext, setState));
+      });
+      unawaited(pollStatus(dialogContext, setState));
+    } catch (error) {
+      if (!dialogContext.mounted) {
+        return;
+      }
+      setState(() {
+        errorText = error.toString();
+      });
+    } finally {
+      if (dialogContext.mounted) {
+        setState(() {
+          refreshing = false;
+        });
+      }
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return StatefulBuilder(
+        builder:
+            (
+              BuildContext dialogContext,
+              void Function(void Function()) setState,
+            ) {
+              if (!initialized) {
+                initialized = true;
+                unawaited(refreshChallenge(dialogContext, setState));
+              }
+              return AlertDialog(
+                title: const Text('二维码登录'),
+                content: SizedBox(
+                  width: 360,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      if (errorText != null &&
+                          errorText!.isNotEmpty) ...<Widget>[
+                        Text(
+                          errorText!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (refreshing && qrImageUrl.isEmpty)
+                        const SizedBox(
+                          height: 240,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else
+                        Center(
+                          child: Container(
+                            width: 240,
+                            height: 240,
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.black.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: qrImageUrl.isEmpty
+                                ? const Center(child: Text('正在生成二维码...'))
+                                : Image.network(
+                                    qrImageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (
+                                          BuildContext context,
+                                          Object error,
+                                          StackTrace? stackTrace,
+                                        ) {
+                                          return const Center(
+                                            child: Text(
+                                              '二维码加载失败，请刷新后重试',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          );
+                                        },
+                                  ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        '请使用已登录的手机端扫描二维码，授权当前桌面端登录。',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        '剩余有效期：${max(expiresInSeconds, 0)} 秒',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        '若账号开启了 MFA，扫码后还需在桌面端完成其他 MFA 验证。',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('关闭'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: refreshing
+                        ? null
+                        : () => unawaited(
+                            refreshChallenge(dialogContext, setState),
+                          ),
+                    icon: refreshing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: const Text('刷新二维码'),
+                  ),
+                ],
+              );
+            },
+      );
+    },
+  );
+
+  await stopPolling();
 }
 
 Future<void> showDesktopSettingsDialog(
@@ -745,9 +1049,11 @@ class LocalAuthPlatform {
     }
 
     try {
-      final bool ok = await _localAuthChannel.invokeMethod<bool>('authenticate', <String, dynamic>{
-            'reason': reason,
-          }) ??
+      final bool ok =
+          await _localAuthChannel.invokeMethod<bool>(
+            'authenticate',
+            <String, dynamic>{'reason': reason},
+          ) ??
           false;
       if (!ok) {
         throw ApiException('本地认证未通过');
@@ -811,10 +1117,7 @@ class AppController extends ChangeNotifier {
     return '正在处理中...';
   }
 
-  Future<T> runBusyAction<T>(
-    String label,
-    Future<T> Function() action,
-  ) async {
+  Future<T> runBusyAction<T>(String label, Future<T> Function() action) async {
     _busyLabelStack.add(label);
     notifyListeners();
     try {
@@ -1490,6 +1793,28 @@ class AppController extends ChangeNotifier {
     });
   }
 
+  Future<QrLoginChallenge> initQrLogin() async {
+    final dynamic data = await _apiClient.post(
+      '/auth/qr/login/init',
+      query: const <String, String>{'target': 'desktop'},
+    );
+    return QrLoginChallenge.fromJson(asMap(data));
+  }
+
+  Future<QrChallengeStatus> pollQrStatus({
+    required String challengeId,
+    required String pollToken,
+  }) async {
+    final dynamic data = await _apiClient.get(
+      '/auth/qr/status',
+      query: <String, String>{
+        'challengeId': challengeId.trim(),
+        'pollToken': pollToken.trim(),
+      },
+    );
+    return QrChallengeStatus.fromJson(asMap(data));
+  }
+
   Future<void> _consumeLoginPayload(dynamic data) async {
     final Map<String, dynamic> json = asMap(data);
     if (json.containsKey('challengeId')) {
@@ -1913,6 +2238,60 @@ class SessionTransferTicket {
   final int expiresInSeconds;
 }
 
+class QrLoginChallenge {
+  const QrLoginChallenge({
+    required this.challengeId,
+    required this.pollToken,
+    required this.qrText,
+    required this.expiresInSeconds,
+  });
+
+  factory QrLoginChallenge.fromJson(Map<String, dynamic> json) {
+    return QrLoginChallenge(
+      challengeId: asString(json['challengeId']) ?? '',
+      pollToken: asString(json['pollToken']) ?? '',
+      qrText: asString(json['qrText']) ?? '',
+      expiresInSeconds: asInt(json['expiresInSeconds']) ?? 0,
+    );
+  }
+
+  final String challengeId;
+  final String pollToken;
+  final String qrText;
+  final int expiresInSeconds;
+}
+
+class QrChallengeStatus {
+  const QrChallengeStatus({
+    required this.status,
+    required this.expiresInSeconds,
+    this.transferCode,
+    this.mfaChallengeId,
+    this.method,
+    this.methods = const <String>[],
+  });
+
+  factory QrChallengeStatus.fromJson(Map<String, dynamic> json) {
+    return QrChallengeStatus(
+      status: asString(json['status']) ?? 'expired',
+      expiresInSeconds: asInt(json['expiresInSeconds']) ?? 0,
+      transferCode: asString(json['transferCode']),
+      mfaChallengeId: asString(json['mfaChallengeId']),
+      method: asString(json['method']),
+      methods: asList(
+        json['methods'],
+      ).map((dynamic item) => item.toString()).toList(),
+    );
+  }
+
+  final String status;
+  final int expiresInSeconds;
+  final String? transferCode;
+  final String? mfaChallengeId;
+  final String? method;
+  final List<String> methods;
+}
+
 class DesktopAuthPortal extends StatefulWidget {
   const DesktopAuthPortal({super.key, required this.controller});
 
@@ -2251,6 +2630,25 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     }
   }
 
+  Future<void> _openLoginQrDialog() async {
+    try {
+      widget.controller.updateApiBaseUrl(_apiController.text);
+      await showDesktopLoginQrDialog(context, widget.controller);
+      if (!mounted) {
+        return;
+      }
+      if (widget.controller.pendingMfaChallenge == null &&
+          widget.controller.isAuthenticated) {
+        _showSuccess('扫码登录成功');
+      } else if (widget.controller.pendingMfaChallenge != null) {
+        _syncMfaModeWithChallenge();
+        _showSuccess('扫码验证成功，请继续完成二次验证');
+      }
+    } catch (error) {
+      _showError(error.toString());
+    }
+  }
+
   void _showError(String message) {
     showAppMessage(context, message, error: true);
   }
@@ -2366,6 +2764,17 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                     )
                                   : const Icon(Icons.login_rounded),
                               label: const Text('登录'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: widget.controller.authBusy
+                                  ? null
+                                  : _openLoginQrDialog,
+                              icon: const Icon(Icons.qr_code_rounded),
+                              label: const Text('二维码登录'),
                             ),
                           ),
                           const SizedBox(height: 12),
