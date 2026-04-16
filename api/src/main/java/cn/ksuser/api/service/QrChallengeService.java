@@ -40,6 +40,7 @@ public class QrChallengeService {
             ChallengeType type,
             Long requestedUserId,
             String mfaChallengeId,
+            String target,
             String webIp,
             String userAgent) {
         long now = Instant.now().getEpochSecond();
@@ -51,6 +52,7 @@ public class QrChallengeService {
         payload.setStatus(ChallengeStatus.PENDING.value());
         payload.setRequestedUserId(requestedUserId);
         payload.setMfaChallengeId(mfaChallengeId);
+        payload.setTarget(target);
         payload.setWebIp(webIp);
         payload.setUserAgent(userAgent);
         payload.setIpLocation(ipLocationService.getIpLocation(webIp));
@@ -213,6 +215,7 @@ public class QrChallengeService {
         private String status;
         private Long requestedUserId;
         private String mfaChallengeId;
+        private String target;
         private String webIp;
         private String ipLocation;
         private String userAgent;
@@ -279,6 +282,14 @@ public class QrChallengeService {
 
         public void setMfaChallengeId(String mfaChallengeId) {
             this.mfaChallengeId = mfaChallengeId;
+        }
+
+        public String getTarget() {
+            return target;
+        }
+
+        public void setTarget(String target) {
+            this.target = target;
         }
 
         public String getWebIp() {

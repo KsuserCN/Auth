@@ -1064,11 +1064,30 @@ public class AuthController {
 
 
     @PostMapping("/qr/login/init")
-    public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrLogin(HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrLogin(
+            @RequestParam(required = false) String target,
+            HttpServletRequest request) {
         String webIp = rateLimitService.getClientIp(request);
         String userAgent = rateLimitService.getClientUserAgent(request);
+        String normalizedTarget;
+        if (target == null || target.isBlank()) {
+            normalizedTarget = SessionTransferService.TARGET_WEB;
+        } else {
+            normalizedTarget = sessionTransferService.normalizeTarget(target);
+            if (normalizedTarget == null) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, "target 只能是 web、desktop 或 mobile"));
+            }
+        }
         QrChallengeService.QrChallengePayload payload =
-            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.LOGIN, null, null, webIp, userAgent);
+            qrChallengeService.createChallenge(
+                QrChallengeService.ChallengeType.LOGIN,
+                null,
+                null,
+                normalizedTarget,
+                webIp,
+                userAgent
+            );
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
     }
@@ -1096,7 +1115,14 @@ public class AuthController {
         }
 
         QrChallengeService.QrChallengePayload payload =
-            qrChallengeService.createChallenge(QrChallengeService.ChallengeType.MFA, userId, mfaChallengeId, clientIp, userAgent);
+            qrChallengeService.createChallenge(
+                QrChallengeService.ChallengeType.MFA,
+                userId,
+                mfaChallengeId,
+                SessionTransferService.TARGET_WEB,
+                clientIp,
+                userAgent
+            );
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
     }
@@ -1123,6 +1149,7 @@ public class AuthController {
             QrChallengeService.ChallengeType.SENSITIVE,
             user.getId(),
             null,
+            SessionTransferService.TARGET_WEB,
             webIp,
             userAgent
         );
@@ -1241,9 +1268,13 @@ public class AuthController {
                     result.put("method", followUpMethods.get(0));
                     result.put("methods", followUpMethods);
                 } else {
+                    String challengeTarget = sessionTransferService.normalizeTarget(challenge.getTarget());
+                    if (challengeTarget == null) {
+                        challengeTarget = SessionTransferService.TARGET_WEB;
+                    }
                     SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
                         user.getId(),
-                        SessionTransferService.TARGET_WEB,
+                        challengeTarget,
                         SessionTransferService.PURPOSE_BRIDGE_LOGIN,
                         challenge.getWebIp(),
                         challenge.getUserAgent()
@@ -1289,9 +1320,13 @@ public class AuthController {
                 }
 
                 mfaService.consumeChallenge(challenge.getMfaChallengeId());
+                String challengeTarget = sessionTransferService.normalizeTarget(challenge.getTarget());
+                if (challengeTarget == null) {
+                    challengeTarget = SessionTransferService.TARGET_WEB;
+                }
                 SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
                     user.getId(),
-                    SessionTransferService.TARGET_WEB,
+                    challengeTarget,
                     SessionTransferService.PURPOSE_BRIDGE_LOGIN,
                     challenge.getWebIp(),
                     challenge.getUserAgent()
