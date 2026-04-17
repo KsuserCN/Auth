@@ -108,6 +108,45 @@
             点击“同意”即表示允许 <span class="right-note-app">{{ context.appName }}</span> 使用您的 Ksuser 账号继续。
           </div>
         </div>
+
+        <div v-else-if="context" class="right-body">
+          <div class="state-panel">
+            <template v-if="desktopBridgeUser">
+              <p class="unauth-title">检测到桌面端已登录</p>
+              <button class="account-row account-row--active" type="button">
+                <el-avatar :size="44" :src="desktopBridgeUser.avatarUrl || undefined" class="account-avatar">
+                  {{ desktopBridgeUser.username?.slice(0, 1)?.toUpperCase() }}
+                </el-avatar>
+                <div class="account-meta">
+                  <div class="account-name">{{ desktopBridgeUser.username }}</div>
+                  <div class="account-email">{{ desktopBridgeUser.email }}</div>
+                </div>
+              </button>
+
+              <div class="consent-actions">
+                <el-button
+                  class="consent-primary-btn"
+                  type="primary"
+                  :loading="desktopSigningIn"
+                  @click="continueWithDesktopAccount"
+                >
+                  使用该账号继续
+                </el-button>
+                <el-button class="consent-secondary-btn" @click="switchAccount">使用其他账号登录</el-button>
+              </div>
+            </template>
+
+            <template v-else>
+              <p class="unauth-title">当前浏览器尚未登录</p>
+              <p class="unauth-description">请先登录后再完成授权，或打开桌面端后刷新页面自动检测登录状态。</p>
+              <div class="consent-actions">
+                <el-button class="consent-primary-btn" type="primary" @click="switchAccount">
+                  登录账号
+                </el-button>
+              </div>
+            </template>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -131,6 +170,12 @@ import {
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { clearAuthSession, getStoredAccessToken } from '@/utils/authSession'
+import {
+  exchangeDesktopSessionToWeb,
+  finalizeWebLogin,
+  getDesktopBridgeStatus,
+  type DesktopBridgeUser,
+} from '@/utils/desktopBridge'
 
 type NormalizedAuthorizeContext = {
   clientId: string
@@ -149,9 +194,11 @@ const { user } = storeToRefs(userStore)
 
 const loading = ref(true)
 const approving = ref(false)
+const desktopSigningIn = ref(false)
 const autoRedirecting = ref(false)
 const errorMessage = ref('')
 const context = ref<NormalizedAuthorizeContext | null>(null)
+const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
 
 const mode = computed<'oauth' | 'sso'>(() => (route.path.startsWith('/sso/') ? 'sso' : 'oauth'))
 
@@ -244,24 +291,76 @@ const redirectToLogin = () => {
   })
 }
 
-const ensureAuthenticated = async () => {
+const refreshDesktopBridgeStatus = async () => {
+  const status = await getDesktopBridgeStatus()
+  if (status?.authenticated && status.user) {
+    desktopBridgeUser.value = status.user
+    return
+  }
+  desktopBridgeUser.value = null
+}
+
+const ensureAuthenticated = async (): Promise<boolean> => {
   if (!getStoredAccessToken()) {
-    redirectToLogin()
+    userStore.clearUser()
     return false
   }
 
   try {
     await userStore.fetchUserInfo()
+    desktopBridgeUser.value = null
     return true
   } catch {
-    redirectToLogin()
+    userStore.clearUser()
+    clearAuthSession()
     return false
   }
 }
 
-const loadContext = async () => {
+const loadAuthorizeContext = async () => {
   const { clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod } =
     requestParams.value
+
+  if (mode.value === 'sso') {
+    const response = await getSSOAuthorizeContext({
+      clientId,
+      redirectUri,
+      responseType,
+      scope,
+      nonce,
+      codeChallenge,
+      codeChallengeMethod,
+    })
+    context.value = {
+      clientId: response.clientId,
+      appName: response.clientName,
+      logoUrl: response.logoUrl,
+      redirectUri: response.redirectUri,
+      requestedScopes: response.requestedScopes,
+      alreadyAuthorized: response.alreadyAuthorized,
+    }
+    return
+  }
+
+  const response = await getOAuth2AuthorizeContext({
+    clientId,
+    redirectUri,
+    responseType,
+    scope,
+  })
+  context.value = {
+    clientId: response.clientId,
+    appName: response.appName,
+    logoUrl: response.logoUrl,
+    contactInfo: response.contactInfo,
+    redirectUri: response.redirectUri,
+    requestedScopes: response.requestedScopes,
+    alreadyAuthorized: response.alreadyAuthorized,
+  }
+}
+
+const loadContext = async () => {
+  const { clientId, redirectUri, responseType } = requestParams.value
 
   if (!clientId || !redirectUri || !responseType) {
     errorMessage.value = '授权链接无效或缺少必要信息，请返回应用后重新发起授权。'
@@ -270,46 +369,15 @@ const loadContext = async () => {
   }
 
   try {
+    await loadAuthorizeContext()
+
     const authenticated = await ensureAuthenticated()
     if (!authenticated) {
+      await refreshDesktopBridgeStatus()
       return
     }
 
-    if (mode.value === 'sso') {
-      const response = await getSSOAuthorizeContext({
-        clientId,
-        redirectUri,
-        responseType,
-        scope,
-        nonce,
-        codeChallenge,
-        codeChallengeMethod,
-      })
-      context.value = {
-        clientId: response.clientId,
-        appName: response.clientName,
-        logoUrl: response.logoUrl,
-        redirectUri: response.redirectUri,
-        requestedScopes: response.requestedScopes,
-        alreadyAuthorized: response.alreadyAuthorized,
-      }
-    } else {
-      const response = await getOAuth2AuthorizeContext({
-        clientId,
-        redirectUri,
-        responseType,
-        scope,
-      })
-      context.value = {
-        clientId: response.clientId,
-        appName: response.appName,
-        logoUrl: response.logoUrl,
-        contactInfo: response.contactInfo,
-        redirectUri: response.redirectUri,
-        requestedScopes: response.requestedScopes,
-        alreadyAuthorized: response.alreadyAuthorized,
-      }
-    }
+    await loadAuthorizeContext()
 
     if (context.value?.alreadyAuthorized) {
       loading.value = false
@@ -404,7 +472,44 @@ const backToLogin = () => {
   router.push('/login')
 }
 
+const continueWithDesktopAccount = async () => {
+  if (desktopSigningIn.value) {
+    return
+  }
+
+  try {
+    desktopSigningIn.value = true
+    const response = await exchangeDesktopSessionToWeb()
+    await finalizeWebLogin({
+      accessToken: response.accessToken,
+      user: response.user,
+      syncDesktop: false,
+    })
+    userStore.clearUser()
+    await userStore.fetchUserInfo()
+    desktopBridgeUser.value = null
+    await loadAuthorizeContext()
+
+    if (context.value?.alreadyAuthorized) {
+      autoRedirecting.value = true
+      await handleApprove(true)
+      return
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '使用桌面端登录失败'
+    ElMessage.error(message)
+    await refreshDesktopBridgeStatus()
+  } finally {
+    desktopSigningIn.value = false
+  }
+}
+
 const switchAccount = async () => {
+  if (!user.value) {
+    redirectToLogin()
+    return
+  }
+
   try {
     if (getStoredAccessToken()) {
       await logout()
@@ -693,6 +798,19 @@ onMounted(() => {
 
 .error-panel {
   color: var(--el-color-danger);
+}
+
+.unauth-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.unauth-description {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  line-height: 1.7;
 }
 
 .permission-box {
