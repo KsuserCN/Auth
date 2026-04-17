@@ -350,7 +350,7 @@ enum LoginFactor { password, emailCode }
 
 enum MfaMode { code, recoveryCode, passkey }
 
-enum SensitiveVerificationMethod { password, emailCode, totp, passkey }
+enum SensitiveVerificationMethod { password, emailCode, totp, passkey, qr }
 
 const MethodChannel _passkeyChannel = MethodChannel('ksuser/passkey');
 const MethodChannel _localAuthChannel = MethodChannel('ksuser/local_auth');
@@ -1801,6 +1801,14 @@ class AppController extends ChangeNotifier {
     return QrLoginChallenge.fromJson(asMap(data));
   }
 
+  Future<QrLoginChallenge> initQrSensitive() async {
+    final dynamic data = await _apiClient.post(
+      '/auth/qr/sensitive/init',
+      authorized: true,
+    );
+    return QrLoginChallenge.fromJson(asMap(data));
+  }
+
   Future<QrChallengeStatus> pollQrStatus({
     required String challengeId,
     required String pollToken,
@@ -2269,6 +2277,7 @@ class QrChallengeStatus {
     this.mfaChallengeId,
     this.method,
     this.methods = const <String>[],
+    this.verified = false,
   });
 
   factory QrChallengeStatus.fromJson(Map<String, dynamic> json) {
@@ -2281,6 +2290,7 @@ class QrChallengeStatus {
       methods: asList(
         json['methods'],
       ).map((dynamic item) => item.toString()).toList(),
+      verified: asBool(json['verified']),
     );
   }
 
@@ -2290,6 +2300,7 @@ class QrChallengeStatus {
   final String? mfaChallengeId;
   final String? method;
   final List<String> methods;
+  final bool verified;
 }
 
 class DesktopAuthPortal extends StatefulWidget {
@@ -4042,7 +4053,11 @@ class SecurityPage extends StatelessWidget {
                         children: <Widget>[
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              initialValue: settings.preferredMfaMethod,
+                              initialValue:
+                                  settings.preferredMfaMethod == 'totp' ||
+                                      settings.preferredMfaMethod == 'passkey'
+                                  ? settings.preferredMfaMethod
+                                  : null,
                               items: <DropdownMenuItem<String>>[
                                 DropdownMenuItem<String>(
                                   value: 'totp',
@@ -4078,7 +4093,17 @@ class SecurityPage extends StatelessWidget {
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
-                              initialValue: settings.preferredSensitiveMethod,
+                              initialValue:
+                                  settings.preferredSensitiveMethod ==
+                                          'password' ||
+                                      settings.preferredSensitiveMethod ==
+                                          'email-code' ||
+                                      settings.preferredSensitiveMethod ==
+                                          'passkey' ||
+                                      settings.preferredSensitiveMethod ==
+                                          'totp'
+                                  ? settings.preferredSensitiveMethod
+                                  : null,
                               items: <DropdownMenuItem<String>>[
                                 const DropdownMenuItem<String>(
                                   value: 'password',
@@ -5470,6 +5495,7 @@ class _SensitiveVerificationDialogState
   final TextEditingController _totpController = TextEditingController();
 
   Timer? _countdownTimer;
+  Timer? _qrPollingTimer;
   List<SensitiveVerificationMethod> _methods =
       const <SensitiveVerificationMethod>[
         SensitiveVerificationMethod.password,
@@ -5483,6 +5509,12 @@ class _SensitiveVerificationDialogState
   bool _verifying = false;
   int _codeCountdown = 0;
   bool _browserPasskeyAvailable = false;
+  bool _qrRefreshing = false;
+  String _qrImageUrl = '';
+  String _qrChallengeId = '';
+  String _qrPollToken = '';
+  int _qrExpiresInSeconds = 0;
+  String? _qrErrorText;
 
   @override
   void initState() {
@@ -5493,6 +5525,7 @@ class _SensitiveVerificationDialogState
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    _cleanupQrPolling();
     _passwordController.dispose();
     _codeController.dispose();
     _totpController.dispose();
@@ -5513,8 +5546,8 @@ class _SensitiveVerificationDialogState
         }
         return;
       }
-      final List<SensitiveVerificationMethod> methods =
-          status.methods.length <= 1
+      final List<SensitiveVerificationMethod> normalizedMethods =
+          status.methods.isEmpty
           ? const <SensitiveVerificationMethod>[
               SensitiveVerificationMethod.password,
               SensitiveVerificationMethod.emailCode,
@@ -5522,6 +5555,11 @@ class _SensitiveVerificationDialogState
               SensitiveVerificationMethod.passkey,
             ]
           : status.methods;
+      final List<SensitiveVerificationMethod> methods =
+          <SensitiveVerificationMethod>{
+            ...normalizedMethods,
+            SensitiveVerificationMethod.qr,
+          }.toList();
       final List<SensitiveVerificationMethod> preferredOrder =
           <SensitiveVerificationMethod>[
             ...<SensitiveVerificationMethod?>[
@@ -5546,6 +5584,8 @@ class _SensitiveVerificationDialogState
       });
       if (selected == SensitiveVerificationMethod.emailCode) {
         await _sendCode();
+      } else if (selected == SensitiveVerificationMethod.qr) {
+        await _startQrVerification();
       }
     } catch (_) {
       if (!mounted) {
@@ -5565,9 +5605,114 @@ class _SensitiveVerificationDialogState
     setState(() {
       _selectedMethod = method;
     });
+    if (method != SensitiveVerificationMethod.qr) {
+      _cleanupQrPolling();
+    }
     if (method == SensitiveVerificationMethod.emailCode &&
         _codeCountdown == 0) {
       await _sendCode();
+    } else if (method == SensitiveVerificationMethod.qr) {
+      await _startQrVerification();
+    }
+  }
+
+  void _cleanupQrPolling() {
+    _qrPollingTimer?.cancel();
+    _qrPollingTimer = null;
+  }
+
+  Future<void> _pollQrVerification() async {
+    if (_qrChallengeId.isEmpty || _qrPollToken.isEmpty) {
+      return;
+    }
+    try {
+      final QrChallengeStatus status = await widget.controller.pollQrStatus(
+        challengeId: _qrChallengeId,
+        pollToken: _qrPollToken,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _qrExpiresInSeconds = status.expiresInSeconds;
+      });
+      if (status.status == 'pending') {
+        return;
+      }
+      _cleanupQrPolling();
+      if (status.status == 'approved') {
+        if (!status.verified) {
+          setState(() {
+            _qrErrorText = '扫码验证结果无效，请刷新二维码后重试';
+          });
+          return;
+        }
+        showAppMessage(context, '验证成功');
+        Navigator.of(context).pop(true);
+        return;
+      }
+      if (status.status == 'rejected') {
+        setState(() {
+          _qrErrorText = '扫码请求已被拒绝，请刷新二维码';
+        });
+        return;
+      }
+      setState(() {
+        _qrErrorText = '二维码已过期，请刷新二维码';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      _cleanupQrPolling();
+      setState(() {
+        _qrErrorText = error.toString();
+      });
+    }
+  }
+
+  void _startQrPolling() {
+    _cleanupQrPolling();
+    _qrPollingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_pollQrVerification());
+    });
+    unawaited(_pollQrVerification());
+  }
+
+  Future<void> _startQrVerification() async {
+    if (_qrRefreshing || !mounted) {
+      return;
+    }
+    setState(() {
+      _qrRefreshing = true;
+      _qrErrorText = null;
+    });
+    try {
+      final QrLoginChallenge challenge = await widget.controller
+          .initQrSensitive();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _qrChallengeId = challenge.challengeId;
+        _qrPollToken = challenge.pollToken;
+        _qrExpiresInSeconds = challenge.expiresInSeconds;
+        _qrImageUrl = buildRemoteQrCodeImageUrl(challenge.qrText);
+      });
+      _startQrPolling();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _qrErrorText = error.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _qrRefreshing = false;
+        });
+      }
     }
   }
 
@@ -5632,6 +5777,8 @@ class _SensitiveVerificationDialogState
     } else if (_selectedMethod == SensitiveVerificationMethod.passkey &&
         !_browserPasskeyAvailable) {
       message = '当前环境未配置可用的 Passkey 浏览器桥接';
+    } else if (_selectedMethod == SensitiveVerificationMethod.qr) {
+      message = '请使用手机扫码完成验证';
     }
     if (message != null) {
       showAppMessage(context, message, error: true);
@@ -5668,6 +5815,8 @@ class _SensitiveVerificationDialogState
           await widget.controller
               .verifySensitiveOperationWithPasskeyInBrowser();
           break;
+        case SensitiveVerificationMethod.qr:
+          return;
       }
       if (mounted) {
         showAppMessage(context, '验证成功');
@@ -5785,6 +5934,63 @@ class _SensitiveVerificationDialogState
                           LengthLimitingTextInputFormatter(6),
                         ],
                       )
+                    else if (_selectedMethod == SensitiveVerificationMethod.qr)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          if (_qrImageUrl.isNotEmpty)
+                            Center(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  _qrImageUrl,
+                                  width: 220,
+                                  height: 220,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            )
+                          else
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 24),
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          Text(
+                            '剩余有效期：${_qrExpiresInSeconds > 0 ? _qrExpiresInSeconds : 0} 秒',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (_qrErrorText != null &&
+                              _qrErrorText!.trim().isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                _qrErrorText!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          OutlinedButton.icon(
+                            onPressed: _qrRefreshing
+                                ? null
+                                : () => _startQrVerification(),
+                            icon: _qrRefreshing
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.refresh_rounded),
+                            label: Text(_qrRefreshing ? '刷新中...' : '刷新二维码'),
+                          ),
+                        ],
+                      )
                     else
                       _DisabledCapabilityCard(
                         title: _browserPasskeyAvailable
@@ -5805,7 +6011,12 @@ class _SensitiveVerificationDialogState
           child: const Text('取消'),
         ),
         FilledButton.icon(
-          onPressed: _loading || _verifying ? null : _verify,
+          onPressed:
+              _loading ||
+                  _verifying ||
+                  _selectedMethod == SensitiveVerificationMethod.qr
+              ? null
+              : _verify,
           icon: _verifying
               ? const SizedBox(
                   width: 18,
@@ -6330,6 +6541,8 @@ String sensitiveVerificationMethodValue(SensitiveVerificationMethod method) {
       return 'totp';
     case SensitiveVerificationMethod.passkey:
       return 'passkey';
+    case SensitiveVerificationMethod.qr:
+      return 'qr';
   }
 }
 
@@ -6343,6 +6556,8 @@ SensitiveVerificationMethod? parseSensitiveVerificationMethod(String? value) {
       return SensitiveVerificationMethod.totp;
     case 'passkey':
       return SensitiveVerificationMethod.passkey;
+    case 'qr':
+      return SensitiveVerificationMethod.qr;
     default:
       return null;
   }
@@ -6360,6 +6575,8 @@ String sensitiveVerificationMethodChipLabel(
       return 'TOTP';
     case SensitiveVerificationMethod.passkey:
       return 'Passkey';
+    case SensitiveVerificationMethod.qr:
+      return '扫码验证';
   }
 }
 
@@ -6375,6 +6592,8 @@ String sensitiveVerificationMethodDescription(
       return '输入身份验证器生成的 6 位动态码。';
     case SensitiveVerificationMethod.passkey:
       return '将自动打开浏览器完成 WebAuthn，再把敏感验证结果回传到桌面端。';
+    case SensitiveVerificationMethod.qr:
+      return '使用已登录手机端扫码确认当前敏感操作。';
   }
 }
 
@@ -7221,7 +7440,7 @@ class BrowserPasskeyBridge {
     request.response.headers
       ..set(HttpHeaders.accessControlAllowOriginHeader, '*')
       ..set(HttpHeaders.accessControlAllowHeadersHeader, 'Content-Type')
-      ..set(HttpHeaders.accessControlAllowMethodsHeader, 'POST, OPTIONS')
+      ..set(HttpHeaders.accessControlAllowMethodsHeader, 'GET, POST, OPTIONS')
       ..set(HttpHeaders.contentTypeHeader, 'text/html; charset=utf-8');
 
     if (request.method == 'OPTIONS') {
@@ -7230,18 +7449,25 @@ class BrowserPasskeyBridge {
       return;
     }
 
-    if (request.method != 'POST' ||
-        request.uri.path != '/desktop-passkey-callback') {
+    if (request.uri.path != '/desktop-passkey-callback' ||
+        (request.method != 'POST' && request.method != 'GET')) {
       request.response.statusCode = HttpStatus.notFound;
       request.response.write('<html><body>Not found</body></html>');
       await request.response.close();
       return;
     }
 
-    final String raw = await utf8.decoder.bind(request).join();
-    final Map<String, dynamic> payload = raw.isEmpty
-        ? <String, dynamic>{}
-        : asMap(jsonDecode(raw));
+    final Map<String, dynamic> payload;
+    if (request.method == 'GET') {
+      final String rawPayload =
+          request.uri.queryParameters['bridgePayload'] ?? '';
+      payload = rawPayload.isEmpty
+          ? <String, dynamic>{}
+          : asMap(jsonDecode(rawPayload));
+    } else {
+      final String raw = await utf8.decoder.bind(request).join();
+      payload = raw.isEmpty ? <String, dynamic>{} : asMap(jsonDecode(raw));
+    }
     final String? state = asString(payload['state']);
     if (state != expectedState) {
       request.response.statusCode = HttpStatus.forbidden;
