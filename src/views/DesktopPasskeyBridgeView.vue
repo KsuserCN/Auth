@@ -235,18 +235,30 @@ const isLoopbackCallback = (value: string): boolean => {
   }
 }
 
+const buildCallbackRedirectUrl = (baseUrl: string, payload: BridgeCallbackPayload): string => {
+  const callback = new URL(baseUrl)
+  callback.searchParams.set('bridgePayload', JSON.stringify(payload))
+  return callback.toString()
+}
+
 const callbackToDesktop = async (payload: BridgeCallbackPayload) => {
   if (!callbackUrl.value) {
     throw new Error('回调地址缺失')
   }
 
-  await fetch(callbackUrl.value, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
+  try {
+    await fetch(callbackUrl.value, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+  } catch (error) {
+    // Some deployments block loopback fetch via CSP; fall back to top-level navigation.
+    window.location.replace(buildCallbackRedirectUrl(callbackUrl.value, payload))
+    return
+  }
 }
 
 const restoreAccessToken = () => {
