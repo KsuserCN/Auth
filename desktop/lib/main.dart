@@ -4287,15 +4287,75 @@ class DevicesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final int onlineCount = controller.sessions
+        .where((SessionItem item) => item.online)
+        .length;
+    final int currentCount = controller.sessions
+        .where((SessionItem item) => item.current)
+        .length;
     return SingleChildScrollView(
       child: Column(
         children: <Widget>[
           _SectionCard(
             title: '在线会话',
             subtitle: '管理您的登录与在线信息',
-            child: controller.sessions.isEmpty
-                ? const Text('暂无在线设备。')
-                : Column(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: <Widget>[
+                    _SessionSummaryChip(
+                      icon: Icons.link_rounded,
+                      label: '会话总数',
+                      value: '${controller.sessions.length}',
+                    ),
+                    _SessionSummaryChip(
+                      icon: Icons.wifi_tethering_rounded,
+                      label: '在线设备',
+                      value: '$onlineCount',
+                      tone: Colors.green,
+                    ),
+                    _SessionSummaryChip(
+                      icon: Icons.verified_user_outlined,
+                      label: '当前设备',
+                      value: '$currentCount',
+                      tone: kPrimaryColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      await _runWithFeedback(
+                        context,
+                        controller.refreshSessions,
+                        success: '会话已刷新',
+                      );
+                    },
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('刷新列表'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (controller.sessions.isEmpty)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.black.withValues(alpha: 0.06),
+                      ),
+                    ),
+                    child: const Text('暂无在线设备。'),
+                  )
+                else
+                  Column(
                     children: controller.sessions.map((SessionItem item) {
                       return _SessionRow(
                         item: item,
@@ -4304,6 +4364,8 @@ class DevicesPage extends StatelessWidget {
                       );
                     }).toList(),
                   ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           _SectionCard(
@@ -5253,12 +5315,36 @@ class _SessionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDesktop = sessionIsDesktopApp(item);
+    final bool isMobile = sessionIsMobileApp(item);
+    final String clientLabel = sessionClientLabel(item);
+    final String systemLabel = sessionSystemLabel(item);
+    final Color accent = isDesktop
+        ? kPrimaryColor
+        : isMobile
+        ? Colors.green
+        : Colors.blueGrey;
+    final Color statusColor = item.current
+        ? Colors.teal
+        : item.online
+        ? Colors.green
+        : Colors.blueGrey;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(compact ? 14 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.04),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -5267,10 +5353,10 @@ class _SessionRow extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3EFE3),
+              color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(deviceIcon(item.deviceType), color: kPrimaryColor),
+            child: Icon(deviceIcon(item.deviceType), color: accent),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -5278,37 +5364,163 @@ class _SessionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        '${item.browser ?? '未知浏览器'} · ${item.deviceType ?? '未知设备'}',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        clientLabel,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (item.current)
-                      const Chip(label: Text('当前'))
-                    else if (item.online)
-                      const Chip(label: Text('在线')),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        item.current
+                            ? '当前'
+                            : item.online
+                            ? '在线'
+                            : '离线',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: statusColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text('${item.ipLocation ?? '未知位置'} · ${item.ipAddress}'),
-                const SizedBox(height: 4),
-                Text('最后活跃 ${formatRelativeTime(item.lastSeenAt)}'),
+                const SizedBox(height: 6),
+                Text(
+                  '$systemLabel · ${item.ipAddress}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.black54,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: <Widget>[
+                    _SessionMetaPill(
+                      icon: Icons.location_on_outlined,
+                      text: item.ipLocation ?? '未知位置',
+                    ),
+                    _SessionMetaPill(
+                      icon: Icons.schedule_rounded,
+                      text: '活跃 ${formatRelativeTime(item.lastSeenAt)}',
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
-          if (!compact && controller != null && !item.current)
-            TextButton(
-              onPressed: () async {
-                await _runWithFeedback(
-                  context,
-                  () => controller!.revokeSession(item.id),
-                  success: '会话已撤销',
-                );
-              },
-              child: const Text('撤销'),
+          if (!compact && controller != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 10),
+              child: item.current
+                  ? OutlinedButton(onPressed: null, child: const Text('当前设备'))
+                  : FilledButton.tonalIcon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.red.withValues(alpha: 0.08),
+                      ),
+                      onPressed: () async {
+                        await _runWithFeedback(
+                          context,
+                          () => controller!.revokeSession(item.id),
+                          success: '会话已撤销',
+                        );
+                      },
+                      icon: const Icon(
+                        Icons.logout_rounded,
+                        color: Colors.red,
+                        size: 18,
+                      ),
+                      label: const Text(
+                        '撤销',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionSummaryChip extends StatelessWidget {
+  const _SessionSummaryChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.tone = Colors.blueGrey,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: tone),
+          const SizedBox(width: 6),
+          Text(
+            '$label $value',
+            style: TextStyle(
+              color: tone.withValues(alpha: 0.92),
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionMetaPill extends StatelessWidget {
+  const _SessionMetaPill({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F6F6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: Colors.black54),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 12, color: Colors.black87),
+          ),
         ],
       ),
     );
@@ -6658,6 +6870,57 @@ IconData deviceIcon(String? deviceType) {
     return Icons.tablet_mac_rounded;
   }
   return Icons.laptop_mac_rounded;
+}
+
+bool sessionIsDesktopApp(SessionItem item) {
+  final String ua = (item.userAgent ?? '').toLowerCase();
+  return ua.contains('ksuserauthdesktop');
+}
+
+bool sessionIsMobileApp(SessionItem item) {
+  final String ua = (item.userAgent ?? '').toLowerCase();
+  return ua.contains('ksuserauthmobile');
+}
+
+String sessionClientLabel(SessionItem item) {
+  if (sessionIsDesktopApp(item)) {
+    return '桌面端';
+  }
+  if (sessionIsMobileApp(item)) {
+    return '移动端';
+  }
+  return item.browser ?? '未知浏览器';
+}
+
+String sessionSystemLabel(SessionItem item) {
+  final String value = ((item.userAgent ?? '') + (item.deviceType ?? ''))
+      .toLowerCase();
+  if (value.contains('windows')) {
+    return 'Windows';
+  }
+  if (value.contains('mac os') ||
+      value.contains('macintosh') ||
+      value.contains('mac')) {
+    return 'macOS';
+  }
+  if (value.contains('android')) {
+    return 'Android';
+  }
+  if (value.contains('iphone') ||
+      value.contains('ipad') ||
+      value.contains('ios')) {
+    return 'iOS';
+  }
+  if (value.contains('linux')) {
+    return 'Linux';
+  }
+  if (sessionIsDesktopApp(item)) {
+    return '桌面端';
+  }
+  if (sessionIsMobileApp(item)) {
+    return '移动端';
+  }
+  return item.deviceType ?? '未知设备';
 }
 
 String displayGender(String? gender) {
