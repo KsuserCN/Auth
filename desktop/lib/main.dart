@@ -8,6 +8,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 const Color kPrimaryColor = Color(0xFFFFB90F);
 const Color kSurfaceTint = Color(0xFFFFF2CC);
@@ -381,8 +382,20 @@ String buildMobileTransferQrText(String transferCode) {
   return 'KSUSER-AUTH-XFER:v1:${transferCode.trim()}';
 }
 
-String buildRemoteQrCodeImageUrl(String text) {
-  return 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=0&data=${Uri.encodeComponent(text)}';
+String buildRemoteQrCodeImageUrl(String text, {bool useDarkModeStyle = false}) {
+  final Map<String, String> query = <String, String>{
+    'size': '240',
+    'margin': '0',
+    'data': text,
+  };
+  if (useDarkModeStyle) {
+    query['dark'] = 'FFFFFF';
+    query['light'] = '0000';
+  } else {
+    query['dark'] = '000000';
+    query['light'] = 'FFFFFF';
+  }
+  return Uri.https('quickchart.io', '/qr', query).toString();
 }
 
 Future<void> showMobileBridgeQrDialog(
@@ -402,7 +415,7 @@ Future<void> showMobileBridgeQrDialog(
     return;
   }
 
-  String qrImageUrl = '';
+  String qrPayload = '';
   int expiresInSeconds = 0;
   bool busy = false;
   String? errorText;
@@ -421,7 +434,7 @@ Future<void> showMobileBridgeQrDialog(
       countdownTimer = null;
       final String qrText = buildMobileTransferQrText(ticket.transferCode);
       setState(() {
-        qrImageUrl = buildRemoteQrCodeImageUrl(qrText);
+        qrPayload = qrText;
         expiresInSeconds = ticket.expiresInSeconds;
       });
       countdownTimer = Timer.periodic(const Duration(seconds: 1), (
@@ -475,66 +488,25 @@ Future<void> showMobileBridgeQrDialog(
                         ),
                         const SizedBox(height: 12),
                       ],
-                      if (busy && qrImageUrl.isEmpty)
+                      if (busy && qrPayload.isEmpty)
                         const SizedBox(
                           height: 240,
                           child: Center(child: CircularProgressIndicator()),
                         )
-                      else if (qrImageUrl.isNotEmpty)
+                      else if (qrPayload.isNotEmpty)
                         Center(
-                          child: Image.network(
-                            qrImageUrl,
+                          child: _buildLocalQrCode(
+                            qrPayload,
                             width: 240,
                             height: 240,
-                            errorBuilder:
-                                (
-                                  BuildContext context,
-                                  Object error,
-                                  StackTrace? stack,
-                                ) {
-                                  return Container(
-                                    width: 240,
-                                    height: 240,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.06)
-                                          : Colors.black.withValues(
-                                              alpha: 0.03,
-                                            ),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: isDark
-                                            ? Colors.white.withValues(
-                                                alpha: 0.08,
-                                              )
-                                            : Colors.black.withValues(
-                                                alpha: 0.08,
-                                              ),
-                                      ),
-                                    ),
-                                    child: const Text('二维码加载失败，请刷新'),
-                                  );
-                                },
+                            isDark: isDark,
                           ),
                         )
                       else
-                        Container(
+                        const SizedBox(
                           width: 240,
                           height: 240,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.06)
-                                : Colors.black.withValues(alpha: 0.03),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.08)
-                                  : Colors.black.withValues(alpha: 0.08),
-                            ),
-                          ),
-                          child: const Text('正在生成二维码...'),
+                          child: Center(child: Text('正在生成二维码...')),
                         ),
                       const SizedBox(height: 12),
                       Text(
@@ -587,7 +559,7 @@ Future<void> showDesktopLoginQrDialog(
 ) async {
   final ThemeData theme = Theme.of(context);
   final bool isDark = theme.brightness == Brightness.dark;
-  String qrImageUrl = '';
+  String qrPayload = '';
   String challengeId = '';
   String pollToken = '';
   int expiresInSeconds = 0;
@@ -719,7 +691,7 @@ Future<void> showDesktopLoginQrDialog(
       setState(() {
         challengeId = challenge.challengeId;
         pollToken = challenge.pollToken;
-        qrImageUrl = buildRemoteQrCodeImageUrl(challenge.qrText);
+        qrPayload = challenge.qrText;
         expiresInSeconds = challenge.expiresInSeconds;
       });
       countdownTimer = Timer.periodic(const Duration(seconds: 1), (
@@ -783,46 +755,23 @@ Future<void> showDesktopLoginQrDialog(
                         ),
                         const SizedBox(height: 12),
                       ],
-                      if (refreshing && qrImageUrl.isEmpty)
+                      if (refreshing && qrPayload.isEmpty)
                         const SizedBox(
                           height: 240,
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else
                         Center(
-                          child: Container(
+                          child: SizedBox(
                             width: 240,
                             height: 240,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? const Color(0xFF262626)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.08)
-                                    : Colors.black.withValues(alpha: 0.08),
-                              ),
-                            ),
-                            child: qrImageUrl.isEmpty
+                            child: qrPayload.isEmpty
                                 ? const Center(child: Text('正在生成二维码...'))
-                                : Image.network(
-                                    qrImageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (
-                                          BuildContext context,
-                                          Object error,
-                                          StackTrace? stackTrace,
-                                        ) {
-                                          return const Center(
-                                            child: Text(
-                                              '二维码加载失败，请刷新后重试',
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          );
-                                        },
+                                : _buildLocalQrCode(
+                                    qrPayload,
+                                    width: 240,
+                                    height: 240,
+                                    isDark: isDark,
                                   ),
                           ),
                         ),
@@ -5818,7 +5767,7 @@ class _SensitiveVerificationDialogState
   int _codeCountdown = 0;
   bool _browserPasskeyAvailable = false;
   bool _qrRefreshing = false;
-  String _qrImageUrl = '';
+  String _qrPayload = '';
   String _qrChallengeId = '';
   String _qrPollToken = '';
   int _qrExpiresInSeconds = 0;
@@ -6005,7 +5954,7 @@ class _SensitiveVerificationDialogState
         _qrChallengeId = challenge.challengeId;
         _qrPollToken = challenge.pollToken;
         _qrExpiresInSeconds = challenge.expiresInSeconds;
-        _qrImageUrl = buildRemoteQrCodeImageUrl(challenge.qrText);
+        _qrPayload = challenge.qrText;
       });
       _startQrPolling();
     } catch (error) {
@@ -6246,16 +6195,15 @@ class _SensitiveVerificationDialogState
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          if (_qrImageUrl.isNotEmpty)
+                          if (_qrPayload.isNotEmpty)
                             Center(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  _qrImageUrl,
-                                  width: 220,
-                                  height: 220,
-                                  fit: BoxFit.cover,
-                                ),
+                              child: _buildLocalQrCode(
+                                _qrPayload,
+                                width: 220,
+                                height: 220,
+                                isDark:
+                                    Theme.of(context).brightness ==
+                                    Brightness.dark,
                               ),
                             )
                           else
@@ -6682,7 +6630,7 @@ Future<void> _showEnableTotpDialog(
                       children: <Widget>[
                         const Text('扫描二维码或手动录入密钥，然后输入身份验证器生成的 6 位动态码。'),
                         const SizedBox(height: 16),
-                        _buildQrWidget(options.qrCodeUrl),
+                        _buildQrWidget(context, options.qrCodeUrl),
                         const SizedBox(height: 16),
                         SelectableText(
                           options.secret,
@@ -6813,13 +6761,57 @@ Future<void> _showRecoveryCodesDialog(
   );
 }
 
-Widget _buildQrWidget(String qrCodeUrl) {
+Widget _buildQrWidget(BuildContext context, String qrCodeUrl) {
+  final bool isDark = Theme.of(context).brightness == Brightness.dark;
   if (qrCodeUrl.startsWith('data:image')) {
     final String encoded = qrCodeUrl.split(',').last;
     final Uint8List bytes = base64Decode(encoded);
     return Center(child: Image.memory(bytes, width: 220, height: 220));
   }
-  return Center(child: Image.network(qrCodeUrl, width: 220, height: 220));
+  Uri uri = Uri.parse(qrCodeUrl);
+  if (isDark &&
+      ((uri.host == 'quickchart.io' && uri.path == '/qr') ||
+          (uri.host == 'api.qrserver.com' &&
+              uri.path.startsWith('/v1/create-qr-code')))) {
+    final Map<String, String> query = Map<String, String>.from(
+      uri.queryParameters,
+    );
+    query['dark'] = 'FFFFFF';
+    query['light'] = '0000';
+    query['color'] = 'FFFFFF';
+    query['bgcolor'] = '00000000';
+    uri = uri.replace(queryParameters: query);
+  }
+  return Center(child: Image.network(uri.toString(), width: 220, height: 220));
+}
+
+Widget _buildLocalQrCode(
+  String payload, {
+  required double width,
+  required double height,
+  required bool isDark,
+}) {
+  final Color codeColor = isDark ? Colors.white : Colors.black;
+  return SizedBox(
+    width: width,
+    height: height,
+    child: QrImageView(
+      data: payload,
+      version: QrVersions.auto,
+      size: min(width, height),
+      gapless: true,
+      padding: EdgeInsets.zero,
+      backgroundColor: Colors.transparent,
+      eyeStyle: QrEyeStyle(eyeShape: QrEyeShape.square, color: codeColor),
+      dataModuleStyle: QrDataModuleStyle(
+        dataModuleShape: QrDataModuleShape.square,
+        color: codeColor,
+      ),
+      errorStateBuilder: (BuildContext context, Object? error) {
+        return const Center(child: Text('二维码生成失败，请刷新'));
+      },
+    ),
+  );
 }
 
 Future<void> _runWithFeedback(
