@@ -390,6 +390,8 @@ Future<void> showMobileBridgeQrDialog(
   AppController controller, {
   String localAuthReason = '请先完成身份验证后再展示手机登录二维码',
 }) async {
+  final ThemeData theme = Theme.of(context);
+  final bool isDark = theme.brightness == Brightness.dark;
   final bool available = await LocalAuthPlatform.isAvailable();
   if (!available) {
     throw ApiException('当前设备不支持系统本地认证');
@@ -495,14 +497,20 @@ Future<void> showMobileBridgeQrDialog(
                                     height: 240,
                                     alignment: Alignment.center,
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.03,
-                                      ),
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.06)
+                                          : Colors.black.withValues(
+                                              alpha: 0.03,
+                                            ),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.08,
-                                        ),
+                                        color: isDark
+                                            ? Colors.white.withValues(
+                                                alpha: 0.08,
+                                              )
+                                            : Colors.black.withValues(
+                                                alpha: 0.08,
+                                              ),
                                       ),
                                     ),
                                     child: const Text('二维码加载失败，请刷新'),
@@ -516,10 +524,14 @@ Future<void> showMobileBridgeQrDialog(
                           height: 240,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.03),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : Colors.black.withValues(alpha: 0.03),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: Colors.black.withValues(alpha: 0.08),
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : Colors.black.withValues(alpha: 0.08),
                             ),
                           ),
                           child: const Text('正在生成二维码...'),
@@ -530,10 +542,13 @@ Future<void> showMobileBridgeQrDialog(
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         '二维码一次性有效，过期后请刷新。',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -570,6 +585,8 @@ Future<void> showDesktopLoginQrDialog(
   BuildContext context,
   AppController controller,
 ) async {
+  final ThemeData theme = Theme.of(context);
+  final bool isDark = theme.brightness == Brightness.dark;
   String qrImageUrl = '';
   String challengeId = '';
   String pollToken = '';
@@ -778,10 +795,14 @@ Future<void> showDesktopLoginQrDialog(
                             height: 240,
                             clipBehavior: Clip.antiAlias,
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: isDark
+                                  ? const Color(0xFF262626)
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.black.withValues(alpha: 0.08),
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.08),
                               ),
                             ),
                             child: qrImageUrl.isEmpty
@@ -816,10 +837,13 @@ Future<void> showDesktopLoginQrDialog(
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
-                      const Text(
+                      Text(
                         '若账号开启了 MFA，扫码后还需在桌面端完成其他 MFA 验证。',
                         textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.black54),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -2792,10 +2816,18 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF323232)
+                                  : Colors.white,
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: Colors.black.withValues(alpha: 0.06),
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.06),
                               ),
                             ),
                             child: Column(
@@ -2853,10 +2885,18 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFBFAF5),
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFF2A2A2A)
+                                  : const Color(0xFFFBFAF5),
                               borderRadius: BorderRadius.circular(18),
                               border: Border.all(
-                                color: Colors.black.withValues(alpha: 0.06),
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.06),
                               ),
                             ),
                             child: Row(
@@ -4346,10 +4386,14 @@ class DevicesPage extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF323232)
+                          : Colors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Colors.black.withValues(alpha: 0.06),
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.06),
                       ),
                     ),
                     child: const Text('暂无在线设备。'),
@@ -4379,7 +4423,10 @@ class DevicesPage extends StatelessWidget {
                 const SizedBox(width: 12),
                 FilledButton.tonalIcon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: Colors.red.shade50,
+                    backgroundColor:
+                        Theme.of(context).brightness == Brightness.dark
+                        ? Colors.red.withValues(alpha: 0.18)
+                        : Colors.red.shade50,
                   ),
                   onPressed: () async {
                     final bool confirmed =
@@ -4581,11 +4628,15 @@ class _PasswordRequirementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color panelColor = isDark
+        ? const Color(0xFF2A2A2A)
+        : const Color(0xFFFBFAF5);
     if (requirement == null) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFFBFAF5),
+          color: panelColor,
           borderRadius: BorderRadius.circular(18),
         ),
         child: const Text('当前无法获取密码规则，提交时将直接依赖后端校验。'),
@@ -4605,7 +4656,7 @@ class _PasswordRequirementCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFAF5),
+        color: panelColor,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -4646,12 +4697,17 @@ class _DisabledCapabilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F7F2),
+        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF8F7F2),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06),
+        ),
       ),
       child: Row(
         children: <Widget>[
@@ -4699,11 +4755,12 @@ class _MfaPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final bool supportsPasskey = challenge.methods.contains('passkey');
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: kSurfaceTint,
+        color: isDark ? const Color(0xFF3A3218) : kSurfaceTint,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
@@ -4788,12 +4845,15 @@ class _WorkspaceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final int score = computeSecurityScore(user, controller);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: <Color>[Color(0xFFFFF4D2), Color(0xFFFFE5A0)],
+        gradient: LinearGradient(
+          colors: isDark
+              ? <Color>[const Color(0xFF4A3D1A), const Color(0xFF5A4510)]
+              : <Color>[const Color(0xFFFFF4D2), const Color(0xFFFFE5A0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -4846,6 +4906,7 @@ class _UserAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
     final String normalizedName = username.trim();
     final String initial = normalizedName.isEmpty
         ? 'K'
@@ -4860,11 +4921,11 @@ class _UserAvatar extends StatelessWidget {
 
     final Widget fallback = CircleAvatar(
       radius: radius,
-      backgroundColor: Colors.black,
+      backgroundColor: scheme.primaryContainer,
       child: Text(
         initial,
         style: TextStyle(
-          color: Colors.white,
+          color: scheme.onPrimaryContainer,
           fontWeight: FontWeight.bold,
           fontSize: radius * 0.72,
         ),
@@ -4915,14 +4976,19 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return SizedBox(
       width: 260,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: const Color(0xFFFBFAF5),
+          color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFBFAF5),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.05),
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -4957,12 +5023,17 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFFFBFAF5),
+        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFBFAF5),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.05),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4989,17 +5060,22 @@ class _InfoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
     return Container(
       constraints: const BoxConstraints(minWidth: 220),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF323232) : Colors.white,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label, style: const TextStyle(color: Colors.black54)),
+          Text(
+            label,
+            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+          ),
           const SizedBox(height: 6),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
         ],
@@ -5021,12 +5097,14 @@ class _EditableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? const Color(0xFF323232) : Colors.white,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
@@ -5035,7 +5113,10 @@ class _EditableRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(label, style: const TextStyle(color: Colors.black54)),
+                  Text(
+                    label,
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     value,
@@ -5096,6 +5177,7 @@ class _TotpPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final TotpStatusResponse? status = controller.totpStatus;
     final bool enabled = status?.enabled == true;
 
@@ -5105,7 +5187,9 @@ class _TotpPanel extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: enabled ? const Color(0xFFEFFAF1) : Colors.white,
+            color: enabled
+                ? (isDark ? const Color(0xFF1F3A24) : const Color(0xFFEFFAF1))
+                : (isDark ? const Color(0xFF323232) : Colors.white),
             borderRadius: BorderRadius.circular(18),
           ),
           child: Row(
@@ -5223,11 +5307,12 @@ class _PasskeyRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF323232) : Colors.white,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
@@ -5316,6 +5401,7 @@ class _SessionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
     final bool isDesktop = sessionIsDesktopApp(item);
     final bool isMobile = sessionIsMobileApp(item);
     final String clientLabel = sessionClientLabel(item);
@@ -5335,14 +5421,18 @@ class _SessionRow extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.all(compact ? 14 : 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06),
+        ),
         boxShadow: <BoxShadow>[
           BoxShadow(
             blurRadius: 18,
             offset: const Offset(0, 8),
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.04),
           ),
         ],
       ),
@@ -5404,7 +5494,7 @@ class _SessionRow extends StatelessWidget {
                 Text(
                   '$systemLabel · ${item.ipAddress}',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.black54,
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -5506,20 +5596,25 @@ class _SessionMetaPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6F6F6),
+        color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFF6F6F6),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 14, color: Colors.black54),
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
           const SizedBox(width: 4),
           Text(
             text,
-            style: const TextStyle(fontSize: 12, color: Colors.black87),
+            style: TextStyle(
+              fontSize: 12,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -5535,6 +5630,7 @@ class _LogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color statusColor = log.result == 'SUCCESS'
         ? Colors.green
         : Colors.red;
@@ -5542,7 +5638,7 @@ class _LogTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
