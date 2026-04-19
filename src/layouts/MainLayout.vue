@@ -396,126 +396,75 @@ onMounted(() => {
 }
 
 .sidebar {
-  position: relative;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--el-color-primary) 6%, var(--el-bg-color)) 0%, transparent 28%),
-    var(--el-bg-color);
-  border-right: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--el-border-color-lighter));
-  padding: 16px 10px 14px;
+  background: var(--el-bg-color);
+  border-right: 1px solid var(--el-border-color-lighter);
+  padding: 20px 8px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  box-shadow:
-    inset -1px 0 0 rgba(255, 255, 255, 0.04),
-    10px 0 24px rgba(15, 23, 42, 0.04);
-}
-
-.sidebar::before {
-  content: '';
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  top: 12px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--el-color-primary-light-5), transparent);
-  opacity: 0.65;
-  pointer-events: none;
+  gap: 8px;
 }
 
 .side-title {
-  padding: 10px 14px 4px;
+  padding: 8px 16px 4px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--el-text-color-secondary);
   text-transform: uppercase;
-  letter-spacing: 1.1px;
-  position: relative;
+  letter-spacing: 0.8px;
 }
 
 .side-menu {
   border-right: none;
   background: transparent;
-  padding: 2px 4px;
 }
 
 .side-menu :deep(.el-menu-item) {
-  position: relative;
-  overflow: hidden;
   height: 40px;
   line-height: 40px;
-  border-radius: 10px;
-  margin: 3px 0;
-  padding: 0 14px;
+  border-radius: 8px;
+  margin: 2px 0;
+  padding: 0 16px;
   color: var(--el-text-color-regular);
   font-size: 14px;
-  border: 1px solid transparent;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.side-menu :deep(.el-menu-item)::before {
-  content: '';
-  position: absolute;
-  left: 6px;
-  top: 50%;
-  width: 3px;
-  height: 0;
-  border-radius: 999px;
-  background: var(--el-color-primary);
-  transform: translateY(-50%);
-  transition: height 0.18s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .side-menu :deep(.el-menu-item .el-icon) {
   font-size: 18px;
-  margin-right: 10px;
-  color: color-mix(in srgb, currentColor 90%, var(--el-text-color-secondary));
+  margin-right: 12px;
 }
 
 .side-menu :deep(.el-menu-item.is-active) {
-  background: color-mix(in srgb, var(--el-color-primary-light-9) 78%, var(--el-bg-color));
+  background: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
-  font-weight: 600;
-  border-color: color-mix(in srgb, var(--el-color-primary) 36%, transparent);
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
-}
-
-.side-menu :deep(.el-menu-item.is-active)::before {
-  height: 20px;
+  font-weight: 500;
 }
 
 .side-menu :deep(.el-menu-item:hover) {
-  background: color-mix(in srgb, var(--el-fill-color-light) 84%, transparent);
-  border-color: color-mix(in srgb, var(--el-border-color-light) 80%, transparent);
+  background: var(--el-fill-color-light);
   color: var(--el-text-color-primary);
-  transform: translateX(1px);
+  transform: translateX(2px);
 }
 
 .side-footer {
   margin-top: auto;
-  padding: 12px 8px 8px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--el-border-color-light) 75%, transparent);
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--el-fill-color-light) 32%, transparent));
-  border-radius: 12px;
 }
 
 .logout-btn {
   width: 100%;
   height: 40px;
-  border-radius: 10px;
+  border-radius: 8px;
   font-size: 14px;
-  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .logout-btn :deep(.el-icon) {
   margin-right: 8px;
   font-size: 18px;
-}
-
-.logout-btn:not(.is-disabled):hover {
-  transform: translateY(-1px);
 }
 
 .content {

@@ -113,13 +113,19 @@
           <div class="state-panel">
             <template v-if="desktopBridgeUser">
               <p class="unauth-title">检测到桌面端已登录</p>
-              <button class="account-row account-row--active" type="button">
+              <button class="account-row account-row--active account-row--desktop-bridge" type="button">
                 <el-avatar :size="44" :src="desktopBridgeUser.avatarUrl || undefined" class="account-avatar">
                   {{ desktopBridgeUser.username?.slice(0, 1)?.toUpperCase() }}
                 </el-avatar>
                 <div class="account-meta">
-                  <div class="account-name">{{ desktopBridgeUser.username }}</div>
-                  <div class="account-email">{{ desktopBridgeUser.email }}</div>
+                  <div
+                    class="account-identity"
+                    :title="`${desktopBridgeUser.username} · ${desktopBridgeUser.email}`"
+                  >
+                    <span class="account-identity-name">{{ desktopBridgeUser.username }}</span>
+                    <span class="account-identity-separator">·</span>
+                    <span class="account-identity-email">{{ desktopBridgeUser.email }}</span>
+                  </div>
                 </div>
               </button>
 
@@ -878,6 +884,10 @@ onMounted(() => {
   cursor: default;
 }
 
+.account-row--desktop-bridge .account-meta {
+  min-width: 0;
+}
+
 .account-row--switch {
   transition: background-color 0.2s ease;
 }
@@ -911,6 +921,39 @@ onMounted(() => {
   font-size: 15px;
   color: var(--el-text-color-regular);
   word-break: break-word;
+}
+
+.account-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 16px;
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
+}
+
+.account-identity-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-identity-separator {
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary);
+}
+
+.account-identity-email {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .switch-title {

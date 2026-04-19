@@ -88,9 +88,18 @@
                 <div v-if="desktopBridgeReady" class="desktop-bridge-card">
                   <div class="desktop-bridge-copy">
                     <div class="desktop-bridge-title">检测到桌面端已登录</div>
-                    <div class="desktop-bridge-user">
-                      {{ desktopBridgeUser?.username || desktopBridgeUser?.email }}
-                      <span v-if="desktopBridgeUser?.email"> · {{ desktopBridgeUser?.email }}</span>
+                    <div
+                      class="desktop-bridge-user"
+                      :title="desktopBridgeUser?.username && desktopBridgeUser?.email
+                        ? `${desktopBridgeUser.username} · ${desktopBridgeUser.email}`
+                        : desktopBridgeUser?.username || desktopBridgeUser?.email || ''"
+                    >
+                      <div class="desktop-bridge-user-name">
+                        {{ desktopBridgeUser?.username || desktopBridgeUser?.email }}
+                      </div>
+                      <div v-if="desktopBridgeUser?.email" class="desktop-bridge-user-email">
+                        {{ desktopBridgeUser.email }}
+                      </div>
                     </div>
                   </div>
                   <el-button
@@ -2301,6 +2310,7 @@ onBeforeUnmount(() => {
 }
 
 .desktop-bridge-copy {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -2312,13 +2322,49 @@ onBeforeUnmount(() => {
 
 .desktop-bridge-user {
   margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
   font-size: 13px;
   color: var(--el-text-color-regular);
-  word-break: break-all;
+}
+
+.desktop-bridge-user-name {
+  min-width: 0;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  line-height: 1.5;
+}
+
+.desktop-bridge-user-email {
+  min-width: 0;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .desktop-bridge-btn {
   flex-shrink: 0;
+}
+
+@media (max-width: 820px) {
+  .desktop-bridge-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .desktop-bridge-btn {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .desktop-bridge-btn {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 /* 输入框样式 */
