@@ -50,6 +50,8 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
   DesktopSessionBridgeServer? _sessionBridge;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   bool _settingsDialogOpen = false;
+  bool? _lastMenuBarAuthenticated;
+  String? _lastMenuBarDisplayName;
 
   @override
   void initState() {
@@ -65,11 +67,14 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
     );
     unawaited(_sessionBridge!.start());
     _appMenuChannel.setMethodCallHandler(_handleAppMenuCall);
+    _controller.addListener(_handleControllerChanged);
+    unawaited(_syncMenuBarState());
   }
 
   @override
   void dispose() {
     _appMenuChannel.setMethodCallHandler(null);
+    _controller.removeListener(_handleControllerChanged);
     unawaited(_sessionBridge?.stop());
     _controller.dispose();
     super.dispose();
@@ -116,10 +121,17 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
         _openSettingsPanel();
         return true;
       case 'refresh':
-        if (_controller.isAuthenticated) {
-          await _controller.refreshWorkspace();
-        } else {
-          await _controller.fetchPasswordRequirement();
+        try {
+          if (_controller.isAuthenticated) {
+            await _controller.refreshWorkspace();
+            await _showMenuBarMessage('数据刷新完成', success: true);
+          } else {
+            await _controller.fetchPasswordRequirement();
+            await _showMenuBarMessage('登录页数据已刷新', success: true);
+          }
+        } catch (error) {
+          await _showMenuBarMessage(error.toString(), success: false);
+          rethrow;
         }
         return true;
       case 'logout':
@@ -176,6 +188,54 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
       return;
     }
     unawaited(showDesktopAboutDialog(context, _controller));
+  }
+
+  void _handleControllerChanged() {
+    unawaited(_syncMenuBarState());
+  }
+
+  Future<void> _syncMenuBarState() async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+
+    final bool authenticated = _controller.isAuthenticated;
+    final String displayName = authenticated
+        ? _controller.user?.username.trim() ?? ''
+        : '';
+
+    if (_lastMenuBarAuthenticated == authenticated &&
+        _lastMenuBarDisplayName == displayName) {
+      return;
+    }
+
+    try {
+      await _menuBarChannel.invokeMethod<bool>('updateState', <String, dynamic>{
+        'authenticated': authenticated,
+        'displayName': displayName,
+      });
+      _lastMenuBarAuthenticated = authenticated;
+      _lastMenuBarDisplayName = displayName;
+    } on PlatformException {
+      // Ignore menu bar sync failures and keep the app usable.
+    }
+  }
+
+  Future<void> _showMenuBarMessage(
+    String message, {
+    required bool success,
+  }) async {
+    if (!Platform.isMacOS) {
+      return;
+    }
+    try {
+      await _menuBarChannel.invokeMethod<bool>('showMessage', <String, dynamic>{
+        'message': message,
+        'success': success,
+      });
+    } on PlatformException {
+      // Ignore menu bar message failures and keep the app usable.
+    }
   }
 
   @override
@@ -356,6 +416,7 @@ enum SensitiveVerificationMethod { password, emailCode, totp, passkey, qr }
 const MethodChannel _passkeyChannel = MethodChannel('ksuser/passkey');
 const MethodChannel _localAuthChannel = MethodChannel('ksuser/local_auth');
 const MethodChannel _appMenuChannel = MethodChannel('ksuser/app_menu');
+const MethodChannel _menuBarChannel = MethodChannel('ksuser/menu_bar');
 const MethodChannel _windowControlChannel = MethodChannel(
   'ksuser/window_control',
 );

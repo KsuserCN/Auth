@@ -6,6 +6,8 @@ class AppDelegate: FlutterAppDelegate {
   private let appDisplayName = "Ksuser Auth 统一认证中心"
   private var statusItem: NSStatusItem?
   private var isMenuBarVisible = false
+  private var menuBarAuthenticated = false
+  private var menuBarDisplayName = ""
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
@@ -52,6 +54,47 @@ class AppDelegate: FlutterAppDelegate {
   @objc private func terminateFromStatusItem(_ sender: Any?) {
     hideStatusItem()
     NSApp.terminate(sender)
+  }
+
+  func updateMenuBarState(authenticated: Bool, displayName: String?) {
+    menuBarAuthenticated = authenticated
+    menuBarDisplayName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    rebuildStatusMenu()
+  }
+
+  func showMenuBarMessage(_ message: String, success: Bool) {
+    let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      return
+    }
+
+    guard let button = statusItem?.button else {
+      return
+    }
+
+    let viewController = NSViewController()
+    let textField = NSTextField(labelWithString: trimmed)
+    textField.textColor = success ? NSColor.labelColor : NSColor.systemRed
+    textField.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+    textField.maximumNumberOfLines = 2
+    textField.lineBreakMode = .byWordWrapping
+
+    let container = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 54))
+    textField.frame = NSRect(x: 14, y: 15, width: 192, height: 24)
+    container.addSubview(textField)
+    viewController.view = container
+
+    let popover = NSPopover()
+    popover.behavior = .transient
+    popover.contentSize = container.frame.size
+    popover.contentViewController = viewController
+    popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+      if popover.isShown {
+        popover.performClose(nil)
+      }
+    }
   }
 
   @objc private func refreshFromMenu(_ sender: Any?) {
@@ -174,28 +217,8 @@ class AppDelegate: FlutterAppDelegate {
       button.toolTip = appDisplayName
     }
 
-    let menu = NSMenu()
-
-    let showItem = NSMenuItem(title: "显示主窗口", action: #selector(showMainWindow(_:)), keyEquivalent: "")
-    showItem.target = self
-
-    let refreshItem = NSMenuItem(title: "刷新数据", action: #selector(refreshFromMenu(_:)), keyEquivalent: "")
-    refreshItem.target = self
-
-    let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
-    settingsItem.target = self
-
-    let quitItem = NSMenuItem(title: "退出应用", action: #selector(terminateFromStatusItem(_:)), keyEquivalent: "")
-    quitItem.target = self
-
-    menu.addItem(showItem)
-    menu.addItem(refreshItem)
-    menu.addItem(settingsItem)
-    menu.addItem(NSMenuItem.separator())
-    menu.addItem(quitItem)
-
-    item.menu = menu
     statusItem = item
+    rebuildStatusMenu()
   }
 
   private func showStatusItem() {
@@ -217,6 +240,52 @@ class AppDelegate: FlutterAppDelegate {
 
   private func restoreRegularApplicationMode() {
     NSApp.setActivationPolicy(.regular)
+  }
+
+  private func rebuildStatusMenu() {
+    guard let item = statusItem else {
+      return
+    }
+
+    let menu = NSMenu()
+
+    if menuBarAuthenticated {
+      let displayName = menuBarDisplayName.isEmpty ? "已登录" : "已登录：\(menuBarDisplayName)"
+      let accountItem = NSMenuItem(title: displayName, action: nil, keyEquivalent: "")
+      accountItem.isEnabled = false
+      menu.addItem(accountItem)
+
+      let showItem = NSMenuItem(title: "显示主窗口", action: #selector(showMainWindow(_:)), keyEquivalent: "")
+      showItem.target = self
+      menu.addItem(showItem)
+    } else {
+      let loginItem = NSMenuItem(title: "点击登录", action: #selector(showMainWindow(_:)), keyEquivalent: "")
+      loginItem.target = self
+      menu.addItem(loginItem)
+    }
+
+    menu.addItem(NSMenuItem.separator())
+
+    let refreshItem = NSMenuItem(title: "刷新数据", action: #selector(refreshFromMenu(_:)), keyEquivalent: "")
+    refreshItem.target = self
+
+    let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
+    settingsItem.target = self
+
+    let quitItem = NSMenuItem(title: "退出应用", action: #selector(terminateFromStatusItem(_:)), keyEquivalent: "")
+    quitItem.target = self
+
+    menu.addItem(refreshItem)
+    menu.addItem(settingsItem)
+    if menuBarAuthenticated {
+      let logoutItem = NSMenuItem(title: "退出登录", action: #selector(logoutFromMenu(_:)), keyEquivalent: "")
+      logoutItem.target = self
+      menu.addItem(logoutItem)
+    }
+    menu.addItem(NSMenuItem.separator())
+    menu.addItem(quitItem)
+
+    item.menu = menu
   }
 
   private func configureApplicationMenu(_ menu: NSMenu?) {

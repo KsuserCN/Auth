@@ -8,6 +8,7 @@ class MainFlutterWindow: NSWindow {
   private var appMenuBridge: AppMenuBridge?
   private var localAuthBridge: LocalAuthBridge?
   private var windowControlBridge: WindowControlBridge?
+  private var menuBarBridge: MenuBarBridge?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -31,12 +32,56 @@ class MainFlutterWindow: NSWindow {
       messenger: flutterViewController.engine.binaryMessenger,
       windowProvider: { [weak self] in self }
     )
+    menuBarBridge = MenuBarBridge(messenger: flutterViewController.engine.binaryMessenger)
 
     super.awakeFromNib()
   }
 
   func dispatchMenuCommand(_ command: String) {
     appMenuBridge?.send(command: command)
+  }
+}
+
+private final class MenuBarBridge {
+  private let channel: FlutterMethodChannel
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.channel = FlutterMethodChannel(name: "ksuser/menu_bar", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      self?.handle(call, result: result)
+    }
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "updateState":
+      guard let arguments = call.arguments as? [String: Any] else {
+        result(FlutterError(code: "bad_args", message: "菜单栏状态参数缺失", details: nil))
+        return
+      }
+      let authenticated = arguments["authenticated"] as? Bool ?? false
+      let displayName = arguments["displayName"] as? String
+      DispatchQueue.main.async {
+        (NSApp.delegate as? AppDelegate)?.updateMenuBarState(
+          authenticated: authenticated,
+          displayName: displayName
+        )
+        result(true)
+      }
+    case "showMessage":
+      guard let arguments = call.arguments as? [String: Any] else {
+        result(FlutterError(code: "bad_args", message: "菜单栏提示参数缺失", details: nil))
+        return
+      }
+      let message = arguments["message"] as? String ?? ""
+      let success = arguments["success"] as? Bool ?? true
+      DispatchQueue.main.async {
+        (NSApp.delegate as? AppDelegate)?.showMenuBarMessage(message, success: success)
+        result(true)
+      }
+    default:
+      result(FlutterMethodNotImplemented)
+    }
   }
 }
 
