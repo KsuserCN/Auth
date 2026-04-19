@@ -356,6 +356,32 @@ enum SensitiveVerificationMethod { password, emailCode, totp, passkey, qr }
 const MethodChannel _passkeyChannel = MethodChannel('ksuser/passkey');
 const MethodChannel _localAuthChannel = MethodChannel('ksuser/local_auth');
 const MethodChannel _appMenuChannel = MethodChannel('ksuser/app_menu');
+const MethodChannel _windowControlChannel = MethodChannel(
+  'ksuser/window_control',
+);
+
+class DesktopWindowPlatform {
+  static bool get supportsMoveToMenuBar => Platform.isMacOS;
+
+  static Future<void> moveToMenuBar() async {
+    if (!supportsMoveToMenuBar) {
+      return;
+    }
+    try {
+      final bool ok =
+          await _windowControlChannel.invokeMethod<bool>('moveToMenuBar') ??
+          false;
+      if (!ok) {
+        throw ApiException('窗口收起到菜单栏失败');
+      }
+    } on PlatformException catch (error) {
+      final String message = error.message?.trim().isNotEmpty == true
+          ? error.message!.trim()
+          : '窗口收起到菜单栏失败';
+      throw ApiException(message);
+    }
+  }
+}
 
 void showAppMessage(
   BuildContext context,
@@ -3132,6 +3158,8 @@ class DesktopWorkspace extends StatelessWidget {
     final Color railUnselectedColor = isDark
         ? Colors.white70
         : const Color(0xFF756A55);
+    final bool supportsMoveToMenuBar =
+        DesktopWindowPlatform.supportsMoveToMenuBar;
 
     return Scaffold(
       body: SafeArea(
@@ -3493,6 +3521,28 @@ class DesktopWorkspace extends StatelessWidget {
                               },
                               icon: const Icon(Icons.settings_rounded),
                             ),
+                            if (supportsMoveToMenuBar) ...<Widget>[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                tooltip: '收起到菜单栏',
+                                onPressed: () async {
+                                  try {
+                                    await DesktopWindowPlatform.moveToMenuBar();
+                                  } catch (error) {
+                                    if (context.mounted) {
+                                      showAppMessage(
+                                        context,
+                                        error.toString(),
+                                        error: true,
+                                      );
+                                    }
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.vertical_align_top_rounded,
+                                ),
+                              ),
+                            ],
                             const SizedBox(width: 8),
                             FilledButton.icon(
                               onPressed: controller.workspaceLoading

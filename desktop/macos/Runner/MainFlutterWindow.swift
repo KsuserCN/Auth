@@ -7,6 +7,7 @@ class MainFlutterWindow: NSWindow {
   private var passkeyBridge: PasskeyBridge?
   private var appMenuBridge: AppMenuBridge?
   private var localAuthBridge: LocalAuthBridge?
+  private var windowControlBridge: WindowControlBridge?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -26,12 +27,57 @@ class MainFlutterWindow: NSWindow {
     )
     appMenuBridge = AppMenuBridge(messenger: flutterViewController.engine.binaryMessenger)
     localAuthBridge = LocalAuthBridge(messenger: flutterViewController.engine.binaryMessenger)
+    windowControlBridge = WindowControlBridge(
+      messenger: flutterViewController.engine.binaryMessenger,
+      windowProvider: { [weak self] in self }
+    )
 
     super.awakeFromNib()
   }
 
   func dispatchMenuCommand(_ command: String) {
     appMenuBridge?.send(command: command)
+  }
+}
+
+private final class WindowControlBridge {
+  private let channel: FlutterMethodChannel
+  private let windowProvider: () -> NSWindow?
+
+  init(messenger: FlutterBinaryMessenger, windowProvider: @escaping () -> NSWindow?) {
+    self.channel = FlutterMethodChannel(name: "ksuser/window_control", binaryMessenger: messenger)
+    self.windowProvider = windowProvider
+    channel.setMethodCallHandler { [weak self] call, result in
+      self?.handle(call, result: result)
+    }
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "moveToMenuBar":
+      DispatchQueue.main.async {
+        if let delegate = NSApp.delegate as? AppDelegate {
+          delegate.moveMainWindowToMenuBar()
+          result(true)
+          return
+        }
+
+        guard let window = self.windowProvider() ?? NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow else {
+          result(
+            FlutterError(
+              code: "window_unavailable",
+              message: "当前未找到可收起的窗口",
+              details: nil
+            )
+          )
+          return
+        }
+        window.orderOut(nil)
+        result(true)
+      }
+    default:
+      result(FlutterMethodNotImplemented)
+    }
   }
 }
 

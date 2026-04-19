@@ -4,23 +4,54 @@ import FlutterMacOS
 @main
 class AppDelegate: FlutterAppDelegate {
   private let appDisplayName = "Ksuser Auth 统一认证中心"
+  private var statusItem: NSStatusItem?
+  private var isMenuBarVisible = false
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
     super.applicationDidFinishLaunching(notification)
+    NSApp.setActivationPolicy(.regular)
     configureMainMenu()
   }
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    return true
+    return !isMenuBarVisible
   }
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
     return true
   }
 
+  override func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    if !flag {
+      showMainWindow(sender)
+    }
+    return true
+  }
+
   @objc private func showMainWindow(_ sender: Any?) {
+    restoreRegularApplicationMode()
+    hideStatusItem()
     NSApp.activate(ignoringOtherApps: true)
     mainFlutterWindow?.makeKeyAndOrderFront(sender)
+  }
+
+  func moveMainWindowToMenuBar() {
+    guard let window = mainFlutterWindow else {
+      return
+    }
+    enterMenuBarApplicationMode()
+    showStatusItem()
+    window.resignKey()
+    window.orderOut(nil)
+  }
+
+  @objc private func moveMainWindowToMenuBarFromMenu(_ sender: Any?) {
+    moveMainWindowToMenuBar()
+  }
+
+  @objc private func terminateFromStatusItem(_ sender: Any?) {
+    hideStatusItem()
+    NSApp.terminate(sender)
   }
 
   @objc private func refreshFromMenu(_ sender: Any?) {
@@ -126,6 +157,68 @@ class AppDelegate: FlutterAppDelegate {
     }
   }
 
+  private func configureStatusItemIfNeeded() {
+    if statusItem != nil {
+      return
+    }
+
+    let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    if let button = item.button {
+      let statusImage = (NSImage(named: "MenuBarIcon") ?? NSImage(named: NSImage.Name("MenuBarIcon")))?.copy() as? NSImage
+      statusImage?.isTemplate = true
+      button.image = statusImage
+      button.image?.isTemplate = true
+      button.imageScaling = .scaleProportionallyDown
+      button.title = ""
+      button.imagePosition = .imageOnly
+      button.toolTip = appDisplayName
+    }
+
+    let menu = NSMenu()
+
+    let showItem = NSMenuItem(title: "显示主窗口", action: #selector(showMainWindow(_:)), keyEquivalent: "")
+    showItem.target = self
+
+    let refreshItem = NSMenuItem(title: "刷新数据", action: #selector(refreshFromMenu(_:)), keyEquivalent: "")
+    refreshItem.target = self
+
+    let settingsItem = NSMenuItem(title: "设置...", action: #selector(openSettingsFromMenu(_:)), keyEquivalent: "")
+    settingsItem.target = self
+
+    let quitItem = NSMenuItem(title: "退出应用", action: #selector(terminateFromStatusItem(_:)), keyEquivalent: "")
+    quitItem.target = self
+
+    menu.addItem(showItem)
+    menu.addItem(refreshItem)
+    menu.addItem(settingsItem)
+    menu.addItem(NSMenuItem.separator())
+    menu.addItem(quitItem)
+
+    item.menu = menu
+    statusItem = item
+  }
+
+  private func showStatusItem() {
+    configureStatusItemIfNeeded()
+    isMenuBarVisible = true
+  }
+
+  private func hideStatusItem() {
+    if let item = statusItem {
+      NSStatusBar.system.removeStatusItem(item)
+      statusItem = nil
+    }
+    isMenuBarVisible = false
+  }
+
+  private func enterMenuBarApplicationMode() {
+    NSApp.setActivationPolicy(.accessory)
+  }
+
+  private func restoreRegularApplicationMode() {
+    NSApp.setActivationPolicy(.regular)
+  }
+
   private func configureApplicationMenu(_ menu: NSMenu?) {
     guard let menu else {
       return
@@ -173,12 +266,17 @@ class AppDelegate: FlutterAppDelegate {
     logoutItem.keyEquivalentModifierMask = [.command, .shift]
     logoutItem.target = self
 
+    let menuBarItem = NSMenuItem(title: "收起到菜单栏", action: #selector(moveMainWindowToMenuBarFromMenu(_:)), keyEquivalent: "m")
+    menuBarItem.keyEquivalentModifierMask = [.command]
+    menuBarItem.target = self
+
     let closeItem = NSMenuItem(title: "关闭窗口", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
 
     menu.addItem(showWindowItem)
     menu.addItem(refreshItem)
     menu.addItem(logoutItem)
     menu.addItem(NSMenuItem.separator())
+    menu.addItem(menuBarItem)
     menu.addItem(closeItem)
   }
 
