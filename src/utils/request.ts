@@ -5,6 +5,8 @@ import { clearAuthSession, getStoredAccessToken, setStoredAccessToken } from '@/
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _refreshRetried?: boolean
+  _skipAuthRefresh?: boolean
+  _suppressErrorToast?: boolean
 }
 
 // API 响应格式
@@ -246,6 +248,10 @@ const refreshTokenWithCoordination = async (): Promise<string> => {
   return refreshPromise
 }
 
+const shouldSuppressErrorToast = (config?: RetryableRequestConfig): boolean => {
+  return Boolean(config?._suppressErrorToast)
+}
+
 // 刷新 Token
 const refreshToken = async (): Promise<string> => {
   try {
@@ -328,13 +334,19 @@ request.interceptors.response.use(
     }
 
     // 其他错误码
-    ElMessage.error(msg || '请求失败')
+    if (!shouldSuppressErrorToast(response.config as RetryableRequestConfig)) {
+      ElMessage.error(msg || '请求失败')
+    }
     return Promise.reject(new Error(msg || '请求失败'))
   },
   async (error) => {
+    const originalRequest = error.config as RetryableRequestConfig | undefined
+
     // 网络错误或服务器错误
     if (!error.response) {
-      ElMessage.error('网络连接失败，请检查网络')
+      if (!shouldSuppressErrorToast(originalRequest)) {
+        ElMessage.error('网络连接失败，请检查网络')
+      }
       return Promise.reject(error)
     }
 
@@ -358,7 +370,18 @@ request.interceptors.response.use(
       if (isAuthEndpoint) {
         // 登录接口的 401 错误直接显示并返回，不做其他处理
         const errorMsg = data?.msg || '认证失败'
-        ElMessage.error(errorMsg)
+        if (!shouldSuppressErrorToast(originalRequest)) {
+          ElMessage.error(errorMsg)
+        }
+        return Promise.reject(new Error(errorMsg))
+      }
+
+      if (originalRequest._skipAuthRefresh) {
+        const errorMsg = data?.msg || '登录状态已失效，请重新登录'
+        clearAuthSession()
+        if (!shouldSuppressErrorToast(originalRequest)) {
+          ElMessage.error(errorMsg)
+        }
         return Promise.reject(new Error(errorMsg))
       }
 
@@ -366,7 +389,9 @@ request.interceptors.response.use(
       if (originalRequest._refreshRetried) {
         const errorMsg = data?.msg || '登录状态已失效，请重新登录'
         clearAuthSession()
-        ElMessage.error(errorMsg)
+        if (!shouldSuppressErrorToast(originalRequest)) {
+          ElMessage.error(errorMsg)
+        }
         return Promise.reject(new Error(errorMsg))
       }
       originalRequest._refreshRetried = true
@@ -412,7 +437,9 @@ request.interceptors.response.use(
 
     // 其他错误状态码
     const errorMsg = data?.msg || '请求失败'
-    ElMessage.error(errorMsg)
+    if (!shouldSuppressErrorToast(config as RetryableRequestConfig)) {
+      ElMessage.error(errorMsg)
+    }
     return Promise.reject(new Error(errorMsg))
   },
 )
