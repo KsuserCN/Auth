@@ -1257,6 +1257,26 @@ public class AuthController {
             .body(new ApiResponse<>(200, "账号恢复成功", tokenResponse));
     }
 
+    /**
+     * 在忘记密码页生成可供已登录移动端扫码背书的恢复挑战
+     */
+    @PostMapping("/account-recovery/qr/init")
+    public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initAccountRecoveryQr(
+            HttpServletRequest request) {
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
+        QrChallengeService.QrChallengePayload payload = qrChallengeService.createChallenge(
+            QrChallengeService.ChallengeType.RECOVERY,
+            null,
+            null,
+            SessionTransferService.TARGET_WEB,
+            clientIp,
+            userAgent
+        );
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "账号恢复扫码背书已创建", toQrInitResponse(payload)));
+    }
+
 
     @PostMapping("/qr/login/init")
     public ResponseEntity<ApiResponse<QrChallengeInitResponse>> initQrLogin(
@@ -1528,6 +1548,29 @@ public class AuthController {
                 );
                 result.put("transferCode", transferPayload.getTransferCode());
                 result.put("verified", true);
+            } else if (challengeType == QrChallengeService.ChallengeType.RECOVERY) {
+                Long sponsorSessionId = getCurrentSessionId(request);
+                UserSession sponsorSession = sponsorSessionId == null
+                    ? null
+                    : userSessionService.findActiveSessionById(sponsorSessionId).orElse(null);
+                if (sponsorSession == null || !user.getId().equals(sponsorSession.getUser().getId())) {
+                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
+                        Map.of("reason", "当前登录会话无效"));
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ApiResponse<>(401, "当前登录会话无效，请重新登录后再试"));
+                }
+
+                String sponsorIp = rateLimitService.getClientIp(request);
+                String sponsorUserAgent = rateLimitService.getClientUserAgent(request);
+                AccountRecoveryService.AccountRecoveryPayload recoveryPayload =
+                    accountRecoveryService.createAuthorization(
+                        user,
+                        sponsorSession.getId(),
+                        sponsorIp,
+                        sponsorUserAgent
+                    );
+                result.put("recoveryCode", recoveryPayload.getRecoveryCode());
+                result.put("verified", true);
             } else if (challengeType == QrChallengeService.ChallengeType.SENSITIVE) {
                 if (challenge.getRequestedUserId() == null || !challenge.getRequestedUserId().equals(user.getId())) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
@@ -1592,6 +1635,10 @@ public class AuthController {
             Object transferCode = result.get("transferCode");
             if (transferCode instanceof String value && !value.isBlank()) {
                 statusResponse.setTransferCode(value);
+            }
+            Object recoveryCode = result.get("recoveryCode");
+            if (recoveryCode instanceof String value && !value.isBlank()) {
+                statusResponse.setRecoveryCode(value);
             }
             Object mfaChallengeId = result.get("mfaChallengeId");
             if (mfaChallengeId instanceof String value && !value.isBlank()) {

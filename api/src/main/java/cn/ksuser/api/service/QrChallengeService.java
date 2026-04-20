@@ -165,7 +165,8 @@ public class QrChallengeService {
     public enum ChallengeType {
         LOGIN("login"),
         MFA("mfa"),
-        SENSITIVE("sensitive");
+        SENSITIVE("sensitive"),
+        RECOVERY("recovery");
 
         private final String value;
 

@@ -6,6 +6,7 @@ public class QrChallengeStatusResponse {
     private String status;
     private Long expiresInSeconds;
     private String transferCode;
+    private String recoveryCode;
     private String mfaChallengeId;
     private String method;
     private List<String> methods;
@@ -41,6 +42,14 @@ public class QrChallengeStatusResponse {
 
     public void setTransferCode(String transferCode) {
         this.transferCode = transferCode;
+    }
+
+    public String getRecoveryCode() {
+        return recoveryCode;
+    }
+
+    public void setRecoveryCode(String recoveryCode) {
+        this.recoveryCode = recoveryCode;
     }
 
     public String getMfaChallengeId() {
