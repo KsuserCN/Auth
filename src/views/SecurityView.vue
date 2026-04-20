@@ -137,6 +137,94 @@
 
     <el-row :gutter="16" class="row-gap">
       <el-col :xs="24">
+        <el-card class="card" shadow="never">
+          <div class="card-title card-title-between">
+            <div class="title-left">
+              <el-icon>
+                <Lock />
+              </el-icon>
+              <span>自适应连续认证引擎</span>
+            </div>
+            <div class="title-actions">
+              <el-tag
+                v-if="adaptiveAuthStatus"
+                :type="getAdaptiveRiskTagType(adaptiveAuthStatus.riskLevel)"
+                effect="plain"
+              >
+                {{ getAdaptiveRiskLabel(adaptiveAuthStatus.riskLevel) }}风险 {{ adaptiveAuthStatus.riskScore }}
+              </el-tag>
+              <el-button text size="small" :loading="adaptiveAuthLoading" @click="loadAdaptiveAuthStatus">
+                刷新
+              </el-button>
+            </div>
+          </div>
+
+          <div v-if="adaptiveAuthStatus" class="adaptive-auth-card">
+            <div class="adaptive-auth-summary">
+              <div class="adaptive-auth-main">
+                <span class="adaptive-auth-title">
+                  {{ adaptiveAuthStatus.requiresStepUp ? '建议立即补做验证' : '当前会话可信度稳定' }}
+                </span>
+                <p class="adaptive-auth-desc">{{ adaptiveAuthStatus.recommendedAction }}</p>
+              </div>
+              <div class="adaptive-auth-actions">
+                <el-tag :type="adaptiveAuthStatus.trusted ? 'success' : 'warning'">
+                  {{ adaptiveAuthStatus.trusted ? '已信任' : '待提升' }}
+                </el-tag>
+                <el-button
+                  type="primary"
+                  plain
+                  :disabled="adaptiveAuthStatus.sensitiveVerified"
+                  @click="openAdaptiveStepUpDialog"
+                >
+                  {{ adaptiveAuthStatus.sensitiveVerified ? '已完成验证' : '立即验证' }}
+                </el-button>
+              </div>
+            </div>
+
+            <div class="adaptive-auth-metrics">
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">敏感验证状态</span>
+                <span class="metric-value">
+                  {{ adaptiveAuthStatus.sensitiveVerified ? `有效 ${adaptiveAuthStatus.sensitiveVerificationRemainingSeconds} 秒` : '未验证' }}
+                </span>
+              </div>
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">会话年龄</span>
+                <span class="metric-value">{{ formatDuration(adaptiveAuthStatus.authAgeSeconds) }}</span>
+              </div>
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">空闲时长</span>
+                <span class="metric-value">{{ formatDuration(adaptiveAuthStatus.idleSeconds) }}</span>
+              </div>
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">当前环境</span>
+                <span class="metric-value">{{ adaptiveAuthStatus.currentLocation || '未知位置' }} / {{ adaptiveAuthStatus.deviceType || '未知设备' }}</span>
+              </div>
+            </div>
+
+            <div class="adaptive-auth-reasons">
+              <span class="metric-label">风险信号</span>
+              <div class="adaptive-auth-chip-list">
+                <el-tag
+                  v-for="reason in adaptiveAuthStatus.reasons"
+                  :key="reason"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ reason }}
+                </el-tag>
+              </div>
+            </div>
+          </div>
+
+          <el-skeleton v-else :rows="4" animated />
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
         <AccountRecoveryCard />
       </el-col>
     </el-row>
@@ -289,11 +377,13 @@ import { useRouter } from 'vue-router'
 	} from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
+  getAdaptiveAuthStatus,
   getPasskeyList,
   getSensitiveLogs,
   getTotpStatus,
   getUserInfo,
   updateUserSetting,
+  type AdaptiveAuthStatus,
   type SensitiveLogItem,
   type SensitiveLoginMethod,
   type SensitiveOperationType,
@@ -329,6 +419,8 @@ const settingsRollbackGuard = ref<{
 const sensitiveLogs = ref<SensitiveLogItem[]>([])
 const sensitiveLogsLoading = ref(false)
 const sensitiveLogsTotal = ref(0)
+const adaptiveAuthStatus = ref<AdaptiveAuthStatus | null>(null)
+const adaptiveAuthLoading = ref(false)
 const sensitiveDialogVisible = ref(false)
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 
@@ -487,6 +579,26 @@ const getRiskTagType = (score: number) => {
   return 'success'
 }
 
+const getAdaptiveRiskTagType = (level: AdaptiveAuthStatus['riskLevel']) => {
+  if (level === 'high') return 'danger'
+  if (level === 'medium') return 'warning'
+  return 'success'
+}
+
+const getAdaptiveRiskLabel = (level: AdaptiveAuthStatus['riskLevel']) => {
+  if (level === 'high') return '高'
+  if (level === 'medium') return '中'
+  return '低'
+}
+
+const formatDuration = (seconds?: number | null) => {
+  const total = Math.max(Number(seconds || 0), 0)
+  if (total < 60) return `${total} 秒`
+  if (total < 3600) return `${Math.floor(total / 60)} 分钟`
+  if (total < 86400) return `${Math.floor(total / 3600)} 小时`
+  return `${Math.floor(total / 86400)} 天`
+}
+
 const getDeviceIconClass = (deviceType?: string | null) => {
   const device = (deviceType || '').toLowerCase()
   if (device.includes('bot') || device.includes('spider') || device.includes('crawler')) {
@@ -551,6 +663,17 @@ const loadSensitiveLogs = async () => {
   }
 }
 
+const loadAdaptiveAuthStatus = async () => {
+  adaptiveAuthLoading.value = true
+  try {
+    adaptiveAuthStatus.value = await getAdaptiveAuthStatus()
+  } catch (error) {
+    console.error('Get adaptive auth status failed:', error)
+  } finally {
+    adaptiveAuthLoading.value = false
+  }
+}
+
 onMounted(async () => {
   try {
     passkeyLoading.value = true
@@ -588,6 +711,7 @@ onMounted(async () => {
   }
 
   await loadSensitiveLogs()
+  await loadAdaptiveAuthStatus()
 })
 
 const applyQuery = () => {
@@ -740,6 +864,9 @@ const runWithSensitiveVerification = async (action: () => Promise<void>) => {
 const handleSensitiveVerificationSuccess = async () => {
   const action = pendingSensitiveAction
   pendingSensitiveAction = null
+
+  await loadAdaptiveAuthStatus()
+
   if (!action) return
 
   try {
@@ -751,6 +878,10 @@ const handleSensitiveVerificationSuccess = async () => {
 
 const handleSensitiveVerificationCancel = () => {
   pendingSensitiveAction = null
+}
+
+const openAdaptiveStepUpDialog = () => {
+  sensitiveDialogVisible.value = true
 }
 </script>
 
@@ -952,6 +1083,83 @@ const handleSensitiveVerificationCancel = () => {
   margin-top: 16px;
 }
 
+.adaptive-auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.adaptive-auth-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 185, 15, 0.08), rgba(255, 255, 255, 0.8));
+}
+
+.adaptive-auth-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.adaptive-auth-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.adaptive-auth-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+.adaptive-auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.adaptive-auth-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.adaptive-auth-metric,
+.adaptive-auth-reasons {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-lighter);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.metric-value {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.adaptive-auth-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .modern-table {
   border-radius: 8px;
 }
@@ -1063,6 +1271,16 @@ const handleSensitiveVerificationCancel = () => {
 
   .preference-select {
     width: 100%;
+  }
+
+  .adaptive-auth-summary,
+  .adaptive-auth-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .adaptive-auth-metrics {
+    grid-template-columns: 1fr;
   }
 }
 </style>

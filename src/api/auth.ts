@@ -639,6 +639,31 @@ export const checkSensitiveVerification = async (): Promise<SensitiveVerificatio
   return response.data as SensitiveVerificationStatus
 }
 
+export interface AdaptiveAuthStatus {
+  sessionId: number | null
+  riskScore: number
+  riskLevel: 'low' | 'medium' | 'high'
+  trusted: boolean
+  requiresStepUp: boolean
+  sensitiveVerified: boolean
+  sensitiveVerificationRemainingSeconds: number
+  authAgeSeconds: number
+  idleSeconds: number
+  currentIp: string | null
+  currentLocation: string | null
+  sessionIp: string | null
+  sessionLocation: string | null
+  browser: string | null
+  deviceType: string | null
+  recommendedAction: string
+  reasons: string[]
+}
+
+export const getAdaptiveAuthStatus = async (): Promise<AdaptiveAuthStatus> => {
+  const response = await request.get<any>('/auth/adaptive-auth/status')
+  return response.data as AdaptiveAuthStatus
+}
+
 // ========== 敏感操作日志 ==========
 
 export type SensitiveOperationType =
