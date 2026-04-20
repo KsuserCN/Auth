@@ -76,8 +76,6 @@ class AppViewModel(
                         it.copy(
                             isBootstrapping = false,
                             isAuthenticated = false,
-                            pendingMobileBridgeConfirmation = null,
-                            mobileBridgeReturnUrl = null,
                             pendingQrConfirmation = null,
                             passwordRequirement = requirement,
                         )
@@ -89,8 +87,6 @@ class AppViewModel(
                             isBootstrapping = false,
                             isAuthenticated = true,
                             currentUser = user,
-                            pendingMobileBridgeConfirmation = null,
-                            mobileBridgeReturnUrl = null,
                             pendingQrConfirmation = null,
                             passwordRequirement = requirement,
                         )
@@ -101,8 +97,6 @@ class AppViewModel(
                     it.copy(
                         isBootstrapping = false,
                         isAuthenticated = false,
-                        pendingMobileBridgeConfirmation = null,
-                        mobileBridgeReturnUrl = null,
                         pendingQrConfirmation = null,
                         error = throwable.toReadableMessage(),
                     )
@@ -154,13 +148,14 @@ class AppViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isBusy = true, error = null, message = null) }
             runCatching {
+                val authenticated = resolveBridgeAuthentication()
                 val status = container.authRepository.getMobileBridgeStatus(challengeId)
                 when (status.status.lowercase()) {
                     "pending" -> PendingMobileBridgeConfirmation(
                         challengeId = challengeId,
                         returnUrl = status.returnUrl,
                         returnOrigin = status.returnOrigin,
-                        requiresLogin = !_uiState.value.isAuthenticated,
+                        requiresLogin = !authenticated,
                     )
                     "approved" -> {
                         if (!status.returnUrl.isNullOrBlank()) {
@@ -199,6 +194,38 @@ class AppViewModel(
                 _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
             }
         }
+    }
+
+    private suspend fun resolveBridgeAuthentication(): Boolean {
+        val snapshot = _uiState.value
+        if (snapshot.isAuthenticated && snapshot.currentUser != null) {
+            return true
+        }
+
+        runCatching { container.authRepository.getCurrentUser() }
+            .onSuccess { user ->
+                _uiState.update {
+                    it.copy(
+                        isAuthenticated = true,
+                        currentUser = user,
+                    )
+                }
+                return true
+            }
+
+        val token = runCatching { container.sessionRepository.bootstrap() }.getOrNull()
+        if (token.isNullOrBlank()) {
+            return false
+        }
+
+        val user = runCatching { container.authRepository.getCurrentUser() }.getOrNull() ?: return false
+        _uiState.update {
+            it.copy(
+                isAuthenticated = true,
+                currentUser = user,
+            )
+        }
+        return true
     }
 
     fun confirmMobileBridgeAction() {
