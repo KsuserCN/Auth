@@ -1,5 +1,6 @@
 package cn.ksuser.api.entity;
 
+import cn.ksuser.api.service.AuthorizationGrantPolicy;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -37,6 +38,12 @@ public class UserSsoAuthorization {
     @Column(name = "scopes", length = 255, nullable = false)
     private String scopes = "openid";
 
+    @Column(name = "grant_mode", length = 32, nullable = false)
+    private String grantMode = AuthorizationGrantPolicy.MODE_PERSISTENT;
+
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
+
     @Column(name = "authorized_at", nullable = false)
     private LocalDateTime authorizedAt;
 
@@ -66,6 +73,9 @@ public class UserSsoAuthorization {
         }
         if (scopes == null || scopes.isBlank()) {
             scopes = "openid";
+        }
+        if (grantMode == null || grantMode.isBlank()) {
+            grantMode = AuthorizationGrantPolicy.MODE_PERSISTENT;
         }
     }
 
@@ -128,6 +138,26 @@ public class UserSsoAuthorization {
 
     public void setScopes(String scopes) {
         this.scopes = scopes == null || scopes.isBlank() ? "openid" : scopes;
+    }
+
+    public String getGrantMode() {
+        return grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+    }
+
+    public void setGrantMode(String grantMode) {
+        this.grantMode = grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
     }
 
     public LocalDateTime getAuthorizedAt() {

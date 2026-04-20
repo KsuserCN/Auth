@@ -186,13 +186,17 @@ public class SsoPlatformService {
         validateRedirectUriMatches(client, redirectUri);
         validatePkceParameters(client, codeChallenge, codeChallengeMethod);
         List<String> requestedScopes = resolveRequestedScopes(client, scope);
+        UserSsoAuthorization existingAuthorization = findReusableAuthorization(user, client.getClientId(), requestedScopes)
+            .orElse(null);
         return new SsoAuthorizeContextResponse(
             client.getClientId(),
             client.getClientName(),
             client.getLogoUrl(),
             normalizeAndValidateRedirectUri(redirectUri),
             requestedScopes,
-            hasExistingAuthorization(user, client.getClientId(), requestedScopes)
+            existingAuthorization != null,
+            existingAuthorization == null ? AuthorizationGrantPolicy.MODE_PERSISTENT : existingAuthorization.getGrantMode(),
+            existingAuthorization == null ? null : existingAuthorization.getExpiresAt()
         );
     }
 
@@ -211,7 +215,12 @@ public class SsoPlatformService {
         String code = generateOpaqueValue("ssocode_", 32);
         String normalizedState = normalizeOptional(request == null ? null : request.getState());
         OidcClient client = findActiveClient(context.getClientId(), HttpStatus.BAD_REQUEST);
-        recordAuthorization(user, client, context.getRequestedScopes(), context.getRedirectUri());
+        String grantMode = AuthorizationGrantPolicy.normalizeGrantMode(request == null ? null : request.getGrantMode());
+        Integer grantTtlSeconds = AuthorizationGrantPolicy.resolveTtlSeconds(
+            grantMode,
+            request == null ? null : request.getGrantTtlSeconds()
+        );
+        recordAuthorization(user, client, context.getRequestedScopes(), context.getRedirectUri(), grantMode, grantTtlSeconds);
         AuthorizationCodePayload payload = new AuthorizationCodePayload(
             user.getId(),
             client.getClientId(),
@@ -573,21 +582,23 @@ public class SsoPlatformService {
             authorization.getRedirectUri(),
             orderScopes(Oauth2ScopeUtil.parseScopeSet(authorization.getScopes())),
             authorization.getAuthorizedAt(),
-            authorization.getLastAuthorizedAt()
+            authorization.getLastAuthorizedAt(),
+            authorization.getGrantMode(),
+            authorization.getExpiresAt()
         );
     }
 
-    private boolean hasExistingAuthorization(User user, String clientId, List<String> requestedScopes) {
+    private Optional<UserSsoAuthorization> findReusableAuthorization(User user, String clientId, List<String> requestedScopes) {
         if (user == null) {
-            return false;
+            return Optional.empty();
         }
         return authorizationRepository.findByUserIdAndClientId(user.getId(), clientId)
-            .map(record -> Oauth2ScopeUtil.parseScopeSet(record.getScopes()))
-            .map(grantedScopes -> grantedScopes.containsAll(requestedScopes))
-            .orElse(false);
+            .filter(record -> AuthorizationGrantPolicy.isReusable(record.getGrantMode(), record.getExpiresAt()))
+            .filter(record -> Oauth2ScopeUtil.parseScopeSet(record.getScopes()).containsAll(requestedScopes));
     }
 
-    private void recordAuthorization(User user, OidcClient client, List<String> requestedScopes, String redirectUri) {
+    private void recordAuthorization(User user, OidcClient client, List<String> requestedScopes, String redirectUri,
+                                     String grantMode, Integer grantTtlSeconds) {
         UserSsoAuthorization record = authorizationRepository.findByUserIdAndClientId(user.getId(), client.getClientId())
             .orElseGet(UserSsoAuthorization::new);
         LocalDateTime now = LocalDateTime.now();
@@ -596,12 +607,18 @@ public class SsoPlatformService {
             record.setClientId(client.getClientId());
             record.setAuthorizedAt(now);
         }
-        LinkedHashSet<String> grantedScopes = new LinkedHashSet<>(Oauth2ScopeUtil.parseScopeSet(record.getScopes()));
+        LinkedHashSet<String> grantedScopes = new LinkedHashSet<>();
+        if (AuthorizationGrantPolicy.MODE_PERSISTENT.equals(grantMode)
+            && AuthorizationGrantPolicy.isReusable(record.getGrantMode(), record.getExpiresAt())) {
+            grantedScopes.addAll(Oauth2ScopeUtil.parseScopeSet(record.getScopes()));
+        }
         grantedScopes.addAll(requestedScopes);
         record.setClientName(client.getClientName());
         record.setLogoUrl(client.getLogoUrl());
         record.setRedirectUri(redirectUri);
         record.setScopes(joinValues(orderScopes(grantedScopes)));
+        record.setGrantMode(grantMode);
+        record.setExpiresAt(AuthorizationGrantPolicy.calculateExpiresAt(now, grantMode, grantTtlSeconds));
         record.setLastAuthorizedAt(now);
         authorizationRepository.save(record);
     }

@@ -1,5 +1,7 @@
 package cn.ksuser.api.dto;
 
+import cn.ksuser.api.service.AuthorizationGrantPolicy;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -11,13 +13,16 @@ public class SsoAuthorizedClientResponse {
     private List<String> scopes;
     private LocalDateTime authorizedAt;
     private LocalDateTime lastAuthorizedAt;
+    private String grantMode;
+    private LocalDateTime expiresAt;
 
     public SsoAuthorizedClientResponse() {
     }
 
     public SsoAuthorizedClientResponse(String clientId, String clientName, String logoUrl, String redirectUri,
                                        List<String> scopes, LocalDateTime authorizedAt,
-                                       LocalDateTime lastAuthorizedAt) {
+                                       LocalDateTime lastAuthorizedAt, String grantMode,
+                                       LocalDateTime expiresAt) {
         this.clientId = clientId;
         this.clientName = clientName;
         this.logoUrl = logoUrl;
@@ -25,6 +30,10 @@ public class SsoAuthorizedClientResponse {
         this.scopes = scopes;
         this.authorizedAt = authorizedAt;
         this.lastAuthorizedAt = lastAuthorizedAt;
+        this.grantMode = grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+        this.expiresAt = expiresAt;
     }
 
     public String getClientId() {
@@ -81,5 +90,23 @@ public class SsoAuthorizedClientResponse {
 
     public void setLastAuthorizedAt(LocalDateTime lastAuthorizedAt) {
         this.lastAuthorizedAt = lastAuthorizedAt;
+    }
+
+    public String getGrantMode() {
+        return grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+    }
+
+    public void setGrantMode(String grantMode) {
+        this.grantMode = grantMode;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
     }
 }

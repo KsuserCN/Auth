@@ -1,5 +1,8 @@
 package cn.ksuser.api.dto;
 
+import cn.ksuser.api.service.AuthorizationGrantPolicy;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class SsoAuthorizeContextResponse {
@@ -9,18 +12,25 @@ public class SsoAuthorizeContextResponse {
     private String redirectUri;
     private List<String> requestedScopes;
     private boolean alreadyAuthorized;
+    private String existingGrantMode;
+    private LocalDateTime existingGrantExpiresAt;
 
     public SsoAuthorizeContextResponse() {
     }
 
     public SsoAuthorizeContextResponse(String clientId, String clientName, String logoUrl, String redirectUri,
-                                       List<String> requestedScopes, boolean alreadyAuthorized) {
+                                       List<String> requestedScopes, boolean alreadyAuthorized,
+                                       String existingGrantMode, LocalDateTime existingGrantExpiresAt) {
         this.clientId = clientId;
         this.clientName = clientName;
         this.logoUrl = logoUrl;
         this.redirectUri = redirectUri;
         this.requestedScopes = requestedScopes;
         this.alreadyAuthorized = alreadyAuthorized;
+        this.existingGrantMode = existingGrantMode == null || existingGrantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : existingGrantMode;
+        this.existingGrantExpiresAt = existingGrantExpiresAt;
     }
 
     public String getClientId() {
@@ -69,5 +79,23 @@ public class SsoAuthorizeContextResponse {
 
     public void setAlreadyAuthorized(boolean alreadyAuthorized) {
         this.alreadyAuthorized = alreadyAuthorized;
+    }
+
+    public String getExistingGrantMode() {
+        return existingGrantMode == null || existingGrantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : existingGrantMode;
+    }
+
+    public void setExistingGrantMode(String existingGrantMode) {
+        this.existingGrantMode = existingGrantMode;
+    }
+
+    public LocalDateTime getExistingGrantExpiresAt() {
+        return existingGrantExpiresAt;
+    }
+
+    public void setExistingGrantExpiresAt(LocalDateTime existingGrantExpiresAt) {
+        this.existingGrantExpiresAt = existingGrantExpiresAt;
     }
 }

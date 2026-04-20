@@ -1,5 +1,7 @@
 package cn.ksuser.api.dto;
 
+import cn.ksuser.api.service.AuthorizationGrantPolicy;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -14,13 +16,16 @@ public class Oauth2AuthorizedAppResponse {
     private List<String> scopes;
     private LocalDateTime authorizedAt;
     private LocalDateTime lastAuthorizedAt;
+    private String grantMode;
+    private LocalDateTime expiresAt;
 
     public Oauth2AuthorizedAppResponse() {
     }
 
     public Oauth2AuthorizedAppResponse(String appId, String appName, String logoUrl, String contactInfo,
                                        String redirectUri, List<String> scopes, LocalDateTime authorizedAt,
-                                       LocalDateTime lastAuthorizedAt) {
+                                       LocalDateTime lastAuthorizedAt, String grantMode,
+                                       LocalDateTime expiresAt) {
         this.appId = appId;
         this.appName = appName;
         this.logoUrl = logoUrl;
@@ -29,11 +34,16 @@ public class Oauth2AuthorizedAppResponse {
         this.scopes = scopes;
         this.authorizedAt = authorizedAt;
         this.lastAuthorizedAt = lastAuthorizedAt;
+        this.grantMode = grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+        this.expiresAt = expiresAt;
     }
 
     public Oauth2AuthorizedAppResponse(String appId, String appName, String logoUrl, String creatorName,
                                        String creatorVerificationType, String contactInfo, String redirectUri,
-                                       List<String> scopes, LocalDateTime authorizedAt, LocalDateTime lastAuthorizedAt) {
+                                       List<String> scopes, LocalDateTime authorizedAt, LocalDateTime lastAuthorizedAt,
+                                       String grantMode, LocalDateTime expiresAt) {
         this.appId = appId;
         this.appName = appName;
         this.logoUrl = logoUrl;
@@ -44,6 +54,10 @@ public class Oauth2AuthorizedAppResponse {
         this.scopes = scopes;
         this.authorizedAt = authorizedAt;
         this.lastAuthorizedAt = lastAuthorizedAt;
+        this.grantMode = grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+        this.expiresAt = expiresAt;
     }
 
     public String getAppId() {
@@ -124,5 +138,23 @@ public class Oauth2AuthorizedAppResponse {
 
     public void setLastAuthorizedAt(LocalDateTime lastAuthorizedAt) {
         this.lastAuthorizedAt = lastAuthorizedAt;
+    }
+
+    public String getGrantMode() {
+        return grantMode == null || grantMode.isBlank()
+            ? AuthorizationGrantPolicy.MODE_PERSISTENT
+            : grantMode;
+    }
+
+    public void setGrantMode(String grantMode) {
+        this.grantMode = grantMode;
+    }
+
+    public LocalDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(LocalDateTime expiresAt) {
+        this.expiresAt = expiresAt;
     }
 }

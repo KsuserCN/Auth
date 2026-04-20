@@ -9,6 +9,8 @@ public class SsoAuthorizeRequest {
     private String nonce;
     private String codeChallenge;
     private String codeChallengeMethod;
+    private String grantMode;
+    private Integer grantTtlSeconds;
 
     public String getClientId() {
         return clientId;
@@ -72,5 +74,21 @@ public class SsoAuthorizeRequest {
 
     public void setCodeChallengeMethod(String codeChallengeMethod) {
         this.codeChallengeMethod = codeChallengeMethod;
+    }
+
+    public String getGrantMode() {
+        return grantMode;
+    }
+
+    public void setGrantMode(String grantMode) {
+        this.grantMode = grantMode;
+    }
+
+    public Integer getGrantTtlSeconds() {
+        return grantTtlSeconds;
+    }
+
+    public void setGrantTtlSeconds(Integer grantTtlSeconds) {
+        this.grantTtlSeconds = grantTtlSeconds;
     }
 }

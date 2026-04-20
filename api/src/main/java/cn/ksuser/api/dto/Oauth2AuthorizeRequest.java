@@ -6,6 +6,8 @@ public class Oauth2AuthorizeRequest {
     private String responseType;
     private String scope;
     private String state;
+    private String grantMode;
+    private Integer grantTtlSeconds;
 
     public String getClientId() {
         return clientId;
@@ -45,5 +47,21 @@ public class Oauth2AuthorizeRequest {
 
     public void setState(String state) {
         this.state = state;
+    }
+
+    public String getGrantMode() {
+        return grantMode;
+    }
+
+    public void setGrantMode(String grantMode) {
+        this.grantMode = grantMode;
+    }
+
+    public Integer getGrantTtlSeconds() {
+        return grantTtlSeconds;
+    }
+
+    public void setGrantTtlSeconds(Integer grantTtlSeconds) {
+        this.grantTtlSeconds = grantTtlSeconds;
     }
 }
