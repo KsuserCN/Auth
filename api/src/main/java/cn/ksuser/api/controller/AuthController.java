@@ -73,6 +73,7 @@ public class AuthController {
     private final MfaService mfaService;
     private final SensitiveLogUtil sensitiveLogUtil;
     private final SessionTransferService sessionTransferService;
+    private final AccountRecoveryService accountRecoveryService;
     private final QrChallengeService qrChallengeService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
@@ -84,6 +85,7 @@ public class AuthController {
                           UserSettingsRepository userSettingsRepository, MfaService mfaService,
                           SensitiveLogUtil sensitiveLogUtil,
                           SessionTransferService sessionTransferService,
+                          AccountRecoveryService accountRecoveryService,
                           QrChallengeService qrChallengeService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
@@ -102,6 +104,7 @@ public class AuthController {
         this.mfaService = mfaService;
         this.sensitiveLogUtil = sensitiveLogUtil;
         this.sessionTransferService = sessionTransferService;
+        this.accountRecoveryService = accountRecoveryService;
         this.qrChallengeService = qrChallengeService;
     }
 
@@ -1060,6 +1063,198 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "跨端登录失败"));
         }
+    }
+
+    /**
+     * 由已登录设备创建一次性账号恢复授权
+     */
+    @PostMapping("/account-recovery/issue")
+    public ResponseEntity<ApiResponse<AccountRecoveryIssueResponse>> issueAccountRecovery(
+            Authentication authentication,
+            HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+        }
+
+        Long sponsorSessionId = getCurrentSessionId(request);
+        UserSession sponsorSession = sponsorSessionId == null
+            ? null
+            : userSessionService.findActiveSessionById(sponsorSessionId).orElse(null);
+        if (sponsorSession == null || !user.getId().equals(sponsorSession.getUser().getId())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前登录会话无效，请重新登录后再试"));
+        }
+
+        String userAgent = rateLimitService.getClientUserAgent(request);
+        try {
+            AccountRecoveryService.AccountRecoveryPayload payload =
+                accountRecoveryService.createAuthorization(user, sponsorSession.getId(), clientIp, userAgent);
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "恢复授权已生成",
+                    new AccountRecoveryIssueResponse(
+                        payload.getRecoveryCode(),
+                        AccountRecoveryService.DEFAULT_TTL_SECONDS,
+                        payload.getUsername(),
+                        payload.getMaskedEmail(),
+                        payload.getSponsorClientName(),
+                        payload.getSponsorBrowser(),
+                        payload.getSponsorSystem(),
+                        payload.getSponsorIpLocation()
+                    )));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "恢复授权生成失败"));
+        }
+    }
+
+    /**
+     * 查询账号恢复授权状态
+     */
+    @GetMapping("/account-recovery/status")
+    public ResponseEntity<ApiResponse<AccountRecoveryStatusResponse>> getAccountRecoveryStatus(
+            @RequestParam String recoveryCode) {
+        if (recoveryCode == null || recoveryCode.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "recoveryCode 不能为空"));
+        }
+
+        AccountRecoveryService.AccountRecoveryPayload payload =
+            accountRecoveryService.getAuthorization(recoveryCode);
+        if (payload == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, "恢复授权不存在、已失效或已被使用"));
+        }
+
+        User user = userService.findById(payload.getUserId()).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, "用户不存在"));
+        }
+
+        if (!isAccountRecoverySponsorSessionActive(payload, user)) {
+            return ResponseEntity.status(HttpStatus.GONE)
+                .body(new ApiResponse<>(410, "发起恢复授权的设备已退出登录，请重新发起"));
+        }
+
+        long remainingSeconds = accountRecoveryService.getRemainingSeconds(recoveryCode);
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "查询成功",
+                new AccountRecoveryStatusResponse(
+                    remainingSeconds > 0 ? remainingSeconds : 0,
+                    payload.getUsername(),
+                    payload.getMaskedEmail(),
+                    payload.getSponsorClientName(),
+                    payload.getSponsorBrowser(),
+                    payload.getSponsorSystem(),
+                    payload.getSponsorIpLocation()
+                )));
+    }
+
+    /**
+     * 使用已背书的恢复授权完成密码重置并签发新会话
+     */
+    @PostMapping("/account-recovery/complete")
+    public ResponseEntity<ApiResponse<TokenResponse>> completeAccountRecovery(
+            @RequestBody AccountRecoveryCompleteRequest requestBody,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        long startTime = System.currentTimeMillis();
+
+        if (requestBody == null || requestBody.getRecoveryCode() == null || requestBody.getRecoveryCode().isBlank()) {
+            sensitiveLogUtil.logChangePassword(request, null, false, "empty_recovery_code", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "recoveryCode 不能为空"));
+        }
+
+        String newPassword = requestBody.getNewPassword();
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            sensitiveLogUtil.logChangePassword(request, null, false, "empty_new_password", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "新密码不能为空"));
+        }
+
+        AccountRecoveryService.AccountRecoveryPayload previewPayload =
+            accountRecoveryService.getAuthorization(requestBody.getRecoveryCode());
+        if (previewPayload == null) {
+            sensitiveLogUtil.logChangePassword(request, null, false, "recovery_authorization_missing", startTime);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, "恢复授权不存在、已失效或已被使用"));
+        }
+
+        User user = userService.findById(previewPayload.getUserId()).orElse(null);
+        if (user == null) {
+            sensitiveLogUtil.logChangePassword(request, null, false, "user_not_found", startTime);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, "用户不存在"));
+        }
+
+        if (!isAccountRecoverySponsorSessionActive(previewPayload, user)) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "sponsor_session_inactive", startTime);
+            return ResponseEntity.status(HttpStatus.GONE)
+                .body(new ApiResponse<>(410, "发起恢复授权的设备已退出登录，请重新发起"));
+        }
+
+        if (!securityValidator.isValidPasswordLength(newPassword)) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "invalid_password_length", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码长度必须在" + appProperties.getPassword().getMinLength() +
+                    "-" + appProperties.getPassword().getMaxLength() + "个字符之间"));
+        }
+
+        if (!securityValidator.isStrongPassword(newPassword)) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "weak_password", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, buildPasswordRequirementMessage()));
+        }
+
+        if (securityValidator.isCommonWeakPassword(newPassword)) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "common_weak_password", startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "密码过于简单，请使用更复杂的密码"));
+        }
+
+        try {
+            accountRecoveryService.consumeAuthorization(requestBody.getRecoveryCode());
+        } catch (IllegalArgumentException e) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "recovery_authorization_missing", startTime);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(new ApiResponse<>(404, e.getMessage()));
+        } catch (IllegalStateException e) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "recovery_authorization_invalid", startTime);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "恢复授权读取失败"));
+        }
+
+        userService.updatePassword(user, newPassword);
+        userSessionService.revokeAllSessions(user);
+        sensitiveOperationService.clearVerification(user.getUuid());
+
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
+        TokenResponse tokenResponse = issueSessionToken(user, clientIp, userAgent, response);
+
+        sensitiveLogUtil.logChangePassword(request, user.getId(), true, null, startTime);
+        sensitiveLogUtil.logLogin(request, user.getId(), "ACCOUNT_RECOVERY", true, null, startTime);
+
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "账号恢复成功", tokenResponse));
     }
 
 
@@ -2537,6 +2732,17 @@ public class AuthController {
         String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
         setRefreshTokenCookie(response, refreshToken);
         return new TokenResponse(accessToken);
+    }
+
+    private boolean isAccountRecoverySponsorSessionActive(
+            AccountRecoveryService.AccountRecoveryPayload payload,
+            User user) {
+        if (payload == null || payload.getSponsorSessionId() == null || user == null || user.getId() == null) {
+            return false;
+        }
+
+        UserSession sponsorSession = userSessionService.findActiveSessionById(payload.getSponsorSessionId()).orElse(null);
+        return sponsorSession != null && user.getId().equals(sponsorSession.getUser().getId());
     }
 
     private String resolveBridgeLoginMethod(String target) {

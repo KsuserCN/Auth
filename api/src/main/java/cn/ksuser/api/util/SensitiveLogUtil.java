@@ -44,7 +44,7 @@ public class SensitiveLogUtil {
         UserSensitiveLog log = new UserSensitiveLog();
         log.setUserId(userId);
         log.setOperationType(operationType);
-        log.setLoginMethod(String.join(",", loginMethod));
+        log.setLoginMethod(loginMethod == null || loginMethod.isBlank() ? null : loginMethod);
         log.setResult(result);
         log.setFailureReason(failureReason);
 
