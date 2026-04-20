@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveLog, Long> {
@@ -73,6 +74,8 @@ public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveL
      * 查询用户5分钟内的操作记录
      */
     List<UserSensitiveLog> findByUserIdAndCreatedAtAfter(Long userId, LocalDateTime createdAt);
+
+    Optional<UserSensitiveLog> findTopByUserIdOrderByCreatedAtDesc(Long userId);
 
     /**
      * 将指定用户的敏感操作日志裁剪到最多保留 keep 条（保留最新的记录）。

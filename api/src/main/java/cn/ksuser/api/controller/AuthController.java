@@ -75,6 +75,7 @@ public class AuthController {
     private final SessionTransferService sessionTransferService;
     private final AccountRecoveryService accountRecoveryService;
     private final QrChallengeService qrChallengeService;
+    private final AdaptiveContinuousAuthService adaptiveContinuousAuthService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
@@ -86,7 +87,8 @@ public class AuthController {
                           SensitiveLogUtil sensitiveLogUtil,
                           SessionTransferService sessionTransferService,
                           AccountRecoveryService accountRecoveryService,
-                          QrChallengeService qrChallengeService) {
+                          QrChallengeService qrChallengeService,
+                          AdaptiveContinuousAuthService adaptiveContinuousAuthService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -106,6 +108,7 @@ public class AuthController {
         this.sessionTransferService = sessionTransferService;
         this.accountRecoveryService = accountRecoveryService;
         this.qrChallengeService = qrChallengeService;
+        this.adaptiveContinuousAuthService = adaptiveContinuousAuthService;
     }
 
     /**
@@ -2286,6 +2289,7 @@ public class AuthController {
 
             // 验证成功，标记用户已验证
             sensitiveOperationService.markVerified(uuid, clientIp);
+            strengthenCurrentSession(request, "password");
             verificationCodeService.clearLockAndError(user.getEmail());
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
@@ -2350,6 +2354,7 @@ public class AuthController {
 
             // 验证成功，标记用户已验证
             sensitiveOperationService.markVerified(uuid, clientIp);
+            strengthenCurrentSession(request, "email-code");
             verificationCodeService.clearLockAndError(email);
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
@@ -2388,6 +2393,7 @@ public class AuthController {
 
             // 验证成功，标记用户已验证
             sensitiveOperationService.markVerified(uuid, clientIp);
+            strengthenCurrentSession(request, "totp");
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
@@ -2560,6 +2566,33 @@ public class AuthController {
             sensitiveMethods
         );
 
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "查询成功", response));
+    }
+
+    @GetMapping("/adaptive-auth/status")
+    public ResponseEntity<ApiResponse<AdaptiveAuthStatusResponse>> getAdaptiveAuthStatus(
+            Authentication authentication,
+            HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        Long currentSessionId = getCurrentSessionId(request);
+        UserSession session = currentSessionId == null
+            ? null
+            : userSessionService.findActiveSessionById(currentSessionId).orElse(null);
+        String clientIp = rateLimitService.getClientIp(request);
+
+        AdaptiveAuthStatusResponse response = adaptiveContinuousAuthService.evaluate(user, session, clientIp);
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "查询成功", response));
     }
@@ -2779,6 +2812,18 @@ public class AuthController {
         String accessToken = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
         setRefreshTokenCookie(response, refreshToken);
         return new TokenResponse(accessToken);
+    }
+
+    private void strengthenCurrentSession(HttpServletRequest request, String method) {
+        Long currentSessionId = getCurrentSessionId(request);
+        if (currentSessionId == null) {
+            return;
+        }
+        UserSession session = userSessionService.findActiveSessionById(currentSessionId).orElse(null);
+        if (session == null) {
+            return;
+        }
+        userSessionService.markStepUpVerified(session, method);
     }
 
     private boolean isAccountRecoverySponsorSessionActive(
@@ -3058,6 +3103,7 @@ public class AuthController {
             
             String clientIp = rateLimitService.getClientIp(httpRequest);
             sensitiveOperationService.markVerified(uuid, clientIp);
+            strengthenCurrentSession(httpRequest, "passkey");
             sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), true, null, startTime);
             
             return ResponseEntity.status(HttpStatus.OK)

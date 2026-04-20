@@ -154,6 +154,16 @@ public class UserSessionService {
         return userSessionRepository.save(session);
     }
 
+    public UserSession markStepUpVerified(UserSession session, String method) {
+        LocalDateTime now = LocalDateTime.now();
+        session.setLastMfaVerifiedAt(now);
+        session.setLastSeenAt(now);
+        if (method != null && !method.isBlank()) {
+            session.setAuthMethod("step-up:" + method.trim().toLowerCase());
+        }
+        return userSessionRepository.save(session);
+    }
+
     public UserSession revokeSession(UserSession session) {
         session.setRevokedAt(LocalDateTime.now());
         return userSessionRepository.save(session);
