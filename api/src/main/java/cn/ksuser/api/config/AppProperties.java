@@ -17,6 +17,7 @@ public class AppProperties {
     private final RateLimit rateLimit = new RateLimit();
     private final SensitiveOperation sensitiveOperation = new SensitiveOperation();
     private final Passkey passkey = new Passkey();
+    private final MobileBridge mobileBridge = new MobileBridge();
     private final Oauth oauth = new Oauth();
     private final Qq qq = new Qq();
     private final Google google = new Google();
@@ -48,6 +49,10 @@ public class AppProperties {
 
     public Passkey getPasskey() {
         return passkey;
+    }
+
+    public MobileBridge getMobileBridge() {
+        return mobileBridge;
     }
 
     public Oauth getOauth() { return oauth; }
@@ -182,6 +187,27 @@ public class AppProperties {
 
         public java.util.List<String> getRedirectUris() { return redirectUris; }
         public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
+    }
+
+    public static class MobileBridge {
+        private String appLinkOrigin = "https://auth.ksuser.cn";
+        private java.util.List<String> allowedReturnOrigins = new java.util.ArrayList<>();
+
+        public String getAppLinkOrigin() {
+            return appLinkOrigin;
+        }
+
+        public void setAppLinkOrigin(String appLinkOrigin) {
+            this.appLinkOrigin = appLinkOrigin;
+        }
+
+        public java.util.List<String> getAllowedReturnOrigins() {
+            return allowedReturnOrigins;
+        }
+
+        public void setAllowedReturnOrigins(java.util.List<String> allowedReturnOrigins) {
+            this.allowedReturnOrigins = allowedReturnOrigins;
+        }
     }
 
     /**

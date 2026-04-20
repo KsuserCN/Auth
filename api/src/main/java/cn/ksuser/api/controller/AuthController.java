@@ -73,6 +73,7 @@ public class AuthController {
     private final MfaService mfaService;
     private final SensitiveLogUtil sensitiveLogUtil;
     private final SessionTransferService sessionTransferService;
+    private final MobileBridgeService mobileBridgeService;
     private final AccountRecoveryService accountRecoveryService;
     private final QrChallengeService qrChallengeService;
     private final AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService;
@@ -87,6 +88,7 @@ public class AuthController {
                           UserSettingsRepository userSettingsRepository, MfaService mfaService,
                           SensitiveLogUtil sensitiveLogUtil,
                           SessionTransferService sessionTransferService,
+                          MobileBridgeService mobileBridgeService,
                           AccountRecoveryService accountRecoveryService,
                           QrChallengeService qrChallengeService,
                           AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService,
@@ -108,6 +110,7 @@ public class AuthController {
         this.mfaService = mfaService;
         this.sensitiveLogUtil = sensitiveLogUtil;
         this.sessionTransferService = sessionTransferService;
+        this.mobileBridgeService = mobileBridgeService;
         this.accountRecoveryService = accountRecoveryService;
         this.qrChallengeService = qrChallengeService;
         this.adaptiveRiskOrchestrationService = adaptiveRiskOrchestrationService;
@@ -1068,6 +1071,133 @@ public class AuthController {
             sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, "跨端登录失败"));
+        }
+    }
+
+    @PostMapping("/mobile-bridge/create")
+    public ResponseEntity<ApiResponse<MobileBridgeCreateResponse>> createMobileBridgeChallenge(
+            @RequestBody MobileBridgeCreateRequest requestBody) {
+        if (requestBody == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "请求体不能为空"));
+        }
+
+        try {
+            MobileBridgeService.MobileBridgePayload payload = mobileBridgeService.createChallenge(
+                requestBody.getReturnUrl(),
+                requestBody.getClientNonce()
+            );
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "移动桥接挑战已创建", new MobileBridgeCreateResponse(
+                    payload.getChallengeId(),
+                    payload.getAppLink(),
+                    MobileBridgeService.DEFAULT_TTL_SECONDS
+                )));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "移动桥接挑战创建失败"));
+        }
+    }
+
+    @PostMapping("/mobile-bridge/approve")
+    public ResponseEntity<ApiResponse<MobileBridgeApproveResponse>> approveMobileBridgeChallenge(
+            @RequestBody MobileBridgeApproveRequest requestBody,
+            Authentication authentication,
+            HttpServletRequest request) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+        if (requestBody == null || requestBody.getChallengeId() == null || requestBody.getChallengeId().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        try {
+            MobileBridgeService.MobileBridgePayload payload = mobileBridgeService.approveChallenge(
+                requestBody.getChallengeId(),
+                user.getId(),
+                rateLimitService.getClientIp(request),
+                rateLimitService.getClientUserAgent(request)
+            );
+            long expiresInSeconds = mobileBridgeService.getRemainingSeconds(payload.getChallengeId());
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "网页登录确认成功", new MobileBridgeApproveResponse(
+                    payload.getChallengeId(),
+                    payload.getReturnUrl(),
+                    payload.getReturnOrigin(),
+                    expiresInSeconds
+                )));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "网页登录确认失败"));
+        }
+    }
+
+    @PostMapping("/mobile-bridge/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelMobileBridgeChallenge(
+            @RequestBody MobileBridgeCancelRequest requestBody) {
+        if (requestBody == null || requestBody.getChallengeId() == null || requestBody.getChallengeId().isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+        }
+
+        try {
+            mobileBridgeService.cancelChallenge(requestBody.getChallengeId());
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "移动桥接挑战已取消"));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "移动桥接挑战取消失败"));
+        }
+    }
+
+    @GetMapping("/mobile-bridge/status")
+    public ResponseEntity<ApiResponse<MobileBridgeStatusResponse>> getMobileBridgeChallengeStatus(
+            @RequestParam String challengeId) {
+        if (challengeId == null || challengeId.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+        }
+
+        try {
+            MobileBridgeService.MobileBridgePayload payload = mobileBridgeService.getChallenge(challengeId);
+            if (payload == null) {
+                return ResponseEntity.status(HttpStatus.OK)
+                    .body(new ApiResponse<>(200, "移动桥接挑战已过期", new MobileBridgeStatusResponse(
+                        MobileBridgeService.STATUS_EXPIRED,
+                        null,
+                        null,
+                        null,
+                        0L
+                    )));
+            }
+
+            long expiresInSeconds = mobileBridgeService.getRemainingSeconds(payload.getChallengeId());
+            return ResponseEntity.status(HttpStatus.OK)
+                .body(new ApiResponse<>(200, "获取成功", new MobileBridgeStatusResponse(
+                    payload.getStatus(),
+                    payload.getTransferCode(),
+                    payload.getReturnUrl(),
+                    payload.getReturnOrigin(),
+                    expiresInSeconds
+                )));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiResponse<>(500, "获取移动桥接状态失败"));
         }
     }
 

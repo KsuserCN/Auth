@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class SessionTransferServiceTest {
 
-    private final SessionTransferService service = new SessionTransferService(null);
+    private final SessionTransferService service = new SessionTransferService(null, null, null);
 
     @Test
     void shouldNormalizeSupportedTargets() {
