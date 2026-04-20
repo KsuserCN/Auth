@@ -444,6 +444,7 @@ export interface QrChallengeStatusResponse {
   status: 'pending' | 'approved' | 'rejected' | 'expired'
   expiresInSeconds: number
   transferCode?: string
+  recoveryCode?: string
   mfaChallengeId?: string
   method?: MFAMethod
   methods?: MFAMethod[]
@@ -465,6 +466,14 @@ export const initQrMfa = async (mfaChallengeId: string): Promise<QrChallengeInit
 export const initQrSensitive = async (): Promise<QrChallengeInitResponse> => {
   const response = await request.post<ApiResponse<QrChallengeInitResponse>>(
     '/auth/qr/sensitive/init',
+    {},
+  )
+  return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
+}
+
+export const initQrAccountRecovery = async (): Promise<QrChallengeInitResponse> => {
+  const response = await request.post<ApiResponse<QrChallengeInitResponse>>(
+    '/auth/account-recovery/qr/init',
     {},
   )
   return (response as unknown as ApiResponse<QrChallengeInitResponse>).data

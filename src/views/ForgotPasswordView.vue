@@ -48,6 +48,28 @@
               </el-form-item>
             </el-form>
 
+            <div class="qr-entry-card">
+              <div class="qr-entry-header">
+                <div>
+                  <div class="qr-entry-title">使用手机扫码背书</div>
+                  <p class="qr-entry-desc">
+                    如果你的 Android 客户端已登录，可在手机端打开“安全”页后扫码，为当前恢复请求直接背书。
+                  </p>
+                </div>
+                <el-button :loading="qrRecoveryLoading" @click="handleInitQrRecovery">
+                  {{ qrRecoveryImage ? '刷新二维码' : '生成二维码' }}
+                </el-button>
+              </div>
+
+              <div v-if="qrRecoveryImage" class="qr-recovery-panel">
+                <img :src="qrRecoveryImage" alt="手机扫码背书二维码" class="qr-recovery-image" />
+                <div class="qr-recovery-meta">
+                  <span>剩余有效期：{{ Math.max(qrRecoveryExpiresInSeconds, 0) }} 秒</span>
+                  <span>手机端扫码确认后，当前页面会自动回填恢复码。</span>
+                </div>
+              </div>
+            </div>
+
             <div class="step-actions">
               <el-button class="back-btn" @click="goToLogin">返回登录</el-button>
               <el-button class="next-btn" :loading="recoveryLoading" @click="loadRecoveryContext">
@@ -140,6 +162,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
+import QRCode from 'qrcode'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
@@ -154,8 +177,11 @@ import {
   completeAccountRecovery,
   getAccountRecoveryStatus,
   getPasswordRequirement,
+  initQrAccountRecovery,
+  pollQrStatus,
   type AccountRecoveryStatusResponse,
   type PasswordRequirement,
+  type QrChallengeStatusResponse,
 } from '@/api/auth'
 import { storeAuthSession } from '@/utils/authSession'
 import { setRequestBaseUrl } from '@/utils/request'
@@ -189,6 +215,11 @@ const submitLoading = ref(false)
 const recoveryStatus = ref<AccountRecoveryStatusResponse | null>(null)
 const recoveryInput = ref({ recoveryCode: '' })
 const passwordInput = ref({ newPassword: '', confirmPassword: '' })
+const qrRecoveryLoading = ref(false)
+const qrRecoveryImage = ref('')
+const qrRecoveryExpiresInSeconds = ref(0)
+const qrRecoveryChallengeId = ref('')
+const qrRecoveryPollToken = ref('')
 
 const passwordRequirement = ref<PasswordRequirement>({
   minLength: 6,
@@ -201,12 +232,28 @@ const passwordRequirement = ref<PasswordRequirement>({
   requirementMessage: '密码强度不足：需包含大写字母、小写字母、数字',
 })
 let recoveryCountdownTimer: number | null = null
+let qrRecoveryPollingTimer: number | null = null
 
 const clearRecoveryCountdown = () => {
   if (recoveryCountdownTimer !== null) {
     window.clearInterval(recoveryCountdownTimer)
     recoveryCountdownTimer = null
   }
+}
+
+const clearQrRecoveryPolling = () => {
+  if (qrRecoveryPollingTimer !== null) {
+    window.clearInterval(qrRecoveryPollingTimer)
+    qrRecoveryPollingTimer = null
+  }
+}
+
+const resetQrRecoveryFlow = () => {
+  clearQrRecoveryPolling()
+  qrRecoveryChallengeId.value = ''
+  qrRecoveryPollToken.value = ''
+  qrRecoveryImage.value = ''
+  qrRecoveryExpiresInSeconds.value = 0
 }
 
 const startRecoveryCountdown = () => {
@@ -337,6 +384,7 @@ const loadRecoveryContext = async () => {
 
     const normalized = recoveryInput.value.recoveryCode.trim()
     const status = await getAccountRecoveryStatus(normalized)
+    resetQrRecoveryFlow()
     recoveryStatus.value = status
     startRecoveryCountdown()
     recoveryInput.value.recoveryCode = normalized
@@ -347,6 +395,74 @@ const loadRecoveryContext = async () => {
     console.error('Load recovery context failed:', error)
   } finally {
     recoveryLoading.value = false
+  }
+}
+
+const handleQrRecoveryApproved = async (status: QrChallengeStatusResponse) => {
+  if (!status.recoveryCode) {
+    ElMessage.error('手机扫码背书结果无效，请刷新二维码后重试')
+    return
+  }
+  recoveryInput.value.recoveryCode = status.recoveryCode.trim()
+  ElMessage.success('手机扫码背书已通过')
+  await loadRecoveryContext()
+}
+
+const pollRecoveryQrStatus = async () => {
+  if (!qrRecoveryChallengeId.value || !qrRecoveryPollToken.value) return
+
+  try {
+    const status = await pollQrStatus(qrRecoveryChallengeId.value, qrRecoveryPollToken.value)
+    qrRecoveryExpiresInSeconds.value = status.expiresInSeconds || 0
+
+    if (status.status === 'pending') {
+      return
+    }
+
+    clearQrRecoveryPolling()
+
+    if (status.status === 'approved') {
+      await handleQrRecoveryApproved(status)
+      return
+    }
+
+    if (status.status === 'rejected') {
+      ElMessage.error('手机扫码背书已被拒绝，请刷新二维码后重试')
+      return
+    }
+
+    ElMessage.warning('扫码背书二维码已过期，请重新生成')
+  } catch (error) {
+    clearQrRecoveryPolling()
+    console.error('Poll account recovery QR status failed:', error)
+  }
+}
+
+const startQrRecoveryPolling = () => {
+  clearQrRecoveryPolling()
+  qrRecoveryPollingTimer = window.setInterval(() => {
+    void pollRecoveryQrStatus()
+  }, 2000)
+  void pollRecoveryQrStatus()
+}
+
+const handleInitQrRecovery = async () => {
+  try {
+    qrRecoveryLoading.value = true
+    const payload = await initQrAccountRecovery()
+    qrRecoveryChallengeId.value = payload.challengeId
+    qrRecoveryPollToken.value = payload.pollToken
+    qrRecoveryExpiresInSeconds.value = payload.expiresInSeconds
+    qrRecoveryImage.value = await QRCode.toDataURL(payload.qrText, {
+      width: 240,
+      margin: 1,
+    })
+    startQrRecoveryPolling()
+  } catch (error) {
+    console.error('Init account recovery QR failed:', error)
+    ElMessage.error('生成手机扫码背书二维码失败，请重试')
+  } finally {
+    qrRecoveryLoading.value = false
   }
 }
 
@@ -415,6 +531,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearRecoveryCountdown()
+  clearQrRecoveryPolling()
 })
 </script>
 
@@ -595,6 +712,60 @@ onBeforeUnmount(() => {
   margin-top: 24px;
 }
 
+.qr-entry-card {
+  margin-top: 8px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-lighter);
+}
+
+.qr-entry-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.qr-entry-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.qr-entry-desc {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+.qr-recovery-panel {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.qr-recovery-image {
+  width: 220px;
+  height: 220px;
+  border-radius: 16px;
+  background: #fff;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.qr-recovery-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
 .back-btn,
 .next-btn {
   height: 44px;
@@ -686,6 +857,10 @@ onBeforeUnmount(() => {
   .login-left,
   .login-right {
     padding: 28px 24px;
+  }
+
+  .qr-entry-header {
+    flex-direction: column;
   }
 }
 </style>
