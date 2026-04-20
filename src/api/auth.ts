@@ -357,6 +357,29 @@ export interface SessionTransferResponse {
   expiresInSeconds: number
 }
 
+export interface MobileBridgeCreateResponse {
+  challengeId: string
+  appLink: string
+  expiresInSeconds: number
+}
+
+export type MobileBridgeStatus = 'pending' | 'approved' | 'expired' | 'cancelled'
+
+export interface MobileBridgeStatusResponse {
+  status: MobileBridgeStatus
+  transferCode?: string
+  returnUrl?: string
+  returnOrigin?: string
+  expiresInSeconds: number
+}
+
+export interface MobileBridgeApproveResponse {
+  challengeId: string
+  returnUrl: string
+  returnOrigin?: string
+  expiresInSeconds: number
+}
+
 export const createSessionTransfer = async (
   target: SessionTransferTarget,
   purpose?: SessionTransferPurpose,
@@ -377,6 +400,50 @@ export const exchangeSessionTransfer = async (
     { transferCode, target },
   )
   return response.data as unknown as LoginResponse
+}
+
+export const createMobileBridgeChallenge = async (
+  returnUrl: string,
+  clientNonce: string,
+): Promise<MobileBridgeCreateResponse> => {
+  const response = await request.post<ApiResponse<MobileBridgeCreateResponse>>(
+    '/auth/mobile-bridge/create',
+    { returnUrl, clientNonce },
+    { _suppressErrorToast: true } as any,
+  )
+  return response.data as unknown as MobileBridgeCreateResponse
+}
+
+export const getMobileBridgeStatus = async (
+  challengeId: string,
+): Promise<MobileBridgeStatusResponse> => {
+  const response = await request.get<ApiResponse<MobileBridgeStatusResponse>>(
+    '/auth/mobile-bridge/status',
+    {
+      params: { challengeId },
+      _suppressErrorToast: true,
+    } as any,
+  )
+  return response.data as unknown as MobileBridgeStatusResponse
+}
+
+export const approveMobileBridgeChallenge = async (
+  challengeId: string,
+): Promise<MobileBridgeApproveResponse> => {
+  const response = await request.post<ApiResponse<MobileBridgeApproveResponse>>(
+    '/auth/mobile-bridge/approve',
+    { challengeId },
+    { _suppressErrorToast: true } as any,
+  )
+  return response.data as unknown as MobileBridgeApproveResponse
+}
+
+export const cancelMobileBridgeChallenge = async (challengeId: string): Promise<void> => {
+  await request.post<ApiResponse<void>>(
+    '/auth/mobile-bridge/cancel',
+    { challengeId },
+    { _suppressErrorToast: true } as any,
+  )
 }
 
 export interface AccountRecoveryTicketResponse {

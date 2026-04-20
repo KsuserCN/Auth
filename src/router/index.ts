@@ -111,6 +111,11 @@ const router = createRouter({
       component: () => import('../views/DesktopPasskeyBridgeView.vue'),
     },
     {
+      path: '/app/bridge-login',
+      name: 'mobile-bridge-launch',
+      component: () => import('../views/MobileBridgeLaunchView.vue'),
+    },
+    {
       path: '/oauth/authorize',
       name: 'oauth-authorize',
       component: () => import('../views/OAuthAuthorizeView.vue'),

@@ -112,6 +112,42 @@
                     使用桌面端登录
                   </el-button>
                 </div>
+
+                <div v-if="mobileBridgeAvailable" class="mobile-bridge-card">
+                  <div class="mobile-bridge-copy">
+                    <div class="mobile-bridge-title">
+                      {{ mobileBridgeAwaitingApproval ? '正在等待 App 确认' : '使用安卓 App 登录' }}
+                    </div>
+                    <div class="mobile-bridge-description">
+                      {{
+                        mobileBridgeAwaitingApproval
+                          ? '请切回 Ksuser App 完成确认；确认后当前网页会自动登录。'
+                          : '在已登录的 Ksuser 安卓 App 中确认一次，无需手动输入密码。'
+                      }}
+                    </div>
+                    <div v-if="mobileBridgeFallbackHint" class="mobile-bridge-tip">
+                      当前设备未自动切回 App；你仍可重试拉起，或继续使用普通登录。
+                    </div>
+                  </div>
+                  <div class="mobile-bridge-actions">
+                    <el-button
+                      class="mobile-bridge-btn"
+                      type="primary"
+                      @click="handleMobileBridgeLogin"
+                      :loading="mobileBridgeLoading"
+                    >
+                      {{ mobileBridgeAwaitingApproval ? '重新打开 App' : '使用 App 登录' }}
+                    </el-button>
+                    <el-button
+                      v-if="mobileBridgeAwaitingApproval"
+                      class="mobile-bridge-cancel"
+                      link
+                      @click="clearMobileBridgeChallenge"
+                    >
+                      取消等待
+                    </el-button>
+                  </div>
+                </div>
               </div>
 
           <!-- 第二步：选择登录方式 -->
@@ -450,6 +486,7 @@ import {
   buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
+  cancelMobileBridgeChallenge,
   exchangeSessionTransfer,
   initQrLogin,
   initQrMfa,
@@ -468,6 +505,16 @@ import {
   syncCurrentWebSessionToDesktop,
   type DesktopBridgeUser,
 } from '@/utils/desktopBridge'
+import {
+  buildMobileBridgeReturnUrl,
+  createMobileBridgeLogin,
+  fetchMobileBridgeStatus,
+  getMobileBridgeChallengeIdFromUrl,
+  isAndroidMobileBridgeSupported,
+  launchMobileBridgeApp,
+  readMobileBridgeFallbackFlag,
+  stripMobileBridgeQuery,
+} from '@/utils/mobileBridge'
 import { getStoredAccessToken, hydrateSessionStorageFromSharedStorage } from '@/utils/authSession'
 import { consumePostLoginRedirect, normalizePostLoginRedirect, persistPostLoginRedirect } from '@/utils/postLoginRedirect'
 import { setRequestBaseUrl } from '@/utils/request'
@@ -657,18 +704,37 @@ const isPasskeySupported = ref(false)
 const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
 const desktopBridgeLoginLoading = ref(false)
 const loginBootstrapping = ref(true)
+const mobileBridgeLoading = ref(false)
+const mobileBridgeAwaitingApproval = ref(false)
+const mobileBridgeChallengeId = ref('')
+let mobileBridgePollingTimer: number | null = null
 
 const desktopBridgeReady = computed(() => {
   return !!desktopBridgeUser.value && step.value === 'email'
 })
 const desktopBridgeHint = computed(() => route.query.desktopBridge === '1')
+const mobileBridgeSupported = computed(() => step.value === 'email' && isAndroidMobileBridgeSupported())
+const mobileBridgeAvailable = computed(() => mobileBridgeSupported.value)
+const mobileBridgeFallbackHint = computed(() => {
+  const url = new URL(window.location.href)
+  return readMobileBridgeFallbackFlag(url)
+})
+const hasPendingMobileBridgeChallenge = computed(() => {
+  return mobileBridgeAwaitingApproval.value || !!mobileBridgeChallengeId.value
+})
 const loginBootstrapTitle = computed(() =>
-  desktopBridgeHint.value ? '正在识别网页登录状态' : '正在初始化登录状态',
+  desktopBridgeHint.value
+    ? '正在识别网页登录状态'
+    : hasPendingMobileBridgeChallenge.value
+      ? '正在等待 App 登录确认'
+      : '正在初始化登录状态',
 )
 const loginBootstrapDescription = computed(() =>
   desktopBridgeHint.value
     ? '如果当前浏览器已登录，页面会直接跳转，并同步桌面端状态。'
-    : '请稍候，系统正在检查当前浏览器是否已有可复用的登录会话。',
+    : hasPendingMobileBridgeChallenge.value
+      ? '请在已登录的安卓 App 中确认本次网页登录；确认后当前网页会自动完成登录。'
+      : '请稍候，系统正在检查当前浏览器是否已有可复用的登录会话。',
 )
 
 const getDirectPostLoginTarget = () => {
@@ -695,6 +761,102 @@ const navigateAfterLogin = async () => {
 
 const persistCurrentPostLoginRedirect = () => {
   persistPostLoginRedirect(typeof route.query.redirect === 'string' ? route.query.redirect : null)
+}
+
+const cleanupMobileBridgePolling = () => {
+  if (mobileBridgePollingTimer !== null) {
+    clearInterval(mobileBridgePollingTimer)
+    mobileBridgePollingTimer = null
+  }
+}
+
+const replaceRouteWithoutMobileBridgeQuery = async () => {
+  const nextUrl = stripMobileBridgeQuery(new URL(window.location.href))
+  const nextQuery = Object.fromEntries(nextUrl.searchParams.entries())
+  await router.replace({
+    path: route.path,
+    query: nextQuery,
+  })
+}
+
+const resetMobileBridgeState = async (clearRoute = false) => {
+  cleanupMobileBridgePolling()
+  mobileBridgeAwaitingApproval.value = false
+  mobileBridgeChallengeId.value = ''
+  if (clearRoute) {
+    await replaceRouteWithoutMobileBridgeQuery()
+  }
+}
+
+const exchangeApprovedMobileBridge = async (transferCode: string) => {
+  const response = await exchangeSessionTransfer(transferCode, 'web')
+  await finalizeWebLogin({
+    accessToken: response.accessToken,
+    user: response.user,
+    syncDesktop: false,
+  })
+  ElMessage.success('已使用安卓 App 登录')
+  await navigateAfterLogin()
+}
+
+const pollMobileBridgeStatus = async () => {
+  if (!mobileBridgeChallengeId.value) {
+    cleanupMobileBridgePolling()
+    return
+  }
+
+  try {
+    const status = await fetchMobileBridgeStatus(mobileBridgeChallengeId.value)
+    if (status.status === 'pending') {
+      mobileBridgeAwaitingApproval.value = true
+      return
+    }
+
+    cleanupMobileBridgePolling()
+
+    if (status.status === 'approved' && status.transferCode) {
+      await exchangeApprovedMobileBridge(status.transferCode)
+      return
+    }
+
+    if (status.status === 'cancelled') {
+      ElMessage.info('App 端已取消本次网页登录请求')
+    } else {
+      ElMessage.warning('App 登录请求已过期，请重试')
+    }
+    await resetMobileBridgeState(true)
+  } catch (error: unknown) {
+    cleanupMobileBridgePolling()
+    const message = error instanceof Error ? error.message : '检查 App 登录状态失败'
+    ElMessage.error(message)
+    await resetMobileBridgeState(false)
+  }
+}
+
+const startMobileBridgePolling = () => {
+  cleanupMobileBridgePolling()
+  mobileBridgeAwaitingApproval.value = true
+  mobileBridgePollingTimer = window.setInterval(() => {
+    void pollMobileBridgeStatus()
+  }, 2000)
+  void pollMobileBridgeStatus()
+}
+
+const resumePendingMobileBridge = async (): Promise<boolean> => {
+  const challengeId = getMobileBridgeChallengeIdFromUrl(new URL(window.location.href))
+  if (!challengeId) {
+    if (mobileBridgeFallbackHint.value) {
+      await replaceRouteWithoutMobileBridgeQuery()
+    }
+    return false
+  }
+
+  mobileBridgeChallengeId.value = challengeId
+  if (mobileBridgeFallbackHint.value) {
+    ElMessage.warning('未自动打开 Ksuser App，请确认已安装后重试，或继续使用普通登录')
+  }
+  startMobileBridgePolling()
+  return true
 }
 
 const normalizeMfaMethods = (
@@ -981,8 +1143,9 @@ onMounted(() => {
 const shouldBlockLoginBootstrap = (): boolean => {
   const transferCode =
     typeof route.query.transferCode === 'string' ? route.query.transferCode.trim() : ''
+  const mobileBridgeChallengeId = getMobileBridgeChallengeIdFromUrl(new URL(window.location.href))
 
-  if (desktopBridgeHint.value || transferCode) {
+  if (desktopBridgeHint.value || transferCode || mobileBridgeChallengeId) {
     return true
   }
 
@@ -1014,6 +1177,10 @@ const initializeLoginView = async () => {
         ElMessage.success(synced ? '已复用当前网页登录，并同步到桌面端' : '当前网页已登录')
       }
       await navigateAfterLogin()
+      return
+    }
+
+    if (await resumePendingMobileBridge()) {
       return
     }
 
@@ -1640,6 +1807,42 @@ const handleDesktopBridgeLogin = async () => {
   }
 }
 
+const clearMobileBridgeChallenge = async () => {
+  if (mobileBridgeChallengeId.value) {
+    await cancelMobileBridgeChallenge(mobileBridgeChallengeId.value).catch(() => undefined)
+  }
+  await resetMobileBridgeState(true)
+}
+
+const handleMobileBridgeLogin = async () => {
+  if (mobileBridgeLoading.value) {
+    return
+  }
+
+  try {
+    mobileBridgeLoading.value = true
+    const challenge = await createMobileBridgeLogin()
+    mobileBridgeChallengeId.value = challenge.challengeId
+
+    const nextReturnUrl = buildMobileBridgeReturnUrl(challenge.challengeId)
+    const nextUrl = new URL(nextReturnUrl)
+    await router.replace({
+      path: route.path,
+      query: Object.fromEntries(nextUrl.searchParams.entries()),
+    })
+
+    mobileBridgeAwaitingApproval.value = true
+    startMobileBridgePolling()
+    launchMobileBridgeApp(challenge.appLink)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '拉起安卓 App 失败'
+    ElMessage.error(message)
+    await resetMobileBridgeState(false)
+  } finally {
+    mobileBridgeLoading.value = false
+  }
+}
+
 const backToMfaMethodOrSource = () => {
   if (canChooseMfaMethod()) {
     updateStep('mfa-method')
@@ -1669,6 +1872,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cleanupCodeCountdown()
   cleanupQrPolling()
+  cleanupMobileBridgePolling()
   window.removeEventListener('keypress', handleKeyPress)
 })
 </script>
@@ -2349,8 +2553,67 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.mobile-bridge-card {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(32, 100, 224, 0.16);
+  background:
+    linear-gradient(160deg, rgba(238, 246, 255, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mobile-bridge-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-bridge-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.mobile-bridge-description {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+
+.mobile-bridge-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #2156b7;
+}
+
+.mobile-bridge-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mobile-bridge-btn {
+  min-width: 116px;
+}
+
+.mobile-bridge-cancel {
+  padding: 0;
+}
+
 @media (max-width: 820px) {
   .desktop-bridge-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .mobile-bridge-card {
     align-items: flex-start;
     flex-wrap: wrap;
   }
@@ -2358,12 +2621,25 @@ onBeforeUnmount(() => {
   .desktop-bridge-btn {
     margin-left: auto;
   }
+
+  .mobile-bridge-actions {
+    width: 100%;
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 640px) {
   .desktop-bridge-btn {
     width: 100%;
     margin-left: 0;
+  }
+
+  .mobile-bridge-btn {
+    width: 100%;
+  }
+
+  .mobile-bridge-actions {
+    align-items: stretch;
   }
 }
 
