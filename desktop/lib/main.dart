@@ -1394,6 +1394,7 @@ class AppController extends ChangeNotifier {
   List<SensitiveLogItem> sensitiveLogs = <SensitiveLogItem>[];
   List<PasskeyListItem> passkeys = <PasskeyListItem>[];
   TotpStatusResponse? totpStatus;
+  AdaptiveAuthStatus? adaptiveAuthStatus;
   PasswordRequirement? passwordRequirement;
   MFAChallenge? pendingMfaChallenge;
   bool workspaceLoading = false;
@@ -1441,6 +1442,7 @@ class AppController extends ChangeNotifier {
     sensitiveLogs = <SensitiveLogItem>[];
     passkeys = <PasskeyListItem>[];
     totpStatus = null;
+    adaptiveAuthStatus = null;
     pendingMfaChallenge = null;
     workspaceError = null;
     selectedSection = DesktopSection.overview;
@@ -1707,6 +1709,7 @@ class AppController extends ChangeNotifier {
       );
       passkeys = await _loadPasskeys();
       totpStatus = await _loadTotpStatus();
+      adaptiveAuthStatus = await _loadAdaptiveAuthStatus();
     } catch (error) {
       workspaceError = error is ApiException ? error.message : '加载桌面数据失败';
       rethrow;
@@ -1742,6 +1745,13 @@ class AppController extends ChangeNotifier {
   Future<void> refreshTotpStatus() async {
     await runBusyAction('正在刷新 TOTP 状态...', () async {
       totpStatus = await _loadTotpStatus();
+      notifyListeners();
+    });
+  }
+
+  Future<void> refreshAdaptiveAuthStatus() async {
+    await runBusyAction('正在刷新连续认证状态...', () async {
+      adaptiveAuthStatus = await _loadAdaptiveAuthStatus();
       notifyListeners();
     });
   }
@@ -1794,6 +1804,16 @@ class AppController extends ChangeNotifier {
         authorized: true,
       );
       return SensitiveVerificationStatus.fromJson(asMap(data));
+    });
+  }
+
+  Future<AdaptiveAuthStatus> getAdaptiveAuthStatus() async {
+    return runBusyAction('正在检查连续认证状态...', () async {
+      final dynamic data = await _apiClient.get(
+        '/auth/adaptive-auth/status',
+        authorized: true,
+      );
+      return AdaptiveAuthStatus.fromJson(asMap(data));
     });
   }
 
@@ -2192,6 +2212,14 @@ class AppController extends ChangeNotifier {
     return asList(
       payload['passkeys'],
     ).map((dynamic item) => PasskeyListItem.fromJson(asMap(item))).toList();
+  }
+
+  Future<AdaptiveAuthStatus> _loadAdaptiveAuthStatus() async {
+    final dynamic data = await _apiClient.get(
+      '/auth/adaptive-auth/status',
+      authorized: true,
+    );
+    return AdaptiveAuthStatus.fromJson(asMap(data));
   }
 
   Future<TotpStatusResponse> _loadTotpStatus() async {
@@ -4630,6 +4658,12 @@ class SecurityPage extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+          _SectionCard(
+            title: '自适应连续认证引擎',
+            subtitle: '根据当前会话环境、风险信号和最近验证状态动态判断是否需要 step-up。',
+            child: _AdaptiveAuthPanel(controller: controller),
+          ),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -4852,6 +4886,148 @@ class DevicesPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AdaptiveAuthPanel extends StatelessWidget {
+  const _AdaptiveAuthPanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final AdaptiveAuthStatus? status = controller.adaptiveAuthStatus;
+    if (status == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final Color tone = adaptiveRiskTone(status.riskLevel, colorScheme);
+    final List<String> reasons = status.reasons.isEmpty
+        ? const <String>['当前会话环境稳定，未发现额外风险信号']
+        : status.reasons;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: tone.withValues(alpha: 0.10),
+            border: Border.all(color: tone.withValues(alpha: 0.24)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      status.requiresStepUp ? '建议立即补做验证' : '当前会话可信度稳定',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      status.recommendedAction,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: <Widget>[
+                  Chip(
+                    avatar: Icon(
+                      status.trusted
+                          ? Icons.verified_user_rounded
+                          : Icons.warning_amber_rounded,
+                      size: 18,
+                      color: tone,
+                    ),
+                    label: Text(
+                      '${adaptiveRiskLabel(status.riskLevel)}风险 ${status.riskScore}',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: status.sensitiveVerified
+                        ? null
+                        : () async {
+                            final bool verified =
+                                await _showSensitiveVerificationDialog(
+                                  context,
+                                  controller: controller,
+                                );
+                            if (verified) {
+                              await controller.refreshAdaptiveAuthStatus();
+                              if (context.mounted) {
+                                showAppMessage(context, '连续认证状态已更新');
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.verified_user_rounded),
+                    label: Text(status.sensitiveVerified ? '已完成验证' : '立即验证'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            _InfoChip(
+              label: '敏感验证状态',
+              value: status.sensitiveVerified
+                  ? '有效 ${status.sensitiveVerificationRemainingSeconds} 秒'
+                  : '未验证',
+            ),
+            _InfoChip(
+              label: '会话年龄',
+              value: formatDurationSeconds(status.authAgeSeconds),
+            ),
+            _InfoChip(
+              label: '空闲时长',
+              value: formatDurationSeconds(status.idleSeconds),
+            ),
+            _InfoChip(
+              label: '当前环境',
+              value:
+                  '${status.currentLocation ?? '未知位置'} · ${status.deviceType ?? '未知设备'}',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          '风险信号',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: reasons
+              .map((String reason) => Chip(label: Text(reason)))
+              .toList(),
+        ),
+      ],
     );
   }
 }
@@ -6506,6 +6682,7 @@ class _SensitiveVerificationDialogState
         case SensitiveVerificationMethod.qr:
           return;
       }
+      await widget.controller.refreshAdaptiveAuthStatus();
       if (mounted) {
         showAppMessage(context, '验证成功');
         Navigator.of(context).pop(true);
@@ -7487,6 +7664,41 @@ String loginMethodLabel(String? loginMethod) {
   return labels[loginMethod] ?? (loginMethod ?? '通用操作');
 }
 
+String adaptiveRiskLabel(String riskLevel) {
+  switch (riskLevel.toLowerCase()) {
+    case 'high':
+      return '高';
+    case 'medium':
+      return '中';
+    default:
+      return '低';
+  }
+}
+
+Color adaptiveRiskTone(String riskLevel, ColorScheme colorScheme) {
+  switch (riskLevel.toLowerCase()) {
+    case 'high':
+      return colorScheme.error;
+    case 'medium':
+      return Colors.orange;
+    default:
+      return Colors.green;
+  }
+}
+
+String formatDurationSeconds(int seconds) {
+  if (seconds < 60) {
+    return '$seconds 秒';
+  }
+  if (seconds < 3600) {
+    return '${seconds ~/ 60} 分钟';
+  }
+  if (seconds < 86400) {
+    return '${seconds ~/ 3600} 小时';
+  }
+  return '${seconds ~/ 86400} 天';
+}
+
 String formatDateTime(String? value) {
   if (value == null || value.isEmpty) {
     return '—';
@@ -7794,6 +8006,72 @@ class SensitiveVerificationStatus {
   final int remainingSeconds;
   final SensitiveVerificationMethod? preferredMethod;
   final List<SensitiveVerificationMethod> methods;
+}
+
+class AdaptiveAuthStatus {
+  const AdaptiveAuthStatus({
+    required this.sessionId,
+    required this.riskScore,
+    required this.riskLevel,
+    required this.trusted,
+    required this.requiresStepUp,
+    required this.sensitiveVerified,
+    required this.sensitiveVerificationRemainingSeconds,
+    required this.authAgeSeconds,
+    required this.idleSeconds,
+    required this.currentIp,
+    required this.currentLocation,
+    required this.sessionIp,
+    required this.sessionLocation,
+    required this.browser,
+    required this.deviceType,
+    required this.recommendedAction,
+    required this.reasons,
+  });
+
+  factory AdaptiveAuthStatus.fromJson(Map<String, dynamic> json) {
+    return AdaptiveAuthStatus(
+      sessionId: asInt(json['sessionId']),
+      riskScore: asInt(json['riskScore']) ?? 0,
+      riskLevel: asString(json['riskLevel']) ?? 'low',
+      trusted: asBool(json['trusted']),
+      requiresStepUp: asBool(json['requiresStepUp']),
+      sensitiveVerified: asBool(json['sensitiveVerified']),
+      sensitiveVerificationRemainingSeconds:
+          asInt(json['sensitiveVerificationRemainingSeconds']) ?? 0,
+      authAgeSeconds: asInt(json['authAgeSeconds']) ?? 0,
+      idleSeconds: asInt(json['idleSeconds']) ?? 0,
+      currentIp: asString(json['currentIp']),
+      currentLocation: asString(json['currentLocation']),
+      sessionIp: asString(json['sessionIp']),
+      sessionLocation: asString(json['sessionLocation']),
+      browser: asString(json['browser']),
+      deviceType: asString(json['deviceType']),
+      recommendedAction: asString(json['recommendedAction']) ?? '',
+      reasons: asList(json['reasons'])
+          .map((dynamic item) => item.toString())
+          .where((String item) => item.trim().isNotEmpty)
+          .toList(),
+    );
+  }
+
+  final int? sessionId;
+  final int riskScore;
+  final String riskLevel;
+  final bool trusted;
+  final bool requiresStepUp;
+  final bool sensitiveVerified;
+  final int sensitiveVerificationRemainingSeconds;
+  final int authAgeSeconds;
+  final int idleSeconds;
+  final String? currentIp;
+  final String? currentLocation;
+  final String? sessionIp;
+  final String? sessionLocation;
+  final String? browser;
+  final String? deviceType;
+  final String recommendedAction;
+  final List<String> reasons;
 }
 
 class PasskeyAllowedCredential {
