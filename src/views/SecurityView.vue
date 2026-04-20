@@ -171,6 +171,12 @@
                 <el-tag :type="adaptiveAuthStatus.trusted ? 'success' : 'warning'">
                   {{ adaptiveAuthStatus.trusted ? '已信任' : '待提升' }}
                 </el-tag>
+                <el-tag
+                  :type="getPolicyDecisionTagType(adaptiveAuthStatus.policyDecision)"
+                  effect="plain"
+                >
+                  {{ getPolicyDecisionLabel(adaptiveAuthStatus.policyDecision) }}
+                </el-tag>
                 <el-button
                   type="primary"
                   plain
@@ -181,6 +187,16 @@
                 </el-button>
               </div>
             </div>
+
+            <el-alert
+              v-if="adaptiveAuthStatus.multiEndpointAlert"
+              :title="adaptiveAuthStatus.alertTitle || '风险告警'"
+              :description="adaptiveAuthStatus.alertMessage || '检测到风险信号，请尽快处理'"
+              :type="adaptiveAuthStatus.alertLevel === 'high' ? 'error' : 'warning'"
+              show-icon
+              :closable="false"
+              class="adaptive-alert"
+            />
 
             <div class="adaptive-auth-metrics">
               <div class="adaptive-auth-metric">
@@ -200,6 +216,25 @@
               <div class="adaptive-auth-metric">
                 <span class="metric-label">当前环境</span>
                 <span class="metric-value">{{ adaptiveAuthStatus.currentLocation || '未知位置' }} / {{ adaptiveAuthStatus.deviceType || '未知设备' }}</span>
+              </div>
+            </div>
+
+            <div v-if="adaptiveMetrics" class="adaptive-auth-metrics adaptive-auth-metrics--engine">
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">策略评估量（7天）</span>
+                <span class="metric-value">{{ adaptiveMetrics.totalEvaluations }}</span>
+              </div>
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">拦截率</span>
+                <span class="metric-value">{{ adaptiveMetrics.interceptRatePercent.toFixed(2) }}%</span>
+              </div>
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">误报率</span>
+                <span class="metric-value">{{ adaptiveMetrics.falsePositiveRatePercent.toFixed(2) }}%</span>
+              </div>
+              <div class="adaptive-auth-metric">
+                <span class="metric-label">平均验证时延</span>
+                <span class="metric-value">{{ adaptiveMetrics.avgVerificationLatencyMs }}ms</span>
               </div>
             </div>
 
@@ -378,12 +413,14 @@ import { useRouter } from 'vue-router'
 import {
   checkSensitiveVerification,
   getAdaptiveAuthStatus,
+  getAdaptiveRiskMetrics,
   getPasskeyList,
   getSensitiveLogs,
   getTotpStatus,
   getUserInfo,
   updateUserSetting,
   type AdaptiveAuthStatus,
+  type AdaptiveRiskMetrics,
   type SensitiveLogItem,
   type SensitiveLoginMethod,
   type SensitiveOperationType,
@@ -421,6 +458,7 @@ const sensitiveLogsLoading = ref(false)
 const sensitiveLogsTotal = ref(0)
 const adaptiveAuthStatus = ref<AdaptiveAuthStatus | null>(null)
 const adaptiveAuthLoading = ref(false)
+const adaptiveMetrics = ref<AdaptiveRiskMetrics | null>(null)
 const sensitiveDialogVisible = ref(false)
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 
@@ -442,6 +480,7 @@ const operationTypeLabels: Record<SensitiveOperationType, string> = {
   REGISTER: '注册',
   LOGIN: '登录',
   SENSITIVE_VERIFY: '敏感验证',
+  ADAPTIVE_POLICY: '风控策略编排',
   CHANGE_PASSWORD: '修改密码',
   CHANGE_EMAIL: '修改邮箱',
   ADD_PASSKEY: '新增 Passkey',
@@ -561,6 +600,7 @@ const getOperationTitle = (op: unknown) => {
   const key = String(op ?? '').toUpperCase()
   if (key === 'LOGIN') return '登录'
   if (key === 'REGISTER') return '注册'
+  if (key === 'ADAPTIVE_POLICY') return '风控编排'
   return '敏感操作'
 }
 
@@ -589,6 +629,18 @@ const getAdaptiveRiskLabel = (level: AdaptiveAuthStatus['riskLevel']) => {
   if (level === 'high') return '高'
   if (level === 'medium') return '中'
   return '低'
+}
+
+const getPolicyDecisionLabel = (decision?: AdaptiveAuthStatus['policyDecision']) => {
+  if (decision === 'FREEZE') return '冻结会话'
+  if (decision === 'STEP_UP') return '强制补验'
+  return '放行'
+}
+
+const getPolicyDecisionTagType = (decision?: AdaptiveAuthStatus['policyDecision']) => {
+  if (decision === 'FREEZE') return 'danger'
+  if (decision === 'STEP_UP') return 'warning'
+  return 'success'
 }
 
 const formatDuration = (seconds?: number | null) => {
@@ -667,6 +719,7 @@ const loadAdaptiveAuthStatus = async () => {
   adaptiveAuthLoading.value = true
   try {
     adaptiveAuthStatus.value = await getAdaptiveAuthStatus()
+    adaptiveMetrics.value = await getAdaptiveRiskMetrics(168)
   } catch (error) {
     console.error('Get adaptive auth status failed:', error)
   } finally {
@@ -1126,10 +1179,19 @@ const openAdaptiveStepUpDialog = () => {
   flex-shrink: 0;
 }
 
+.adaptive-alert {
+  margin-top: -4px;
+}
+
 .adaptive-auth-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.adaptive-auth-metrics--engine {
+  border-top: 1px dashed var(--el-border-color);
+  padding-top: 12px;
 }
 
 .adaptive-auth-metric,

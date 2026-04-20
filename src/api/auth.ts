@@ -643,8 +643,11 @@ export interface AdaptiveAuthStatus {
   sessionId: number | null
   riskScore: number
   riskLevel: 'low' | 'medium' | 'high'
+  policyDecision?: 'ALLOW' | 'STEP_UP' | 'FREEZE'
+  policyVersion?: string
   trusted: boolean
   requiresStepUp: boolean
+  sessionFrozen?: boolean
   sensitiveVerified: boolean
   sensitiveVerificationRemainingSeconds: number
   authAgeSeconds: number
@@ -655,6 +658,11 @@ export interface AdaptiveAuthStatus {
   sessionLocation: string | null
   browser: string | null
   deviceType: string | null
+  multiEndpointAlert?: boolean
+  alertLevel?: 'medium' | 'high' | string
+  alertTitle?: string | null
+  alertMessage?: string | null
+  alertRemainingSeconds?: number
   recommendedAction: string
   reasons: string[]
 }
@@ -664,12 +672,34 @@ export const getAdaptiveAuthStatus = async (): Promise<AdaptiveAuthStatus> => {
   return response.data as AdaptiveAuthStatus
 }
 
+export interface AdaptiveRiskMetrics {
+  windowHours: number
+  totalEvaluations: number
+  interceptedCount: number
+  stepUpCount: number
+  freezeCount: number
+  interceptRatePercent: number
+  falsePositiveCount: number
+  falsePositiveRatePercent: number
+  completedStepUpCount: number
+  avgVerificationLatencyMs: number
+  generatedAt: string
+}
+
+export const getAdaptiveRiskMetrics = async (windowHours = 168): Promise<AdaptiveRiskMetrics> => {
+  const response = await request.get<any>('/auth/adaptive-auth/metrics', {
+    params: { windowHours },
+  })
+  return response.data as AdaptiveRiskMetrics
+}
+
 // ========== 敏感操作日志 ==========
 
 export type SensitiveOperationType =
   | 'REGISTER'
   | 'LOGIN'
   | 'SENSITIVE_VERIFY'
+  | 'ADAPTIVE_POLICY'
   | 'CHANGE_PASSWORD'
   | 'CHANGE_EMAIL'
   | 'ADD_PASSKEY'
@@ -712,7 +742,7 @@ export interface SensitiveLogItem {
   result: 'SUCCESS' | 'FAILURE'
   failureReason: string | null
   riskScore: number
-  actionTaken: 'ALLOW' | 'BLOCK' | 'FREEZE'
+  actionTaken: 'ALLOW' | 'STEP_UP' | 'FREEZE' | 'BLOCK'
   triggeredMultiErrorLock: boolean
   triggeredRateLimitLock: boolean
   durationMs: number
