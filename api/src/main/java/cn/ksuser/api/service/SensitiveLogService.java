@@ -117,7 +117,7 @@ public class SensitiveLogService {
                 // 敏感操作邮件通知（跳过以 _MFA 结尾的中间步骤，避免重复通知）
                 if (log.getUserId() != null) {
                     String op = log.getOperationType();
-                    if (op != null && op.endsWith("_MFA")) {
+                    if (op != null && (op.endsWith("_MFA") || op.startsWith("ADAPTIVE_"))) {
                         logger.debug("Skipping email for MFA intermediate step: userId={}, operation={}", log.getUserId(), op);
                     } else {
                         userSettingsRepository.findByUserId(log.getUserId()).ifPresent(settings -> {
@@ -205,7 +205,7 @@ public class SensitiveLogService {
                 // 敏感操作邮件通知（跳过以 _MFA 结尾的中间步骤，避免重复通知）
                 if (log.getUserId() != null) {
                     String op = log.getOperationType();
-                    if (op != null && op.endsWith("_MFA")) {
+                    if (op != null && (op.endsWith("_MFA") || op.startsWith("ADAPTIVE_"))) {
                         logger.debug("Skipping email for MFA intermediate step: userId={}, operation={}", log.getUserId(), op);
                     } else {
                         userSettingsRepository.findByUserId(log.getUserId()).ifPresent(settings -> {

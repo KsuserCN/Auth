@@ -77,6 +77,18 @@ public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveL
 
     Optional<UserSensitiveLog> findTopByUserIdOrderByCreatedAtDesc(Long userId);
 
+    List<UserSensitiveLog> findByUserIdAndOperationTypeAndCreatedAtAfterOrderByCreatedAtAsc(
+        Long userId,
+        String operationType,
+        LocalDateTime createdAt
+    );
+
+    List<UserSensitiveLog> findByUserIdAndCreatedAtBetweenOrderByCreatedAtAsc(
+        Long userId,
+        LocalDateTime start,
+        LocalDateTime end
+    );
+
     /**
      * 将指定用户的敏感操作日志裁剪到最多保留 keep 条（保留最新的记录）。
      * <p>

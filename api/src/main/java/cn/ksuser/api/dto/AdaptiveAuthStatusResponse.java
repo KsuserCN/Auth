@@ -7,8 +7,11 @@ public class AdaptiveAuthStatusResponse {
     private Long sessionId;
     private int riskScore;
     private String riskLevel;
+    private String policyDecision;
+    private String policyVersion;
     private boolean trusted;
     private boolean requiresStepUp;
+    private boolean sessionFrozen;
     private boolean sensitiveVerified;
     private long sensitiveVerificationRemainingSeconds;
     private long authAgeSeconds;
@@ -19,6 +22,11 @@ public class AdaptiveAuthStatusResponse {
     private String sessionLocation;
     private String browser;
     private String deviceType;
+    private boolean multiEndpointAlert;
+    private String alertLevel;
+    private String alertTitle;
+    private String alertMessage;
+    private long alertRemainingSeconds;
     private String recommendedAction;
     private List<String> reasons = new ArrayList<>();
 
@@ -49,6 +57,22 @@ public class AdaptiveAuthStatusResponse {
         this.riskLevel = riskLevel;
     }
 
+    public String getPolicyDecision() {
+        return policyDecision;
+    }
+
+    public void setPolicyDecision(String policyDecision) {
+        this.policyDecision = policyDecision;
+    }
+
+    public String getPolicyVersion() {
+        return policyVersion;
+    }
+
+    public void setPolicyVersion(String policyVersion) {
+        this.policyVersion = policyVersion;
+    }
+
     public boolean isTrusted() {
         return trusted;
     }
@@ -63,6 +87,14 @@ public class AdaptiveAuthStatusResponse {
 
     public void setRequiresStepUp(boolean requiresStepUp) {
         this.requiresStepUp = requiresStepUp;
+    }
+
+    public boolean isSessionFrozen() {
+        return sessionFrozen;
+    }
+
+    public void setSessionFrozen(boolean sessionFrozen) {
+        this.sessionFrozen = sessionFrozen;
     }
 
     public boolean isSensitiveVerified() {
@@ -143,6 +175,46 @@ public class AdaptiveAuthStatusResponse {
 
     public void setDeviceType(String deviceType) {
         this.deviceType = deviceType;
+    }
+
+    public boolean isMultiEndpointAlert() {
+        return multiEndpointAlert;
+    }
+
+    public void setMultiEndpointAlert(boolean multiEndpointAlert) {
+        this.multiEndpointAlert = multiEndpointAlert;
+    }
+
+    public String getAlertLevel() {
+        return alertLevel;
+    }
+
+    public void setAlertLevel(String alertLevel) {
+        this.alertLevel = alertLevel;
+    }
+
+    public String getAlertTitle() {
+        return alertTitle;
+    }
+
+    public void setAlertTitle(String alertTitle) {
+        this.alertTitle = alertTitle;
+    }
+
+    public String getAlertMessage() {
+        return alertMessage;
+    }
+
+    public void setAlertMessage(String alertMessage) {
+        this.alertMessage = alertMessage;
+    }
+
+    public long getAlertRemainingSeconds() {
+        return alertRemainingSeconds;
+    }
+
+    public void setAlertRemainingSeconds(long alertRemainingSeconds) {
+        this.alertRemainingSeconds = alertRemainingSeconds;
     }
 
     public String getRecommendedAction() {

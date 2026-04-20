@@ -75,7 +75,8 @@ public class AuthController {
     private final SessionTransferService sessionTransferService;
     private final AccountRecoveryService accountRecoveryService;
     private final QrChallengeService qrChallengeService;
-    private final AdaptiveContinuousAuthService adaptiveContinuousAuthService;
+    private final AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService;
+    private final AdaptiveRiskMetricsService adaptiveRiskMetricsService;
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
@@ -88,7 +89,8 @@ public class AuthController {
                           SessionTransferService sessionTransferService,
                           AccountRecoveryService accountRecoveryService,
                           QrChallengeService qrChallengeService,
-                          AdaptiveContinuousAuthService adaptiveContinuousAuthService) {
+                          AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService,
+                          AdaptiveRiskMetricsService adaptiveRiskMetricsService) {
         this.userService = userService;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
@@ -108,7 +110,8 @@ public class AuthController {
         this.sessionTransferService = sessionTransferService;
         this.accountRecoveryService = accountRecoveryService;
         this.qrChallengeService = qrChallengeService;
-        this.adaptiveContinuousAuthService = adaptiveContinuousAuthService;
+        this.adaptiveRiskOrchestrationService = adaptiveRiskOrchestrationService;
+        this.adaptiveRiskMetricsService = adaptiveRiskMetricsService;
     }
 
     /**
@@ -1088,6 +1091,11 @@ public class AuthController {
         }
 
         String clientIp = rateLimitService.getClientIp(request);
+        AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "account-recovery-issue");
+        if (adaptiveStatus.isSessionFrozen()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+        }
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
@@ -2438,6 +2446,12 @@ public class AuthController {
         }
 
         String clientIp = rateLimitService.getClientIp(request);
+        AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "change-email");
+        if (adaptiveStatus.isSessionFrozen()) {
+            sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "session_frozen_by_adaptive_risk", startTime);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+        }
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
@@ -2549,12 +2563,22 @@ public class AuthController {
         }
 
         String clientIp = rateLimitService.getClientIp(request);
+        AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "check-sensitive-verification");
+        if (adaptiveStatus.isSessionFrozen()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+        }
 
         // 检查是否已验证
         boolean isVerified = sensitiveOperationService.isVerified(uuid, clientIp);
         
         // 获取剩余时间
         long remainingSeconds = sensitiveOperationService.getRemainingTime(uuid);
+
+        if ("STEP_UP".equalsIgnoreCase(adaptiveStatus.getPolicyDecision())) {
+            isVerified = false;
+            remainingSeconds = 0L;
+        }
         
         List<String> sensitiveMethods = resolveSensitiveMethods(user);
         String preferredSensitiveMethod = resolvePreferredSensitiveMethod(user, sensitiveMethods);
@@ -2591,8 +2615,40 @@ public class AuthController {
             ? null
             : userSessionService.findActiveSessionById(currentSessionId).orElse(null);
         String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
 
-        AdaptiveAuthStatusResponse response = adaptiveContinuousAuthService.evaluate(user, session, clientIp);
+        AdaptiveAuthStatusResponse response = adaptiveRiskOrchestrationService.evaluateAndApply(
+            user,
+            session,
+            clientIp,
+            userAgent,
+            "adaptive-auth-status"
+        );
+        return ResponseEntity.status(HttpStatus.OK)
+            .body(new ApiResponse<>(200, "查询成功", response));
+    }
+
+    @GetMapping("/adaptive-auth/metrics")
+    public ResponseEntity<ApiResponse<AdaptiveRiskMetricsResponse>> getAdaptiveAuthMetrics(
+        Authentication authentication,
+        @RequestParam(required = false, defaultValue = "168") Integer windowHours
+    ) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "未登录"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        AdaptiveRiskMetricsResponse response = adaptiveRiskMetricsService.buildUserMetrics(
+            user.getId(),
+            windowHours == null ? 168 : windowHours
+        );
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "查询成功", response));
     }
@@ -2621,6 +2677,11 @@ public class AuthController {
         }
 
         String clientIp = rateLimitService.getClientIp(request);
+        AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "delete-account");
+        if (adaptiveStatus.isSessionFrozen()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+        }
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
@@ -2683,6 +2744,12 @@ public class AuthController {
         }
 
         String clientIp = rateLimitService.getClientIp(request);
+        AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "change-password");
+        if (adaptiveStatus.isSessionFrozen()) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "session_frozen_by_adaptive_risk", startTime);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+        }
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
@@ -2814,6 +2881,26 @@ public class AuthController {
         return new TokenResponse(accessToken);
     }
 
+    private AdaptiveAuthStatusResponse evaluateAdaptiveRiskForCurrentSession(
+        User user,
+        HttpServletRequest request,
+        String source
+    ) {
+        Long currentSessionId = getCurrentSessionId(request);
+        UserSession session = currentSessionId == null
+            ? null
+            : userSessionService.findActiveSessionById(currentSessionId).orElse(null);
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
+        return adaptiveRiskOrchestrationService.evaluateAndApply(
+            user,
+            session,
+            clientIp,
+            userAgent,
+            source
+        );
+    }
+
     private void strengthenCurrentSession(HttpServletRequest request, String method) {
         Long currentSessionId = getCurrentSessionId(request);
         if (currentSessionId == null) {
@@ -2889,6 +2976,11 @@ public class AuthController {
 
         // ========== 检查是否已通过敏感操作验证 ==========
         String clientIp = rateLimitService.getClientIp(httpRequest);
+        AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, httpRequest, "passkey-registration-options");
+        if (adaptiveStatus.isSessionFrozen()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+        }
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, "需要先通过敏感操作验证"));
