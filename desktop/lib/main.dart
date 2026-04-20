@@ -469,6 +469,24 @@ String buildMobileTransferQrText(String transferCode) {
   return 'KSUSER-AUTH-XFER:v1:${transferCode.trim()}';
 }
 
+Uri buildWebAccountRecoveryUri({
+  required String passkeyOrigin,
+  required String apiBaseUrl,
+  String? recoveryCode,
+}) {
+  final String origin = passkeyOrigin.trim();
+  final Uri baseUri = Uri.parse(origin.endsWith('/') ? origin : '$origin/');
+  return baseUri
+      .resolve('forgot-password')
+      .replace(
+        queryParameters: <String, String>{
+          if (recoveryCode != null && recoveryCode.trim().isNotEmpty)
+            'recoveryCode': recoveryCode.trim(),
+          if (apiBaseUrl.trim().isNotEmpty) 'apiBaseUrl': apiBaseUrl.trim(),
+        },
+      );
+}
+
 String buildRemoteQrCodeImageUrl(String text, {bool useDarkModeStyle = false}) {
   final Map<String, String> query = <String, String>{
     'size': '240',
@@ -640,6 +658,233 @@ Future<void> showMobileBridgeQrDialog(
   countdownTimer?.cancel();
 }
 
+Future<void> showAccountRecoveryDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  final ThemeData theme = Theme.of(context);
+  final bool isDark = theme.brightness == Brightness.dark;
+  AccountRecoveryTicket? ticket;
+  int expiresInSeconds = 0;
+  bool refreshing = false;
+  bool initialized = false;
+  String? errorText;
+  Timer? countdownTimer;
+
+  Future<void> refreshTicket(void Function(void Function()) setState) async {
+    setState(() {
+      refreshing = true;
+      errorText = null;
+    });
+    try {
+      final AccountRecoveryTicket nextTicket = await controller
+          .issueAccountRecoveryTicket();
+      countdownTimer?.cancel();
+      countdownTimer = Timer.periodic(const Duration(seconds: 1), (
+        Timer timer,
+      ) {
+        if (expiresInSeconds <= 0) {
+          timer.cancel();
+          return;
+        }
+        setState(() {
+          expiresInSeconds -= 1;
+        });
+      });
+      setState(() {
+        ticket = nextTicket;
+        expiresInSeconds = nextTicket.expiresInSeconds;
+      });
+    } catch (error) {
+      setState(() {
+        errorText = error.toString();
+      });
+    } finally {
+      setState(() {
+        refreshing = false;
+      });
+    }
+  }
+
+  await showDialog<void>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return StatefulBuilder(
+        builder: (BuildContext dialogContext, void Function(void Function()) setState) {
+          if (!initialized) {
+            initialized = true;
+            unawaited(refreshTicket(setState));
+          }
+          final Uri? recoveryUri = ticket == null
+              ? null
+              : buildWebAccountRecoveryUri(
+                  passkeyOrigin: controller.passkeyOrigin,
+                  apiBaseUrl: controller.apiBaseUrl,
+                  recoveryCode: ticket!.recoveryCode,
+                );
+          return AlertDialog(
+            title: const Text('账号恢复授权'),
+            content: SizedBox(
+              width: 380,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  if (errorText != null && errorText!.isNotEmpty) ...<Widget>[
+                    Text(
+                      errorText!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (refreshing && ticket == null)
+                    const SizedBox(
+                      height: 240,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (recoveryUri != null)
+                    Center(
+                      child: _buildLocalQrCode(
+                        recoveryUri.toString(),
+                        width: 240,
+                        height: 240,
+                        isDark: isDark,
+                      ),
+                    )
+                  else
+                    const SizedBox(
+                      height: 240,
+                      child: Center(child: Text('正在生成恢复二维码...')),
+                    ),
+                  const SizedBox(height: 12),
+                  if (ticket != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            '${ticket!.username} · ${ticket!.maskedEmail}',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '背书设备：${ticket!.sponsorClientName.isNotEmpty ? ticket!.sponsorClientName : '当前桌面端'}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            '位置：${ticket!.sponsorIpLocation.isNotEmpty ? ticket!.sponsorIpLocation : '未知位置'}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '剩余有效期：${max(expiresInSeconds, 0)} 秒',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    ticket?.recoveryCode ?? '恢复码生成中...',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '请在另一台设备打开网页恢复页后扫码，或手动输入上面的恢复码。恢复成功后旧会话会自动失效。',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('关闭'),
+              ),
+              TextButton.icon(
+                onPressed: ticket == null
+                    ? null
+                    : () async {
+                        try {
+                          await Clipboard.setData(
+                            ClipboardData(text: ticket!.recoveryCode),
+                          );
+                          if (dialogContext.mounted) {
+                            showAppMessage(dialogContext, '恢复码已复制');
+                          }
+                        } catch (error) {
+                          if (dialogContext.mounted) {
+                            showAppMessage(
+                              dialogContext,
+                              error.toString(),
+                              error: true,
+                            );
+                          }
+                        }
+                      },
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('复制恢复码'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: recoveryUri == null
+                    ? null
+                    : () async {
+                        try {
+                          await openExternalUrl(recoveryUri.toString());
+                        } catch (error) {
+                          if (dialogContext.mounted) {
+                            showAppMessage(
+                              dialogContext,
+                              error.toString(),
+                              error: true,
+                            );
+                          }
+                        }
+                      },
+                icon: const Icon(Icons.open_in_new_rounded),
+                label: const Text('打开网页恢复页'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: refreshing ? null : () => refreshTicket(setState),
+                icon: refreshing
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh_rounded),
+                label: Text(refreshing ? '刷新中...' : '刷新授权'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+
+  countdownTimer?.cancel();
+}
+
 Future<void> showDesktopLoginQrDialog(
   BuildContext context,
   AppController controller,
@@ -703,8 +948,7 @@ Future<void> showDesktopLoginQrDialog(
 
     final MFAChallenge? nextMfa = buildMfaChallengeFromStatus(status);
     if (nextMfa != null) {
-      controller.pendingMfaChallenge = nextMfa;
-      controller.notifyListeners();
+      controller.updatePendingMfaChallenge(nextMfa);
       if (dialogContext.mounted) {
         Navigator.of(dialogContext).pop();
       }
@@ -1247,6 +1491,14 @@ class AppController extends ChangeNotifier {
       return;
     }
     reduceMotion = value;
+    notifyListeners();
+  }
+
+  void updatePendingMfaChallenge(MFAChallenge? value) {
+    if (pendingMfaChallenge == value) {
+      return;
+    }
+    pendingMfaChallenge = value;
     notifyListeners();
   }
 
@@ -1834,6 +2086,19 @@ class AppController extends ChangeNotifier {
     });
   }
 
+  Future<AccountRecoveryTicket> issueAccountRecoveryTicket() async {
+    return runBusyAction('正在生成账号恢复授权...', () async {
+      if (!isAuthenticated) {
+        throw ApiException('当前桌面端尚未登录');
+      }
+      final dynamic data = await _apiClient.post(
+        '/auth/account-recovery/issue',
+        authorized: true,
+      );
+      return AccountRecoveryTicket.fromJson(asMap(data));
+    });
+  }
+
   Future<void> importSessionTransferTicket(String transferCode) async {
     await runBusyAction('正在同步网页登录状态...', () async {
       final dynamic data = await _apiClient.post(
@@ -2304,6 +2569,41 @@ class SessionTransferTicket {
 
   final String transferCode;
   final int expiresInSeconds;
+}
+
+class AccountRecoveryTicket {
+  const AccountRecoveryTicket({
+    required this.recoveryCode,
+    required this.expiresInSeconds,
+    required this.username,
+    required this.maskedEmail,
+    required this.sponsorClientName,
+    required this.sponsorBrowser,
+    required this.sponsorSystem,
+    required this.sponsorIpLocation,
+  });
+
+  factory AccountRecoveryTicket.fromJson(Map<String, dynamic> json) {
+    return AccountRecoveryTicket(
+      recoveryCode: asString(json['recoveryCode']) ?? '',
+      expiresInSeconds: asInt(json['expiresInSeconds']) ?? 0,
+      username: asString(json['username']) ?? '',
+      maskedEmail: asString(json['maskedEmail']) ?? '',
+      sponsorClientName: asString(json['sponsorClientName']) ?? '',
+      sponsorBrowser: asString(json['sponsorBrowser']) ?? '',
+      sponsorSystem: asString(json['sponsorSystem']) ?? '',
+      sponsorIpLocation: asString(json['sponsorIpLocation']) ?? '',
+    );
+  }
+
+  final String recoveryCode;
+  final int expiresInSeconds;
+  final String username;
+  final String maskedEmail;
+  final String sponsorClientName;
+  final String sponsorBrowser;
+  final String sponsorSystem;
+  final String sponsorIpLocation;
 }
 
 class QrLoginChallenge {
@@ -4302,6 +4602,26 @@ class SecurityPage extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.password_rounded),
                         label: const Text('修改密码'),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton.tonalIcon(
+                        onPressed: () => _runWithSensitiveVerification(
+                          context,
+                          controller: controller,
+                          action: () =>
+                              showAccountRecoveryDialog(context, controller),
+                        ),
+                        icon: const Icon(Icons.qr_code_2_rounded),
+                        label: const Text('发起账号恢复'),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '为另一台设备生成 5 分钟有效的一次性恢复二维码和恢复码，恢复成功后旧会话会自动撤销。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          height: 1.5,
+                        ),
                       ),
                     ],
                   ),
@@ -7162,6 +7482,7 @@ String loginMethodLabel(String? loginMethod) {
     'BRIDGE_FROM_DESKTOP': '电脑端桥接',
     'BRIDGE_FROM_WEB': '网页端桥接',
     'BRIDGE_TO_MOBILE': '桥接到手机端',
+    'ACCOUNT_RECOVERY': '账号恢复',
   };
   return labels[loginMethod] ?? (loginMethod ?? '通用操作');
 }
