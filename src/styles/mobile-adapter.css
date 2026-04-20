@@ -1,0 +1,64 @@
+@media (max-width: 768px) {
+  html,
+  body,
+  #app {
+    overflow-x: hidden;
+  }
+
+  .login-container,
+  .consent-container,
+  .oauth-callback-page,
+  .bridge-launch {
+    min-height: 100dvh !important;
+    padding: 0 !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    overflow-y: auto !important;
+  }
+
+  .login-box,
+  .consent-box,
+  .callback-card,
+  .bridge-launch-card {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .login-box,
+  .consent-box {
+    background: transparent !important;
+  }
+
+  .callback-card,
+  .bridge-launch-card {
+    background: var(--el-bg-color) !important;
+    padding: 20px 16px !important;
+  }
+
+  .login-left,
+  .login-right,
+  .consent-left,
+  .consent-right {
+    border: none !important;
+    border-radius: 0 !important;
+  }
+
+  .el-dialog {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .el-message-box {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .el-table__body-wrapper {
+    overflow-x: auto;
+  }
+}

@@ -39,12 +39,20 @@ watchEffect(() => {
   --global-banner-height: 0px;
   width: 100%;
   height: 100vh;
+  height: 100dvh;
 }
 
 .app-content {
   width: 100%;
   height: calc(100vh - var(--global-banner-height));
+  height: calc(100dvh - var(--global-banner-height));
   margin-top: var(--global-banner-height);
   overflow: hidden;
+}
+
+@media (max-width: 720px) {
+  .app-content {
+    overflow: auto;
+  }
 }
 </style>

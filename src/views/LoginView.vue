@@ -2898,15 +2898,48 @@ onBeforeUnmount(() => {
   }
 
   .login-left {
-    padding: 32px 24px;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    flex: none;
+    width: 100%;
+    border-bottom: none;
+    min-height: 0;
+  }
+
+  .login-left .login-description,
+  .login-left .feature-list,
+  .login-left .desktop-login-hint,
+  .login-left br {
+    display: none !important;
+  }
+
+  .logo-section {
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .logo-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
   }
 
   .login-right {
-    padding: 32px 24px;
+    padding: 12px 16px 24px;
+    flex: 1 1 auto;
   }
 
   .login-title {
-    font-size: 24px;
+    font-size: 28px;
+    margin-bottom: 0;
+    line-height: 1.2;
+    text-align: left;
   }
 
   .step-title {
@@ -2966,6 +2999,35 @@ onBeforeUnmount(() => {
 
   .method-info p {
     font-size: 12px;
+  }
+
+  .extra-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .extra-icons {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    justify-items: center;
+  }
+
+  .icon-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 6px 0;
+  }
+
+  .icon-btn i {
+    font-size: 24px;
+  }
+
+  .extra-btn {
+    width: 100%;
+    max-width: 100%;
   }
 
   .qr-image,

@@ -4,6 +4,9 @@
       <!-- 顶部导航栏 -->
       <el-header class="navbar">
         <div class="navbar-left">
+          <el-button class="mobile-menu-trigger" circle @click="mobileMenuVisible = true">
+            <el-icon><Menu /></el-icon>
+          </el-button>
           <div class="brand">
             <img src="/favicon.ico" class="brand-logo" alt="logo" />
             <span class="brand-text">Ksuser 统一认证中心</span>
@@ -61,53 +64,16 @@
         <el-aside class="sidebar" width="240px">
           <div class="side-title">设置中心</div>
           <el-menu class="side-menu" :default-active="$route.path" router>
-            <el-menu-item index="/home/overview" to="/home/overview">
+            <el-menu-item
+              v-for="item in menuItems"
+              :key="item.path"
+              :index="item.path"
+              :to="item.path"
+            >
               <el-icon>
-                <HomeFilled />
+                <component :is="item.icon" />
               </el-icon>
-              <span>概览</span>
-            </el-menu-item>
-            <el-menu-item index="/home/profile" to="/home/profile">
-              <el-icon>
-                <User />
-              </el-icon>
-              <span>基本信息</span>
-            </el-menu-item>
-            <el-menu-item index="/home/security" to="/home/security">
-              <el-icon>
-                <Lock />
-              </el-icon>
-              <span>安全性</span>
-            </el-menu-item>
-            <el-menu-item index="/home/login-options" to="/home/login-options">
-              <el-icon>
-                <Key />
-              </el-icon>
-              <span>登录选项</span>
-            </el-menu-item>
-            <el-menu-item index="/home/devices" to="/home/devices">
-              <el-icon>
-                <Monitor />
-              </el-icon>
-              <span>设备与登录</span>
-            </el-menu-item>
-            <el-menu-item index="/home/privacy" to="/home/privacy">
-              <el-icon>
-                <DataLine />
-              </el-icon>
-              <span>隐私与数据</span>
-            </el-menu-item>
-            <el-menu-item index="/home/preferences" to="/home/preferences">
-              <el-icon>
-                <Setting />
-              </el-icon>
-              <span>偏好设置</span>
-            </el-menu-item>
-            <el-menu-item index="/home/open-platform" to="/home/open-platform">
-              <el-icon>
-                <Connection />
-              </el-icon>
-              <span>开放平台</span>
+              <span>{{ item.label }}</span>
             </el-menu-item>
           </el-menu>
 
@@ -129,19 +95,59 @@
         </el-main>
       </el-container>
     </el-container>
+
+    <el-drawer
+      v-model="mobileMenuVisible"
+      class="mobile-nav-drawer"
+      direction="ltr"
+      size="78%"
+      :with-header="false"
+    >
+      <div class="side-title mobile-side-title">设置中心</div>
+      <el-menu
+        class="side-menu mobile-side-menu"
+        :default-active="currentPath"
+        @select="handleMobileMenuSelect"
+      >
+        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+          <el-icon>
+            <component :is="item.icon" />
+          </el-icon>
+          <span>{{ item.label }}</span>
+        </el-menu-item>
+      </el-menu>
+
+      <div class="side-footer mobile-side-footer">
+        <MobileBridgeQrSidebarAction />
+        <el-button
+          class="logout-btn"
+          type="danger"
+          plain
+          :loading="logoutLoading"
+          :disabled="logoutLoading"
+          @click="handleLogout"
+        >
+          <el-icon>
+            <SwitchButton />
+          </el-icon>
+          <span>退出登录</span>
+        </el-button>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDark, useStorage } from '@vueuse/core'
-import { useRouter, RouterView } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Connection,
   DataLine,
   HomeFilled,
   Key,
   Lock,
+  Menu,
   Monitor,
   Moon,
   Setting,
@@ -160,6 +166,21 @@ const userStore = useUserStore()
 const { user, loading } = storeToRefs(userStore)
 const logoutLoading = ref(false)
 const router = useRouter()
+const route = useRoute()
+const mobileMenuVisible = ref(false)
+
+const menuItems = [
+  { path: '/home/overview', label: '概览', icon: HomeFilled },
+  { path: '/home/profile', label: '基本信息', icon: User },
+  { path: '/home/security', label: '安全性', icon: Lock },
+  { path: '/home/login-options', label: '登录选项', icon: Key },
+  { path: '/home/devices', label: '设备与登录', icon: Monitor },
+  { path: '/home/privacy', label: '隐私与数据', icon: DataLine },
+  { path: '/home/preferences', label: '偏好设置', icon: Setting },
+  { path: '/home/open-platform', label: '开放平台', icon: Connection },
+]
+
+const currentPath = computed(() => route.path)
 
 // 使用 VueUse 的 useDark 和 useStorage 实现持久化主题
 const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')
@@ -194,6 +215,13 @@ const verificationTagType = computed(() => {
 
 const handleThemeCommand = (command: 'light' | 'dark' | 'system') => {
   themeMode.value = command
+}
+
+const handleMobileMenuSelect = (path: string) => {
+  mobileMenuVisible.value = false
+  if (path !== route.path) {
+    router.push(path)
+  }
 }
 
 const handleLogout = async () => {
@@ -274,6 +302,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
+  min-width: 0;
 }
 
 .brand {
@@ -282,6 +311,11 @@ onMounted(() => {
   gap: 10px;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.mobile-menu-trigger {
+  display: none;
+  border: 1px solid var(--el-border-color-light);
 }
 
 .brand-logo {
@@ -454,6 +488,14 @@ onMounted(() => {
   gap: 8px;
 }
 
+.mobile-side-title {
+  padding: 4px 8px 8px;
+}
+
+.mobile-side-footer {
+  padding: 8px 0 0;
+}
+
 .logout-btn {
   width: 100%;
   height: 40px;
@@ -504,6 +546,22 @@ onMounted(() => {
 @media (max-width: 720px) {
   .navbar {
     padding: 0 16px;
+    height: 56px;
+  }
+
+  .body {
+    height: calc(100% - 56px);
+  }
+
+  .mobile-menu-trigger {
+    display: inline-flex;
+  }
+
+  .brand-text {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .user-meta {
@@ -511,6 +569,42 @@ onMounted(() => {
   }
 
   .sidebar {
+    display: none;
+  }
+
+  .content {
+    padding: 12px;
+  }
+
+  .navbar-right :deep(.el-divider) {
+    margin: 0 2px;
+  }
+
+  .navbar-right {
+    gap: 8px;
+  }
+
+  .theme-label {
+    display: none;
+  }
+
+  :deep(.mobile-nav-drawer .el-drawer__body) {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+  }
+
+  .mobile-side-menu {
+    border-right: none;
+  }
+
+  .mobile-side-footer {
+    margin-top: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-text {
     display: none;
   }
 }
