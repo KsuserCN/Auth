@@ -4964,6 +4964,25 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  Chip(
+                    avatar: Icon(
+                      status.policyDecision == 'FREEZE'
+                          ? Icons.lock_rounded
+                          : status.policyDecision == 'STEP_UP'
+                          ? Icons.gpp_maybe_rounded
+                          : Icons.check_circle_rounded,
+                      size: 18,
+                      color: tone,
+                    ),
+                    label: Text(
+                      status.policyDecision == 'FREEZE'
+                          ? '策略：冻结会话'
+                          : status.policyDecision == 'STEP_UP'
+                          ? '策略：强制补验'
+                          : '策略：放行',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   FilledButton.tonalIcon(
                     onPressed: status.sensitiveVerified
                         ? null
@@ -4988,6 +5007,54 @@ class _AdaptiveAuthPanel extends StatelessWidget {
             ],
           ),
         ),
+        if (status.multiEndpointAlert)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: (status.alertLevel == 'high'
+                        ? Colors.red
+                        : Colors.orange)
+                    .withValues(alpha: 0.10),
+                border: Border.all(
+                  color: (status.alertLevel == 'high'
+                          ? Colors.red
+                          : Colors.orange)
+                      .withValues(alpha: 0.32),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    status.alertTitle ?? '风险告警',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    status.alertMessage ?? '检测到风险信号，请尽快处理',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.45,
+                    ),
+                  ),
+                  if (status.alertRemainingSeconds > 0) ...<Widget>[
+                    const SizedBox(height: 6),
+                    Text(
+                      '告警剩余有效期：${status.alertRemainingSeconds} 秒',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         const SizedBox(height: 16),
         Wrap(
           spacing: 12,
@@ -8013,8 +8080,11 @@ class AdaptiveAuthStatus {
     required this.sessionId,
     required this.riskScore,
     required this.riskLevel,
+    required this.policyDecision,
+    required this.policyVersion,
     required this.trusted,
     required this.requiresStepUp,
+    required this.sessionFrozen,
     required this.sensitiveVerified,
     required this.sensitiveVerificationRemainingSeconds,
     required this.authAgeSeconds,
@@ -8025,6 +8095,11 @@ class AdaptiveAuthStatus {
     required this.sessionLocation,
     required this.browser,
     required this.deviceType,
+    required this.multiEndpointAlert,
+    required this.alertLevel,
+    required this.alertTitle,
+    required this.alertMessage,
+    required this.alertRemainingSeconds,
     required this.recommendedAction,
     required this.reasons,
   });
@@ -8034,8 +8109,11 @@ class AdaptiveAuthStatus {
       sessionId: asInt(json['sessionId']),
       riskScore: asInt(json['riskScore']) ?? 0,
       riskLevel: asString(json['riskLevel']) ?? 'low',
+      policyDecision: asString(json['policyDecision']) ?? 'ALLOW',
+      policyVersion: asString(json['policyVersion']) ?? '1.0.0',
       trusted: asBool(json['trusted']),
       requiresStepUp: asBool(json['requiresStepUp']),
+      sessionFrozen: asBool(json['sessionFrozen']),
       sensitiveVerified: asBool(json['sensitiveVerified']),
       sensitiveVerificationRemainingSeconds:
           asInt(json['sensitiveVerificationRemainingSeconds']) ?? 0,
@@ -8047,6 +8125,11 @@ class AdaptiveAuthStatus {
       sessionLocation: asString(json['sessionLocation']),
       browser: asString(json['browser']),
       deviceType: asString(json['deviceType']),
+      multiEndpointAlert: asBool(json['multiEndpointAlert']),
+      alertLevel: asString(json['alertLevel']),
+      alertTitle: asString(json['alertTitle']),
+      alertMessage: asString(json['alertMessage']),
+      alertRemainingSeconds: asInt(json['alertRemainingSeconds']) ?? 0,
       recommendedAction: asString(json['recommendedAction']) ?? '',
       reasons: asList(json['reasons'])
           .map((dynamic item) => item.toString())
@@ -8058,8 +8141,11 @@ class AdaptiveAuthStatus {
   final int? sessionId;
   final int riskScore;
   final String riskLevel;
+  final String policyDecision;
+  final String policyVersion;
   final bool trusted;
   final bool requiresStepUp;
+  final bool sessionFrozen;
   final bool sensitiveVerified;
   final int sensitiveVerificationRemainingSeconds;
   final int authAgeSeconds;
@@ -8070,6 +8156,11 @@ class AdaptiveAuthStatus {
   final String? sessionLocation;
   final String? browser;
   final String? deviceType;
+  final bool multiEndpointAlert;
+  final String? alertLevel;
+  final String? alertTitle;
+  final String? alertMessage;
+  final int alertRemainingSeconds;
   final String recommendedAction;
   final List<String> reasons;
 }
