@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
 import type { VerificationType } from '@/api/auth'
+import type { AuthorizationGrantMode } from '@/api/oauth2'
 
 export type SSOScope = 'openid' | 'profile' | 'email'
 
@@ -48,6 +49,8 @@ export interface SSOAuthorizeContext {
   redirectUri: string
   requestedScopes: SSOScope[]
   alreadyAuthorized: boolean
+  existingGrantMode: AuthorizationGrantMode
+  existingGrantExpiresAt?: string | null
 }
 
 export interface SSOAuthorizeApproveRequest {
@@ -59,6 +62,8 @@ export interface SSOAuthorizeApproveRequest {
   nonce?: string
   codeChallenge?: string
   codeChallengeMethod?: 'S256'
+  grantMode?: AuthorizationGrantMode
+  grantTtlSeconds?: number
 }
 
 export interface SSOAuthorizeApproveResponse {
@@ -73,6 +78,8 @@ export interface SSOAuthorizedClient {
   scopes: SSOScope[]
   authorizedAt: string
   lastAuthorizedAt: string
+  grantMode: AuthorizationGrantMode
+  expiresAt?: string | null
 }
 
 export const getSSOClients = async (): Promise<SSOClientsOverview> => {

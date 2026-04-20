@@ -3,6 +3,7 @@ import type { ApiResponse } from '@/utils/request'
 import type { VerificationType } from '@/api/auth'
 
 export type OAuth2Scope = 'profile' | 'email'
+export type AuthorizationGrantMode = 'PERSISTENT' | 'ONE_TIME' | 'TIME_LIMITED'
 
 export interface OAuth2App {
   appId: string
@@ -49,6 +50,8 @@ export interface OAuth2AuthorizeContext {
   redirectUri: string
   requestedScopes: OAuth2Scope[]
   alreadyAuthorized: boolean
+  existingGrantMode: AuthorizationGrantMode
+  existingGrantExpiresAt?: string | null
 }
 
 export interface OAuth2AuthorizeApproveRequest {
@@ -57,6 +60,8 @@ export interface OAuth2AuthorizeApproveRequest {
   responseType: 'code'
   scope?: string
   state?: string
+  grantMode?: AuthorizationGrantMode
+  grantTtlSeconds?: number
 }
 
 export interface OAuth2AuthorizeApproveResponse {
@@ -74,6 +79,8 @@ export interface OAuth2AuthorizedApp {
   scopes: OAuth2Scope[]
   authorizedAt: string
   lastAuthorizedAt: string
+  grantMode: AuthorizationGrantMode
+  expiresAt?: string | null
 }
 
 export const getOAuth2Apps = async (): Promise<OAuth2AppsOverview> => {

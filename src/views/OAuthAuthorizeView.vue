@@ -97,6 +97,45 @@
             </button>
           </div>
 
+          <div class="grant-policy-card">
+            <div class="grant-policy-header">
+              <div class="grant-policy-title">授权方式</div>
+              <div class="grant-policy-subtitle">默认保持长期授权，也可切换为一次性或限时授权。</div>
+            </div>
+
+            <div v-if="context.alreadyAuthorized && hasConsentPrompt" class="grant-policy-banner">
+              当前应用已有可复用授权，手动确认后可切换为更严格的授权方式。
+            </div>
+
+            <el-radio-group v-model="grantMode" class="grant-policy-options">
+              <el-radio-button
+                v-for="option in grantModeOptions"
+                :key="option.value"
+                :label="option.value"
+              >
+                {{ option.label }}
+              </el-radio-button>
+            </el-radio-group>
+
+            <div class="grant-policy-note">{{ grantModeDescription }}</div>
+
+            <div v-if="grantMode === 'TIME_LIMITED'" class="grant-ttl-row">
+              <span class="grant-ttl-label">有效期</span>
+              <el-select v-model="grantTtlSeconds" class="grant-ttl-select">
+                <el-option
+                  v-for="option in grantTtlOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                />
+              </el-select>
+            </div>
+
+            <div v-if="existingGrantSummary" class="grant-policy-footnote">
+              当前可复用授权：{{ existingGrantSummary }}
+            </div>
+          </div>
+
           <div class="consent-actions">
             <el-button class="consent-secondary-btn" @click="handleDeny">拒绝</el-button>
             <el-button class="consent-primary-btn" type="primary" :loading="approving" @click="handleApprove">
@@ -168,6 +207,7 @@ import { logout } from '@/api/auth'
 import {
   approveOAuth2Authorize,
   getOAuth2AuthorizeContext,
+  type AuthorizationGrantMode,
 } from '@/api/oauth2'
 import {
   approveSSOAuthorize,
@@ -191,6 +231,14 @@ type NormalizedAuthorizeContext = {
   redirectUri: string
   requestedScopes: string[]
   alreadyAuthorized: boolean
+  existingGrantMode: AuthorizationGrantMode
+  existingGrantExpiresAt?: string | null
+}
+
+type GrantModeOption = {
+  value: AuthorizationGrantMode
+  label: string
+  description: string
 }
 
 const route = useRoute()
@@ -205,6 +253,8 @@ const autoRedirecting = ref(false)
 const errorMessage = ref('')
 const context = ref<NormalizedAuthorizeContext | null>(null)
 const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
+const grantMode = ref<AuthorizationGrantMode>('PERSISTENT')
+const grantTtlSeconds = ref(3600)
 
 const mode = computed<'oauth' | 'sso'>(() => (route.path.startsWith('/sso/') ? 'sso' : 'oauth'))
 
@@ -230,6 +280,7 @@ const requestParams = computed(() => {
     typeof route.query.code_challenge_method === 'string'
       ? route.query.code_challenge_method.trim().toUpperCase()
       : ''
+  const prompt = typeof route.query.prompt === 'string' ? route.query.prompt.trim() : ''
 
   return {
     clientId,
@@ -240,7 +291,39 @@ const requestParams = computed(() => {
     nonce: nonce || undefined,
     codeChallenge: codeChallenge || undefined,
     codeChallengeMethod: codeChallengeMethod === 'S256' ? ('S256' as const) : undefined,
+    prompt: prompt || undefined,
   }
+})
+
+const grantModeOptions: GrantModeOption[] = [
+  {
+    value: 'PERSISTENT',
+    label: '长期授权',
+    description: '后续同范围请求可自动放行，直到您主动撤销。',
+  },
+  {
+    value: 'ONE_TIME',
+    label: '一次性授权',
+    description: '仅本次继续有效，下次同应用再次请求时必须重新确认。',
+  },
+  {
+    value: 'TIME_LIMITED',
+    label: '限时授权',
+    description: '在设定时限内自动放行，过期后需要重新确认。',
+  },
+]
+
+const grantTtlOptions = [
+  { value: 300, label: '5 分钟' },
+  { value: 3600, label: '1 小时' },
+  { value: 86400, label: '24 小时' },
+  { value: 604800, label: '7 天' },
+]
+
+const hasConsentPrompt = computed(() => {
+  const prompt = requestParams.value.prompt?.toLowerCase()
+  if (!prompt) return false
+  return prompt.split(/\s+/).includes('consent')
 })
 
 const leftSubtitle = computed(() =>
@@ -272,6 +355,36 @@ const permissionItems = computed(() => {
   }
 
   return items
+})
+
+const grantModeDescription = computed(() => {
+  return grantModeOptions.find((option) => option.value === grantMode.value)?.description ?? ''
+})
+
+const formatGrantDateTime = (value?: string | null) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+const existingGrantSummary = computed(() => {
+  const currentContext = context.value
+  if (!currentContext?.alreadyAuthorized) return ''
+  if (currentContext.existingGrantMode === 'ONE_TIME') {
+    return '一次性授权'
+  }
+  if (currentContext.existingGrantMode === 'TIME_LIMITED') {
+    const expiresAt = formatGrantDateTime(currentContext.existingGrantExpiresAt)
+    return expiresAt ? `限时授权，至 ${expiresAt}` : '限时授权'
+  }
+  return '长期授权'
 })
 
 const buildDeniedRedirect = () => {
@@ -344,6 +457,8 @@ const loadAuthorizeContext = async () => {
       redirectUri: response.redirectUri,
       requestedScopes: response.requestedScopes,
       alreadyAuthorized: response.alreadyAuthorized,
+      existingGrantMode: response.existingGrantMode,
+      existingGrantExpiresAt: response.existingGrantExpiresAt,
     }
     return
   }
@@ -362,6 +477,8 @@ const loadAuthorizeContext = async () => {
     redirectUri: response.redirectUri,
     requestedScopes: response.requestedScopes,
     alreadyAuthorized: response.alreadyAuthorized,
+    existingGrantMode: response.existingGrantMode,
+    existingGrantExpiresAt: response.existingGrantExpiresAt,
   }
 }
 
@@ -385,7 +502,7 @@ const loadContext = async () => {
 
     await loadAuthorizeContext()
 
-    if (context.value?.alreadyAuthorized) {
+    if (context.value?.alreadyAuthorized && !hasConsentPrompt.value) {
       loading.value = false
       autoRedirecting.value = true
       await handleApprove(true)
@@ -429,6 +546,8 @@ const handleApprove = async (silent = false) => {
         nonce: requestParams.value.nonce,
         codeChallenge: requestParams.value.codeChallenge,
         codeChallengeMethod: requestParams.value.codeChallengeMethod,
+        grantMode: grantMode.value,
+        grantTtlSeconds: grantMode.value === 'TIME_LIMITED' ? grantTtlSeconds.value : undefined,
       })
       window.location.replace(response.redirectUrl)
       return
@@ -440,6 +559,8 @@ const handleApprove = async (silent = false) => {
       responseType: 'code',
       scope: requestParams.value.scope,
       state: requestParams.value.state,
+      grantMode: grantMode.value,
+      grantTtlSeconds: grantMode.value === 'TIME_LIMITED' ? grantTtlSeconds.value : undefined,
     })
     window.location.replace(response.redirectUrl)
   } catch (error) {
@@ -496,7 +617,7 @@ const continueWithDesktopAccount = async () => {
     desktopBridgeUser.value = null
     await loadAuthorizeContext()
 
-    if (context.value?.alreadyAuthorized) {
+    if (context.value?.alreadyAuthorized && !hasConsentPrompt.value) {
       autoRedirecting.value = true
       await handleApprove(true)
       return
@@ -849,6 +970,67 @@ onMounted(() => {
   flex-direction: column;
   gap: 24px;
   align-items: stretch;
+}
+
+.grant-policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-extra-light);
+}
+
+.grant-policy-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.grant-policy-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.grant-policy-subtitle,
+.grant-policy-note,
+.grant-policy-footnote {
+  color: var(--el-text-color-secondary);
+  line-height: 1.7;
+  font-size: 13px;
+}
+
+.grant-policy-banner {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(31, 157, 108, 0.08);
+  color: #1f7a56;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.grant-policy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.grant-ttl-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.grant-ttl-label {
+  color: var(--el-text-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.grant-ttl-select {
+  width: 160px;
 }
 
 .account-picker {

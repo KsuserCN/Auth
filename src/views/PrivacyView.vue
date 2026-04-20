@@ -81,8 +81,12 @@
                   <div class="app-name-row">
                     <span class="app-name">{{ app.clientName }}</span>
                     <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
+                    <el-tag size="small" effect="plain">{{ grantModeLabel(app.grantMode) }}</el-tag>
                   </div>
                   <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
+                  <div v-if="app.grantMode === 'TIME_LIMITED' && app.expiresAt" class="app-meta">
+                    授权有效期至：{{ formatDateTime(app.expiresAt) }}
+                  </div>
                 </div>
               </div>
 
@@ -131,6 +135,7 @@
                   <div class="app-name-row">
                     <span class="app-name">{{ app.appName }}</span>
                     <el-tag size="small" type="info" effect="plain">{{ creatorNameLabel(app.creatorName) }}</el-tag>
+                    <el-tag size="small" effect="plain">{{ grantModeLabel(app.grantMode) }}</el-tag>
                     <el-tag
                       v-if="app.creatorVerificationType"
                       size="small"
@@ -141,6 +146,9 @@
                     </el-tag>
                   </div>
                   <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
+                  <div v-if="app.grantMode === 'TIME_LIMITED' && app.expiresAt" class="app-meta">
+                    授权有效期至：{{ formatDateTime(app.expiresAt) }}
+                  </div>
                 </div>
               </div>
 
@@ -196,6 +204,15 @@
         <el-descriptions class="detail-desc" :column="1" border>
           <el-descriptions-item label="网站">{{ extractWebsite(ssoDetailApp.redirectUri) }}</el-descriptions-item>
           <el-descriptions-item label="首次授权">{{ formatDateTime(ssoDetailApp.authorizedAt) }}</el-descriptions-item>
+          <el-descriptions-item label="授权方式">
+            {{ grantModeLabel(ssoDetailApp.grantMode) }}
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-if="ssoDetailApp.grantMode === 'TIME_LIMITED' && ssoDetailApp.expiresAt"
+            label="授权有效期至"
+          >
+            {{ formatDateTime(ssoDetailApp.expiresAt) }}
+          </el-descriptions-item>
           <el-descriptions-item label="权限范围">
             <div class="scope-list">
               <el-tag
@@ -254,6 +271,15 @@
           <el-descriptions-item label="网站">{{ extractWebsite(oauthDetailApp.redirectUri) }}</el-descriptions-item>
           <el-descriptions-item label="开发者">{{ oauthDetailApp.contactInfo }}</el-descriptions-item>
           <el-descriptions-item label="首次授权">{{ formatDateTime(oauthDetailApp.authorizedAt) }}</el-descriptions-item>
+          <el-descriptions-item label="授权方式">
+            {{ grantModeLabel(oauthDetailApp.grantMode) }}
+          </el-descriptions-item>
+          <el-descriptions-item
+            v-if="oauthDetailApp.grantMode === 'TIME_LIMITED' && oauthDetailApp.expiresAt"
+            label="授权有效期至"
+          >
+            {{ formatDateTime(oauthDetailApp.expiresAt) }}
+          </el-descriptions-item>
           <el-descriptions-item label="权限范围">
             <div class="scope-list">
               <el-tag
@@ -339,6 +365,7 @@ import type { VerificationType } from '@/api/auth'
 import {
   getOAuth2Authorizations,
   revokeOAuth2Authorization,
+  type AuthorizationGrantMode,
   type OAuth2AuthorizedApp,
   type OAuth2Scope,
 } from '@/api/oauth2'
@@ -379,6 +406,12 @@ const ssoScopeLabel = (scope: SSOScope) => {
 const creatorNameLabel = (value?: string) => {
   const normalized = value?.trim()
   return normalized ? normalized : 'Third-party'
+}
+
+const grantModeLabel = (mode?: AuthorizationGrantMode) => {
+  if (mode === 'ONE_TIME') return '一次性'
+  if (mode === 'TIME_LIMITED') return '限时'
+  return '长期'
 }
 
 const verificationLabel = (type?: VerificationType) => {
