@@ -379,6 +379,60 @@ export const exchangeSessionTransfer = async (
   return response.data as unknown as LoginResponse
 }
 
+export interface AccountRecoveryTicketResponse {
+  recoveryCode: string
+  expiresInSeconds: number
+  username: string
+  maskedEmail: string
+  sponsorClientName: string
+  sponsorBrowser: string
+  sponsorSystem: string
+  sponsorIpLocation: string
+}
+
+export interface AccountRecoveryStatusResponse {
+  expiresInSeconds: number
+  username: string
+  maskedEmail: string
+  sponsorClientName: string
+  sponsorBrowser: string
+  sponsorSystem: string
+  sponsorIpLocation: string
+}
+
+export interface AccountRecoveryCompleteRequest {
+  recoveryCode: string
+  newPassword: string
+}
+
+export const issueAccountRecoveryTicket = async (): Promise<AccountRecoveryTicketResponse> => {
+  const response = await request.post<ApiResponse<AccountRecoveryTicketResponse>>(
+    '/auth/account-recovery/issue',
+    {},
+  )
+  return (response as unknown as ApiResponse<AccountRecoveryTicketResponse>).data
+}
+
+export const getAccountRecoveryStatus = async (
+  recoveryCode: string,
+): Promise<AccountRecoveryStatusResponse> => {
+  const response = await request.get<ApiResponse<AccountRecoveryStatusResponse>>(
+    '/auth/account-recovery/status',
+    { params: { recoveryCode } },
+  )
+  return (response as unknown as ApiResponse<AccountRecoveryStatusResponse>).data
+}
+
+export const completeAccountRecovery = async (
+  data: AccountRecoveryCompleteRequest,
+): Promise<LoginResponse> => {
+  const response = await request.post<ApiResponse<LoginResponse>>(
+    '/auth/account-recovery/complete',
+    data,
+  )
+  return (response as unknown as ApiResponse<LoginResponse>).data
+}
+
 export interface QrChallengeInitResponse {
   challengeId: string
   pollToken: string
@@ -610,6 +664,7 @@ export type SensitiveLoginMethod =
   | 'BRIDGE_FROM_DESKTOP'
   | 'BRIDGE_FROM_WEB'
   | 'BRIDGE_TO_MOBILE'
+  | 'ACCOUNT_RECOVERY'
 
 export interface SensitiveLogItem {
   id: number

@@ -135,6 +135,12 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
+        <AccountRecoveryCard />
+      </el-col>
+    </el-row>
+
     <!-- 活跃会话卡片已移除按需求 -->
 
     <el-row :gutter="16" class="row-gap">
@@ -294,6 +300,7 @@ import {
 } from '@/api/auth'
 	import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 	import DangerZoneCard from '@/components/DangerZoneCard.vue'
+import AccountRecoveryCard from '@/components/AccountRecoveryCard.vue'
 
 const router = useRouter()
 
@@ -372,6 +379,7 @@ const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
   BRIDGE_FROM_DESKTOP: '电脑端桥接',
   BRIDGE_FROM_WEB: '网页端桥接',
   BRIDGE_TO_MOBILE: '桥接到手机端',
+  ACCOUNT_RECOVERY: '账号恢复',
 }
 
 const formatSensitiveTime = (value?: string | null) => {
@@ -410,6 +418,7 @@ const normalizeLoginTokenLabel = (token: string) => {
   if (key === 'BRIDGE_FROM_DESKTOP') return '电脑端桥接'
   if (key === 'BRIDGE_FROM_WEB') return '网页端桥接'
   if (key === 'BRIDGE_TO_MOBILE') return '桥接到手机端'
+  if (key === 'ACCOUNT_RECOVERY') return '账号恢复'
   return token.trim()
 }
 
