@@ -7,6 +7,7 @@ import {
 
 const MOBILE_BRIDGE_CHALLENGE_QUERY_KEY = 'mobileBridgeChallengeId'
 const MOBILE_BRIDGE_FALLBACK_QUERY_KEY = 'mobileBridgeFallback'
+const ANDROID_APP_PACKAGE = 'cn.ksuser.auth.android'
 
 export const isAndroidMobileBridgeSupported = (): boolean => {
   if (typeof navigator === 'undefined') {
@@ -47,6 +48,17 @@ export const replaceMobileBridgeChallengeInReturnUrl = (
 }
 
 export const launchMobileBridgeApp = (appLink: string): void => {
+  if (!isAndroidMobileBridgeSupported()) {
+    window.location.assign(appLink)
+    return
+  }
+
+  const intentUrl = buildAndroidIntentUrl(appLink)
+  if (intentUrl) {
+    window.location.assign(intentUrl)
+    return
+  }
+
   window.location.assign(appLink)
 }
 
@@ -65,4 +77,15 @@ export const stripMobileBridgeQuery = (url: URL): URL => {
 
 export const readMobileBridgeFallbackFlag = (url: URL): boolean => {
   return url.searchParams.get(MOBILE_BRIDGE_FALLBACK_QUERY_KEY) === '1'
+}
+
+const buildAndroidIntentUrl = (rawUrl: string): string | null => {
+  try {
+    const url = new URL(rawUrl)
+    const hostAndPath = `${url.host}${url.pathname}${url.search}`
+    const fallbackUrl = encodeURIComponent(rawUrl)
+    return `intent://${hostAndPath}#Intent;scheme=${url.protocol.replace(':', '')};package=${ANDROID_APP_PACKAGE};S.browser_fallback_url=${fallbackUrl};end`
+  } catch {
+    return null
+  }
 }
