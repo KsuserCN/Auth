@@ -143,7 +143,7 @@
         >
           <img
             class="beian-icon"
-            src="https://qcloudimg.tencent-cloud.cn/raw/eed02831a0e201b8d794c8282c40cf2e.png"
+            src="https://static.ksuser.cn/gongan.png"
             alt="公安备案图标"
             loading="lazy"
             decoding="async"
