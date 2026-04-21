@@ -4,6 +4,10 @@ import FlutterMacOS
 import LocalAuthentication
 
 class MainFlutterWindow: NSWindow {
+  private let appDisplayName =
+    (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ??
+    (Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String) ??
+    "Ksuser认证中心"
   private var passkeyBridge: PasskeyBridge?
   private var appMenuBridge: AppMenuBridge?
   private var localAuthBridge: LocalAuthBridge?
@@ -16,7 +20,7 @@ class MainFlutterWindow: NSWindow {
     self.setContentSize(NSSize(width: 1440, height: 920))
     self.minSize = NSSize(width: 1240, height: 820)
     self.center()
-    self.title = "Ksuser Auth 统一认证中心"
+    self.title = appDisplayName
     if #available(macOS 11.0, *) {
       self.toolbarStyle = .unified
     }

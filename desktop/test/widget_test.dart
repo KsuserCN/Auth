@@ -7,7 +7,7 @@ void main() {
     await tester.pumpWidget(const KsuserDesktopApp());
     await tester.pump();
 
-    expect(find.text('Ksuser Auth 统一认证中心'), findsOneWidget);
+    expect(find.text(kDesktopAppName), findsOneWidget);
     expect(find.text('二维码登录'), findsOneWidget);
   });
 

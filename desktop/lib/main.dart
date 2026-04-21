@@ -13,6 +13,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 const Color kPrimaryColor = Color(0xFFFFB90F);
 const Color kSurfaceTint = Color(0xFFFFF2CC);
 const String kDefaultApiBaseUrl = 'https://api.ksuser.cn';
+const String kDesktopAppName = 'Ksuser认证中心';
 const String kDesktopAppVersion = '1.0.0';
 const int kDesktopSessionBridgePort = 43921;
 const String kSidebarLogoAsset = 'assets/logo/sidebar_logo.png';
@@ -244,7 +245,7 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
       animation: _controller,
       builder: (BuildContext context, _) {
         return MaterialApp(
-          title: 'Ksuser Auth 统一认证中心',
+          title: kDesktopAppName,
           navigatorKey: _navigatorKey,
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(Brightness.light),
@@ -1251,7 +1252,7 @@ Future<void> showDesktopAboutDialog(
     context: context,
     builder: (BuildContext context) {
       return AboutDialog(
-        applicationName: 'Ksuser Auth 统一认证中心',
+        applicationName: kDesktopAppName,
         applicationVersion: kDesktopAppVersion,
         applicationIcon: ClipRRect(
           borderRadius: BorderRadius.circular(16),
@@ -3468,7 +3469,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'Ksuser Auth 统一认证中心',
+                            kDesktopAppName,
                             style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
@@ -3621,7 +3622,7 @@ class DesktopWorkspace extends StatelessWidget {
                                                   CrossAxisAlignment.start,
                                               children: <Widget>[
                                                 Text(
-                                                  'Ksuser Auth',
+                                                  kDesktopAppName,
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
@@ -3629,14 +3630,6 @@ class DesktopWorkspace extends StatelessWidget {
                                                     color: sidebarTitleColor,
                                                     fontWeight: FontWeight.w800,
                                                     fontSize: 18,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 2),
-                                                Text(
-                                                  '统一认证中心',
-                                                  style: TextStyle(
-                                                    color: sidebarSubtitleColor,
-                                                    fontSize: 12,
                                                   ),
                                                 ),
                                               ],

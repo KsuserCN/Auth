@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Ksuser Auth 统一认证中心</string>
+	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundleIconFile</key>
 	<string></string>
 	<key>CFBundleIdentifier</key>
