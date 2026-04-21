@@ -17,7 +17,7 @@ class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     self.contentViewController = flutterViewController
-    self.setContentSize(NSSize(width: 1440, height: 920))
+    self.setContentSize(NSSize(width: 1520, height: 920))
     self.minSize = NSSize(width: 1240, height: 820)
     self.center()
     self.title = appDisplayName
