@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -47,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -97,6 +99,8 @@ internal fun AuthFlowScreen(
     val passkeyAvailability = remember(container) { container.passkeyManager.availability() }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
     val backgroundBrush = rememberAppBackgroundBrush()
+    val density = LocalDensity.current
+    val isImeVisible = WindowInsets.ime.getBottom(density) > 0
     val openQrScanner = {
         val granted = ContextCompat.checkSelfPermission(
             context,
@@ -310,34 +314,36 @@ internal fun AuthFlowScreen(
                         }
                     }
 
-                    SectionCard(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            "使用通行密钥(Passkey)登录",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        if (passkeyAvailability != PasskeyAvailability.Available) {
+                    if (!isImeVisible) {
+                        SectionCard(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                passkeyAvailabilityMessage,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall,
+                                "使用通行密钥(Passkey)登录",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
                             )
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                if (activity == null) {
-                                    Toast.makeText(context, "当前上下文不支持 Passkey", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    viewModel.loginWithPasskey(activity)
-                                }
-                            },
-                            enabled = !state.isBusy && passkeyAvailability == PasskeyAvailability.Available,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(AppRadius.R12),
-                        ) {
-                            Icon(Icons.Outlined.Key, contentDescription = null)
-                            Spacer(modifier = Modifier.width(AppSpacing.S8))
-                            Text(if (state.isBusy) "处理中..." else "使用通行密钥(Passkey)登录")
+                            if (passkeyAvailability != PasskeyAvailability.Available) {
+                                Text(
+                                    passkeyAvailabilityMessage,
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    if (activity == null) {
+                                        Toast.makeText(context, "当前上下文不支持 Passkey", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.loginWithPasskey(activity)
+                                    }
+                                },
+                                enabled = !state.isBusy && passkeyAvailability == PasskeyAvailability.Available,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(AppRadius.R12),
+                            ) {
+                                Icon(Icons.Outlined.Key, contentDescription = null)
+                                Spacer(modifier = Modifier.width(AppSpacing.S8))
+                                Text(if (state.isBusy) "处理中..." else "使用通行密钥(Passkey)登录")
+                            }
                         }
                     }
                 }
