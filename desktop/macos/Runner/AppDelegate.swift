@@ -380,11 +380,11 @@ class AppDelegate: FlutterAppDelegate {
 
     menu.removeAllItems()
 
-    menu.addItem(makeSectionItem(title: "账户概览", action: #selector(showOverview(_:)), key: "1"))
-    menu.addItem(makeSectionItem(title: "个人资料", action: #selector(showProfile(_:)), key: "2"))
-    menu.addItem(makeSectionItem(title: "安全中心", action: #selector(showSecurity(_:)), key: "3"))
-    menu.addItem(makeSectionItem(title: "设备会话", action: #selector(showDevices(_:)), key: "4"))
-    menu.addItem(makeSectionItem(title: "敏感日志", action: #selector(showActivity(_:)), key: "5"))
+    menu.addItem(makeSectionItem(title: "账号总览", action: #selector(showOverview(_:)), key: "1"))
+    menu.addItem(makeSectionItem(title: "账号资料", action: #selector(showProfile(_:)), key: "2"))
+    menu.addItem(makeSectionItem(title: "安全设置", action: #selector(showSecurity(_:)), key: "3"))
+    menu.addItem(makeSectionItem(title: "设备管理", action: #selector(showDevices(_:)), key: "4"))
+    menu.addItem(makeSectionItem(title: "操作日志", action: #selector(showActivity(_:)), key: "5"))
     menu.addItem(NSMenuItem.separator())
 
     let fullScreenItem = NSMenuItem(title: "进入全屏", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")

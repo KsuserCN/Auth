@@ -1599,25 +1599,29 @@ class AppController extends ChangeNotifier {
       authBusy = true;
       notifyListeners();
       try {
-        final BrowserPasskeyBridgeResponse response =
-            await BrowserPasskeyBridge.start(
-              passkeyOrigin: passkeyOrigin,
-              apiBaseUrl: apiBaseUrl,
-              mode: BrowserPasskeyBridgeMode.mfa,
-              mfaChallengeId: challengeId,
-            );
-        if (response.transferCode != null &&
-            response.transferCode!.isNotEmpty) {
-          await importSessionTransferTicket(response.transferCode!);
+        try {
+          final BrowserPasskeyBridgeResponse response =
+              await BrowserPasskeyBridge.start(
+                passkeyOrigin: passkeyOrigin,
+                apiBaseUrl: apiBaseUrl,
+                mode: BrowserPasskeyBridgeMode.mfa,
+                mfaChallengeId: challengeId,
+              );
+          if (response.transferCode != null &&
+              response.transferCode!.isNotEmpty) {
+            await importSessionTransferTicket(response.transferCode!);
+            pendingMfaChallenge = null;
+            return;
+          }
+          if (response.accessToken == null || response.accessToken!.isEmpty) {
+            throw ApiException(response.message ?? '浏览器未返回登录结果');
+          }
+          _apiClient.accessToken = response.accessToken;
           pendingMfaChallenge = null;
-          return;
+          await refreshWorkspace();
+        } on SocketException catch (error) {
+          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
         }
-        if (response.accessToken == null || response.accessToken!.isEmpty) {
-          throw ApiException(response.message ?? '浏览器未返回登录结果');
-        }
-        _apiClient.accessToken = response.accessToken;
-        pendingMfaChallenge = null;
-        await refreshWorkspace();
       } finally {
         authBusy = false;
         notifyListeners();
@@ -1862,22 +1866,26 @@ class AppController extends ChangeNotifier {
       pendingMfaChallenge = null;
       notifyListeners();
       try {
-        final BrowserPasskeyBridgeResponse response =
-            await BrowserPasskeyBridge.start(
-              passkeyOrigin: passkeyOrigin,
-              apiBaseUrl: apiBaseUrl,
-              mode: BrowserPasskeyBridgeMode.login,
-            );
-        if (response.transferCode != null &&
-            response.transferCode!.isNotEmpty) {
-          await importSessionTransferTicket(response.transferCode!);
-          return;
+        try {
+          final BrowserPasskeyBridgeResponse response =
+              await BrowserPasskeyBridge.start(
+                passkeyOrigin: passkeyOrigin,
+                apiBaseUrl: apiBaseUrl,
+                mode: BrowserPasskeyBridgeMode.login,
+              );
+          if (response.transferCode != null &&
+              response.transferCode!.isNotEmpty) {
+            await importSessionTransferTicket(response.transferCode!);
+            return;
+          }
+          if (response.accessToken == null || response.accessToken!.isEmpty) {
+            throw ApiException(response.message ?? '浏览器未返回登录结果');
+          }
+          _apiClient.accessToken = response.accessToken;
+          await refreshWorkspace();
+        } on SocketException catch (error) {
+          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
         }
-        if (response.accessToken == null || response.accessToken!.isEmpty) {
-          throw ApiException(response.message ?? '浏览器未返回登录结果');
-        }
-        _apiClient.accessToken = response.accessToken;
-        await refreshWorkspace();
       } finally {
         authBusy = false;
         notifyListeners();
@@ -1908,34 +1916,59 @@ class AppController extends ChangeNotifier {
 
   Future<void> verifySensitiveOperationWithPasskeyInBrowser() {
     return runBusyAction('正在等待 Passkey 验证...', () async {
-      final BrowserPasskeyBridgeResponse response =
-          await BrowserPasskeyBridge.start(
-            passkeyOrigin: passkeyOrigin,
-            apiBaseUrl: apiBaseUrl,
-            mode: BrowserPasskeyBridgeMode.sensitive,
-            accessToken: _apiClient.accessToken,
-          );
-      if (!response.verified) {
-        throw ApiException(response.message ?? '浏览器未完成敏感验证');
+      try {
+        final BrowserPasskeyBridgeResponse response =
+            await BrowserPasskeyBridge.start(
+              passkeyOrigin: passkeyOrigin,
+              apiBaseUrl: apiBaseUrl,
+              mode: BrowserPasskeyBridgeMode.sensitive,
+              accessToken: _apiClient.accessToken,
+            );
+        if (!response.verified) {
+          throw ApiException(response.message ?? '浏览器未完成敏感验证');
+        }
+      } on SocketException catch (error) {
+        throw ApiException(_passkeyBridgeSocketErrorMessage(error));
       }
     });
   }
 
   Future<void> registerPasskeyInBrowser({String? preferredName}) async {
     await runBusyAction('正在等待浏览器完成 Passkey 登记...', () async {
-      final BrowserPasskeyBridgeResponse response =
-          await BrowserPasskeyBridge.start(
-            passkeyOrigin: passkeyOrigin,
-            apiBaseUrl: apiBaseUrl,
-            mode: BrowserPasskeyBridgeMode.register,
-            accessToken: _apiClient.accessToken,
-            passkeyName: preferredName,
-          );
-      if (!response.registered) {
-        throw ApiException(response.message ?? '浏览器未完成 Passkey 登记');
+      try {
+        final BrowserPasskeyBridgeResponse response =
+            await BrowserPasskeyBridge.start(
+              passkeyOrigin: passkeyOrigin,
+              apiBaseUrl: apiBaseUrl,
+              mode: BrowserPasskeyBridgeMode.register,
+              accessToken: _apiClient.accessToken,
+              passkeyName: preferredName,
+            );
+        if (!response.registered) {
+          throw ApiException(response.message ?? '浏览器未完成 Passkey 登记');
+        }
+        await refreshPasskeys();
+      } on SocketException catch (error) {
+        throw ApiException(_passkeyBridgeSocketErrorMessage(error));
       }
-      await refreshPasskeys();
     });
+  }
+
+  static bool _isLoopbackBindDenied(SocketException error) {
+    final int? code = error.osError?.errorCode;
+    final String message = '${error.message} ${error.osError?.message ?? ''}'
+        .toLowerCase();
+    return code == 1 ||
+        message.contains('operation not permitted') ||
+        message.contains('failed to create server socket');
+  }
+
+  static String _passkeyBridgeSocketErrorMessage(SocketException error) {
+    if (_isLoopbackBindDenied(error)) {
+      return '当前环境禁止创建本地回调端口，无法使用浏览器 Passkey 桥接。'
+          '请检查系统网络入站权限，或在 macOS 上启用原生 Passkey。';
+    }
+    return '无法创建本地 Passkey 回调服务：${error.message}';
   }
 
   Future<void> sendChangeEmailCode(String email) {
@@ -3724,27 +3757,27 @@ class DesktopWorkspace extends StatelessWidget {
                             selectedIcon: Icon(
                               Icons.dashboard_customize_rounded,
                             ),
-                            label: Text('概览'),
+                            label: Text('账号总览'),
                           ),
                           NavigationRailDestination(
                             icon: Icon(Icons.badge_outlined),
                             selectedIcon: Icon(Icons.badge_rounded),
-                            label: Text('资料'),
+                            label: Text('账号资料'),
                           ),
                           NavigationRailDestination(
                             icon: Icon(Icons.lock_outline_rounded),
                             selectedIcon: Icon(Icons.verified_user_rounded),
-                            label: Text('安全'),
+                            label: Text('安全设置'),
                           ),
                           NavigationRailDestination(
                             icon: Icon(Icons.devices_other_outlined),
                             selectedIcon: Icon(Icons.devices_rounded),
-                            label: Text('设备'),
+                            label: Text('设备管理'),
                           ),
                           NavigationRailDestination(
                             icon: Icon(Icons.history_outlined),
                             selectedIcon: Icon(Icons.history_rounded),
-                            label: Text('日志'),
+                            label: Text('操作日志'),
                           ),
                         ],
                         trailing: Padding(
@@ -5008,15 +5041,13 @@ class _AdaptiveAuthPanel extends StatelessWidget {
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                color: (status.alertLevel == 'high'
-                        ? Colors.red
-                        : Colors.orange)
-                    .withValues(alpha: 0.10),
+                color:
+                    (status.alertLevel == 'high' ? Colors.red : Colors.orange)
+                        .withValues(alpha: 0.10),
                 border: Border.all(
-                  color: (status.alertLevel == 'high'
-                          ? Colors.red
-                          : Colors.orange)
-                      .withValues(alpha: 0.32),
+                  color:
+                      (status.alertLevel == 'high' ? Colors.red : Colors.orange)
+                          .withValues(alpha: 0.32),
                 ),
               ),
               child: Column(
@@ -5075,10 +5106,7 @@ class _AdaptiveAuthPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        const Text(
-          '风险信号',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
+        const Text('风险信号', style: TextStyle(fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
         Wrap(
           spacing: 10,
@@ -5137,8 +5165,8 @@ class _ActivityPageState extends State<ActivityPage> {
       child: Column(
         children: <Widget>[
           _SectionCard(
-            title: '敏感操作日志',
-            subtitle: '在这里查看你的敏感操作记录',
+            title: '操作日志',
+            subtitle: '在这里查看账号敏感操作和验证记录',
             child: Column(
               children: <Widget>[
                 Row(
@@ -7568,30 +7596,30 @@ String sensitiveVerificationMethodDescription(
 String sectionTitle(DesktopSection section) {
   switch (section) {
     case DesktopSection.overview:
-      return '账户概览';
+      return '账号总览';
     case DesktopSection.profile:
-      return '个人资料';
+      return '账号资料';
     case DesktopSection.security:
-      return '安全与登录';
+      return '安全设置';
     case DesktopSection.devices:
-      return '设备与会话';
+      return '设备管理';
     case DesktopSection.activity:
-      return '敏感操作日志';
+      return '操作日志';
   }
 }
 
 String sectionSubtitle(DesktopSection section) {
   switch (section) {
     case DesktopSection.overview:
-      return '查看桌面版汇总信息、登录方式与近期活动。';
+      return '查看桌面端的账号状态、登录方式和近期活动。';
     case DesktopSection.profile:
-      return '管理用户资料与扩展字段。';
+      return '管理账户资料与扩展信息。';
     case DesktopSection.security:
-      return '配置 MFA、TOTP、Passkey 与敏感操作偏好。';
+      return '配置 MFA、TOTP、Passkey 和敏感验证偏好。';
     case DesktopSection.devices:
-      return '管理登录设备和在线会话。';
+      return '查看在线设备、登录会话和当前状态。';
     case DesktopSection.activity:
-      return '过滤查看敏感操作日志。';
+      return '筛选查看敏感操作与验证记录。';
   }
 }
 
