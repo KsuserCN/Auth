@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 import { clearAuthSession, getStoredAccessToken, setStoredAccessToken } from '@/utils/authSession'
+import { persistPostLoginRedirect } from '@/utils/postLoginRedirect'
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _refreshRetried?: boolean
@@ -43,6 +44,8 @@ const REFRESH_EVENT_KEY = 'ksuser:auth:refresh-event'
 const REFRESH_LOCK_TTL_MS = 10000
 const REFRESH_WAIT_TIMEOUT_MS = 12000
 const REFRESH_WAIT_POLL_MS = 250
+const REFRESH_FAILURE_COUNT_KEY = 'ksuser:auth:refresh-failure-count'
+const REFRESH_FAILURE_LIMIT = 2
 const refreshOwnerId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 // 是否正在刷新 Token
@@ -53,6 +56,60 @@ let refreshSubscribers: Array<{
   reject: (error: Error) => void
 }> = []
 let refreshPromise: Promise<string> | null = null
+let hasForcedLogout = false
+
+const getRefreshFailureCount = (): number => {
+  const raw = sessionStorage.getItem(REFRESH_FAILURE_COUNT_KEY)
+  if (!raw) {
+    return 0
+  }
+  const value = Number.parseInt(raw, 10)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
+const setRefreshFailureCount = (count: number): void => {
+  if (count <= 0) {
+    sessionStorage.removeItem(REFRESH_FAILURE_COUNT_KEY)
+    return
+  }
+  sessionStorage.setItem(REFRESH_FAILURE_COUNT_KEY, String(count))
+}
+
+const resetRefreshFailureCount = (): void => {
+  setRefreshFailureCount(0)
+}
+
+const redirectToLoginAfterRefreshFailures = (): void => {
+  if (hasForcedLogout) {
+    return
+  }
+  hasForcedLogout = true
+
+  clearAuthSession()
+
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  const onLoginPage = window.location.pathname === '/login'
+
+  if (!onLoginPage) {
+    persistPostLoginRedirect(currentPath)
+    const loginUrl = new URL('/login', window.location.origin)
+    loginUrl.searchParams.set('redirect', currentPath)
+    ElMessage.error('登录状态已过期，请重新登录')
+    window.location.replace(`${loginUrl.pathname}${loginUrl.search}${loginUrl.hash}`)
+    return
+  }
+
+  ElMessage.error('登录状态已过期，请重新登录')
+}
+
+const recordRefreshFailure = (): void => {
+  const nextCount = getRefreshFailureCount() + 1
+  setRefreshFailureCount(nextCount)
+  if (nextCount >= REFRESH_FAILURE_LIMIT) {
+    resetRefreshFailureCount()
+    redirectToLoginAfterRefreshFailures()
+  }
+}
 
 // 添加到刷新队列
 const subscribeTokenRefresh = (
@@ -223,6 +280,7 @@ const refreshTokenWithCoordination = async (): Promise<string> => {
 
     try {
       const newToken = await refreshToken()
+      resetRefreshFailureCount()
       publishRefreshEvent({
         owner: refreshOwnerId,
         status: 'success',
@@ -238,6 +296,7 @@ const refreshTokenWithCoordination = async (): Promise<string> => {
         message,
         at: Date.now(),
       })
+      recordRefreshFailure()
       throw error
     } finally {
       releaseRefreshLock()
@@ -327,9 +386,13 @@ request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const data = response.data
     const { code, msg } = data
+    const accessToken = (data as ApiResponse<{ accessToken?: string }>)?.data?.accessToken
 
     // 成功响应 (200)、MFA 需求 (201)、未绑定账号或需要验证 (202) - 直接返回 ApiResponse 对象
     if (code === 200 || code === 201 || code === 202) {
+      if (accessToken) {
+        resetRefreshFailureCount()
+      }
       return response.data as any
     }
 
