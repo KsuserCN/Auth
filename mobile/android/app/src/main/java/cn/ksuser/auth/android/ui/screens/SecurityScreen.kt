@@ -410,24 +410,72 @@ internal fun SecurityScreen(
                         else -> Icons.Outlined.CheckCircle
                     },
                     statusAccent = decision == "ALLOW" && status.trusted,
-                    actionLabel = "${adaptiveRiskLabel(status.riskLevel)}风险 ${status.riskScore} · $decisionLabel",
+                    actionLabel = "查看",
                     onClick = {
                         if (!status.sensitiveVerified && !status.sessionFrozen) {
                             showSensitiveDialog = true
                         }
                     },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                    RiskMetaChip("策略决策", decisionLabel)
-                    RiskMetaChip("策略版本", status.policyVersion.ifBlank { "2.0.0" })
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
+                ) {
+                    RiskMetaChip(
+                        label = "风险等级",
+                        value = "${adaptiveRiskLabel(status.riskLevel)}风险",
+                        modifier = Modifier.weight(1f),
+                    )
+                    RiskMetaChip(
+                        label = "策略决策",
+                        value = decisionLabel,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                    RiskMetaChip("敏感验证", if (status.sensitiveVerified) "有效 ${status.sensitiveVerificationRemainingSeconds} 秒" else "未验证")
-                    RiskMetaChip("会话年龄", formatDurationSeconds(status.authAgeSeconds))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
+                ) {
+                    RiskMetaChip(
+                        label = "风险分",
+                        value = status.riskScore.toString(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    RiskMetaChip(
+                        label = "策略版本",
+                        value = status.policyVersion.ifBlank { "2.0.0" },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                    RiskMetaChip("空闲时长", formatDurationSeconds(status.idleSeconds))
-                    RiskMetaChip("当前环境", listOfNotNull(status.currentLocation, status.deviceType).joinToString(" / ").ifBlank { "未知环境" })
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
+                ) {
+                    RiskMetaChip(
+                        label = "敏感验证",
+                        value = if (status.sensitiveVerified) "有效 ${status.sensitiveVerificationRemainingSeconds} 秒" else "未验证",
+                        modifier = Modifier.weight(1f),
+                    )
+                    RiskMetaChip(
+                        label = "会话年龄",
+                        value = formatDurationSeconds(status.authAgeSeconds),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
+                ) {
+                    RiskMetaChip(
+                        label = "空闲时长",
+                        value = formatDurationSeconds(status.idleSeconds),
+                        modifier = Modifier.weight(1f),
+                    )
+                    RiskMetaChip(
+                        label = "当前环境",
+                        value = listOfNotNull(status.currentLocation, status.deviceType).joinToString(" / ").ifBlank { "未知环境" },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 if (status.multiEndpointAlert) {
                     val alertTone = adaptiveAlertColor(status.alertLevel)
@@ -1020,8 +1068,9 @@ private fun SecurityActionCard(
 private fun RiskMetaChip(
     label: String,
     value: String,
+    modifier: Modifier = Modifier,
 ) {
-    SectionCard {
+    SectionCard(modifier = modifier) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value, style = MaterialTheme.typography.bodyMedium)
