@@ -3575,8 +3575,11 @@ class DesktopWorkspace extends StatelessWidget {
     final Color sidebarSubtitleColor = isDark
         ? Colors.white70
         : const Color(0xFF6B614E);
-    final Color railSelectedTextColor = isDark
+    final Color railSelectedIconColor = isDark
         ? const Color(0xFF2A2204)
+        : const Color(0xFF3A2C00);
+    final Color railSelectedLabelColor = isDark
+        ? const Color(0xFFF4F4F4)
         : const Color(0xFF3A2C00);
     final Color railUnselectedColor = isDark
         ? Colors.white70
@@ -3694,10 +3697,10 @@ class DesktopWorkspace extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                         selectedIconTheme: IconThemeData(
-                          color: railSelectedTextColor,
+                          color: railSelectedIconColor,
                         ),
                         selectedLabelTextStyle: TextStyle(
-                          color: railSelectedTextColor,
+                          color: railSelectedLabelColor,
                           fontWeight: FontWeight.w700,
                         ),
                         indicatorColor: kPrimaryColor,
