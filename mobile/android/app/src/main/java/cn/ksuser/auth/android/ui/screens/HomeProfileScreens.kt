@@ -2,9 +2,11 @@ package cn.ksuser.auth.android.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +48,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
+import cn.ksuser.auth.android.R
+import cn.ksuser.auth.android.core.app.AppIdentityProvider
+import cn.ksuser.auth.android.core.env.EnvironmentProvider
 import cn.ksuser.auth.android.data.AppContainer
 import cn.ksuser.auth.android.data.model.UserProfile
 import cn.ksuser.auth.android.ui.components.AppOutlinedField
@@ -466,8 +472,10 @@ internal fun ProfileScreen(
 }
 
 @Composable
-internal fun AboutScreen() {
+internal fun AboutScreen(container: AppContainer) {
     val context = LocalContext.current
+    val appIdentity = remember(context) { AppIdentityProvider.current(context) }
+    val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
 
     Column(
         modifier = Modifier
@@ -485,26 +493,44 @@ internal fun AboutScreen() {
                     modifier = Modifier
                         .size(48.dp)
                         .clip(androidx.compose.foundation.shape.RoundedCornerShape(AppRadius.R16))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(MaterialTheme.colorScheme.surfaceContainerHigh),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                    Image(
+                        painter = painterResource(id = R.drawable.ksuser_launcher_icon),
+                        contentDescription = "应用图标",
+                        modifier = Modifier.size(40.dp),
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Ksuser Auth Android", style = MaterialTheme.typography.titleLarge)
-                    Text("版本 1.0.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        "版本 ${appIdentity.versionName}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
         SectionCard(modifier = Modifier.fillMaxWidth()) {
             AboutInfoRow(title = "软件名称", value = "Ksuser Auth Android")
-            AboutInfoRow(title = "版本号", value = "1.0.0")
+            AboutInfoRow(title = "版本号", value = "${appIdentity.versionName} (${appIdentity.versionCode})")
             AboutInfoRow(title = "备案号", value = "沪ICP备2025144703号-2")
         }
+        OverviewCard(
+            title = "环境与 Passkey",
+            subtitle = passkeyAvailabilityMessage,
+            body = buildString {
+                appendLine("API 前缀: ${EnvironmentProvider.current.apiBaseUrl}")
+                appendLine("RP ID: ${EnvironmentProvider.current.passkeyRpId}")
+                appendLine("Origin Hint: ${EnvironmentProvider.current.passkeyOriginHint}")
+                appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                appendLine("UA: ${AppIdentityProvider.userAgent()}")
+                appendLine("包名: ${appIdentity.packageName}")
+                appendLine("版本: ${appIdentity.versionName} (${appIdentity.versionCode})")
+                append("签名 SHA-256: ${appIdentity.signingSha256.joinToString(" / ").ifBlank { "未知" }}")
+            },
+        )
         SectionCard(modifier = Modifier.fillMaxWidth()) {
             AboutLinkRow(
                 title = "服务条款",

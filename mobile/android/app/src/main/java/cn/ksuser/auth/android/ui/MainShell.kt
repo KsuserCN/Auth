@@ -221,7 +221,7 @@ internal fun MainShell(
                 LogsScreen(container = container)
             }
             composable(ABOUT_ROUTE) {
-                AboutScreen()
+                AboutScreen(container = container)
             }
         }
     }

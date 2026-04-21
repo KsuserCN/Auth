@@ -9,7 +9,6 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.net.Uri
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -73,7 +72,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import cn.ksuser.auth.android.core.app.AppIdentityProvider
 import cn.ksuser.auth.android.core.env.EnvironmentProvider
 import cn.ksuser.auth.android.data.AppContainer
 import cn.ksuser.auth.android.data.model.AdaptiveAuthStatus
@@ -117,7 +115,6 @@ internal fun SecurityScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val clipboardManager = LocalClipboardManager.current
-    val appIdentity = remember(context) { AppIdentityProvider.current(context) }
     val passkeyAvailability = remember(container) { container.passkeyManager.availability() }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
     val scope = rememberCoroutineScope()
@@ -299,23 +296,6 @@ internal fun SecurityScreen(
             .padding(AppPagePadding),
         verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
     ) {
-        OverviewCard(
-            title = "环境与 Passkey",
-            subtitle = "原生 Credential Manager",
-            body = buildString {
-                appendLine("API 前缀: ${EnvironmentProvider.current.apiBaseUrl}")
-                appendLine("RP ID: ${EnvironmentProvider.current.passkeyRpId}")
-                appendLine("Origin Hint: ${EnvironmentProvider.current.passkeyOriginHint}")
-                appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-                appendLine("UA: ${AppIdentityProvider.userAgent()}")
-                appendLine("包名: ${appIdentity.packageName}")
-                appendLine("版本: ${appIdentity.versionName} (${appIdentity.versionCode})")
-                append("签名 SHA-256: ${appIdentity.signingSha256.joinToString(" / ").ifBlank { "未知" }}")
-            },
-            actionLabel = "刷新安全数据",
-            onAction = { scope.launch { reloadAll() } },
-        )
-
         SectionCard {
             Text("安全偏好", style = MaterialTheme.typography.titleMedium)
             SettingSwitchRow("启用 MFA", settings?.mfaEnabled == true) { checked ->
