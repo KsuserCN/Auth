@@ -3591,7 +3591,9 @@ class DesktopWorkspace extends StatelessWidget {
             LayoutBuilder(
               builder: (BuildContext context, BoxConstraints constraints) {
                 final bool extended = MediaQuery.of(context).size.width > 1240;
-                final double railWidth = extended ? 248 : 88;
+                final double railExtendedWidth = 286;
+                final double railContentWidth = 230;
+                final double railWidth = extended ? railExtendedWidth : 88;
 
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(18, 18, 0, 18),
@@ -3618,16 +3620,17 @@ class DesktopWorkspace extends StatelessWidget {
                           controller.selectedSection,
                         ),
                         extended: extended,
+                        trailingAtBottom: true,
                         groupAlignment: -1,
                         minWidth: 88,
-                        minExtendedWidth: 248,
+                        minExtendedWidth: railExtendedWidth,
                         onDestinationSelected: (int index) {
                           controller.setSection(DesktopSection.values[index]);
                         },
                         leading: Padding(
                           padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
                           child: SizedBox(
-                            width: extended ? 194 : 48,
+                            width: extended ? railContentWidth : 48,
                             child: extended
                                 ? Column(
                                     mainAxisSize: MainAxisSize.min,
@@ -3662,7 +3665,7 @@ class DesktopWorkspace extends StatelessWidget {
                                                   style: TextStyle(
                                                     color: sidebarTitleColor,
                                                     fontWeight: FontWeight.w800,
-                                                    fontSize: 18,
+                                                    fontSize: 20,
                                                   ),
                                                 ),
                                               ],
@@ -3670,59 +3673,6 @@ class DesktopWorkspace extends StatelessWidget {
                                           ),
                                         ],
                                       ),
-                                      if (user != null) ...<Widget>[
-                                        const SizedBox(height: 16),
-                                        Container(
-                                          padding: const EdgeInsets.all(14),
-                                          decoration: BoxDecoration(
-                                            color: isDark
-                                                ? Colors.white.withValues(
-                                                    alpha: 0.04,
-                                                  )
-                                                : Colors.white.withValues(
-                                                    alpha: 0.72,
-                                                  ),
-                                            borderRadius: BorderRadius.circular(
-                                              18,
-                                            ),
-                                            border: Border.all(
-                                              color: isDark
-                                                  ? Colors.white.withValues(
-                                                      alpha: 0.06,
-                                                    )
-                                                  : Colors.black.withValues(
-                                                      alpha: 0.04,
-                                                    ),
-                                            ),
-                                          ),
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Text(
-                                                user.username,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  color: sidebarTitleColor,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                user.email,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  color: sidebarSubtitleColor,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
                                     ],
                                   )
                                 : ClipRRect(
@@ -3783,9 +3733,10 @@ class DesktopWorkspace extends StatelessWidget {
                         trailing: Padding(
                           padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
                           child: SizedBox(
-                            width: extended ? 194 : 48,
+                            width: extended ? railContentWidth : 48,
                             child: Column(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisSize: MainAxisSize.max,
+                              mainAxisAlignment: MainAxisAlignment.end,
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: <Widget>[
                                 if (extended)
@@ -3820,27 +3771,252 @@ class DesktopWorkspace extends StatelessWidget {
                                     label: const Text('手机扫码登录'),
                                   )
                                 else
-                                  Tooltip(
-                                    message: '手机扫码登录',
-                                    child: IconButton.filled(
-                                      onPressed: () async {
-                                        try {
-                                          await showMobileBridgeQrDialog(
-                                            context,
-                                            controller,
-                                          );
-                                        } catch (error) {
-                                          if (context.mounted) {
-                                            showAppMessage(
-                                              context,
-                                              error.toString(),
-                                              error: true,
+                                  Column(
+                                    children: <Widget>[
+                                      Tooltip(
+                                        message: '手机扫码登录',
+                                        child: IconButton.filled(
+                                          onPressed: () async {
+                                            try {
+                                              await showMobileBridgeQrDialog(
+                                                context,
+                                                controller,
+                                              );
+                                            } catch (error) {
+                                              if (context.mounted) {
+                                                showAppMessage(
+                                                  context,
+                                                  error.toString(),
+                                                  error: true,
+                                                );
+                                              }
+                                            }
+                                          },
+                                          icon: const Icon(
+                                            Icons.qr_code_rounded,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Tooltip(
+                                        message: '打开网页端并自动登录',
+                                        child: IconButton.filledTonal(
+                                          onPressed: () async {
+                                            try {
+                                              await controller.runBusyAction(
+                                                '正在打开网页端...',
+                                                () async {
+                                                  final SessionTransferTicket ticket =
+                                                      await controller
+                                                          .createSessionTransferTicket(
+                                                            target: 'web',
+                                                          );
+                                                  final Uri baseUri = Uri.parse(
+                                                    controller.passkeyOrigin
+                                                            .endsWith('/')
+                                                        ? controller
+                                                              .passkeyOrigin
+                                                        : '${controller.passkeyOrigin}/',
+                                                  );
+                                                  final Uri launchUri = baseUri
+                                                      .resolve('login')
+                                                      .replace(
+                                                        queryParameters:
+                                                            <String, String>{
+                                                              'transferCode': ticket
+                                                                  .transferCode,
+                                                              'from': 'desktop',
+                                                              'apiBaseUrl':
+                                                                  controller
+                                                                      .apiBaseUrl,
+                                                            },
+                                                      );
+                                                  await openExternalUrl(
+                                                    launchUri.toString(),
+                                                  );
+                                                },
+                                              );
+                                              if (context.mounted) {
+                                                showAppMessage(
+                                                  context,
+                                                  '已在浏览器打开网页端并自动登录',
+                                                );
+                                              }
+                                            } catch (error) {
+                                              if (context.mounted) {
+                                                showAppMessage(
+                                                  context,
+                                                  error.toString(),
+                                                  error: true,
+                                                );
+                                              }
+                                            }
+                                          },
+                                          icon: const Icon(
+                                            Icons.open_in_browser_rounded,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Tooltip(
+                                        message: '通过网页登录同步回桌面端',
+                                        child: IconButton.filledTonal(
+                                          onPressed: () async {
+                                            try {
+                                              await controller.runBusyAction(
+                                                '正在打开网页登录页...',
+                                                () async {
+                                                  final Uri baseUri = Uri.parse(
+                                                    controller.passkeyOrigin
+                                                            .endsWith('/')
+                                                        ? controller
+                                                              .passkeyOrigin
+                                                        : '${controller.passkeyOrigin}/',
+                                                  );
+                                                  final Uri launchUri = baseUri
+                                                      .resolve('login')
+                                                      .replace(
+                                                        queryParameters:
+                                                            <String, String>{
+                                                              'desktopBridge':
+                                                                  '1',
+                                                              'from': 'desktop',
+                                                              'apiBaseUrl':
+                                                                  controller
+                                                                      .apiBaseUrl,
+                                                            },
+                                                      );
+                                                  await openExternalUrl(
+                                                    launchUri.toString(),
+                                                  );
+                                                },
+                                              );
+                                              if (context.mounted) {
+                                                showAppMessage(
+                                                  context,
+                                                  '已打开网页登录页；网页登录成功后会自动同步回桌面端',
+                                                );
+                                              }
+                                            } catch (error) {
+                                              if (context.mounted) {
+                                                showAppMessage(
+                                                  context,
+                                                  error.toString(),
+                                                  error: true,
+                                                );
+                                              }
+                                            }
+                                          },
+                                          icon: const Icon(Icons.sync_alt_rounded),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                if (extended) const SizedBox(height: 8),
+                                if (extended)
+                                  FilledButton.tonalIcon(
+                                    onPressed: () async {
+                                      try {
+                                        await controller.runBusyAction(
+                                          '正在打开网页端...',
+                                          () async {
+                                            final SessionTransferTicket ticket =
+                                                await controller
+                                                    .createSessionTransferTicket(
+                                                      target: 'web',
+                                                    );
+                                            final Uri baseUri = Uri.parse(
+                                              controller.passkeyOrigin.endsWith(
+                                                    '/',
+                                                  )
+                                                  ? controller.passkeyOrigin
+                                                  : '${controller.passkeyOrigin}/',
                                             );
-                                          }
+                                            final Uri launchUri = baseUri
+                                                .resolve('login')
+                                                .replace(
+                                                  queryParameters:
+                                                      <String, String>{
+                                                        'transferCode': ticket
+                                                            .transferCode,
+                                                        'from': 'desktop',
+                                                        'apiBaseUrl': controller
+                                                            .apiBaseUrl,
+                                                      },
+                                                );
+                                            await openExternalUrl(
+                                              launchUri.toString(),
+                                            );
+                                          },
+                                        );
+                                        if (context.mounted) {
+                                          showAppMessage(
+                                            context,
+                                            '已在浏览器打开网页端并自动登录',
+                                          );
                                         }
-                                      },
-                                      icon: const Icon(Icons.qr_code_rounded),
-                                    ),
+                                      } catch (error) {
+                                        if (context.mounted) {
+                                          showAppMessage(
+                                            context,
+                                            error.toString(),
+                                            error: true,
+                                          );
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.open_in_browser_rounded),
+                                    label: const Text('打开网页端'),
+                                  ),
+                                if (extended) const SizedBox(height: 8),
+                                if (extended)
+                                  FilledButton.tonalIcon(
+                                    onPressed: () async {
+                                      try {
+                                        await controller.runBusyAction(
+                                          '正在打开网页登录页...',
+                                          () async {
+                                            final Uri baseUri = Uri.parse(
+                                              controller.passkeyOrigin.endsWith(
+                                                    '/',
+                                                  )
+                                                  ? controller.passkeyOrigin
+                                                  : '${controller.passkeyOrigin}/',
+                                            );
+                                            final Uri launchUri = baseUri
+                                                .resolve('login')
+                                                .replace(
+                                                  queryParameters:
+                                                      <String, String>{
+                                                        'desktopBridge': '1',
+                                                        'from': 'desktop',
+                                                        'apiBaseUrl': controller
+                                                            .apiBaseUrl,
+                                                      },
+                                                );
+                                            await openExternalUrl(
+                                              launchUri.toString(),
+                                            );
+                                          },
+                                        );
+                                        if (context.mounted) {
+                                          showAppMessage(
+                                            context,
+                                            '已打开网页登录页；网页登录成功后会自动同步回桌面端',
+                                          );
+                                        }
+                                      } catch (error) {
+                                        if (context.mounted) {
+                                          showAppMessage(
+                                            context,
+                                            error.toString(),
+                                            error: true,
+                                          );
+                                        }
+                                      }
+                                    },
+                                    icon: const Icon(Icons.sync_alt_rounded),
+                                    label: const Text('网页登录同步'),
                                   ),
                                 const SizedBox(height: 12),
                                 if (extended)
@@ -4077,83 +4253,6 @@ class OverviewPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _SectionCard(
-            title: '跨端联通',
-            subtitle: '桌面端与网页端可直接互通，无需重复输入密码。',
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                FilledButton.icon(
-                  onPressed: () async {
-                    try {
-                      await controller.runBusyAction('正在打开网页端...', () async {
-                        final SessionTransferTicket ticket = await controller
-                            .createSessionTransferTicket(target: 'web');
-                        final Uri baseUri = Uri.parse(
-                          controller.passkeyOrigin.endsWith('/')
-                              ? controller.passkeyOrigin
-                              : '${controller.passkeyOrigin}/',
-                        );
-                        final Uri launchUri = baseUri
-                            .resolve('login')
-                            .replace(
-                              queryParameters: <String, String>{
-                                'transferCode': ticket.transferCode,
-                                'from': 'desktop',
-                                'apiBaseUrl': controller.apiBaseUrl,
-                              },
-                            );
-                        await openExternalUrl(launchUri.toString());
-                      });
-                      if (context.mounted) {
-                        showAppMessage(context, '已在浏览器打开网页端并自动登录');
-                      }
-                    } catch (error) {
-                      if (context.mounted) {
-                        showAppMessage(context, error.toString(), error: true);
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.open_in_browser_rounded),
-                  label: const Text('打开网页端并自动登录'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: () async {
-                    try {
-                      await controller.runBusyAction('正在打开网页登录页...', () async {
-                        final Uri baseUri = Uri.parse(
-                          controller.passkeyOrigin.endsWith('/')
-                              ? controller.passkeyOrigin
-                              : '${controller.passkeyOrigin}/',
-                        );
-                        final Uri launchUri = baseUri
-                            .resolve('login')
-                            .replace(
-                              queryParameters: <String, String>{
-                                'desktopBridge': '1',
-                                'from': 'desktop',
-                                'apiBaseUrl': controller.apiBaseUrl,
-                              },
-                            );
-                        await openExternalUrl(launchUri.toString());
-                      });
-                      if (context.mounted) {
-                        showAppMessage(context, '已打开网页登录页；网页登录成功后会自动同步回桌面端');
-                      }
-                    } catch (error) {
-                      if (context.mounted) {
-                        showAppMessage(context, error.toString(), error: true);
-                      }
-                    }
-                  },
-                  icon: const Icon(Icons.sync_alt_rounded),
-                  label: const Text('通过网页登录同步回桌面端'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
           Wrap(
             spacing: 16,
             runSpacing: 16,
