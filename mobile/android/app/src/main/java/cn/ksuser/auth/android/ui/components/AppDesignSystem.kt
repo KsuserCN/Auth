@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -177,42 +177,41 @@ fun GradientPrimaryButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val disabledColors: ButtonColors = ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.52f),
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f),
-        disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.62f),
-    )
+    val buttonShape = RoundedCornerShape(AppRadius.R12)
+    val buttonBrush = if (enabled) {
+        Brush.linearGradient(listOf(BrandButtonGradientStart, BrandButtonGradientEnd))
+    } else {
+        Brush.linearGradient(
+            listOf(
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
+            ),
+        )
+    }
     Button(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             .heightIn(min = 42.dp)
-            .clip(RoundedCornerShape(AppRadius.R12)),
-        shape = RoundedCornerShape(AppRadius.R12),
-        contentPadding = PaddingValues(0.dp),
-        colors = disabledColors,
+            .clip(buttonShape)
+            .background(buttonBrush, shape = buttonShape),
+        shape = buttonShape,
+        contentPadding = PaddingValues(vertical = AppSpacing.S8),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+            disabledElevation = 0.dp,
+        ),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = Color.Transparent,
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.62f),
+        ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (enabled) {
-                        Brush.linearGradient(listOf(BrandButtonGradientStart, BrandButtonGradientEnd))
-                    } else {
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.38f),
-                            ),
-                        )
-                    },
-                )
-                .padding(vertical = AppSpacing.S8),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text)
-        }
+        Text(text)
     }
 }
 

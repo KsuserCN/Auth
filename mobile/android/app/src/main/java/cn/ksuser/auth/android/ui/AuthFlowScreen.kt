@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import cn.ksuser.auth.android.R
@@ -278,12 +279,13 @@ internal fun AuthFlowScreen(
                                         onValueChange = { password = it },
                                         label = "密码",
                                     )
-                                    SolidPrimaryButton(
-                                        text = if (state.isBusy) "登录中..." else "继续",
-                                        onClick = { viewModel.passwordLogin(email.trim(), password) },
-                                        enabled = !state.isBusy && email.isNotBlank() && password.isNotBlank(),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                                SolidPrimaryButton(
+                                    text = "继续",
+                                    onClick = { viewModel.passwordLogin(email.trim(), password) },
+                                    enabled = !state.isBusy && email.isNotBlank() && password.isNotBlank(),
+                                    isLoading = state.isBusy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                                 }
 
                                 else -> {
@@ -303,12 +305,13 @@ internal fun AuthFlowScreen(
                                             LoadingButtonContent(text = "发送", isLoading = state.isBusy)
                                         }
                                     }
-                                    SolidPrimaryButton(
-                                        text = if (state.isBusy) "登录中..." else "继续",
-                                        onClick = { viewModel.loginWithCode(email.trim(), code.trim()) },
-                                        enabled = !state.isBusy && email.isNotBlank() && code.isNotBlank(),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
+                                SolidPrimaryButton(
+                                    text = "继续",
+                                    onClick = { viewModel.loginWithCode(email.trim(), code.trim()) },
+                                    enabled = !state.isBusy && email.isNotBlank() && code.isNotBlank(),
+                                    isLoading = state.isBusy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                                 }
                             }
                         }
@@ -337,16 +340,29 @@ internal fun AuthFlowScreen(
                                     }
                                 },
                                 enabled = !state.isBusy && passkeyAvailability == PasskeyAvailability.Available,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(AppRadius.R12),
+                        ) {
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(AppRadius.R12),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
                             ) {
+                                if (state.isBusy) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacing.S8))
+                                }
                                 Icon(Icons.Outlined.Key, contentDescription = null)
                                 Spacer(modifier = Modifier.width(AppSpacing.S8))
-                                Text(if (state.isBusy) "处理中..." else "使用通行密钥(Passkey)登录")
+                                Text("使用通行密钥(Passkey)登录")
                             }
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -396,6 +412,7 @@ private fun SolidPrimaryButton(
     text: String,
     onClick: () -> Unit,
     enabled: Boolean,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     Button(
@@ -403,6 +420,13 @@ private fun SolidPrimaryButton(
         enabled = enabled,
         modifier = modifier.height(46.dp),
         shape = RoundedCornerShape(AppRadius.R12),
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+            disabledElevation = 0.dp,
+        ),
         colors = ButtonDefaults.buttonColors(
             containerColor = BrandButtonGradientStart,
             contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -410,6 +434,6 @@ private fun SolidPrimaryButton(
             disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
         ),
     ) {
-        Text(text)
+        LoadingButtonContent(text = text, isLoading = isLoading)
     }
 }
