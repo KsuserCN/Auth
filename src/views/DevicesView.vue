@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">设备与登录</h1>
-        <p class="page-subtitle">查看和管理您已连接的设备</p>
+        <h1 class="page-title">设备管理</h1>
+        <p class="page-subtitle">查看在线设备、登录会话和当前状态</p>
       </div>
       <el-button @click="loadSessions" :loading="loading" :icon="Refresh"> 刷新 </el-button>
     </div>

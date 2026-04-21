@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">基本信息</h1>
-        <p class="page-subtitle">编辑和管理您的个人基本信息</p>
+        <h1 class="page-title">账号资料</h1>
+        <p class="page-subtitle">查看和维护您的账户资料与个人信息</p>
       </div>
     </div>
 

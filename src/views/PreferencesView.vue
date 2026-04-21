@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">偏好设置</h1>
-        <p class="page-subtitle">自定义您的使用偏好和通知设置</p>
+        <h1 class="page-title">使用偏好</h1>
+        <p class="page-subtitle">自定义界面外观和通知偏好</p>
       </div>
     </div>
 

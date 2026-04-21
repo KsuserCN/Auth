@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">登录选项</h1>
-        <p class="page-subtitle">管理您的登录凭据和认证方式</p>
+        <h1 class="page-title">登录方式</h1>
+        <p class="page-subtitle">管理密码、Passkey、TOTP 和第三方登录绑定</p>
       </div>
     </div>
 

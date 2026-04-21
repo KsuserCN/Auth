@@ -2,8 +2,8 @@
   <div class="open-platform-page">
     <div class="content-header">
       <div>
-        <h1 class="page-title">开放平台</h1>
-        <p class="page-subtitle">提供第三方多服务连接能力</p>
+        <h1 class="page-title">服务接入</h1>
+        <p class="page-subtitle">创建并管理 OAuth 与 SSO 接入应用</p>
       </div>
     </div>
 

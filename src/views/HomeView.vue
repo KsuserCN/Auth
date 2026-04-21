@@ -2,8 +2,8 @@
   <div class="overview-page">
     <div class="content-header card-like">
       <div class="header-main">
-        <h1 class="page-title">账号概览</h1>
-        <p class="page-subtitle">在这里查看你的账号整体评分与常用入口</p>
+        <h1 class="page-title">账号总览</h1>
+        <p class="page-subtitle">在这里查看账号安全状态、常用入口和近期概况</p>
       </div>
       <el-button class="primary-btn" :loading="refreshing" @click="refreshOverview">
         <el-icon>
@@ -73,7 +73,7 @@
                 <el-icon>
                   <User />
                 </el-icon>
-                <span>基本信息</span>
+                <span>账号资料</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/security')">
                 <el-icon>
@@ -85,31 +85,31 @@
                 <el-icon>
                   <Link />
                 </el-icon>
-                <span>登录选项</span>
+                <span>登录方式</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/devices')">
                 <el-icon>
                   <Monitor />
                 </el-icon>
-                <span>设备与登录</span>
+                <span>设备管理</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/privacy')">
                 <el-icon>
                   <DataLine />
                 </el-icon>
-                <span>隐私与数据</span>
+                <span>访问授权</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/preferences')">
                 <el-icon>
                   <Setting />
                 </el-icon>
-                <span>偏好设置</span>
+                <span>使用偏好</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/open-platform')">
                 <el-icon>
                   <Connection />
                 </el-icon>
-                <span>开放平台</span>
+                <span>服务接入</span>
               </button>
             </div>
           </el-card>

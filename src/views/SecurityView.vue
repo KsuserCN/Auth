@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">安全性</h1>
-        <p class="page-subtitle">管理您的账户安全设置和登录认证方式</p>
+        <h1 class="page-title">安全设置</h1>
+        <p class="page-subtitle">管理账户防护、验证方式和安全提醒</p>
       </div>
     </div>
 

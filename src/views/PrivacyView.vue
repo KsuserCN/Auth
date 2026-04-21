@@ -2,8 +2,8 @@
   <div class="privacy-page">
     <div class="content-header">
       <div>
-        <h1 class="page-title">隐私与数据</h1>
-        <p class="page-subtitle">管理您的数据、隐私和授权应用</p>
+        <h1 class="page-title">访问授权</h1>
+        <p class="page-subtitle">管理已授权应用及其可访问的账号信息</p>
       </div>
     </div>
 

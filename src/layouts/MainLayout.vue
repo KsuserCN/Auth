@@ -62,7 +62,7 @@
       <el-container class="body">
         <!-- 侧边栏 -->
         <el-aside class="sidebar" width="240px">
-          <div class="side-title">设置中心</div>
+          <div class="side-title">账号中心</div>
           <el-menu class="side-menu" :default-active="$route.path" router>
             <el-menu-item
               v-for="item in menuItems"
@@ -103,7 +103,7 @@
       size="78%"
       :with-header="false"
     >
-      <div class="side-title mobile-side-title">设置中心</div>
+      <div class="side-title mobile-side-title">账号中心</div>
       <el-menu
         class="side-menu mobile-side-menu"
         :default-active="currentPath"
@@ -170,14 +170,14 @@ const route = useRoute()
 const mobileMenuVisible = ref(false)
 
 const menuItems = [
-  { path: '/home/overview', label: '概览', icon: HomeFilled },
-  { path: '/home/profile', label: '基本信息', icon: User },
-  { path: '/home/security', label: '安全性', icon: Lock },
-  { path: '/home/login-options', label: '登录选项', icon: Key },
-  { path: '/home/devices', label: '设备与登录', icon: Monitor },
-  { path: '/home/privacy', label: '隐私与数据', icon: DataLine },
-  { path: '/home/preferences', label: '偏好设置', icon: Setting },
-  { path: '/home/open-platform', label: '开放平台', icon: Connection },
+  { path: '/home/overview', label: '账号总览', icon: HomeFilled },
+  { path: '/home/profile', label: '账号资料', icon: User },
+  { path: '/home/security', label: '安全设置', icon: Lock },
+  { path: '/home/login-options', label: '登录方式', icon: Key },
+  { path: '/home/devices', label: '设备管理', icon: Monitor },
+  { path: '/home/privacy', label: '访问授权', icon: DataLine },
+  { path: '/home/preferences', label: '使用偏好', icon: Setting },
+  { path: '/home/open-platform', label: '服务接入', icon: Connection },
 ]
 
 const currentPath = computed(() => route.path)
