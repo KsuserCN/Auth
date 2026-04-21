@@ -135,9 +135,20 @@
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
           沪ICP备2025144703号-2
         </a>
-        <a href="https://beian.mps.gov.cn/#/query/webSearch?code=31011502403952" target="_blank"
-          rel="noopener noreferrer">
-          沪公网安备31011502403952号
+        <a
+          class="beian-link with-img"
+          href="https://beian.mps.gov.cn/#/query/webSearch?code=31011502403952"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            class="beian-icon"
+            src="https://qcloudimg.tencent-cloud.cn/raw/eed02831a0e201b8d794c8282c40cf2e.png"
+            alt="公安备案图标"
+            loading="lazy"
+            decoding="async"
+          />
+          <span>沪公网安备31011502403952号</span>
         </a>
       </div>
     </footer>
@@ -298,6 +309,7 @@ onMounted(async () => {
   max-width: 1400px;
   min-height: calc(100vh - 112px);
   margin: 0 auto;
+  padding-bottom: 8px;
 }
 
 .card-like {
@@ -551,8 +563,10 @@ onMounted(async () => {
 }
 
 .overview-footer {
+  position: sticky;
+  bottom: 0;
   margin-top: auto;
-  padding: 14px 0 6px;
+  padding: 14px 0 8px;
   border-top: 1px solid var(--el-border-color-lighter);
   display: flex;
   align-items: flex-start;
@@ -561,6 +575,9 @@ onMounted(async () => {
   color: var(--el-text-color-secondary);
   font-size: 12px;
   line-height: 1.8;
+  background: color-mix(in srgb, var(--el-bg-color-page) 92%, transparent);
+  backdrop-filter: blur(8px);
+  z-index: 10;
 }
 
 .footer-left,
@@ -584,6 +601,18 @@ onMounted(async () => {
   color: var(--el-text-color-regular);
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.beian-link.with-img {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.beian-icon {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
 }
 
 @media (max-width: 992px) {
