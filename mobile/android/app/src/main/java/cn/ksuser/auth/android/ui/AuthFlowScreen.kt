@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,26 +16,30 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +48,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import cn.ksuser.auth.android.R
 import cn.ksuser.auth.android.data.AppContainer
 import cn.ksuser.auth.android.data.model.PasskeyAvailability
 import cn.ksuser.auth.android.ui.components.AppOutlinedField
@@ -55,6 +64,7 @@ import cn.ksuser.auth.android.ui.components.AppSpacing
 import cn.ksuser.auth.android.ui.components.GradientPrimaryButton
 import cn.ksuser.auth.android.ui.components.LoadingButtonContent
 import cn.ksuser.auth.android.ui.components.SectionCard
+import cn.ksuser.auth.android.ui.theme.BrandButtonGradientStart
 import cn.ksuser.auth.android.ui.theme.rememberAppBackgroundBrush
 import kotlinx.coroutines.launch
 
@@ -78,7 +88,6 @@ internal fun AuthFlowScreen(
             Toast.makeText(context, "相机权限被拒绝，无法扫码", Toast.LENGTH_SHORT).show()
         }
     }
-    var authTab by rememberSaveable { mutableStateOf(0) }
     var loginMethod by rememberSaveable { mutableStateOf(0) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -88,6 +97,17 @@ internal fun AuthFlowScreen(
     val passkeyAvailability = remember(container) { container.passkeyManager.availability() }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
     val backgroundBrush = rememberAppBackgroundBrush()
+    val openQrScanner = {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.CAMERA,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            showQrScanner = true
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -98,7 +118,6 @@ internal fun AuthFlowScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(backgroundBrush)
-                .verticalScroll(rememberScrollState())
                 .padding(AppPagePadding),
             verticalArrangement = Arrangement.spacedBy(AppSpacing.S20),
         ) {
@@ -107,10 +126,41 @@ internal fun AuthFlowScreen(
                 verticalArrangement = Arrangement.spacedBy(AppSpacing.S8),
             ) {
                 Spacer(modifier = Modifier.height(18.dp))
-                Text(
-                    "登录",
-                    style = MaterialTheme.typography.headlineMedium,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12)) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ksuser_launcher_icon),
+                            contentDescription = "Ksuser Logo",
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(8.dp),
+                                )
+                                .padding(2.dp),
+                        )
+                        Text(
+                            "登录",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = openQrScanner,
+                        enabled = !state.isBusy,
+                        shape = RoundedCornerShape(AppRadius.R12),
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.size(42.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                    ) {
+                        Icon(Icons.Outlined.QrCodeScanner, contentDescription = "扫码登录/授权")
+                    }
+                }
                 Text(
                     if (state.pendingMfa != null) {
                         "继续完成账号验证"
@@ -120,29 +170,6 @@ internal fun AuthFlowScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-
-            OutlinedButton(
-                onClick = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context,
-                        Manifest.permission.CAMERA,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) {
-                        showQrScanner = true
-                    } else {
-                        cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(AppRadius.R12),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            ) {
-                Icon(Icons.Outlined.QrCodeScanner, contentDescription = null)
-                Spacer(modifier = Modifier.width(AppSpacing.S8))
-                Text("扫码登录 / 扫码授权")
             }
 
             if (state.pendingMfa != null) {
@@ -203,45 +230,51 @@ internal fun AuthFlowScreen(
                 }
             } else {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                     verticalArrangement = Arrangement.spacedBy(AppSpacing.S16),
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
-                        tonalElevation = 1.dp,
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 18.dp, vertical = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
-                        ) {
+                        SectionCard(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                "选择登录方式",
+                                "账号登录",
                                 style = MaterialTheme.typography.titleMedium,
                             )
-                            TabRow(selectedTabIndex = authTab) {
-                                Tab(selected = authTab == 0, onClick = { authTab = 0 }, text = { Text("登录") })
+                            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                                FilterChip(
+                                    selected = loginMethod == 0,
+                                    onClick = { loginMethod = 0 },
+                                    label = { Text("密码登录") },
+                                )
+                                FilterChip(
+                                    selected = loginMethod == 1,
+                                    onClick = { loginMethod = 1 },
+                                    label = { Text("验证码登录") },
+                                )
                             }
-                            TabRow(selectedTabIndex = loginMethod) {
-                                Tab(selected = loginMethod == 0, onClick = { loginMethod = 0 }, text = { Text("密码") })
-                                Tab(selected = loginMethod == 1, onClick = { loginMethod = 1 }, text = { Text("验证码") })
-                            }
+                        }
+
+                        SectionCard(modifier = Modifier.fillMaxWidth()) {
+                            LoginLineField(
+                                value = email,
+                                onValueChange = { email = it },
+                                label = "邮箱",
+                            )
                             when (loginMethod) {
                                 0 -> {
-                                    AppOutlinedField(
-                                        value = email,
-                                        onValueChange = { email = it },
-                                        label = { Text("邮箱") },
-                                    )
-                                    AppOutlinedField(
+                                    LoginLineField(
                                         value = password,
                                         onValueChange = { password = it },
-                                        label = { Text("密码") },
+                                        label = "密码",
                                     )
-                                    GradientPrimaryButton(
+                                    SolidPrimaryButton(
                                         text = if (state.isBusy) "登录中..." else "继续",
                                         onClick = { viewModel.passwordLogin(email.trim(), password) },
                                         enabled = !state.isBusy && email.isNotBlank() && password.isNotBlank(),
@@ -250,28 +283,23 @@ internal fun AuthFlowScreen(
                                 }
 
                                 else -> {
-                                    AppOutlinedField(
-                                        value = email,
-                                        onValueChange = { email = it },
-                                        label = { Text("邮箱") },
-                                    )
                                     Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                                        AppOutlinedField(
+                                        LoginLineField(
                                             value = code,
                                             onValueChange = { code = it },
-                                            label = { Text("验证码") },
+                                            label = "验证码",
                                             modifier = Modifier.weight(1f),
                                         )
                                         OutlinedButton(
                                             onClick = { viewModel.sendLoginCode(email.trim()) },
                                             enabled = !state.isBusy && email.isNotBlank(),
                                             modifier = Modifier.height(56.dp),
-                                            shape = androidx.compose.foundation.shape.RoundedCornerShape(AppRadius.R12),
+                                            shape = RoundedCornerShape(AppRadius.R12),
                                         ) {
                                             LoadingButtonContent(text = "发送", isLoading = state.isBusy)
                                         }
                                     }
-                                    GradientPrimaryButton(
+                                    SolidPrimaryButton(
                                         text = if (state.isBusy) "登录中..." else "继续",
                                         onClick = { viewModel.loginWithCode(email.trim(), code.trim()) },
                                         enabled = !state.isBusy && email.isNotBlank() && code.isNotBlank(),
@@ -282,14 +310,11 @@ internal fun AuthFlowScreen(
                         }
                     }
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-                    ) {
+                    SectionCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            "或使用 Passkey",
+                            "使用通行密钥(Passkey)登录",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
                         )
                         if (passkeyAvailability != PasskeyAvailability.Available) {
                             Text(
@@ -308,11 +333,11 @@ internal fun AuthFlowScreen(
                             },
                             enabled = !state.isBusy && passkeyAvailability == PasskeyAvailability.Available,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(AppRadius.R12),
+                            shape = RoundedCornerShape(AppRadius.R12),
                         ) {
                             Icon(Icons.Outlined.Key, contentDescription = null)
                             Spacer(modifier = Modifier.width(AppSpacing.S8))
-                            Text(if (state.isBusy) "处理中..." else "使用 Passkey 登录")
+                            Text(if (state.isBusy) "处理中..." else "使用通行密钥(Passkey)登录")
                         }
                     }
                 }
@@ -331,5 +356,54 @@ internal fun AuthFlowScreen(
                 scope.launch { snackbarHostState.showSnackbar(message) }
             },
         )
+    }
+}
+
+@Composable
+private fun LoginLineField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    TextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        singleLine = true,
+        label = { Text(label) },
+        shape = RoundedCornerShape(0.dp),
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            disabledContainerColor = Color.Transparent,
+            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+        ),
+    )
+}
+
+@Composable
+private fun SolidPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.height(46.dp),
+        shape = RoundedCornerShape(AppRadius.R12),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = BrandButtonGradientStart,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = BrandButtonGradientStart.copy(alpha = 0.45f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.65f),
+        ),
+    ) {
+        Text(text)
     }
 }
