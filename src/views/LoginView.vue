@@ -116,13 +116,21 @@
                 <div v-if="mobileBridgeAvailable" class="mobile-bridge-card">
                   <div class="mobile-bridge-copy">
                     <div class="mobile-bridge-title">
-                      {{ mobileBridgeAwaitingApproval ? '正在等待 App 确认' : '使用安卓 App 登录' }}
+                      {{
+                        mobileBridgeInWeChat
+                          ? '微信内无法直接拉起 App'
+                          : mobileBridgeAwaitingApproval
+                            ? '正在等待 App 确认'
+                            : '使用安卓 App 登录'
+                      }}
                     </div>
                     <div class="mobile-bridge-description">
                       {{
-                        mobileBridgeAwaitingApproval
-                          ? '请切回 Ksuser App 完成确认；确认后当前网页会自动登录。'
-                          : '在已登录的 Ksuser 安卓 App 中确认一次，无需手动输入密码。'
+                        mobileBridgeInWeChat
+                          ? '请先在系统浏览器（Chrome/系统浏览器）打开当前页面，再使用 App 登录。'
+                          : mobileBridgeAwaitingApproval
+                            ? '请切回 Ksuser App 完成确认；确认后当前网页会自动登录。'
+                            : '在已登录的 Ksuser 安卓 App 中确认一次，无需手动输入密码。'
                       }}
                     </div>
                     <div v-if="mobileBridgeFallbackHint" class="mobile-bridge-tip">
@@ -131,6 +139,15 @@
                   </div>
                   <div class="mobile-bridge-actions">
                     <el-button
+                      v-if="mobileBridgeInWeChat"
+                      class="mobile-bridge-btn"
+                      type="primary"
+                      @click="copyCurrentLinkForExternalBrowser"
+                    >
+                      复制链接去浏览器打开
+                    </el-button>
+                    <el-button
+                      v-else
                       class="mobile-bridge-btn"
                       type="primary"
                       @click="handleMobileBridgeLogin"
@@ -511,6 +528,7 @@ import {
   fetchMobileBridgeStatus,
   getMobileBridgeChallengeIdFromUrl,
   isAndroidMobileBridgeSupported,
+  isWeChatInAppBrowser,
   launchMobileBridgeApp,
   readMobileBridgeFallbackFlag,
   stripMobileBridgeQuery,
@@ -715,6 +733,7 @@ const desktopBridgeReady = computed(() => {
 const desktopBridgeHint = computed(() => route.query.desktopBridge === '1')
 const mobileBridgeSupported = computed(() => step.value === 'email' && isAndroidMobileBridgeSupported())
 const mobileBridgeAvailable = computed(() => mobileBridgeSupported.value)
+const mobileBridgeInWeChat = computed(() => mobileBridgeSupported.value && isWeChatInAppBrowser())
 const mobileBridgeFallbackHint = computed(() => {
   const url = new URL(window.location.href)
   return readMobileBridgeFallbackFlag(url)
@@ -1814,8 +1833,33 @@ const clearMobileBridgeChallenge = async () => {
   await resetMobileBridgeState(true)
 }
 
+const copyCurrentLinkForExternalBrowser = async () => {
+  const text = window.location.href
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const tempInput = document.createElement('textarea')
+      tempInput.value = text
+      tempInput.style.position = 'fixed'
+      tempInput.style.opacity = '0'
+      document.body.appendChild(tempInput)
+      tempInput.select()
+      document.execCommand('copy')
+      document.body.removeChild(tempInput)
+    }
+    ElMessage.success('已复制当前链接，请在系统浏览器中打开')
+  } catch {
+    ElMessage.error('复制失败，请手动复制地址栏链接')
+  }
+}
+
 const handleMobileBridgeLogin = async () => {
   if (mobileBridgeLoading.value) {
+    return
+  }
+  if (mobileBridgeInWeChat.value) {
+    ElMessage.warning('微信内无法直接拉起 App，请先复制链接并在系统浏览器打开')
     return
   }
 

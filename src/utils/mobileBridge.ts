@@ -16,6 +16,13 @@ export const isAndroidMobileBridgeSupported = (): boolean => {
   return /Android/i.test(navigator.userAgent || '')
 }
 
+export const isWeChatInAppBrowser = (): boolean => {
+  if (typeof navigator === 'undefined') {
+    return false
+  }
+  return /MicroMessenger/i.test(navigator.userAgent || '')
+}
+
 export const getMobileBridgeChallengeIdFromUrl = (url: URL): string => {
   return url.searchParams.get(MOBILE_BRIDGE_CHALLENGE_QUERY_KEY)?.trim() || ''
 }
