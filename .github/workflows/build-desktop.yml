@@ -5,10 +5,20 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/build-desktop.yml'
   pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/build-desktop.yml'
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: desktop
 
 jobs:
   build:
@@ -78,5 +88,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_name }}.zip
+          path: desktop/${{ matrix.artifact_name }}.zip
           if-no-files-found: error
