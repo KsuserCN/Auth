@@ -25,6 +25,10 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  passkey_bridge_ = std::make_unique<runner::PasskeyBridge>(
+      flutter_controller_->engine()->messenger(), GetHandle());
+  local_auth_bridge_ = std::make_unique<runner::LocalAuthBridge>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +44,12 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (local_auth_bridge_) {
+    local_auth_bridge_.reset();
+  }
+  if (passkey_bridge_) {
+    passkey_bridge_.reset();
+  }
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

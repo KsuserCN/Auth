@@ -506,9 +506,8 @@ String buildRemoteQrCodeImageUrl(String text, {bool useDarkModeStyle = false}) {
 
 Future<void> showMobileBridgeQrDialog(
   BuildContext context,
-  AppController controller, {
-  String localAuthReason = '请先完成身份验证后再展示手机登录二维码',
-}) async {
+  AppController controller,
+) async {
   final ThemeData theme = Theme.of(context);
   final bool isDark = theme.brightness == Brightness.dark;
   final bool available = await LocalAuthPlatform.isAvailable();
@@ -516,7 +515,7 @@ Future<void> showMobileBridgeQrDialog(
     throw ApiException('当前设备不支持系统本地认证');
   }
 
-  await LocalAuthPlatform.authenticate(reason: localAuthReason);
+  await LocalAuthPlatform.authenticate(reason: '请先完成身份验证后再展示手机登录二维码');
   if (!context.mounted) {
     return;
   }
@@ -1290,8 +1289,10 @@ String themeModeLabel(ThemeMode mode) {
 }
 
 class PasskeyPlatform {
+  static bool get supportsAssertion => Platform.isWindows;
+
   static Future<bool> isAvailable() async {
-    if (!Platform.isMacOS) {
+    if (!supportsAssertion) {
       return false;
     }
     try {
@@ -1305,7 +1306,7 @@ class PasskeyPlatform {
     required PasskeyAssertionOptions options,
     required String origin,
   }) async {
-    if (!Platform.isMacOS) {
+    if (!supportsAssertion) {
       throw ApiException('当前平台暂不支持原生 Passkey');
     }
 
@@ -1315,6 +1316,7 @@ class PasskeyPlatform {
             'performAssertion',
             <String, dynamic>{
               'challenge': options.challenge,
+              'timeout': options.timeout,
               'rpId': options.rpId,
               'origin': origin,
               'userVerification': options.userVerification,
@@ -1337,8 +1339,11 @@ class PasskeyPlatform {
 }
 
 class LocalAuthPlatform {
+  static bool get supportsProtectedActions =>
+      Platform.isMacOS || Platform.isWindows;
+
   static Future<bool> isAvailable() async {
-    if (!Platform.isMacOS) {
+    if (!supportsProtectedActions) {
       return false;
     }
     try {
@@ -1349,7 +1354,7 @@ class LocalAuthPlatform {
   }
 
   static Future<void> authenticate({required String reason}) async {
-    if (!Platform.isMacOS) {
+    if (!supportsProtectedActions) {
       throw ApiException('当前平台暂不支持系统本地认证');
     }
 
@@ -1365,6 +1370,18 @@ class LocalAuthPlatform {
       }
     } on PlatformException catch (error) {
       final String code = error.code.trim();
+      if (Platform.isWindows) {
+        if (code == 'canceled') {
+          throw ApiException('用户取消了系统身份验证');
+        }
+        if (code == 'not_available') {
+          throw ApiException('当前设备未启用 Windows Hello、PIN 或其他系统身份验证方式');
+        }
+        final String message = error.message?.trim().isNotEmpty == true
+            ? error.message!.trim()
+            : 'Windows 系统身份验证失败';
+        throw ApiException(message);
+      }
       if (code == 'canceled') {
         throw ApiException('用户取消了本地认证');
       }
@@ -1599,28 +1616,56 @@ class AppController extends ChangeNotifier {
       authBusy = true;
       notifyListeners();
       try {
-        try {
-          final BrowserPasskeyBridgeResponse response =
-              await BrowserPasskeyBridge.start(
-                passkeyOrigin: passkeyOrigin,
-                apiBaseUrl: apiBaseUrl,
-                mode: BrowserPasskeyBridgeMode.mfa,
-                mfaChallengeId: challengeId,
+        if (usesNativePasskey) {
+          if (!await PasskeyPlatform.isAvailable()) {
+            throw ApiException(passkeyUnavailableMessage);
+          }
+          final PasskeyAssertionOptions options =
+              await getPasskeyAuthenticationOptions();
+          final PasskeyAssertionResult assertion =
+              await PasskeyPlatform.getAssertion(
+                options: options,
+                origin: passkeyOrigin,
               );
-          if (response.transferCode != null &&
-              response.transferCode!.isNotEmpty) {
-            await importSessionTransferTicket(response.transferCode!);
-            pendingMfaChallenge = null;
-            return;
-          }
-          if (response.accessToken == null || response.accessToken!.isEmpty) {
-            throw ApiException(response.message ?? '浏览器未返回登录结果');
-          }
-          _apiClient.accessToken = response.accessToken;
+          final dynamic data = await _apiClient.post(
+            '/auth/passkey/mfa-verify',
+            body: <String, dynamic>{
+              'mfaChallengeId': challengeId,
+              'passkeyChallengeId': options.challengeId,
+              ...assertion.toJson(),
+            },
+          );
           pendingMfaChallenge = null;
-          await refreshWorkspace();
-        } on SocketException catch (error) {
-          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+          await _consumeLoginPayload(data);
+        } else if (usesBrowserPasskeyBridge) {
+          if (!supportsBrowserPasskeyBridge) {
+            throw ApiException(passkeyUnavailableMessage);
+          }
+          try {
+            final BrowserPasskeyBridgeResponse response =
+                await BrowserPasskeyBridge.start(
+                  passkeyOrigin: passkeyOrigin,
+                  apiBaseUrl: apiBaseUrl,
+                  mode: BrowserPasskeyBridgeMode.mfa,
+                  mfaChallengeId: challengeId,
+                );
+            if (response.transferCode != null &&
+                response.transferCode!.isNotEmpty) {
+              await importSessionTransferTicket(response.transferCode!);
+              pendingMfaChallenge = null;
+              return;
+            }
+            if (response.accessToken == null || response.accessToken!.isEmpty) {
+              throw ApiException(response.message ?? '浏览器未返回登录结果');
+            }
+            _apiClient.accessToken = response.accessToken;
+            pendingMfaChallenge = null;
+            await refreshWorkspace();
+          } on SocketException catch (error) {
+            throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+          }
+        } else {
+          throw ApiException(passkeyUnavailableMessage);
         }
       } finally {
         authBusy = false;
@@ -1860,31 +1905,82 @@ class AppController extends ChangeNotifier {
     return PasskeyAssertionOptions.fromJson(asMap(data));
   }
 
+  bool get supportsBrowserPasskeyBridge =>
+      BrowserPasskeyBridge.isSupported(passkeyOrigin);
+
+  bool get usesNativePasskey => Platform.isWindows;
+
+  bool get usesBrowserPasskeyBridge => Platform.isMacOS;
+
+  String get passkeyUnavailableMessage {
+    if (usesNativePasskey) {
+      return '当前设备未启用 Windows 原生 Passkey';
+    }
+    if (usesBrowserPasskeyBridge) {
+      return '当前环境未配置可用的 Passkey 浏览器桥接地址';
+    }
+    return '当前平台暂不支持 Passkey';
+  }
+
+  Future<bool> isPasskeyAvailable() async {
+    if (usesNativePasskey) {
+      return PasskeyPlatform.isAvailable();
+    }
+    if (usesBrowserPasskeyBridge) {
+      return supportsBrowserPasskeyBridge;
+    }
+    return false;
+  }
+
   Future<void> loginWithPasskey() async {
     await runBusyAction('正在等待 Passkey 登录...', () async {
       authBusy = true;
       pendingMfaChallenge = null;
       notifyListeners();
       try {
-        try {
-          final BrowserPasskeyBridgeResponse response =
-              await BrowserPasskeyBridge.start(
-                passkeyOrigin: passkeyOrigin,
-                apiBaseUrl: apiBaseUrl,
-                mode: BrowserPasskeyBridgeMode.login,
+        if (usesNativePasskey) {
+          if (!await PasskeyPlatform.isAvailable()) {
+            throw ApiException(passkeyUnavailableMessage);
+          }
+          final PasskeyAssertionOptions options =
+              await getPasskeyAuthenticationOptions();
+          final PasskeyAssertionResult assertion =
+              await PasskeyPlatform.getAssertion(
+                options: options,
+                origin: passkeyOrigin,
               );
-          if (response.transferCode != null &&
-              response.transferCode!.isNotEmpty) {
-            await importSessionTransferTicket(response.transferCode!);
-            return;
+          final dynamic data = await _apiClient.post(
+            '/auth/passkey/authentication-verify',
+            query: <String, String>{'challengeId': options.challengeId},
+            body: assertion.toJson(),
+          );
+          await _consumeLoginPayload(data);
+        } else if (usesBrowserPasskeyBridge) {
+          if (!supportsBrowserPasskeyBridge) {
+            throw ApiException(passkeyUnavailableMessage);
           }
-          if (response.accessToken == null || response.accessToken!.isEmpty) {
-            throw ApiException(response.message ?? '浏览器未返回登录结果');
+          try {
+            final BrowserPasskeyBridgeResponse response =
+                await BrowserPasskeyBridge.start(
+                  passkeyOrigin: passkeyOrigin,
+                  apiBaseUrl: apiBaseUrl,
+                  mode: BrowserPasskeyBridgeMode.login,
+                );
+            if (response.transferCode != null &&
+                response.transferCode!.isNotEmpty) {
+              await importSessionTransferTicket(response.transferCode!);
+              return;
+            }
+            if (response.accessToken == null || response.accessToken!.isEmpty) {
+              throw ApiException(response.message ?? '浏览器未返回登录结果');
+            }
+            _apiClient.accessToken = response.accessToken;
+            await refreshWorkspace();
+          } on SocketException catch (error) {
+            throw ApiException(_passkeyBridgeSocketErrorMessage(error));
           }
-          _apiClient.accessToken = response.accessToken;
-          await refreshWorkspace();
-        } on SocketException catch (error) {
-          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+        } else {
+          throw ApiException(passkeyUnavailableMessage);
         }
       } finally {
         authBusy = false;
@@ -1912,6 +2008,51 @@ class AppController extends ChangeNotifier {
       query: <String, String>{'challengeId': challengeId},
       body: assertion.toJson(),
     );
+  }
+
+  Future<void> performPasskeySensitiveVerification() {
+    return runBusyAction('正在等待 Passkey 验证...', () async {
+      if (usesNativePasskey) {
+        if (!await PasskeyPlatform.isAvailable()) {
+          throw ApiException(passkeyUnavailableMessage);
+        }
+        final PasskeyAssertionOptions options =
+            await getPasskeySensitiveVerificationOptions();
+        final PasskeyAssertionResult assertion =
+            await PasskeyPlatform.getAssertion(
+              options: options,
+              origin: passkeyOrigin,
+            );
+        await verifySensitiveOperationWithPasskey(
+          challengeId: options.challengeId,
+          assertion: assertion,
+        );
+        return;
+      }
+
+      if (!usesBrowserPasskeyBridge) {
+        throw ApiException(passkeyUnavailableMessage);
+      }
+
+      if (!supportsBrowserPasskeyBridge) {
+        throw ApiException(passkeyUnavailableMessage);
+      }
+
+      try {
+        final BrowserPasskeyBridgeResponse response =
+            await BrowserPasskeyBridge.start(
+              passkeyOrigin: passkeyOrigin,
+              apiBaseUrl: apiBaseUrl,
+              mode: BrowserPasskeyBridgeMode.sensitive,
+              accessToken: _apiClient.accessToken,
+            );
+        if (!response.verified) {
+          throw ApiException(response.message ?? '浏览器未完成敏感验证');
+        }
+      } on SocketException catch (error) {
+        throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+      }
+    });
   }
 
   Future<void> verifySensitiveOperationWithPasskeyInBrowser() {
@@ -2758,6 +2899,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   bool? _usernameAvailable;
   String? _usernameHint;
   bool _passkeyAvailable = false;
+  bool _nativePasskeyAvailable = false;
   bool _bridgeBusy = false;
 
   @override
@@ -2796,13 +2938,13 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   }
 
   Future<void> _detectPasskeyAvailability() async {
-    final bool available = BrowserPasskeyBridge.isSupported(
-      widget.controller.passkeyOrigin,
-    );
+    final bool nativeAvailable = await PasskeyPlatform.isAvailable();
+    final bool available = await widget.controller.isPasskeyAvailable();
     if (!mounted) {
       return;
     }
     setState(() {
+      _nativePasskeyAvailable = nativeAvailable;
       _passkeyAvailable = available;
     });
   }
@@ -2924,7 +3066,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
 
   Future<void> _loginWithPasskey() async {
     if (!_passkeyAvailable) {
-      _showError('当前环境未配置浏览器 Passkey 桥接');
+      _showError(widget.controller.passkeyUnavailableMessage);
       return;
     }
     widget.controller.updateApiBaseUrl(_apiController.text);
@@ -3317,8 +3459,12 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        _passkeyAvailable
-                                            ? '将自动打开浏览器完成 WebAuthn，然后把结果直接回传到桌面端。'
+                                        widget.controller.usesNativePasskey
+                                            ? _nativePasskeyAvailable
+                                                  ? '将直接调用 Windows 系统原生 Passkey 完成验证。'
+                                                  : '当前设备未启用 Windows 原生 Passkey。'
+                                            : _passkeyAvailable
+                                            ? '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn。'
                                             : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
                                       ),
                                     ],
@@ -3584,6 +3730,8 @@ class DesktopWorkspace extends StatelessWidget {
     final Color railUnselectedColor = isDark
         ? Colors.white70
         : const Color(0xFF756A55);
+    final bool supportsProtectedMobileBridge =
+        LocalAuthPlatform.supportsProtectedActions;
     final bool supportsMoveToMenuBar =
         DesktopWindowPlatform.supportsMoveToMenuBar;
 
@@ -3752,7 +3900,7 @@ class DesktopWorkspace extends StatelessWidget {
                                     ),
                                   ),
                                 if (extended) const SizedBox(height: 10),
-                                if (extended)
+                                if (extended && supportsProtectedMobileBridge)
                                   FilledButton.icon(
                                     onPressed: () async {
                                       try {
@@ -3772,35 +3920,39 @@ class DesktopWorkspace extends StatelessWidget {
                                     },
                                     icon: const Icon(Icons.qr_code_rounded),
                                     label: const Text('手机扫码登录'),
-                                  )
-                                else
+                                  ),
+                                if (!extended)
                                   Column(
                                     children: <Widget>[
-                                      Tooltip(
-                                        message: '手机扫码登录',
-                                        child: IconButton.filled(
-                                          onPressed: () async {
-                                            try {
-                                              await showMobileBridgeQrDialog(
-                                                context,
-                                                controller,
-                                              );
-                                            } catch (error) {
-                                              if (context.mounted) {
-                                                showAppMessage(
+                                      if (supportsProtectedMobileBridge) ...<
+                                        Widget
+                                      >[
+                                        Tooltip(
+                                          message: '手机扫码登录',
+                                          child: IconButton.filled(
+                                            onPressed: () async {
+                                              try {
+                                                await showMobileBridgeQrDialog(
                                                   context,
-                                                  error.toString(),
-                                                  error: true,
+                                                  controller,
                                                 );
+                                              } catch (error) {
+                                                if (context.mounted) {
+                                                  showAppMessage(
+                                                    context,
+                                                    error.toString(),
+                                                    error: true,
+                                                  );
+                                                }
                                               }
-                                            }
-                                          },
-                                          icon: const Icon(
-                                            Icons.qr_code_rounded,
+                                            },
+                                            icon: const Icon(
+                                              Icons.qr_code_rounded,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
+                                        const SizedBox(height: 8),
+                                      ],
                                       Tooltip(
                                         message: '打开网页端并自动登录',
                                         child: IconButton.filledTonal(
@@ -3809,11 +3961,11 @@ class DesktopWorkspace extends StatelessWidget {
                                               await controller.runBusyAction(
                                                 '正在打开网页端...',
                                                 () async {
-                                                  final SessionTransferTicket ticket =
-                                                      await controller
-                                                          .createSessionTransferTicket(
-                                                            target: 'web',
-                                                          );
+                                                  final SessionTransferTicket
+                                                  ticket = await controller
+                                                      .createSessionTransferTicket(
+                                                        target: 'web',
+                                                      );
                                                   final Uri baseUri = Uri.parse(
                                                     controller.passkeyOrigin
                                                             .endsWith('/')
@@ -3910,7 +4062,9 @@ class DesktopWorkspace extends StatelessWidget {
                                               }
                                             }
                                           },
-                                          icon: const Icon(Icons.sync_alt_rounded),
+                                          icon: const Icon(
+                                            Icons.sync_alt_rounded,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -3923,11 +4077,11 @@ class DesktopWorkspace extends StatelessWidget {
                                         await controller.runBusyAction(
                                           '正在打开网页端...',
                                           () async {
-                                            final SessionTransferTicket ticket =
-                                                await controller
-                                                    .createSessionTransferTicket(
-                                                      target: 'web',
-                                                    );
+                                            final SessionTransferTicket
+                                            ticket = await controller
+                                                .createSessionTransferTicket(
+                                                  target: 'web',
+                                                );
                                             final Uri baseUri = Uri.parse(
                                               controller.passkeyOrigin.endsWith(
                                                     '/',
@@ -3940,8 +4094,8 @@ class DesktopWorkspace extends StatelessWidget {
                                                 .replace(
                                                   queryParameters:
                                                       <String, String>{
-                                                        'transferCode': ticket
-                                                            .transferCode,
+                                                        'transferCode':
+                                                            ticket.transferCode,
                                                         'from': 'desktop',
                                                         'apiBaseUrl': controller
                                                             .apiBaseUrl,
@@ -3968,7 +4122,9 @@ class DesktopWorkspace extends StatelessWidget {
                                         }
                                       }
                                     },
-                                    icon: const Icon(Icons.open_in_browser_rounded),
+                                    icon: const Icon(
+                                      Icons.open_in_browser_rounded,
+                                    ),
                                     label: const Text('打开网页端'),
                                   ),
                                 if (extended) const SizedBox(height: 8),
@@ -5555,7 +5711,11 @@ class _MfaPanel extends StatelessWidget {
             _DisabledCapabilityCard(
               title: passkeyAvailable ? '使用 Passkey 完成二次验证' : 'Passkey 当前不可用',
               description: passkeyAvailable
-                  ? '点击下方按钮后将自动跳转浏览器完成 WebAuthn，再回到桌面端继续。'
+                  ? Platform.isWindows
+                        ? '将直接调用 Windows 系统原生 Passkey 完成二次验证。'
+                        : '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn 后回到桌面端继续。'
+                  : Platform.isWindows
+                  ? '当前设备未启用 Windows 原生 Passkey。'
                   : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
               icon: Icons.fingerprint_rounded,
             ),
@@ -6562,7 +6722,7 @@ class _SensitiveVerificationDialogState
   bool _sendingCode = false;
   bool _verifying = false;
   int _codeCountdown = 0;
-  bool _browserPasskeyAvailable = false;
+  bool _passkeyAvailable = false;
   bool _qrRefreshing = false;
   String _qrPayload = '';
   String _qrChallengeId = '';
@@ -6588,9 +6748,8 @@ class _SensitiveVerificationDialogState
 
   Future<void> _loadStatus() async {
     try {
-      final bool browserPasskeyAvailable = BrowserPasskeyBridge.isSupported(
-        widget.controller.passkeyOrigin,
-      );
+      final bool passkeyAvailable = await widget.controller
+          .isPasskeyAvailable();
       final SensitiveVerificationStatus status =
           widget.initialStatus ??
           await widget.controller.checkSensitiveVerification();
@@ -6623,8 +6782,7 @@ class _SensitiveVerificationDialogState
           ];
       final SensitiveVerificationMethod selected = preferredOrder.firstWhere(
         (SensitiveVerificationMethod method) =>
-            method != SensitiveVerificationMethod.passkey ||
-            browserPasskeyAvailable,
+            method != SensitiveVerificationMethod.passkey || passkeyAvailable,
         orElse: () => preferredOrder.first,
       );
       if (!mounted) {
@@ -6633,7 +6791,7 @@ class _SensitiveVerificationDialogState
       setState(() {
         _methods = methods;
         _selectedMethod = selected;
-        _browserPasskeyAvailable = browserPasskeyAvailable;
+        _passkeyAvailable = passkeyAvailable;
         _loading = false;
       });
       if (selected == SensitiveVerificationMethod.emailCode) {
@@ -6646,7 +6804,7 @@ class _SensitiveVerificationDialogState
         return;
       }
       setState(() {
-        _browserPasskeyAvailable = false;
+        _passkeyAvailable = false;
         _loading = false;
       });
     }
@@ -6829,8 +6987,8 @@ class _SensitiveVerificationDialogState
         _totpController.text.trim().length != 6) {
       message = '请输入 6 位动态码';
     } else if (_selectedMethod == SensitiveVerificationMethod.passkey &&
-        !_browserPasskeyAvailable) {
-      message = '当前环境未配置可用的 Passkey 浏览器桥接';
+        !_passkeyAvailable) {
+      message = widget.controller.passkeyUnavailableMessage;
     } else if (_selectedMethod == SensitiveVerificationMethod.qr) {
       message = '请使用手机扫码完成验证';
     }
@@ -6864,10 +7022,14 @@ class _SensitiveVerificationDialogState
           break;
         case SensitiveVerificationMethod.passkey:
           if (mounted) {
-            showAppMessage(context, '即将打开浏览器完成 Passkey 验证');
+            showAppMessage(
+              context,
+              Platform.isWindows
+                  ? '即将调用 Windows 系统 Passkey'
+                  : '即将打开浏览器完成 Passkey 验证',
+            );
           }
-          await widget.controller
-              .verifySensitiveOperationWithPasskeyInBrowser();
+          await widget.controller.performPasskeySensitiveVerification();
           break;
         case SensitiveVerificationMethod.qr:
           return;
@@ -6916,7 +7078,7 @@ class _SensitiveVerificationDialogState
                       ) {
                         final bool supported =
                             method != SensitiveVerificationMethod.passkey ||
-                            _browserPasskeyAvailable;
+                            _passkeyAvailable;
                         return ChoiceChip(
                           label: Text(
                             sensitiveVerificationMethodChipLabel(method),
@@ -7047,12 +7209,14 @@ class _SensitiveVerificationDialogState
                       )
                     else
                       _DisabledCapabilityCard(
-                        title: _browserPasskeyAvailable
-                            ? 'Passkey 浏览器验证已接入'
+                        title: _passkeyAvailable
+                            ? 'Passkey 验证已接入'
                             : 'Passkey 当前不可用',
-                        description: _browserPasskeyAvailable
-                            ? '点击验证后会自动打开默认浏览器完成 WebAuthn，成功后当前弹窗会自动继续。'
-                            : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
+                        description: _passkeyAvailable
+                            ? Platform.isWindows
+                                  ? '将直接调用 Windows 系统原生 Passkey 完成验证。'
+                                  : '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn。'
+                            : widget.controller.passkeyUnavailableMessage,
                         icon: Icons.fingerprint_rounded,
                       ),
                   ],
@@ -7689,7 +7853,9 @@ String sensitiveVerificationMethodDescription(
     case SensitiveVerificationMethod.totp:
       return '输入身份验证器生成的 6 位动态码。';
     case SensitiveVerificationMethod.passkey:
-      return '将自动打开浏览器完成 WebAuthn，再把敏感验证结果回传到桌面端。';
+      return Platform.isWindows
+          ? '将直接调用 Windows 系统原生 Passkey 完成验证。'
+          : '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn。';
     case SensitiveVerificationMethod.qr:
       return '使用已登录手机端扫码确认当前敏感操作。';
   }

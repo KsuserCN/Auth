@@ -6,6 +6,8 @@
 
 #include <memory>
 
+#include "local_auth_bridge.h"
+#include "passkey_bridge.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
@@ -28,6 +30,12 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Windows native Passkey bridge exposed to Flutter.
+  std::unique_ptr<runner::PasskeyBridge> passkey_bridge_;
+
+  // Windows system local-auth bridge exposed to Flutter.
+  std::unique_ptr<runner::LocalAuthBridge> local_auth_bridge_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
