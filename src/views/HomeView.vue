@@ -655,6 +655,26 @@ onMounted(async () => {
   }
 
 }
+
+@media (max-width: 720px) {
+  .overview-page {
+    padding-bottom: calc(156px + env(safe-area-inset-bottom));
+  }
+
+  .overview-footer {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 0;
+    margin-top: 0;
+    padding: 10px 12px calc(8px + env(safe-area-inset-bottom));
+    border: 1px solid var(--el-border-color-lighter);
+    border-bottom: none;
+    border-radius: 12px 12px 0 0;
+    background: var(--el-bg-color-page);
+    z-index: 30;
+  }
+}
 </style>
 
 <style>
