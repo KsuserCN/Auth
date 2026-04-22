@@ -9,7 +9,7 @@ import java.nio.file.Paths;
 
 /**
  * .env 文件加载器配置
- * 在应用启动时按 KSUSER_ENV 加载项目根目录的 .env.<env> 文件
+ * 在应用启动时按 KSUSER_ENV 加载 api 目录下的 .env.<env> 文件
  */
 @Configuration
 public class DotenvConfig {
@@ -21,11 +21,11 @@ public class DotenvConfig {
     static {
         try {
             String envName = resolveEnvName();
-            Path rootDir = resolveRootDir();
-            Path envFile = rootDir.resolve(".env." + envName);
+            Path envDir = resolveEnvDir();
+            Path envFile = envDir.resolve(".env." + envName);
 
             Dotenv dotenv = Dotenv.configure()
-                    .directory(rootDir.toString())
+                    .directory(envDir.toString())
                     .filename(envFile.getFileName().toString())
                     .ignoreIfMissing()
                     .load();
@@ -56,23 +56,36 @@ public class DotenvConfig {
         return envName.trim();
     }
 
-    private static Path resolveRootDir() {
-        String explicitRoot = System.getenv("KSUSER_ROOT");
-        if (explicitRoot == null || explicitRoot.isBlank()) {
-            explicitRoot = System.getProperty("KSUSER_ROOT");
+    private static Path resolveEnvDir() {
+        String explicitDir = System.getenv("KSUSER_ENV_DIR");
+        if (explicitDir == null || explicitDir.isBlank()) {
+            explicitDir = System.getProperty("KSUSER_ENV_DIR");
         }
-        if (explicitRoot != null && !explicitRoot.isBlank()) {
-            return Paths.get(explicitRoot).toAbsolutePath().normalize();
+        if (explicitDir != null && !explicitDir.isBlank()) {
+            return Paths.get(explicitDir).toAbsolutePath().normalize();
         }
 
         Path current = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
         while (current != null) {
-            if (Files.isDirectory(current.resolve("auth"))
-                && Files.isDirectory(current.resolve("api"))) {
+            if (isApiProjectDir(current)) {
                 return current;
             }
+
+            Path nestedApiDir = current.resolve("api");
+            if (isApiProjectDir(nestedApiDir)) {
+                return nestedApiDir;
+            }
+
             current = current.getParent();
         }
+
         return Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+    }
+
+    private static boolean isApiProjectDir(Path path) {
+        return Files.isDirectory(path)
+            && Files.exists(path.resolve("build.gradle"))
+            && Files.isDirectory(path.resolve("src"))
+            && Files.isDirectory(path.resolve("src/main"));
     }
 }

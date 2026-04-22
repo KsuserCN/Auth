@@ -35,20 +35,20 @@ Spring Boot (Java 21) authentication service powering Ksuser accounts.
 
 ### 2) Configure environment
 
-This project loads environment variables from the workspace root (the folder that contains both `auth/` and `api/`):
+This project loads environment variables from the `api/` directory:
 
 - `KSUSER_ENV` selects the env file: `.env.<KSUSER_ENV>`
 - Default `KSUSER_ENV` is `production`
 
 Recommended setup:
 
-1. Copy the workspace root `.env.example` to `.env.development` (also in the workspace root)
+1. Copy `api/.env.example` to `api/.env.development`
 2. Fill in at least: `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`, `JWT_SECRET`
 3. Start the API with `KSUSER_ENV=development`
 
 Optional:
 
-- Set `KSUSER_ROOT=/path/to/workspace-root` if you run the service from a different working directory.
+- Set `KSUSER_ENV_DIR=/path/to/api` if you want to override the env directory.
 
 ### 3) Run
 
@@ -69,7 +69,7 @@ cd api
 Core:
 
 - `KSUSER_ENV`: selects `.env.<env>` (default: `production`)
-- `KSUSER_ROOT`: override workspace root discovery
+- `KSUSER_ENV_DIR`: override env directory
 - `DEBUG`: `true|false`
 
 Database / cache:
@@ -142,19 +142,19 @@ SSO / OIDC:
 
 ### 2）环境变量
 
-服务会从工作区根目录（同时包含 `auth/` 与 `api/` 的目录）加载 `.env.<KSUSER_ENV>`：
+服务会从 `api/` 目录加载 `.env.<KSUSER_ENV>`：
 
 - `KSUSER_ENV` 用于选择 env 文件，默认是 `production`
 
 推荐做法：
 
-1. 将工作区根目录的 `.env.example` 复制为 `.env.development`（同样在工作区根目录）
+1. 将 `api/.env.example` 复制为 `api/.env.development`
 2. 至少填写：`DB_URL` / `DB_USERNAME` / `DB_PASSWORD` / `REDIS_HOST` / `REDIS_PORT` / `JWT_SECRET`
 3. 使用 `KSUSER_ENV=development` 启动
 
 可选：
 
-- 如果不在工作区根目录启动，可设置 `KSUSER_ROOT=/path/to/workspace-root` 指定根目录。
+- 如果你想覆盖默认目录，可设置 `KSUSER_ENV_DIR=/path/to/api`。
 
 ### 3）启动命令
 
