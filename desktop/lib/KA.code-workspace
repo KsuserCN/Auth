@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../../auth"
+		},
+		{
+			"path": "../../api"
+		},
+		{
+			"path": ".."
+		}
+	],
+	"settings": {}
+}
