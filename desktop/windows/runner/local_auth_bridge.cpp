@@ -100,10 +100,12 @@ std::string MessageForHresult(const winrt::hresult_error& error,
 
 bool EnsureInteropAvailable() {
   try {
-    const winrt::hstring class_name = winrt::name_of<UserConsentVerifier>();
+    const winrt::hstring class_name =
+        winrt::to_hstring(winrt::name_of<UserConsentVerifier>());
     winrt::com_ptr<IUserConsentVerifierInterop> interop;
     winrt::check_hresult(::RoGetActivationFactory(
-        winrt::get_abi(class_name), __uuidof(IUserConsentVerifierInterop),
+        reinterpret_cast<HSTRING>(winrt::get_abi(class_name)),
+        __uuidof(IUserConsentVerifierInterop),
         interop.put_void()));
     return interop != nullptr;
   } catch (...) {
@@ -200,10 +202,12 @@ void LocalAuthBridge::HandleAuthenticate(
   const std::string reason = NormalizeReason(GetStringArgument(arguments, "reason"));
 
   try {
-    const winrt::hstring class_name = winrt::name_of<UserConsentVerifier>();
+    const winrt::hstring class_name =
+        winrt::to_hstring(winrt::name_of<UserConsentVerifier>());
     winrt::com_ptr<IUserConsentVerifierInterop> interop;
     winrt::check_hresult(::RoGetActivationFactory(
-        winrt::get_abi(class_name), __uuidof(IUserConsentVerifierInterop),
+        reinterpret_cast<HSTRING>(winrt::get_abi(class_name)),
+        __uuidof(IUserConsentVerifierInterop),
         interop.put_void()));
 
     const winrt::hstring reason_text = winrt::to_hstring(reason);
@@ -213,7 +217,7 @@ void LocalAuthBridge::HandleAuthenticate(
 
     request_in_progress_ = true;
     winrt::check_hresult(interop->RequestVerificationForWindowAsync(
-        window_handle_, winrt::get_abi(reason_text),
+        window_handle_, reinterpret_cast<HSTRING>(winrt::get_abi(reason_text)),
         winrt::guid_of<Operation>(),
         reinterpret_cast<void**>(winrt::put_abi(operation))));
     const UserConsentVerificationResult verification_result = operation.get();
