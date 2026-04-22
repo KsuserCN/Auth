@@ -24,6 +24,8 @@ using UserConsentVerifierAvailability =
     winrt::Windows::Security::Credentials::UI::UserConsentVerifierAvailability;
 
 constexpr char kChannelName[] = "ksuser/local_auth";
+constexpr wchar_t kUserConsentVerifierRuntimeClassName[] =
+    L"Windows.Security.Credentials.UI.UserConsentVerifier";
 
 std::optional<std::string> GetStringArgument(const EncodableMap& arguments,
                                              const char* key) {
@@ -100,8 +102,7 @@ std::string MessageForHresult(const winrt::hresult_error& error,
 
 bool EnsureInteropAvailable() {
   try {
-    const winrt::hstring class_name =
-        winrt::to_hstring(winrt::name_of<UserConsentVerifier>());
+    const winrt::hstring class_name{kUserConsentVerifierRuntimeClassName};
     winrt::com_ptr<IUserConsentVerifierInterop> interop;
     winrt::check_hresult(::RoGetActivationFactory(
         reinterpret_cast<HSTRING>(winrt::get_abi(class_name)),
@@ -202,8 +203,7 @@ void LocalAuthBridge::HandleAuthenticate(
   const std::string reason = NormalizeReason(GetStringArgument(arguments, "reason"));
 
   try {
-    const winrt::hstring class_name =
-        winrt::to_hstring(winrt::name_of<UserConsentVerifier>());
+    const winrt::hstring class_name{kUserConsentVerifierRuntimeClassName};
     winrt::com_ptr<IUserConsentVerifierInterop> interop;
     winrt::check_hresult(::RoGetActivationFactory(
         reinterpret_cast<HSTRING>(winrt::get_abi(class_name)),
