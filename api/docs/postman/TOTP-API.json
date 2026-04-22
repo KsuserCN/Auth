@@ -1,0 +1,247 @@
+{
+  "info": {
+    "_postman_id": "totp-collection",
+    "name": "TOTP API 测试集合",
+    "description": "TOTP（Time-based One-Time Password）双因素认证 API 测试集合",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 获取 TOTP 注册选项",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": ""
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/totp/registration-options",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "registration-options"]
+        },
+        "description": "获取 TOTP 注册所需的选项，包括密钥、二维码 URL 和回复码"
+      },
+      "response": []
+    },
+    {
+      "name": "2. 确认 TOTP 注册",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"code\": \"123456\"}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/totp/registration-verify",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "registration-verify"]
+        },
+        "description": "确认 TOTP 注册，需要输入身份验证器应用中的 6 位码"
+      },
+      "response": []
+    },
+    {
+      "name": "3. 验证 TOTP 码",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"code\": \"123456\"}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/totp/verify",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "verify"]
+        },
+        "description": "验证用户提供的 TOTP 码"
+      },
+      "response": []
+    },
+    {
+      "name": "4. 使用回复码验证",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"recoveryCode\": \"12345678\"}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/totp/verify",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "verify"]
+        },
+        "description": "使用回复码进行验证（当用户丢失 TOTP 设备时使用）"
+      },
+      "response": []
+    },
+    {
+      "name": "5. 获取 TOTP 状态",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/totp/status",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "status"]
+        },
+        "description": "获取用户的 TOTP 启用状态和剩余回复码数量"
+      },
+      "response": []
+    },
+    {
+      "name": "6. 获取回复码列表",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/totp/recovery-codes",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "recovery-codes"]
+        },
+        "description": "获取用户的未使用回复码列表"
+      },
+      "response": []
+    },
+    {
+      "name": "7. 重新生成回复码",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": ""
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/totp/recovery-codes/regenerate",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "recovery-codes", "regenerate"]
+        },
+        "description": "重新生成用户的回复码，旧的回复码将被删除"
+      },
+      "response": []
+    },
+    {
+      "name": "8. 禁用 TOTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"password\": \"user_password\"}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/totp/disable",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "totp", "disable"]
+        },
+        "description": "禁用用户的 TOTP，需要验证密码"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string",
+      "description": "用户的访问令牌，需要在登录后设置"
+    }
+  ]
+}

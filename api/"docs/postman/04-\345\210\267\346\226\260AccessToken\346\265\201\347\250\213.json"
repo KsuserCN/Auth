@@ -1,0 +1,43 @@
+{
+  "info": {
+    "name": "04-刷新AccessToken流程",
+    "description": "使用 RefreshToken 刷新 AccessToken",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "刷新 AccessToken",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    pm.environment.set('accessToken', data.accessToken);",
+              "    console.log('✓ AccessToken 刷新成功！');",
+              "    console.log('新的 AccessToken: ' + data.accessToken);",
+              "    console.log('AccessToken 已更新到环境变量');",
+              "    console.log('');",
+              "    console.log('💡 旧的 AccessToken 已失效');",
+              "    console.log('💡 RefreshToken 仍在 Cookie 中有效');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/auth/refresh",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "refresh"]
+        },
+        "description": "⚠️ 此请求需要 RefreshToken Cookie\n\n如何使用：\n1. 先使用登录接口（密码登录或验证码登录）\n2. 登录成功后，RefreshToken 会自动保存在 Cookie 中\n3. 调用此接口时会自动携带 Cookie 中的 RefreshToken\n4. 成功后会获得新的 AccessToken，旧的 AccessToken 立即失效"
+      }
+    }
+  ]
+}

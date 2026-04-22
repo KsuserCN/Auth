@@ -1,0 +1,1 @@
+现在根据passkey数据表的内容，进行Passkey功能的适配：包括使用Passkey登录、敏感操作使用Passkey验证、修改并管理Passkey（需要敏感操作验证），因为passkey功能不能通过postman验证，所以暂时把这个消息的postman配置文件任务改成在/docs/passkey-debug文件夹中创建简易html文件实现（请求域名需要添加：http://localhost:8000，并单独写一个输入框供我手动填写accesstoken实现身份验证），临时challenge使用redis实现，时效5分钟，具体的方法需要和代码中其他敏感操作的方法类似（相同的流程可以直接引用）

@@ -1,0 +1,716 @@
+# 敏感操作邮箱验证 - 完整 Postman 测试流程
+
+本文档提供了完整的步骤，演示如何通过邮箱验证码方式完成敏感操作验证，以及后续的敏感操作（如更改邮箱）。
+
+## 流程概述
+
+```
+1. 登录获取 AccessToken
+   ↓
+2. 查看敏感操作验证状态（可选）
+   ↓
+3. 发送邮箱验证码（type: sensitive-verification）
+   ↓
+4. 用邮箱验证码进行敏感操作验证
+   ↓
+5. 检查验证状态（已验证）
+   ↓
+6. 发送新邮箱验证码（type: change-email）
+   ↓
+7. 完成邮箱更改
+```
+
+---
+
+## 详细步骤
+
+### 步骤 1：登录获取 AccessToken
+
+**请求方法**：POST  
+**URL**：http://localhost:8000/auth/login  
+**请求头**：
+```
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "登录成功",
+  "data": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "user@example.com",
+    "username": "username",
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "avatarUrl": null
+  }
+}
+```
+
+**关键字段**：保存 `data.accessToken` 供后续使用
+
+---
+
+### 步骤 2：检查敏感操作验证状态（可选）
+
+**请求方法**：GET  
+**URL**：http://localhost:8000/auth/check-sensitive-verification  
+**请求头**：
+```
+Authorization: Bearer {accessToken}
+```
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "查询成功",
+  "data": {
+    "verified": false,
+    "remainingSeconds": 0
+  }
+}
+```
+
+**说明**：
+- `verified: false` - 还未进行敏感操作验证
+- `remainingSeconds: 0` - 没有有效的验证
+
+---
+
+### 步骤 3：发送邮箱验证码（敏感操作专用）
+
+**请求方法**：POST  
+**URL**：http://localhost:8000/auth/send-code  
+**请求头**：
+```
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "type": "sensitive-verification"
+}
+```
+
+**关键点**：`type` 必须设置为 `"sensitive-verification"`，并且**必须携带 AccessToken**，系统会自动使用当前登录用户绑定邮箱。
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "验证码已发送"
+}
+```
+
+**邮件内容示例**：
+```
+亲爱的用户，
+
+您的敏感操作验证码是：123456
+
+验证码有效期为 10 分钟。
+```
+
+**重要**：记录验证码（如：123456），用于下一步验证
+
+---
+
+### 步骤 4：用邮箱验证码进行敏感操作验证
+
+**请求方法**：POST  
+**URL**：http://localhost:8000/auth/verify-sensitive  
+**请求头**：
+```
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "method": "email-code",
+  "code": "123456"
+}
+```
+
+**关键点**：
+- `method` 设置为 `"email-code"`
+- `code` 填入收到的验证码
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "验证成功，有效期15分钟"
+}
+```
+
+**说明**：
+- 验证成功后，用户的敏感操作验证状态将被标记为已验证
+- 有效期为 15 分钟
+- 验证与设备（IP）绑定
+
+---
+
+### 步骤 5：检查敏感操作验证状态（验证后）
+
+**请求方法**：GET  
+**URL**：http://localhost:8000/auth/check-sensitive-verification  
+**请求头**：
+```
+Authorization: Bearer {accessToken}
+```
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "查询成功",
+  "data": {
+    "verified": true,
+    "remainingSeconds": 850
+  }
+}
+```
+
+**说明**：
+- `verified: true` - 已完成敏感操作验证
+- `remainingSeconds: 850` - 还有约 850 秒（14 分钟）的有效期
+
+---
+
+### 步骤 6：发送新邮箱验证码
+
+**请求方法**：POST  
+**URL**：http://localhost:8000/auth/send-code  
+**请求头**：
+```
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "email": "new-email@example.com",
+  "type": "change-email"
+}
+```
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "验证码已发送"
+}
+```
+
+**重要**：记录新邮箱的验证码
+
+---
+
+### 步骤 7：完成邮箱更改
+
+**请求方法**：POST  
+**URL**：http://localhost:8000/auth/update/email  
+**请求头**：
+```
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+**请求体**：
+```json
+{
+  "newEmail": "new-email@example.com",
+  "code": "654321"
+}
+```
+
+**预期响应** (200 OK)：
+```json
+{
+  "code": 200,
+  "msg": "邮箱更改成功",
+  "data": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "email": "new-email@example.com",
+    "username": "username",
+    "avatarUrl": null
+  }
+}
+```
+
+**完成**：邮箱已成功更改为新邮箱地址
+
+---
+
+## Postman 集合 JSON（可直接导入）
+
+```json
+{
+  "info": {
+    "name": "敏感操作邮箱验证流程",
+    "description": "完整的邮箱验证敏感操作和更改邮箱流程",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 登录",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    pm.environment.set('accessToken', data.accessToken);",
+              "    console.log('AccessToken 已保存');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/login",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "2. 检查敏感操作验证状态（验证前）",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/auth/check-sensitive-verification",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "check-sensitive-verification"]
+        }
+      }
+    },
+    {
+      "name": "3. 发送敏感操作邮箱验证码",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "console.log('✓ 验证码已发送到用户邮箱');",
+              "console.log('⚠️ 请检查邮箱获取验证码');",
+              "console.log('💡 在 Postman 环境变量中设置: pm.environment.set(\"sensitiveVerificationCode\", \"123456\")')"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"sensitive-verification\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/send-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "send-code"]
+        }
+      }
+    },
+    {
+      "name": "4. 用邮箱验证码进行敏感操作验证",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    console.log('✓ 敏感操作验证成功！有效期 15 分钟');",
+              "    pm.environment.set('verificationTime', new Date().getTime());",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"method\": \"email-code\",\n  \"code\": \"{{sensitiveVerificationCode}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/verify-sensitive",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "verify-sensitive"]
+        }
+      }
+    },
+    {
+      "name": "5. 检查敏感操作验证状态（验证后）",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/auth/check-sensitive-verification",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "check-sensitive-verification"]
+        }
+      }
+    },
+    {
+      "name": "6. 发送新邮箱验证码",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "console.log('✓ 验证码已发送到新邮箱');",
+              "console.log('⚠️ 请检查新邮箱获取验证码');",
+              "console.log('💡 在 Postman 环境变量中设置: pm.environment.set(\"changeEmailCode\", \"654321\")')"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"new-email@example.com\",\n  \"type\": \"change-email\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/send-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "send-code"]
+        }
+      }
+    },
+    {
+      "name": "7. 完成邮箱更改",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 邮箱已成功更改为: ' + data.email);",
+              "    console.log('下次登录时需要使用新邮箱: ' + data.email);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"newEmail\": \"new-email@example.com\",\n  \"code\": \"654321\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/update/email",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "update", "email"]
+        }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Postman 环境变量设置
+
+为了方便测试，建议在 Postman 中创建以下环境变量：
+
+| 变量名 | 初始值 | 用途 |
+|--------|--------|------|
+| `accessToken` | - | 登录后自动设置 |
+| `sensitiveVerificationCode` | 手动输入 | 敏感操作邮箱验证码 |
+| `changeEmailCode` | 手动输入 | 新邮箱验证码 |
+
+**在 Postman 中创建环境**：
+1. 点击右上角的齿轮图标
+2. 选择 "Manage Environments"
+3. 点击 "Add" 创建新环境
+4. 输入环境名称：如 "Local API"
+5. 添加上述变量
+
+---
+
+## 错误处理和常见问题
+
+### 1. 验证码已过期
+
+**错误响应**：
+```json
+{
+  "code": 400,
+  "msg": "验证码已过期，请重新获取（1/5）"
+}
+```
+
+**解决方案**：
+- 重新执行步骤 3（发送邮箱验证码）
+- 验证码有效期为 10 分钟
+
+### 2. IP 不匹配
+
+**错误响应**：
+```json
+{
+  "code": 400,
+  "msg": "发送验证码的设备与当前设备不匹配（1/5）"
+}
+```
+
+**原因**：
+- 发送验证码和验证验证码来自不同的 IP 地址
+- 不要在 VPN 连接中途切换
+
+**解决方案**：
+- 确保从同一设备上执行所有步骤
+- 不要切换网络或 VPN
+
+### 3. 验证过期（敏感操作）
+
+**错误响应**：
+```json
+{
+  "code": 400,
+  "msg": "验证过期，请重新进行敏感操作验证"
+}
+```
+
+**原因**：
+- 15 分钟内未完成后续敏感操作
+
+**解决方案**：
+- 重新执行敏感操作验证（步骤 3-4）
+
+### 4. 邮箱已被使用
+
+**错误响应**：
+```json
+{
+  "code": 409,
+  "msg": "邮箱已被使用"
+}
+```
+
+**原因**：
+- 新邮箱已被其他用户注册
+
+**解决方案**：
+- 使用未被注册的邮箱
+
+### 5. 验证码错误 5 次
+
+**错误响应**：
+```json
+{
+  "code": 429,
+  "msg": "验证码错误次数过多，该邮箱已被锁定1小时"
+}
+```
+
+**原因**：
+- 连续输入错误验证码 5 次
+
+**解决方案**：
+- 等待 1 小时后重试
+- 或者使用密码方式进行敏感操作验证
+
+---
+
+## 关键点总结
+
+| 项目 | 说明 |
+|------|------|
+| **敏感操作验证类型** | `type: "sensitive-verification"` |
+| **敏感操作验证方式** | `method: "email-code"` |
+| **验证有效期** | 15 分钟 |
+| **验证码有效期** | 10 分钟 |
+| **设备绑定** | 必须从同一 IP 完成验证和操作 |
+| **错误限制** | 5 次错误后锁定 1 小时 |
+
+---
+
+## 测试流程总览
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 登录获取 AccessToken                                        │
+│ POST /auth/login                                            │
+│ 响应: accessToken                                           │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────┐
+│ 检查验证状态（可选）- verified: false                       │
+│ GET /auth/check-sensitive-verification                      │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────┐
+│ 发送邮箱验证码（敏感操作专用）                              │
+│ POST /auth/send-code                                        │
+│ type: "sensitive-verification"                              │
+│ ⚠️ 记录邮箱中收到的验证码                                   │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────┐
+│ 用邮箱验证码进行敏感操作验证                                │
+│ POST /auth/verify-sensitive                                 │
+│ method: "email-code", code: "xxxxxx"                        │
+│ 响应: 验证成功，有效期15分钟                                │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────┐
+│ 检查验证状态（已验证）- verified: true                      │
+│ GET /auth/check-sensitive-verification                      │
+│ remainingSeconds: 约 850                                    │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────┐
+│ 发送新邮箱验证码                                            │
+│ POST /auth/send-code                                        │
+│ type: "change-email"                                        │
+│ ⚠️ 记录新邮箱中收到的验证码                                 │
+└──────────────────┬──────────────────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────────────────┐
+│ 完成邮箱更改                                                │
+│ POST /auth/update/email                                     │
+│ newEmail: "new-email@example.com", code: "yyyyyy"           │
+│ 响应: 邮箱已更改为 new-email@example.com                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 与密码验证方式的对比
+
+### 邮箱验证方式（本文档）
+```json
+POST /auth/verify-sensitive
+{
+  "method": "email-code",
+  "code": "123456"
+}
+```
+
+**优点**：
+- 不需要输入密码
+- 适合忘记密码的情况
+- 通过邮箱验证提供额外的安全性
+
+### 密码验证方式
+```json
+POST /auth/verify-sensitive
+{
+  "method": "password",
+  "password": "myPassword123"
+}
+```
+
+**优点**：
+- 快速验证
+- 不需要等待邮件
+- 无需邮箱访问
+
+---
+
+## 下一步
+
+完成邮箱更改后，用户：
+- 下次登录需要使用新邮箱地址
+- 旧邮箱将不再关联此账户
+- 新邮箱现在用于验证码接收和账户恢复
+
+## 相关文档
+- [敏感操作验证接口](auth-verify-sensitive.md)
+- [更改邮箱接口](auth-change-email.md)
+- [检查验证状态接口](auth-check-sensitive-verification.md)
+- [发送验证码接口](auth-send-code.md)

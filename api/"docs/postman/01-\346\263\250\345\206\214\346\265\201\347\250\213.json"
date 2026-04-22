@@ -1,0 +1,126 @@
+{
+  "info": {
+    "name": "01-注册流程",
+    "description": "完整的用户注册流程：检查用户名 → 发送验证码 → 注册",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 检查用户名可用性",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    if (!data.exists) {",
+              "        console.log('✓ 用户名可用');",
+              "    } else {",
+              "        console.log('✗ 用户名已存在，请更换用户名');",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8000/auth/check-username?username=testuser",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "check-username"],
+          "query": [
+            {
+              "key": "username",
+              "value": "testuser"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "2. 发送注册验证码",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    console.log('✓ 验证码已发送到邮箱');",
+              "    console.log('⚠️ 请检查邮箱获取验证码');",
+              "    console.log('💡 收到验证码后，在环境变量中设置：');",
+              "    console.log('   pm.environment.set(\"registerCode\", \"123456\")');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"2765301200@qq.com\",\n  \"type\": \"register\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/send-code",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "send-code"]
+        }
+      }
+    },
+    {
+      "name": "3. 注册账号",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    pm.environment.set('accessToken', data.accessToken);",
+              "    pm.environment.set('userUuid', data.uuid);",
+              "    console.log('✓ 注册成功！');",
+              "    console.log('用户 UUID: ' + data.uuid);",
+              "    console.log('用户名: ' + data.username);",
+              "    console.log('邮箱: ' + data.email);",
+              "    console.log('AccessToken 已保存到环境变量');",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"2765301200@qq.com\",\n  \"password\": \"123456\",\n  \"code\": \"{{registerCode}}\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/register",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "register"]
+        }
+      }
+    }
+  ]
+}

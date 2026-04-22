@@ -1,0 +1,169 @@
+{
+  "info": {
+    "name": "05-修改个人信息流程",
+    "description": "修改用户名和/或头像 URL",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 获取当前用户信息",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 当前用户信息：');",
+              "    console.log('UUID: ' + data.uuid);",
+              "    console.log('用户名: ' + data.username);",
+              "    console.log('邮箱: ' + data.email);",
+              "    console.log('头像: ' + (data.avatarUrl || '未设置'));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8000/auth/info",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "info"]
+        }
+      }
+    },
+    {
+      "name": "2. 修改用户名",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 用户名修改成功！');",
+              "    console.log('新用户名: ' + data.username);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"newusername\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/update/profile",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "update", "profile"]
+        }
+      }
+    },
+    {
+      "name": "3. 修改头像 URL",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 头像修改成功！');",
+              "    console.log('新头像 URL: ' + data.avatarUrl);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"avatarUrl\": \"https://example.com/avatar.jpg\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/update/profile",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "update", "profile"]
+        }
+      }
+    },
+    {
+      "name": "4. 同时修改用户名和头像",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    const data = pm.response.json().data;",
+              "    console.log('✓ 用户信息修改成功！');",
+              "    console.log('新用户名: ' + data.username);",
+              "    console.log('新头像 URL: ' + data.avatarUrl);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"newusername\",\n  \"avatarUrl\": \"https://example.com/avatar.jpg\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8000/auth/update/profile",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8000",
+          "path": ["auth", "update", "profile"]
+        }
+      }
+    }
+  ]
+}

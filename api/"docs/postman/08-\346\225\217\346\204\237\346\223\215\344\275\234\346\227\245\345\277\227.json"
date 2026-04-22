@@ -1,0 +1,310 @@
+{
+  "info": {
+    "name": "敏感操作日志 API",
+    "_postman_id": "sensitive-logs-api",
+    "description": "敏感操作日志查询接口测试集合",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "查询所有敏感日志（第一页）",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"]
+        },
+        "description": "查询当前用户的所有敏感操作日志，返回第一页（默认20条）"
+      },
+      "response": []
+    },
+    {
+      "name": "查询指定页和数量",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?page=1&pageSize=10",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "description": "页码，从1开始"
+            },
+            {
+              "key": "pageSize",
+              "value": "10",
+              "description": "每页数量，最大100"
+            }
+          ]
+        },
+        "description": "查询第1页，每页10条记录"
+      },
+      "response": []
+    },
+    {
+      "name": "按日期范围查询",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?startDate=2026-02-01&endDate=2026-02-07",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "startDate",
+              "value": "2026-02-01",
+              "description": "开始日期 YYYY-MM-DD"
+            },
+            {
+              "key": "endDate",
+              "value": "2026-02-07",
+              "description": "结束日期 YYYY-MM-DD"
+            }
+          ]
+        },
+        "description": "查询指定日期范围内的敏感操作日志"
+      },
+      "response": []
+    },
+    {
+      "name": "查询登录操作",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?operationType=LOGIN",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "operationType",
+              "value": "LOGIN",
+              "description": "操作类型：REGISTER, LOGIN, SENSITIVE_VERIFY, CHANGE_PASSWORD, CHANGE_EMAIL, ADD_PASSKEY, DELETE_PASSKEY, ENABLE_TOTP, DISABLE_TOTP"
+            }
+          ]
+        },
+        "description": "只查询登录操作的日志"
+      },
+      "response": []
+    },
+    {
+      "name": "查询失败的操作",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?result=FAILURE",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "result",
+              "value": "FAILURE",
+              "description": "操作结果：SUCCESS 或 FAILURE"
+            }
+          ]
+        },
+        "description": "只查询失败的操作"
+      },
+      "response": []
+    },
+    {
+      "name": "查询成功的操作",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?result=SUCCESS",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "result",
+              "value": "SUCCESS",
+              "description": "操作结果：SUCCESS 或 FAILURE"
+            }
+          ]
+        },
+        "description": "只查询成功的操作"
+      },
+      "response": []
+    },
+    {
+      "name": "组合查询（登录失败记录）",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?operationType=LOGIN&result=FAILURE&startDate=2026-02-01&page=1&pageSize=20",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "operationType",
+              "value": "LOGIN"
+            },
+            {
+              "key": "result",
+              "value": "FAILURE"
+            },
+            {
+              "key": "startDate",
+              "value": "2026-02-01"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "pageSize",
+              "value": "20"
+            }
+          ]
+        },
+        "description": "组合查询：查询2月1日之后的所有登录失败记录"
+      },
+      "response": []
+    },
+    {
+      "name": "查询Passkey相关操作",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?operationType=ADD_PASSKEY",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "operationType",
+              "value": "ADD_PASSKEY",
+              "description": "可选：ADD_PASSKEY 或 DELETE_PASSKEY"
+            }
+          ]
+        },
+        "description": "查询Passkey新增操作"
+      },
+      "response": []
+    },
+    {
+      "name": "查询TOTP相关操作",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?operationType=ENABLE_TOTP",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "operationType",
+              "value": "ENABLE_TOTP",
+              "description": "可选：ENABLE_TOTP 或 DISABLE_TOTP"
+            }
+          ]
+        },
+        "description": "查询TOTP启用操作"
+      },
+      "response": []
+    },
+    {
+      "name": "查询密码和邮箱修改记录",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/auth/sensitive-logs?operationType=CHANGE_PASSWORD",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "sensitive-logs"],
+          "query": [
+            {
+              "key": "operationType",
+              "value": "CHANGE_PASSWORD",
+              "description": "可选：CHANGE_PASSWORD 或 CHANGE_EMAIL"
+            }
+          ]
+        },
+        "description": "查询密码修改记录"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

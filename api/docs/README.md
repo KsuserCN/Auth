@@ -1,0 +1,622 @@
+# 身份认证 API 文档
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+- API使用说明？→ [sensitive-logs.md](sensitive-logs.md)- 需要代码示例？→ [SENSITIVE_LOG_EXAMPLES.md](SENSITIVE_LOG_EXAMPLES.md)- 集成方法不清楚？→ [SENSITIVE_LOG_INTEGRATION.md](SENSITIVE_LOG_INTEGRATION.md)查看以下文档：## 需要帮助？```}  }    "totalPages": 3    "total": 45,    "pageSize": 20,    "page": 1,    ],      }        "createdAt": "2026-02-07T14:30:00"        "durationMs": 245,        "actionTaken": "ALLOW",        "riskScore": 10,        "result": "SUCCESS",        "deviceType": "Desktop",        "browser": "Chrome 120",        "ipLocation": "广东省深圳市",        "ipAddress": "203.208.60.1",        "loginMethod": "PASSWORD",        "operationType": "LOGIN",        "id": 123,      {    "data": [  "data": {  "message": "Sensitive logs retrieved successfully",  "status": "success",{```json## 示例响应使用Postman导入 `docs/postman/08-敏感操作日志.json` 进行测试。## 测试5. ⚠️ 注册时userId可能为null（注册失败时）4. ⚠️ 不要在失败原因中包含密码等敏感信息3. ✅ User-Agent自动解析浏览器和设备信息2. ✅ IP属地自动从第三方API获取1. ✅ 日志记录是异步的，不影响业务性能## 注意事项- [Postman集合](postman/08-敏感操作日志.json) - API测试集合- [代码示例](SENSITIVE_LOG_EXAMPLES.md) - 各种场景的完整示例- [集成指南](SENSITIVE_LOG_INTEGRATION.md) - 详细的集成方法- [API文档](sensitive-logs.md) - 查询接口详细说明## 完整文档```mysql -u root -p your_database < sql/init.sql```bash运行 `sql/init.sql` 创建 `user_sensitive_logs` 表：## 数据库准备```GET /auth/sensitive-logs?operationType=LOGIN&result=FAILURE&startDate=2026-02-01# 带过滤条件Authorization: Bearer <token>GET /auth/sensitive-logs# 查询所有日志```bash用户可以通过API查询自己的操作日志：## 查询日志API```sensitiveLogUtil.logDisableTotp(httpRequest, userId, success, failureReason, startTime);// 禁用TOTPsensitiveLogUtil.logEnableTotp(httpRequest, userId, success, failureReason, startTime);// 启用TOTPsensitiveLogUtil.logDeletePasskey(httpRequest, userId, success, failureReason, startTime);// 删除PasskeysensitiveLogUtil.logAddPasskey(httpRequest, userId, success, failureReason, startTime);// 新增PasskeysensitiveLogUtil.logChangeEmail(httpRequest, userId, success, failureReason, startTime);// 修改邮箱sensitiveLogUtil.logChangePassword(httpRequest, userId, success, failureReason, startTime);// 修改密码sensitiveLogUtil.logSensitiveVerify(httpRequest, userId, success, failureReason, startTime);// 敏感操作认证sensitiveLogUtil.logLogin(httpRequest, userId, loginMethod, success, failureReason, startTime);// 登录（需指定登录方式：PASSWORD, EMAIL_CODE, PASSKEY, PASSKEY_MFA）sensitiveLogUtil.logRegister(httpRequest, userId, success, failureReason, startTime);// 注册```java## 可用的日志方法```}    }        throw e;                                 false, e.getMessage(), startTime);        sensitiveLogUtil.logLogin(httpRequest, null, "PASSWORD",         // ✅ 记录失败日志    } catch (Exception e) {        return ResponseEntity.ok(response);                                         "PASSWORD", true, null, startTime);        sensitiveLogUtil.logLogin(httpRequest, response.getUserId(),         // ✅ 记录成功日志                LoginResponse response = authService.login(request);    try {        long startTime = System.currentTimeMillis();                              HttpServletRequest httpRequest) {public ResponseEntity<?> login(@RequestBody LoginRequest request, @PostMapping("/login")```java在需要记录的操作中添加日志记录代码：### 步骤3：记录日志```private SensitiveLogUtil sensitiveLogUtil;@Autowired```java### 步骤2：在Controller中注入工具类```implementation 'com.github.ua-parser:uap-java:1.6.1'```gradle确保 `build.gradle` 包含User-Agent解析库：### 步骤1：添加依赖## 快速集成- 安全信息（风险评分、锁定状态、耗时）- 设备信息（浏览器、设备类型）- IP信息（地址、属地）- 操作详情（类型、时间、结果、失败原因）每条日志记录包含：- ✅ TOTP管理（启用/禁用）- ✅ Passkey管理（新增/删除）- ✅ 修改邮箱- ✅ 修改密码- ✅ 敏感操作认证- ✅ 各种方式的登录（密码、验证码、Passkey、Passkey+MFA）- ✅ 用户注册敏感操作日志功能自动记录用户的所有重要操作，包括：## 功能简介## 概述
+本文档描述了完整的身份认证系统 API，包括：
+- 用户注册（邮箱验证）
+- 密码登录
+- 验证码登录
+- 会话管理（多设备支持）
+- 令牌刷新和撤销
+
+## 文档导航
+- [验证码系统设计约束](VERIFICATION_CODE_DESIGN.md) - 验证码系统的核心功能和设计原则
+- [请求类型处理指南](REQUEST_TYPE_HANDLING.md) - Content-Type 验证和错误处理说明
+- [Passkey (WebAuthn) 支持](passkey.md) - 现代身份验证方式，支持登录和敏感操作验证
+- [敏感操作日志](sensitive-logs.md) - 查询用户的敏感操作记录（登录、修改密码、Passkey管理等）
+- [敏感日志集成指南](SENSITIVE_LOG_INTEGRATION.md) - 在代码中集成敏感日志记录的方法
+- [敏感日志集成示例](SENSITIVE_LOG_EXAMPLES.md) - 具体的代码集成示例
+
+## API 端点
+
+### 1. 检查用户名可用性
+[GET /auth/check-username](auth-check-username.md)
+
+检查用户名是否已被注册。
+
+### 2. 发送验证码
+[POST /auth/send-code](auth-send-code.md)
+
+发送邮箱验证码，用于注册或登录。支持以下功能：
+- 自动区分注册和登录场景
+- 邮箱校验（注册检查已注册，登录检查存在）
+- IP 和邮箱的速率限制（1/分钟，6/小时）
+- 错误次数限制（5次后锁定1小时）
+
+### 3. 注册
+[POST /auth/register](auth-register.md)
+
+使用邮箱验证码完成用户注册。特性：
+- 验证邮箱和IP与发送验证码时一致
+- 密码长度 6-66 字符
+- 使用 Argon2id 加密密码
+- 密钥存储用户 UUID
+
+### 4. 密码登录
+[POST /auth/login](auth-login.md)
+
+使用邮箱和密码登录。
+
+### 5. 验证码登录
+[POST /auth/login-with-code](auth-login-with-code.md)
+
+使用邮箱验证码登录。验证流程：
+- 验证邮箱和IP与发送验证码时一致
+- 验证成功后创建会话并返回令牌
+
+### 6. 获取当前用户信息
+[GET /auth/info](auth-info.md)
+
+获取当前登录用户的信息。需要认证。
+
+### 6.1 更新用户设置
+[POST /auth/update/setting](auth-info.md)
+
+更新用户设置项（字段名 + bool）。需要认证。
+
+### 7. 查询密码强度要求
+[GET /info/password-requirement](info-password-requirement.md)
+
+获取当前密码强度要求，供前端动态校验和提示。
+
+### 8. 更新用户信息
+[POST /auth/update/profile](auth-update-profile.md)
+
+更新用户名和/或头像URL。支持：
+- 单独更新用户名或头像
+- 同时更新用户名和头像
+- 用户名唯一性检查
+- 需要认证（AccessToken）
+
+### 9. 敏感操作验证
+[POST /auth/verify-sensitive](auth-verify-sensitive.md)
+
+验证用户身份以执行敏感操作。支持：
+- 密码验证
+- 邮箱验证码验证
+- 验证有效期15分钟
+- 设备（IP）绑定
+
+### 10. 更改邮箱
+[POST /auth/update/email](auth-change-email.md)
+
+更改用户绑定邮箱。要求：
+- 需要先完成敏感操作验证
+- 新邮箱验证码验证
+- 遵循所有验证码系统约束
+- 需要认证（AccessToken）
+
+### 11. 检查敏感操作验证状态
+[GET /auth/check-sensitive-verification](auth-check-sensitive-verification.md)
+
+检查当前用户是否已完成敏感操作验证及剩余有效时间。特性：
+- 仅供前端 UI 显示使用
+- 返回验证状态和剩余秒数
+- 支持设备（IP）一致性检查
+- 需要认证（AccessToken）
+
+### 12. 修改密码
+[POST /auth/update/password](auth-change-password.md)
+
+修改用户登录密码。要求：
+- 需要先完成敏感操作验证
+- 密码强度验证（6-66 字符，大小写+数字）
+- 防止弱密码
+- 需要认证（AccessToken）
+
+### 13. 注销账号
+[POST /auth/delete](auth-delete-account.md)
+
+注销用户账号，完全删除账号和所有相关数据。特性：
+- 需要先完成敏感操作验证
+- 双确认机制（需输入 "我真的不想要我的号辣"）
+- 删除后所有会话失效
+- 账号不可恢复
+- 需要认证（AccessToken）
+
+### 14. 刷新令牌
+[POST /auth/refresh](auth-refresh.md)
+
+使用 RefreshToken 获取新的 AccessToken。支持多设备会话。
+
+### 15. 退出登录（单设备）
+[POST /auth/logout](auth-logout.md)
+
+退出当前设备上的登录。
+
+### 16. 退出登录（全设备）
+[POST /auth/logout/all](auth-logout-all.md)
+
+从所有设备上退出登录。
+
+## Passkey (WebAuthn) 端点
+
+### 17. 生成 Passkey 注册选项
+[POST /auth/passkey/registration-options](passkey.md#1-获取注册选项)
+
+为新用户生成 Passkey 注册选项。需要认证。
+
+### 18. 验证 Passkey 注册
+[POST /auth/passkey/registration-verify](passkey.md#2-完成-passkey-注册)
+
+验证并保存用户的 Passkey 凭证。需要认证。
+
+### 19. 生成 Passkey 认证选项
+[POST /auth/passkey/authentication-options](passkey.md#1-获取认证选项)
+
+生成 Passkey 登录所需的认证选项。无需认证。
+
+### 20. Passkey 认证验证（登录）
+[POST /auth/passkey/authentication-verify](passkey.md#2-完成-passkey-认证)
+
+验证 Passkey 认证并完成登录。无需认证。
+
+### 21. 生成敏感操作验证选项（Passkey）
+[POST /auth/passkey/sensitive-verification-options](passkey.md#1-获取敏感操作验证选项)
+
+为敏感操作生成 Passkey 验证选项。需要认证。
+
+### 22. 验证敏感操作（Passkey）
+[POST /auth/passkey/sensitive-verification-verify](passkey.md#2-验证敏感操作)
+
+使用 Passkey 验证敏感操作。需要认证。
+
+### 23. 获取 Passkey 列表
+[GET /auth/passkey/list](passkey.md#获取-passkey-列表)
+
+获取用户所有已注册的 Passkey。需要认证。
+
+### 24. 删除 Passkey
+[DELETE /auth/passkey/{passkeyId}](passkey.md#删除-passkey)
+
+删除用户的指定 Passkey。需要认证。
+
+## 认证流程
+
+### 注册流程
+```
+1. GET /auth/check-username?username=xxx
+   → 检查用户名是否可用
+
+2. POST /auth/send-code
+   → 请求体: {"email": "xxx@xxx.com", "type": "register"}
+   → 发送注册验证码到邮箱
+   → 注意：无论邮箱是否已注册都会发送验证码（保护邮箱隐私）
+  → 注册成功次数达到阈值会触发锁定（按 IP/UA，当天 2 次=10分钟，3次=1小时，4次=1天）
+
+3. POST /auth/register
+   → 请求体: {"username": "xxx", "email": "xxx@xxx.com", "password": "xxx", "code": "xxxxxx"}
+   → 验证码验证成功后才检查邮箱是否已注册
+   → 如果邮箱已注册，返回 409 "邮箱已被注册"
+  → 如果验证成功并邮箱未注册，注册成功并直接登录（返回 AccessToken，设置 RefreshToken Cookie）
+```
+
+### 密码登录流程
+```
+1. POST /auth/login
+   → 请求体: {"email": "xxx@xxx.com", "password": "xxx"}
+   → 返回 AccessToken
+```
+
+### 验证码登录流程
+```
+1. POST /auth/send-code
+   → 请求体: {"email": "xxx@xxx.com", "type": "login"}
+   → 发送登录验证码到邮箱
+   → 注意：无论邮箱是否注册都会发送验证码（保护邮箱隐私）
+
+2. POST /auth/login-with-code
+   → 请求体: {"email": "xxx@xxx.com", "code": "xxxxxx"}
+   → 验证码验证成功后才检查邮箱是否注册
+   → 如果邮箱未注册，返回 401 "邮箱未注册或验证码错误"
+   → 如果验证成功并邮箱已注册，返回 AccessToken 完成登录
+```
+
+## 安全特性
+
+### 密码安全
+- 使用 Argon2id 算法加密密码
+- 密码长度限制 6-66 字符
+- 密码永不返回，仅支持验证
+
+### 令牌安全
+- **AccessToken**：15 分钟有效期，用于访问受保护的资源
+- **RefreshToken**：7 天有效期，通过 HttpOnly Cookie 返回
+- 支持令牌刷新，自动使旧令牌失效
+- 支持多设备会话，设备之间独立
+
+### 验证码安全
+- 6 位数字验证码，每 10 分钟过期
+- 一次性使用，验证成功后自动删除
+- 错误计数限制：5 次错误后锁定邮箱 1 小时
+- 同一邮箱最多：1 次/分钟，14 次/小时
+- 同一 IP 最多：3 次/分钟，14 次/小时
+- **邮箱隐私保护**：登录验证码发送时不检查邮箱是否存在，仅在验证成功后才返回邮箱未注册错误
+  - 这样可以防止邮箱枚举攻击，保护已注册邮箱的隐私
+
+### 会话安全
+- 每个会话有唯一 ID 和版本号
+- 刷新 AccessToken 时自动递增版本号，使旧令牌立即失效
+- 支持从单个设备或所有设备登出
+- 每个会话包含加密的 RefreshToken
+
+### 设备和 IP 验证
+- 发送验证码和验证验证码必须来自同一 IP 地址
+- 防止验证码被其他设备或代理滥用
+
+## 错误处理
+
+### HTTP 状态码
+- **200**：请求成功
+- **400**：客户端请求错误（参数验证、验证码错误等）
+- **401**：未认证或令牌无效
+- **403**：无权限访问
+- **405**：请求方法不支持
+- **409**：资源冲突（用户名/邮箱已存在）
+- **415**：不支持的请求类型
+- **429**：请求过于频繁或超过限制
+- **500**：服务器错误
+
+### 错误响应格式
+```json
+{
+  "code": 400,
+  "msg": "错误描述信息"
+}
+```
+
+### 请求类型错误（415）
+当请求的 Content-Type 与接口要求不符时，会返回 415 状态码。
+
+**示例**：发送 text/plain 到需要 application/json 的接口
+```bash
+curl -X POST \
+  -H "Content-Type: text/plain" \
+  -d 'invalid data' \
+  http://localhost:8000/auth/send-code
+
+# 响应
+{
+  "code": 415,
+  "msg": "不支持的请求类型: text/plain。请使用 Content-Type: application/json"
+}
+```
+
+### 请求类型要求
+- **需要 JSON 请求体的接口**：必须使用 `Content-Type: application/json`
+  - POST /auth/send-code
+  - POST /auth/register
+  - POST /auth/login
+  - POST /auth/login-with-code
+  
+- **无请求体的接口**：不需要 Content-Type 或设置为空
+  - POST /auth/refresh（仅使用 Cookie）
+  - POST /auth/logout（仅使用 Cookie）
+  - POST /auth/logout/all（仅使用 Authorization 头）
+
+## 使用示例
+
+### 注册新用户
+```bash
+# 1. 检查用户名
+curl -X GET http://localhost:8000/auth/check-username?username=john
+
+# 2. 发送验证码
+curl -X POST http://localhost:8000/auth/send-code \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","type":"register"}'
+
+# 3. 等待邮件，获取验证码（例如：123456）
+
+# 4. 注册
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username":"john",
+    "email":"john@example.com",
+    "password":"secure123",
+    "code":"123456"
+  }'
+```
+
+### 密码登录
+```bash
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","password":"secure123"}'
+
+# 响应包含 AccessToken
+# Cookie 中包含 RefreshToken
+```
+
+### 验证码登录
+```bash
+# 1. 发送验证码
+curl -X POST http://localhost:8000/auth/send-code \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","type":"login"}'
+
+# 2. 使用验证码登录
+curl -X POST http://localhost:8000/auth/login-with-code \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","code":"123456"}'
+```
+
+### 访问受保护的资源
+```bash
+curl -X GET http://localhost:8000/auth/info \
+  -H "Authorization: Bearer {accessToken}"
+
+curl -X GET "http://localhost:8000/auth/info?type=details" \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+### 更新用户信息
+```bash
+# 更新用户名
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"username","value":"newname"}'
+
+# 更新头像URL
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"avatarUrl","value":"https://example.com/avatar.jpg"}'
+
+# 更新扩展资料
+curl -X POST http://localhost:8000/auth/update/profile \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"realName","value":"张三"}'
+```
+
+### 更改邮箱（敏感操作）
+```bash
+# 第一步：检查验证状态（可选，用于 UI 显示）
+curl -X GET http://localhost:8000/auth/check-sensitive-verification \
+  -H "Authorization: Bearer {accessToken}"
+# 响应: {"code":200,"msg":"查询成功","data":{"verified":false,"remainingSeconds":0}}
+
+# 第二步：敏感操作验证（使用密码）
+curl -X POST http://localhost:8000/auth/verify-sensitive \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"method":"password","password":"myPassword123"}'
+
+# 第二步（可选）：再次检查验证状态
+curl -X GET http://localhost:8000/auth/check-sensitive-verification \
+  -H "Authorization: Bearer {accessToken}"
+# 响应: {"code":200,"msg":"查询成功","data":{"verified":true,"remainingSeconds":900}}
+
+# 第三步：发送新邮箱验证码
+curl -X POST http://localhost:8000/auth/send-code \
+  -H "Content-Type: application/json" \
+  -d '{"email":"newemail@example.com","type":"change-email"}'
+
+# 第四步：提交新邮箱和验证码
+curl -X POST http://localhost:8000/auth/update/email \
+  -H "Authorization: Bearer {accessToken}" \
+  -H "Content-Type: application/json" \
+  -d '{"newEmail":"newemail@example.com","code":"123456"}'
+```
+
+### 刷新令牌
+```bash
+curl -X POST http://localhost:8000/auth/refresh \
+  -b "refreshToken={token}"
+```
+
+### 登出
+```bash
+# 单设备登出
+curl -X POST http://localhost:8000/auth/logout \
+  -b "refreshToken={token}"
+
+# 全设备登出
+curl -X POST http://localhost:8000/auth/logout/all \
+  -H "Authorization: Bearer {accessToken}"
+```
+
+## 配置说明
+
+### 邮箱配置
+```properties
+spring.mail.host=smtp.exmail.qq.com
+spring.mail.port=465
+spring.mail.username=your-email@example.com
+spring.mail.password=your-password
+```
+
+### JWT 配置
+```properties
+jwt.secret=your-secret-key
+jwt.access-token-expiration=900000  # 15分钟（毫秒）
+jwt.refresh-token-expiration=604800000  # 7天（毫秒）
+```
+
+### Redis 配置
+```properties
+spring.redis.host=localhost
+spring.redis.port=6379
+```
