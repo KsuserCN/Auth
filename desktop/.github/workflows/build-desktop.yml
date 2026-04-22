@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -56,8 +56,13 @@ jobs:
       - name: Archive macOS app
         if: matrix.platform == 'macos'
         run: |
+          APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ]; then
+            echo "No macOS app bundle found under build/macos/Build/Products/Release"
+            exit 1
+          fi
           ditto -c -k --sequesterRsrc --keepParent \
-            "build/macos/Build/Products/Release/Ksuser认证中心.app" \
+            "$APP_PATH" \
             "${{ matrix.artifact_name }}.zip"
 
       - name: Build Windows
