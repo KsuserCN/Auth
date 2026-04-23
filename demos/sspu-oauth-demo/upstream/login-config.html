@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="program" content="no-cache"><meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate"><meta name="renderer" content="webkit"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover"><link rel="icon" href="/favicon/favicon.ico"><script src="/jweixin-1.4.0.js" defer></script><script src="/uni.webview.1.5.3.js" defer></script><script src="/vconsole.min.js" defer></script><script>document.addEventListener("UniAppJSBridgeReady", function() {
+        window.uni.getEnv(function(res) {
+          console.log("当前环境：" + JSON.stringify(res));
+        });
+      });
+      function IsPC() {
+        var userAgentInfo = navigator.userAgent;
+        var Agents = [
+          "Android",
+          "iPhone",
+          "SymbianOS",
+          "Windows Phone",
+          "iPad",
+          "iPod",
+          "Phone; OpenHarmony"
+        ];
+        var flag = true;
+        for (var v = 0; v < Agents.length; v++) {
+          if (userAgentInfo.indexOf(Agents[v]) > 0) {
+            flag = false;
+            break;
+          }
+        }
+        if (!flag) {
+          var vConsole = new window.VConsole();
+        }
+      }
+      // IsPC()</script><title>安全中心</title><link href="/static/css/chunk-06462b7a.9238f0fb.css" rel="prefetch"><link href="/static/css/chunk-0f18daa6.bd115ea6.css" rel="prefetch"><link href="/static/css/chunk-131fa984.e6640b01.css" rel="prefetch"><link href="/static/css/chunk-1f932252.c1f70413.css" rel="prefetch"><link href="/static/css/chunk-21cb1e9e.8acd5e1a.css" rel="prefetch"><link href="/static/css/chunk-2590d794.8d46feac.css" rel="prefetch"><link href="/static/css/chunk-27527f13.a58fad3b.css" rel="prefetch"><link href="/static/css/chunk-33828dd8.7ee2bbfd.css" rel="prefetch"><link href="/static/css/chunk-3d6a98c0.31bf8583.css" rel="prefetch"><link href="/static/css/chunk-43d8f6c0.18982a33.css" rel="prefetch"><link href="/static/css/chunk-4768e4bb.22a67bcf.css" rel="prefetch"><link href="/static/css/chunk-61be462a.e86e17c3.css" rel="prefetch"><link href="/static/css/chunk-623021cf.7a0b7e0b.css" rel="prefetch"><link href="/static/css/chunk-62919a10.d58a2c6e.css" rel="prefetch"><link href="/static/css/chunk-647e1534.46143a67.css" rel="prefetch"><link href="/static/css/chunk-6b34c48f.a7576903.css" rel="prefetch"><link href="/static/css/chunk-7c9c3436.3007fab9.css" rel="prefetch"><link href="/static/css/chunk-7f398b07.42419e17.css" rel="prefetch"><link href="/static/css/chunk-87db1298.ea8092d3.css" rel="prefetch"><link href="/static/css/chunk-8c58305e.66084f9a.css" rel="prefetch"><link href="/static/css/chunk-b8b8630a.50813593.css" rel="prefetch"><link href="/static/css/chunk-bf9713fc.8290c005.css" rel="prefetch"><link href="/static/css/chunk-d58bece0.3363e7b4.css" rel="prefetch"><link href="/static/js/chunk-06462b7a.95067aa1.js" rel="prefetch"><link href="/static/js/chunk-0f18daa6.5a2ead5c.js" rel="prefetch"><link href="/static/js/chunk-131fa984.458f6570.js" rel="prefetch"><link href="/static/js/chunk-1f932252.7827b02e.js" rel="prefetch"><link href="/static/js/chunk-2046befa.16f66bfa.js" rel="prefetch"><link href="/static/js/chunk-21cb1e9e.d8d15f3c.js" rel="prefetch"><link href="/static/js/chunk-2590d794.0225dbd8.js" rel="prefetch"><link href="/static/js/chunk-27527f13.b86247b2.js" rel="prefetch"><link href="/static/js/chunk-33828dd8.cc610722.js" rel="prefetch"><link href="/static/js/chunk-3d6a98c0.ad08ffed.js" rel="prefetch"><link href="/static/js/chunk-43d8f6c0.e9c8043b.js" rel="prefetch"><link href="/static/js/chunk-4768e4bb.cf2ab656.js" rel="prefetch"><link href="/static/js/chunk-61be462a.55574f9f.js" rel="prefetch"><link href="/static/js/chunk-623021cf.71e69213.js" rel="prefetch"><link href="/static/js/chunk-62919a10.090f0664.js" rel="prefetch"><link href="/static/js/chunk-647e1534.67e309d8.js" rel="prefetch"><link href="/static/js/chunk-6b34c48f.38e5325d.js" rel="prefetch"><link href="/static/js/chunk-7c9c3436.340481a7.js" rel="prefetch"><link href="/static/js/chunk-7e1f8093.c9ad9d7f.js" rel="prefetch"><link href="/static/js/chunk-7f398b07.8cb122ee.js" rel="prefetch"><link href="/static/js/chunk-87db1298.b0ffa255.js" rel="prefetch"><link href="/static/js/chunk-8c58305e.07a306c8.js" rel="prefetch"><link href="/static/js/chunk-b8b8630a.28b5319e.js" rel="prefetch"><link href="/static/js/chunk-bf9713fc.63595613.js" rel="prefetch"><link href="/static/js/chunk-d58bece0.749b2138.js" rel="prefetch"><link href="/static/css/chunk-sw-ui.7b258748.css" rel="preload" as="style"><link href="/static/css/index.6f1e3400.css" rel="preload" as="style"><link href="/static/js/chunk-sw-ui.625cd148.js" rel="preload" as="script"><link href="/static/js/chunk-vendors.2d26d711.js" rel="preload" as="script"><link href="/static/js/index.b09bbce7.js" rel="preload" as="script"><link href="/static/css/chunk-sw-ui.7b258748.css" rel="stylesheet"><link href="/static/css/index.6f1e3400.css" rel="stylesheet"></head><body><noscript><strong>We're sorry but security-center-ui doesn't work properly without JavaScript enabled. Please enable it to continue.</strong></noscript><div id="app"></div><script src="/static/js/chunk-sw-ui.625cd148.js"></script><script src="/static/js/chunk-vendors.2d26d711.js"></script><script src="/static/js/index.b09bbce7.js"></script></body></html>

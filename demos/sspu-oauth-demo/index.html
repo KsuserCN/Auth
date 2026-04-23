@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>登录 - 上海第二工业大学</title>
+    <link rel="icon" href="/assets/favicon.ico">
+    <link rel="stylesheet" href="https://id.sspu.edu.cn/cas/deps/js/sw-ui/lib/theme-chalk/index.css">
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <div class="sw-login">
+      <div class="sw-login-wrap">
+        <div class="bg-wrap" aria-hidden="true"></div>
+
+        <div class="logo-wrap">
+          <div>
+            <img src="/assets/logo.png" alt="上海第二工业大学">
+          </div>
+          <div class="line"></div>
+          <div class="auth-name">
+            <span>统一身份认证</span>
+          </div>
+        </div>
+
+        <div class="sw-login-main">
+          <div class="sw-login-main-content">
+            <div class="tabs" role="tablist" aria-label="登录方式">
+              <button class="tab is-active" data-tab="password" role="tab" aria-selected="true">账号密码登录</button>
+              <button class="tab" data-tab="sms" role="tab" aria-selected="false">手机验证码登录</button>
+            </div>
+
+            <div class="tab-panel is-active" data-panel="password">
+              <form class="login-form" id="password-form">
+                <div class="form-item">
+                  <label class="field-wrap">
+                    <i class="su-input-icon black su-input-icon-prefix el-input__icon su-icon-people prefix-icon" aria-hidden="true"></i>
+                    <input class="field-input" type="text" placeholder="请输入学工号" autocomplete="username">
+                  </label>
+                </div>
+
+                <div class="form-item relative">
+                  <label class="field-wrap">
+                    <i class="su-input-icon black su-input-icon-prefix el-input__icon su-icon-lock prefix-icon" aria-hidden="true"></i>
+                    <input id="password-input" class="field-input" type="password" placeholder="请输入登录密码" autocomplete="current-password">
+                    <button class="toggle-password" type="button" aria-label="显示或隐藏密码">
+                      <i id="password-toggle-icon" class="el-input__icon su-icon-hide" aria-hidden="true"></i>
+                    </button>
+                  </label>
+                </div>
+
+                <div class="form-item">
+                  <button class="login-btn" type="submit">登 录</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="tab-panel" data-panel="sms">
+              <form class="login-form" id="sms-form">
+                <div class="form-item">
+                  <label class="field-wrap">
+                    <i class="su-input-icon black su-input-icon-prefix el-input__icon el-icon-mobile-phone prefix-icon" aria-hidden="true"></i>
+                    <input class="field-input" type="text" placeholder="请输入手机号" autocomplete="tel">
+                  </label>
+                </div>
+
+                <div class="form-item">
+                  <label class="field-wrap code-field-wrap">
+                    <i class="su-input-icon black su-input-icon-prefix el-input__icon su-icon-lock prefix-icon" aria-hidden="true"></i>
+                    <input class="field-input code-input" type="text" placeholder="请输入验证码" autocomplete="one-time-code">
+                    <button class="code-text secondary-inline" type="button">获取验证码</button>
+                  </label>
+                </div>
+
+                <div class="form-item">
+                  <button class="login-btn" type="submit">登 录</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="other-link">
+              <div>
+                <a href="https://id110.sspu.edu.cn/active-face-recognition" target="_blank" rel="noreferrer">账号激活</a>
+              </div>
+              <div>
+                <a href="https://id110.sspu.edu.cn/find-pwd" target="_blank" rel="noreferrer">忘记密码？</a>
+              </div>
+            </div>
+
+            <div class="other-login-ways" id="other-login-ways">
+              <div class="login-ways">
+                <div class="ways">其它方式登录：</div>
+
+                <div class="ways-right">
+                  <button class="login-way weixin-wrap" type="button" data-provider="wechat" aria-label="微信登录" title="微信登录">
+                    <i class="su-icon-weixinbian weixin" aria-hidden="true"></i>
+                    <i class="su-icon-wechat weixin" aria-hidden="true"></i>
+                  </button>
+                </div>
+
+                <div class="ways-right">
+                  <button class="login-way work-wechat-wrap" type="button" data-provider="workweixin" aria-label="企业微信登录" title="企业微信登录">
+                    <i class="su-icon-qiyeweixin-inactive ww" aria-hidden="true"></i>
+                    <i class="su-icon-qiyeweixin ww" aria-hidden="true"></i>
+                  </button>
+                </div>
+
+                <div class="ways-right">
+                  <button class="login-way ksuser-way" type="button" id="ksuser-entry" aria-label="Ksuser OAuth 登录" title="Ksuser OAuth 登录">
+                    <img class="ksuser-badge" src="./assets/ksuser-icon.png" alt="Ksuser OAuth">
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="oauth-status" id="oauth-status" hidden>
+              <div class="oauth-status-badge">
+                <span class="oauth-status-dot"></span>
+                <span id="oauth-status-text">已接入 Ksuser OAuth</span>
+              </div>
+              <button type="button" id="view-oauth-result">查看集成结果</button>
+            </div>
+          </div>
+        </div>
+
+        <section class="notice-announcement">
+          <div class="notice-announcement-title">
+            <img class="notice-img" src="/assets/laba.png" alt="">
+            <span>通知公告</span>
+          </div>
+          <div class="notice-announcement-content">
+            <div class="content" id="notice-content"></div>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <div class="guide-browser">
+            <nav class="guide-link-wrap" id="footer-links"></nav>
+          </div>
+          <div class="footer-detail" id="footer-copyright">上海第二工业大学信息技术中心</div>
+        </footer>
+      </div>
+    </div>
+
+    <div class="modal" id="oauth-modal" hidden>
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title">Ksuser OAuth 集成结果</div>
+            <div class="modal-subtitle" id="oauth-modal-subtitle">本地模拟回调结果</div>
+          </div>
+          <button class="modal-close" type="button" data-close-modal="true" aria-label="关闭">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="result-summary" id="oauth-summary"></div>
+          <div class="result-block">
+            <div class="result-label">Token 响应</div>
+            <pre id="token-json"></pre>
+          </div>
+          <div class="result-block">
+            <div class="result-label">userinfo 响应</div>
+            <pre id="userinfo-json"></pre>
+          </div>
+          <div class="result-block">
+            <div class="result-label">OAuth2 集成信息</div>
+            <pre id="meta-json"></pre>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="ghost-button" id="clear-session" type="button">清除状态</button>
+          <button class="small-primary-button" type="button" data-close-modal="true">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>

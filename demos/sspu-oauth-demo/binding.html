@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>安全中心</title>
+    <link rel="icon" href="/assets/favicon.ico">
+    <link rel="stylesheet" href="/binding.css">
+  </head>
+  <body>
+    <div class="security-page">
+      <header class="security-topbar">
+        <div class="security-topbar-title">
+          <span>安全中心</span>
+          <span class="security-topbar-dot" aria-hidden="true"></span>
+        </div>
+
+        <div class="security-topbar-user">
+          <button class="topbar-fullscreen" type="button" aria-label="全屏">
+            <img src="/assets/fullscreen.svg" alt="">
+          </button>
+          <div class="topbar-user-chip">
+            <img id="topbar-user-avatar" class="topbar-user-avatar" src="/assets/avatar.svg" alt="头像">
+            <span id="topbar-user-name" class="topbar-user-name">金阳</span>
+          </div>
+        </div>
+      </header>
+
+      <div class="security-body">
+        <aside class="security-sidebar">
+          <div class="sidebar-profile">
+            <img id="sidebar-avatar" class="sidebar-avatar" src="/assets/avatar.svg" alt="金阳">
+            <div id="sidebar-name" class="sidebar-name">金阳</div>
+            <div id="sidebar-email" class="sidebar-email">已绑定邮箱</div>
+          </div>
+
+          <nav class="sidebar-nav" aria-label="安全中心导航">
+            <button class="sidebar-nav-item" type="button">
+              <i class="sw-icon su-icon-account-information" aria-hidden="true"></i>
+              <span>账号信息</span>
+            </button>
+            <button class="sidebar-nav-item" type="button">
+              <i class="sw-icon su-icon-security" aria-hidden="true"></i>
+              <span>安全设置</span>
+            </button>
+            <button class="sidebar-nav-item is-active" type="button">
+              <i class="sw-icon su-icon-Jointlogon" aria-hidden="true"></i>
+              <span>联合登录设置</span>
+            </button>
+            <button class="sidebar-nav-item" type="button">
+              <i class="sw-icon su-icon-Loginlog" aria-hidden="true"></i>
+              <span>登录历史</span>
+            </button>
+            <button class="sidebar-nav-item" type="button">
+              <i class="sw-icon su-icon-screen" aria-hidden="true"></i>
+              <span>设备/IP管理</span>
+            </button>
+          </nav>
+
+          <button class="sidebar-collapse" type="button" aria-label="收起导航">
+            <img src="/assets/chevron-left.svg" alt="">
+          </button>
+        </aside>
+
+        <main class="security-main">
+          <div class="security-breadcrumb">
+            <span>安全中心</span>
+            <span class="breadcrumb-separator">›</span>
+            <span class="breadcrumb-current">联合登录设置</span>
+          </div>
+
+          <section class="binding-card">
+            <div class="binding-title">
+              <i class="sw-icon su-icon-union binding-title-icon" aria-hidden="true"></i>
+              <h1>社交账号绑定</h1>
+            </div>
+
+            <div class="binding-list">
+              <article class="binding-row">
+                <i class="sw-icon su-icon-wechat binding-platform-icon is-wechat" aria-hidden="true"></i>
+                <div class="binding-platform-copy">
+                  <div class="binding-platform-name">微信</div>
+                  <div class="binding-platform-desc">您已绑定微信号烤*Y，可通过微信号一键登录</div>
+                </div>
+                <div class="binding-status">
+                  <i class="sw-icon su-icon-saf-success" aria-hidden="true"></i>
+                  <span>已设置</span>
+                </div>
+                <button class="binding-action" type="button">解除绑定</button>
+              </article>
+
+              <article class="binding-row">
+                <i class="sw-icon su-icon-qiyeweixin binding-platform-icon is-workwechat" aria-hidden="true"></i>
+                <div class="binding-platform-copy">
+                  <div class="binding-platform-name">企业微信</div>
+                  <div class="binding-platform-desc">您已绑定企业微信，企业微信昵称金*阳，可通过企业微信一键登录</div>
+                </div>
+                <div class="binding-status">
+                  <i class="sw-icon su-icon-saf-success" aria-hidden="true"></i>
+                  <span>已设置</span>
+                </div>
+                <button class="binding-action" type="button">解除绑定</button>
+              </article>
+
+              <article class="binding-row">
+                <div class="binding-platform-icon binding-platform-badge is-ksuser" aria-hidden="true">
+                  <img class="binding-platform-asset" src="/assets/ksuser-icon.png" alt="">
+                </div>
+                <div class="binding-platform-copy">
+                  <div class="binding-platform-name">Ksuser账号</div>
+                  <div id="ksuser-binding-desc" class="binding-platform-desc">您已绑定 Ksuser 账号，可通过 Ksuser 账号一键登录</div>
+                </div>
+                <div class="binding-status">
+                  <i class="sw-icon su-icon-saf-success" aria-hidden="true"></i>
+                  <span>已设置</span>
+                </div>
+                <button class="binding-action" type="button">解除绑定</button>
+              </article>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="/binding.js" defer></script>
+  </body>
+</html>

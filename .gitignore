@@ -1,1 +1,10 @@
 .DS_Store
+.env
+.venv/
+__pycache__/
+*.pyc
+demos/sspu-oauth-demo/local-ca-bundle.pem
+demos/oauth-local-demo/local-ca-bundle.pem
+demos/oidc-local-demo/local-ca-bundle.pem
+
+*/.env

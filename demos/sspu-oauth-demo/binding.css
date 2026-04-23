@@ -1,0 +1,431 @@
+:root {
+  color-scheme: light;
+  --navy: #1d2d50;
+  --navy-right: #203d64;
+  --page-bg: #f2f6fb;
+  --sidebar-bg: #edf3fb;
+  --border: #dbe4ef;
+  --title: #2d3f5f;
+  --text: #506178;
+  --muted: #c9d3e0;
+  --active: #58acef;
+  --status: #5fc474;
+  --button-bg: #d6dee8;
+  --button-text: #253751;
+}
+
+@font-face {
+  font-family: "sw-icons";
+  src: url("/assets/fonts/iconfont.79d3cb55.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "sw-icons";
+  src: url("/assets/fonts/iconfont.5725165c.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "sw-icons";
+  src: url("/assets/fonts/iconfont.b8e8fdb6.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  overflow: hidden;
+  font-family: "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+}
+
+.sw-icon {
+  display: inline-block;
+  font-family: "sw-icons" !important;
+  font-style: normal;
+  font-weight: 400;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  vertical-align: baseline;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.su-icon-screen::before {
+  content: "\e606";
+}
+
+.su-icon-saf-success::before {
+  content: "\e646";
+}
+
+.su-icon-union::before {
+  content: "\e65a";
+}
+
+.su-icon-security::before {
+  content: "\e690";
+}
+
+.su-icon-Jointlogon::before {
+  content: "\e691";
+}
+
+.su-icon-Loginlog::before {
+  content: "\e692";
+}
+
+.su-icon-wechat::before {
+  content: "\e64c";
+}
+
+.su-icon-account-information::before {
+  content: "\e6c3";
+}
+
+.su-icon-qiyeweixin::before {
+  content: "\e6e5";
+}
+
+img {
+  display: block;
+}
+
+.security-page {
+  min-height: 100vh;
+}
+
+.security-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 61px;
+  padding: 0 17px 0 31px;
+  background:
+    linear-gradient(90deg, var(--navy) 0, var(--navy) 76%, rgba(32, 61, 100, 0.96) 86%, rgba(32, 61, 100, 0.92) 100%),
+    url("/assets/top-bg.png") right center / auto 100% no-repeat;
+  color: #fff;
+}
+
+.security-topbar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 5px;
+}
+
+.security-topbar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+.security-topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.topbar-fullscreen {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  opacity: 0.86;
+  cursor: default;
+}
+
+.topbar-fullscreen img {
+  width: 16px;
+  height: 16px;
+}
+
+.topbar-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.topbar-user-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.topbar-user-name {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.security-body {
+  display: grid;
+  grid-template-columns: 173px minmax(0, 1fr);
+  height: calc(100vh - 61px);
+}
+
+.security-sidebar {
+  position: relative;
+  background: linear-gradient(180deg, #edf3fb 0, #eef5fc 68%, #edf4fb 100%);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar-profile {
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  padding-top: 49px;
+}
+
+.sidebar-avatar {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+}
+
+.sidebar-name {
+  color: #475870;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.sidebar-email {
+  max-width: 134px;
+  overflow: hidden;
+  color: #9aa8b9;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-email[hidden] {
+  display: none;
+}
+
+.sidebar-nav {
+  margin-top: 32px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 47px;
+  padding-left: 31px;
+  color: #334760;
+  font-size: 12px;
+  cursor: default;
+}
+
+.sidebar-nav-item .sw-icon {
+  width: 18px;
+  font-size: 17px;
+  color: #344963;
+  text-align: center;
+}
+
+.sidebar-nav-item.is-active {
+  color: var(--active);
+  background: #d8edff;
+  box-shadow: inset -3px 0 0 #4ba3ea;
+}
+
+.sidebar-nav-item.is-active .sw-icon {
+  color: var(--active);
+}
+
+.sidebar-collapse {
+  position: absolute;
+  top: 362px;
+  right: -11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 48px;
+  border-radius: 0 12px 12px 0;
+  background: #edf2f9;
+  border: 1px solid #e4ebf4;
+  border-left: 0;
+  cursor: default;
+}
+
+.sidebar-collapse img {
+  width: 10px;
+  height: 18px;
+  opacity: 0.5;
+}
+
+.security-main {
+  padding: 12px 0 0;
+  background: linear-gradient(180deg, #f4f8fc 0, #f7fbff 100%);
+}
+
+.security-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 25px;
+  margin-left: 17px;
+  color: #9fabbc;
+  font-size: 11px;
+}
+
+.breadcrumb-separator {
+  color: #c6d0db;
+}
+
+.breadcrumb-current {
+  color: var(--active);
+}
+
+.binding-card {
+  height: calc(100vh - 97px);
+  margin-top: 1px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.binding-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 57px 0 0 30px;
+}
+
+.binding-title-icon {
+  font-size: 30px;
+  color: #56acf2;
+}
+
+.binding-title h1 {
+  margin: 0;
+  color: var(--title);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.binding-list {
+  padding: 30px 97px 0 96px;
+}
+
+.binding-row {
+  display: grid;
+  grid-template-columns: 69px minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 39px;
+  min-height: 88px;
+  padding: 7px 0 27px;
+  border-bottom: 1px solid #e3ebf4;
+}
+
+.binding-row + .binding-row {
+  padding-top: 22px;
+}
+
+.binding-platform-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 73px;
+  height: 73px;
+  font-size: 73px;
+  line-height: 73px;
+}
+
+.binding-platform-icon.is-wechat {
+  color: #19c409;
+}
+
+.binding-platform-icon.is-workwechat {
+  color: #1faae6;
+}
+
+.binding-platform-badge {
+  border-radius: 50%;
+}
+
+.binding-platform-badge.is-ksuser {
+  background: linear-gradient(180deg, #ffe08a 0, #f5bc34 100%);
+  box-shadow: inset 0 -3px 0 rgba(191, 120, 10, 0.18);
+}
+
+.binding-platform-asset {
+  width: 48px;
+  height: 48px;
+  font-size: 0;
+  object-fit: contain;
+}
+
+.binding-platform-copy {
+  min-width: 0;
+}
+
+.binding-platform-name {
+  color: var(--title);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.binding-platform-desc {
+  margin-top: 14px;
+  color: #c7d1dd;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.binding-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-right: 20px;
+  color: var(--status);
+  font-size: 17px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.binding-status .sw-icon {
+  font-size: 18px;
+}
+
+.binding-action {
+  min-width: 62px;
+  height: 28px;
+  padding: 0 18px;
+  border-radius: 1px;
+  background: var(--button-bg);
+  color: var(--button-text);
+  font-size: 12px;
+  cursor: default;
+}
