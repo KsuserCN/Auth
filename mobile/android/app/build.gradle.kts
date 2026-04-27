@@ -55,7 +55,7 @@ fun assetStatementsValue(originHint: String): String {
 }
 
 android {
-    namespace = "cn.ksuser.auth.android"
+    namespace = "cn.ksuser.auth"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -63,7 +63,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "cn.ksuser.auth.android"
+        applicationId = "cn.ksuser.auth"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -109,6 +109,11 @@ android {
         compose = true
         buildConfig = true
         resValues = true
+    }
+    lint {
+        // Avoid blocking release packaging on lintVital when lint artifacts
+        // cannot be fetched in restricted network environments.
+        checkReleaseBuilds = false
     }
 }
 

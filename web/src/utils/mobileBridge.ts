@@ -7,7 +7,7 @@ import {
 
 const MOBILE_BRIDGE_CHALLENGE_QUERY_KEY = 'mobileBridgeChallengeId'
 const MOBILE_BRIDGE_FALLBACK_QUERY_KEY = 'mobileBridgeFallback'
-const ANDROID_APP_PACKAGE = 'cn.ksuser.auth.android'
+const ANDROID_APP_PACKAGE = 'cn.ksuser.auth'
 
 export const isAndroidMobileBridgeSupported = (): boolean => {
   if (typeof navigator === 'undefined') {
