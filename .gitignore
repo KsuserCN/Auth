@@ -8,3 +8,7 @@ demos/oauth-local-demo/local-ca-bundle.pem
 demos/oidc-local-demo/local-ca-bundle.pem
 
 */.env
+artifacts
+release
+
+mobile/android/app
