@@ -7,7 +7,7 @@
 ## 查询参数
 
 - `client_id`：必填，应用 `AppID`
-- `redirect_uri`：必填，必须与应用登记值完全一致
+- `redirect_uri`：必填，必须与应用登记的任一回调地址完全一致；应用可登记多个地址，使用英文分号 `;` 分隔
 - `response_type`：必填，当前固定 `code`
 - `scope`：可选，支持 `openid profile email`
 - `nonce`：可选，OIDC 请求建议传入

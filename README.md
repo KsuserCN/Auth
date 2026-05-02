@@ -17,6 +17,7 @@
 | `web/` | Web 认证中心与 OAuth/SSO 授权页，开发环境默认 `5173` | Vue 3, Vite, TypeScript, Element Plus |
 | `desktop/` | 桌面客户端，当前支持 `macOS` / `Windows` | Flutter |
 | `mobile/android/` | Android 客户端 | Kotlin, Jetpack Compose, Retrofit |
+| `mobile/ios/` | iOS 客户端 | SwiftUI, URLSession |
 | `demos/` | 本地 OAuth / OIDC / SSPU 接入演示 | Python, HTML/JS |
 | `.github/workflows/` | 分模块 CI 构建工作流 | GitHub Actions |
 
@@ -154,6 +155,13 @@ npm run dev:web
   - `APP_ENV`
   - `ENABLE_HTTP_LOGGING`
 - 若未提供环境文件，Gradle 脚本会回落到默认值
+
+### Mobile iOS
+
+- Xcode 项目：`mobile/ios/Ksuser Auth.xcodeproj`
+- 运行时读取环境变量 `API_BASE_URL`，默认 `https://api.ksuser.cn`
+- 会话通过 Keychain / `UserDefaults` 存储 `accessToken` + Cookie-based `refreshToken`
+- 最低支持 iOS 15.0
 
 ## 子项目文档
 

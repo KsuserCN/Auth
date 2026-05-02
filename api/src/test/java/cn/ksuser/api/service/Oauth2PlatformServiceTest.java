@@ -127,6 +127,47 @@ class Oauth2PlatformServiceTest {
         assertEquals(400, exception.getStatus().value());
     }
 
+    @Test
+    void shouldExchangeAuthorizationCodeWithAnyRegisteredRedirectUri() {
+        Oauth2Application application = buildApplication();
+        application.setRedirectUri("http://localhost:9000/callback;https://demo.example.com/oauth/callback");
+        User user = buildUser();
+
+        when(applicationRepository.findByAppId("ksapp_demo")).thenReturn(Optional.of(application));
+        when(passwordEncoder.matches("kssecret_demo", "encoded-secret")).thenReturn(true);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(valueOperations.getAndDelete("oauth2:auth-code:kscode_demo")).thenReturn(
+            "{" +
+                "\"userId\":1," +
+                "\"ownerUserId\":99," +
+                "\"clientId\":\"ksapp_demo\"," +
+                "\"redirectUri\":\"https://demo.example.com/oauth/callback\"," +
+                "\"scope\":\"profile\"" +
+                "}"
+        );
+        when(oauth2TokenService.generateAccessToken(
+            eq("ksapp_demo"),
+            eq(99L),
+            eq(1L),
+            eq("user-uuid-demo"),
+            eq("profile"),
+            anyString(),
+            anyString()
+        )).thenReturn("access-token-demo");
+        when(oauth2TokenService.getAccessTokenExpiresInSeconds()).thenReturn(7200);
+
+        Map<String, Object> response = service.exchangeAuthorizationCode(
+            "authorization_code",
+            "kscode_demo",
+            "ksapp_demo",
+            "kssecret_demo",
+            "https://demo.example.com/oauth/callback"
+        );
+
+        assertEquals("access-token-demo", response.get("access_token"));
+        assertEquals("profile", response.get("scope"));
+    }
+
     private Oauth2Application buildApplication() {
         Oauth2Application application = new Oauth2Application();
         application.setAppId("ksapp_demo");

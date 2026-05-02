@@ -110,7 +110,7 @@ public class Oauth2PlatformService {
         }
 
         String appName = normalizeAppName(request == null ? null : request.getAppName());
-        String redirectUri = normalizeAndValidateRedirectUri(request == null ? null : request.getRedirectUri());
+        String redirectUri = normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUri());
         String contactInfo = normalizeContactInfo(request == null ? null : request.getContactInfo());
         List<String> scopes = normalizeAppScopes(request == null ? null : request.getScopes());
 
@@ -143,7 +143,7 @@ public class Oauth2PlatformService {
     public Oauth2AppResponse updateApplication(User user, String appId, Oauth2AppUpdateRequest request) {
         Oauth2Application application = findOwnedApplication(user, appId);
         application.setAppName(normalizeAppName(request == null ? null : request.getAppName()));
-        application.setRedirectUri(normalizeAndValidateRedirectUri(request == null ? null : request.getRedirectUri()));
+        application.setRedirectUri(normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUri()));
         application.setContactInfo(normalizeContactInfo(request == null ? null : request.getContactInfo()));
         return toAppResponse(applicationRepository.save(application));
     }
@@ -162,7 +162,7 @@ public class Oauth2PlatformService {
                                                                 String responseType, String scope) {
         validateResponseType(responseType);
         Oauth2Application application = findActiveApplication(clientId, HttpStatus.BAD_REQUEST);
-        validateRedirectUriMatches(application, redirectUri);
+        String normalizedRedirectUri = validateRedirectUriMatches(application, redirectUri);
         List<String> requestedScopes = resolveRequestedScopes(application, scope);
         UserOauth2Authorization existingAuthorization = findReusableAuthorization(user, application.getAppId(), requestedScopes)
             .orElse(null);
@@ -171,7 +171,7 @@ public class Oauth2PlatformService {
             application.getAppName(),
             application.getLogoUrl(),
             application.getContactInfo(),
-            application.getRedirectUri(),
+            normalizedRedirectUri,
             requestedScopes,
             existingAuthorization != null,
             existingAuthorization == null ? AuthorizationGrantPolicy.MODE_PERSISTENT : existingAuthorization.getGrantMode(),
@@ -240,13 +240,13 @@ public class Oauth2PlatformService {
             throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", "AppSecret 不正确");
         }
 
-        validateRedirectUriMatches(application, redirectUri);
+        String normalizedRedirectUri = validateRedirectUriMatches(application, redirectUri);
         AuthorizationCodePayload payload = consumeAuthorizationCode(code);
         if (payload == null) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码无效、已过期或已使用");
         }
         if (!application.getAppId().equals(payload.clientId())
-            || !application.getRedirectUri().equals(payload.redirectUri())) {
+            || !normalizedRedirectUri.equals(payload.redirectUri())) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码与当前应用或回调地址不匹配");
         }
 
@@ -344,12 +344,13 @@ public class Oauth2PlatformService {
         }
     }
 
-    private void validateRedirectUriMatches(Oauth2Application application, String redirectUri) {
+    private String validateRedirectUriMatches(Oauth2Application application, String redirectUri) {
         String normalizedRedirectUri = normalizeAndValidateRedirectUri(redirectUri);
-        if (!application.getRedirectUri().equals(normalizedRedirectUri)) {
+        if (!parseRegisteredRedirectUris(application.getRedirectUri()).contains(normalizedRedirectUri)) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
                 "redirect_uri 与应用登记信息不一致");
         }
+        return normalizedRedirectUri;
     }
 
     private String normalizeAppName(String appName) {
@@ -388,6 +389,25 @@ public class Oauth2PlatformService {
         } catch (IllegalArgumentException ex) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址格式不正确");
         }
+    }
+
+    private String normalizeAndValidateRedirectUris(String redirectUris) {
+        String normalized = normalizeRequired(redirectUris, "回调地址不能为空");
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        for (String redirectUri : normalized.split(";")) {
+            String item = normalizeOptional(redirectUri);
+            if (item != null) {
+                values.add(normalizeAndValidateRedirectUri(item));
+            }
+        }
+        if (values.isEmpty()) {
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址不能为空");
+        }
+        String joined = String.join(";", values);
+        if (joined.length() > 500) {
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址总长度不能超过 500 个字符");
+        }
+        return joined;
     }
 
     private List<String> normalizeAppScopes(List<String> scopes) {
@@ -450,6 +470,20 @@ public class Oauth2PlatformService {
 
     private String joinScopes(List<String> scopes) {
         return scopes == null || scopes.isEmpty() ? "" : String.join(" ", scopes);
+    }
+
+    private List<String> parseRegisteredRedirectUris(String redirectUris) {
+        if (redirectUris == null || redirectUris.isBlank()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (String redirectUri : redirectUris.split(";")) {
+            String item = normalizeOptional(redirectUri);
+            if (item != null) {
+                values.add(item);
+            }
+        }
+        return values;
     }
 
     private Oauth2AppResponse toAppResponse(Oauth2Application application) {

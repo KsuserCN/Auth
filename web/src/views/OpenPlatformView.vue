@@ -169,9 +169,11 @@
 
         <el-descriptions class="detail-desc" :column="1" border>
           <el-descriptions-item label="回调地址">
-            <div class="detail-code-row">
-              <code class="detail-code">{{ oauthDetailApp.redirectUri }}</code>
-              <el-button text size="small" @click="copyText(oauthDetailApp.redirectUri)">复制</el-button>
+            <div class="detail-stack">
+              <div v-for="uri in oauthRedirectUris(oauthDetailApp.redirectUri)" :key="uri" class="detail-code-row">
+                <code class="detail-code">{{ uri }}</code>
+                <el-button text size="small" @click="copyText(uri)">复制</el-button>
+              </div>
             </div>
           </el-descriptions-item>
           <el-descriptions-item label="联系方式">{{ oauthDetailApp.contactInfo }}</el-descriptions-item>
@@ -271,7 +273,8 @@
         </el-row>
 
         <el-form-item label="回调地址" prop="redirectUri">
-          <el-input v-model="oauthCreateForm.redirectUri" placeholder="https://example.com/oauth/callback 或 http://localhost:3000/callback" />
+          <el-input v-model="oauthCreateForm.redirectUri" type="textarea" :rows="3"
+            placeholder="多个地址用 ; 隔开，例如 https://example.com/oauth/callback;http://localhost:3000/callback" />
         </el-form-item>
 
         <el-form-item label="可授权范围" prop="scopes">
@@ -295,8 +298,8 @@
         </el-form-item>
 
         <el-form-item label="回调地址" prop="redirectUri">
-          <el-input v-model="oauthEditForm.redirectUri"
-            placeholder="https://example.com/oauth/callback 或 http://localhost:3000/callback" />
+          <el-input v-model="oauthEditForm.redirectUri" type="textarea" :rows="3"
+            placeholder="多个地址用 ; 隔开，例如 https://example.com/oauth/callback;http://localhost:3000/callback" />
         </el-form-item>
 
         <el-form-item label="联系方式" prop="contactInfo">
@@ -595,6 +598,14 @@ const normalizeLines = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean)
 
+const normalizeSemicolonValues = (value: string) =>
+  value
+    .split(';')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const oauthRedirectUris = (value: string) => normalizeSemicolonValues(value || '')
+
 const verificationLabel = computed(() => {
   const type = oauthOverview.value?.verificationType || ssoOverview.value?.verificationType || 'none'
   if (type === 'admin') return '管理员'
@@ -618,23 +629,31 @@ const secretDialogTitle = computed(() => {
 })
 
 const redirectUriValidator = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-  const raw = value?.trim() || ''
-  if (!raw) {
+  const values = normalizeSemicolonValues(value || '')
+  if (!values.length) {
     callback(new Error('请输入回调地址'))
+    return
+  }
+  if (values.join(';').length > 500) {
+    callback(new Error('回调地址总长度不能超过 500 个字符'))
     return
   }
 
   try {
-    const url = new URL(raw)
-    const isHttps = url.protocol === 'https:'
-    const isLocalhostHttp = url.protocol === 'http:' && url.hostname === 'localhost'
-    if (!isHttps && !isLocalhostHttp) {
-      callback(new Error('回调地址只支持 https:// 或 http://localhost'))
-      return
-    }
+    values.forEach((raw) => {
+      const url = new URL(raw)
+      const isHttps = url.protocol === 'https:'
+      const isLocalhostHttp = url.protocol === 'http:' && url.hostname === 'localhost'
+      if (!isHttps && !isLocalhostHttp) {
+        throw new Error('回调地址只支持 https:// 或 http://localhost')
+      }
+      if (url.hash) {
+        throw new Error('回调地址不允许包含 URL fragment')
+      }
+    })
     callback()
-  } catch {
-    callback(new Error('回调地址格式不正确'))
+  } catch (error) {
+    callback(error instanceof Error ? error : new Error('回调地址格式不正确'))
   }
 }
 
@@ -860,7 +879,7 @@ const handleOAuthCreate = async () => {
   try {
     oauthCreatedApp.value = await createOAuth2App({
       appName: oauthCreateForm.appName.trim(),
-      redirectUri: oauthCreateForm.redirectUri.trim(),
+      redirectUri: normalizeSemicolonValues(oauthCreateForm.redirectUri).join(';'),
       contactInfo: oauthCreateForm.contactInfo.trim(),
       scopes: [...oauthCreateForm.scopes],
     })
@@ -885,7 +904,7 @@ const handleOAuthEdit = async () => {
   try {
     await updateOAuth2App(editingOAuthAppId.value, {
       appName: oauthEditForm.appName.trim(),
-      redirectUri: oauthEditForm.redirectUri.trim(),
+      redirectUri: normalizeSemicolonValues(oauthEditForm.redirectUri).join(';'),
       contactInfo: oauthEditForm.contactInfo.trim(),
     })
     oauthEditDialogVisible.value = false

@@ -104,7 +104,7 @@ CREATE TABLE oauth2_applications (
 
   app_name VARCHAR(100) NOT NULL COMMENT '应用名称',
   logo_url VARCHAR(255) DEFAULT NULL COMMENT '应用 Logo 地址',
-  redirect_uri VARCHAR(500) NOT NULL COMMENT '唯一回调地址，仅支持 http://localhost 或 https://',
+  redirect_uri VARCHAR(500) NOT NULL COMMENT '回调地址，多个使用;分隔，仅支持 http://localhost 或 https://',
   contact_info VARCHAR(120) NOT NULL COMMENT '开发者联系方式',
   scopes VARCHAR(255) NOT NULL DEFAULT '' COMMENT '允许授权的范围，空格分隔（profile email）',
 

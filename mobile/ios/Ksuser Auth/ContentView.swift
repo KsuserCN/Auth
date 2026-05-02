@@ -33,6 +33,16 @@ private struct UpdateProfileRequest: Encodable {
     let value: String
 }
 
+private struct UpdateSettingRequest: Encodable {
+    let field: String
+    let value: Bool?
+    let stringValue: String?
+}
+
+private struct PasskeyRenameRequest: Encodable {
+    let newName: String
+}
+
 private struct AuthResponsePayload: Decodable {
     let accessToken: String?
     let challengeId: String?
@@ -60,6 +70,119 @@ private struct UserInfoPayload: Decodable {
     let realName: String?
     let region: String?
     let bio: String?
+    let settings: UserSettingsPayload?
+}
+
+private struct UserSettingsPayload: Decodable {
+    let mfaEnabled: Bool
+    let detectUnusualLogin: Bool
+    let notifySensitiveActionEmail: Bool
+    let subscribeNewsEmail: Bool
+    let preferredMfaMethod: String?
+    let preferredSensitiveMethod: String?
+}
+
+private struct ApiDataEnvelope<T: Decodable>: Decodable {
+    let code: Int?
+    let msg: String?
+    let data: T?
+}
+
+private struct TotpStatusPayload: Decodable {
+    let enabled: Bool
+    let recoveryCodesCount: Int
+}
+
+private struct SensitiveVerificationStatusPayload: Decodable {
+    let verified: Bool
+    let remainingSeconds: Int
+    let preferredMethod: String?
+    let methods: [String]?
+}
+
+private struct AdaptiveAuthStatusPayload: Decodable {
+    let riskScore: Int?
+    let riskLevel: String?
+    let policyDecision: String?
+    let policyVersion: String?
+    let trusted: Bool?
+    let requiresStepUp: Bool?
+    let sessionFrozen: Bool?
+    let sensitiveVerified: Bool?
+    let sensitiveVerificationRemainingSeconds: Int?
+    let authAgeSeconds: Int?
+    let idleSeconds: Int?
+    let currentLocation: String?
+    let deviceType: String?
+    let multiEndpointAlert: Bool?
+    let alertLevel: String?
+    let alertTitle: String?
+    let alertMessage: String?
+    let alertRemainingSeconds: Int?
+    let recommendedAction: String?
+    let reasons: [String]?
+}
+
+private struct SessionItemPayload: Decodable, Identifiable {
+    let id: Int64
+    let ipAddress: String
+    let ipLocation: String?
+    let userAgent: String?
+    let browser: String?
+    let deviceType: String?
+    let createdAt: String
+    let lastSeenAt: String
+    let expiresAt: String
+    let revokedAt: String?
+    let online: Bool
+    let current: Bool
+}
+
+private struct SensitiveLogItemPayload: Decodable, Identifiable {
+    let id: Int64
+    let operationType: String
+    let loginMethod: String?
+    let loginMethods: [String]?
+    let ipAddress: String
+    let ipLocation: String?
+    let browser: String?
+    let deviceType: String?
+    let result: String
+    let failureReason: String?
+    let riskScore: Int
+    let actionTaken: String?
+    let triggeredMultiErrorLock: Bool
+    let triggeredRateLimitLock: Bool
+    let durationMs: Int
+    let createdAt: String
+}
+
+private struct PaginatedSensitiveLogsPayload: Decodable {
+    let data: [SensitiveLogItemPayload]
+    let page: Int
+    let pageSize: Int
+    let total: Int
+    let totalPages: Int
+}
+
+private struct PasskeyItemPayload: Decodable, Identifiable {
+    let id: Int64
+    let name: String
+    let transports: String
+    let lastUsedAt: String?
+    let createdAt: String
+}
+
+private struct PasskeyListPayload: Decodable {
+    let passkeys: [PasskeyItemPayload]?
+}
+
+private struct SecuritySnapshot {
+    let settings: UserSettingsPayload
+    let totpStatus: TotpStatusPayload
+    let sensitiveStatus: SensitiveVerificationStatusPayload
+    let adaptiveStatus: AdaptiveAuthStatusPayload
+    let passkeys: [PasskeyItemPayload]
 }
 
 private struct ProfileUser {
@@ -70,6 +193,7 @@ private struct ProfileUser {
     var email: String
     var uuid: String
     var avatarURL: String?
+    var settings: UserSettingsPayload?
 }
 
 private enum ProfileField: String, Identifiable {
@@ -233,7 +357,8 @@ private actor AuthAPIClient {
             bio: user.bio ?? "",
             email: user.email,
             uuid: user.uuid,
-            avatarURL: user.avatarUrl
+            avatarURL: user.avatarUrl,
+            settings: user.settings
         )
     }
 
@@ -261,6 +386,148 @@ private actor AuthAPIClient {
         if businessCode != 200 {
             throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "更新资料失败")
         }
+    }
+
+    func logoutAll() async throws {
+        let csrfToken = try await bootstrapCsrfTokenIfNeeded()
+        var request = URLRequest(url: makeURL(path: "/auth/logout/all"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        if let csrfToken, !csrfToken.isEmpty {
+            request.setValue(csrfToken, forHTTPHeaderField: "X-XSRF-TOKEN")
+        }
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeEnvelope(from: data)
+        let businessCode = envelope.code ?? -1
+        if businessCode != 200 {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "退出所有设备失败")
+        }
+    }
+
+    func updateBooleanSetting(field: String, value: Bool) async throws -> UserSettingsPayload {
+        try await updateSetting(field: field, value: value, stringValue: nil)
+    }
+
+    func updateStringSetting(field: String, value: String) async throws -> UserSettingsPayload {
+        try await updateSetting(field: field, value: nil, stringValue: value)
+    }
+
+    func fetchTotpStatus() async throws -> TotpStatusPayload {
+        var request = URLRequest(url: makeURL(path: "/auth/totp/status"))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeDataEnvelope(TotpStatusPayload.self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200, let payload = envelope.data else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "加载 TOTP 状态失败")
+        }
+        return payload
+    }
+
+    func fetchSensitiveVerificationStatus() async throws -> SensitiveVerificationStatusPayload {
+        var request = URLRequest(url: makeURL(path: "/auth/check-sensitive-verification"))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeDataEnvelope(SensitiveVerificationStatusPayload.self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200, let payload = envelope.data else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "加载敏感验证状态失败")
+        }
+        return payload
+    }
+
+    func fetchAdaptiveStatus() async throws -> AdaptiveAuthStatusPayload {
+        var request = URLRequest(url: makeURL(path: "/auth/adaptive-auth/status"))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeDataEnvelope(AdaptiveAuthStatusPayload.self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200, let payload = envelope.data else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "加载连续认证状态失败")
+        }
+        return payload
+    }
+
+    func fetchPasskeyList() async throws -> [PasskeyItemPayload] {
+        var request = URLRequest(url: makeURL(path: "/auth/passkey/list"))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeDataEnvelope(PasskeyListPayload.self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200 else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "加载 Passkey 列表失败")
+        }
+        return envelope.data?.passkeys ?? []
+    }
+
+    func fetchSessions() async throws -> [SessionItemPayload] {
+        var request = URLRequest(url: makeURL(path: "/auth/sessions"))
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeDataEnvelope([SessionItemPayload].self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200 else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "加载会话失败")
+        }
+        return envelope.data ?? []
+    }
+
+    func revokeSession(sessionId: Int64) async throws {
+        let csrfToken = try await bootstrapCsrfTokenIfNeeded()
+        var request = URLRequest(url: makeURL(path: "/auth/sessions/\(sessionId)/revoke"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        if let csrfToken, !csrfToken.isEmpty {
+            request.setValue(csrfToken, forHTTPHeaderField: "X-XSRF-TOKEN")
+        }
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeEnvelope(from: data)
+        let businessCode = envelope.code ?? -1
+        if businessCode != 200 {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "撤销会话失败")
+        }
+    }
+
+    func fetchSensitiveLogs(
+        page: Int = 1,
+        pageSize: Int = 20,
+        operationType: String?,
+        result: String?,
+    ) async throws -> PaginatedSensitiveLogsPayload {
+        var components = URLComponents(url: makeURL(path: "/auth/sensitive-logs"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "pageSize", value: String(pageSize)),
+            URLQueryItem(name: "operationType", value: operationType),
+            URLQueryItem(name: "result", value: result),
+        ].filter { $0.value != nil }
+        guard let endpoint = components?.url else {
+            throw AuthNetworkError.invalidResponse
+        }
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: nil)
+        let envelope = try decodeDataEnvelope(PaginatedSensitiveLogsPayload.self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200 else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "加载敏感日志失败")
+        }
+        return envelope.data ?? PaginatedSensitiveLogsPayload(data: [], page: page, pageSize: pageSize, total: 0, totalPages: 0)
     }
 
     func clearAuth() {
@@ -519,6 +786,42 @@ private actor AuthAPIClient {
         }
     }
 
+    private func decodeDataEnvelope<T: Decodable>(_ type: T.Type, from data: Data) throws -> ApiDataEnvelope<T> {
+        do {
+            return try JSONDecoder().decode(ApiDataEnvelope<T>.self, from: data)
+        } catch {
+            log("❌ 解码响应失败(\(T.self)): \(error.localizedDescription)")
+            throw AuthNetworkError.invalidResponse
+        }
+    }
+
+    private func updateSetting(
+        field: String,
+        value: Bool?,
+        stringValue: String?,
+    ) async throws -> UserSettingsPayload {
+        let csrfToken = try await bootstrapCsrfTokenIfNeeded()
+        var request = URLRequest(url: makeURL(path: "/auth/update/setting"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("KsuserAuthiOS/1.0", forHTTPHeaderField: "User-Agent")
+        if let csrfToken, !csrfToken.isEmpty {
+            request.setValue(csrfToken, forHTTPHeaderField: "X-XSRF-TOKEN")
+        }
+
+        let body = UpdateSettingRequest(field: field, value: value, stringValue: stringValue)
+        let bodyData = try JSONEncoder().encode(body)
+        request.httpBody = bodyData
+        let (data, _) = try await performAuthorizedRequest(request: request, bodyData: bodyData)
+        let envelope = try decodeDataEnvelope(UserSettingsPayload.self, from: data)
+        let businessCode = envelope.code ?? -1
+        guard businessCode == 200, let payload = envelope.data else {
+            throw AuthNetworkError.businessError(code: businessCode, message: envelope.msg ?? "更新安全设置失败")
+        }
+        return payload
+    }
+
     private func logResponse(prefix: String, response: URLResponse, data: Data) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             log("❌ 非 HTTP 响应: \(response)")
@@ -604,7 +907,8 @@ private final class AuthFlowViewModel: ObservableObject {
         bio: "",
         email: "",
         uuid: UUID().uuidString.lowercased(),
-        avatarURL: nil
+        avatarURL: nil,
+        settings: nil
     )
     private var cachedClient: AuthAPIClient?
 
@@ -736,6 +1040,120 @@ private final class AuthFlowViewModel: ObservableObject {
         }
     }
 
+    func refreshHomeData() async {
+        await refreshProfile()
+    }
+
+    func fetchSecuritySnapshot() async -> SecuritySnapshot? {
+        do {
+            let client = try apiClient()
+            async let totp = client.fetchTotpStatus()
+            async let sensitive = client.fetchSensitiveVerificationStatus()
+            async let adaptive = client.fetchAdaptiveStatus()
+            async let passkeys = client.fetchPasskeyList()
+            let settings = profileUser.settings ?? UserSettingsPayload(
+                mfaEnabled: false,
+                detectUnusualLogin: true,
+                notifySensitiveActionEmail: true,
+                subscribeNewsEmail: false,
+                preferredMfaMethod: "totp",
+                preferredSensitiveMethod: "password"
+            )
+            return try await SecuritySnapshot(
+                settings: settings,
+                totpStatus: totp,
+                sensitiveStatus: sensitive,
+                adaptiveStatus: adaptive,
+                passkeys: passkeys
+            )
+        } catch {
+            handleAsyncError(prefix: "加载安全状态失败", error: error)
+            return nil
+        }
+    }
+
+    func updateSecurityBooleanSetting(field: String, value: Bool) async -> UserSettingsPayload? {
+        do {
+            let client = try apiClient()
+            let settings = try await client.updateBooleanSetting(field: field, value: value)
+            profileUser.settings = settings
+            toastMessage = "设置已更新"
+            return settings
+        } catch {
+            handleAsyncError(prefix: "更新安全设置失败", error: error)
+            return nil
+        }
+    }
+
+    func updateSecurityStringSetting(field: String, value: String) async -> UserSettingsPayload? {
+        do {
+            let client = try apiClient()
+            let settings = try await client.updateStringSetting(field: field, value: value)
+            profileUser.settings = settings
+            toastMessage = "设置已更新"
+            return settings
+        } catch {
+            handleAsyncError(prefix: "更新安全设置失败", error: error)
+            return nil
+        }
+    }
+
+    func fetchSessions() async -> [SessionItemPayload] {
+        do {
+            let client = try apiClient()
+            return try await client.fetchSessions()
+        } catch {
+            handleAsyncError(prefix: "加载会话失败", error: error)
+            return []
+        }
+    }
+
+    func revokeSession(sessionId: Int64) async -> Bool {
+        do {
+            let client = try apiClient()
+            try await client.revokeSession(sessionId: sessionId)
+            toastMessage = "会话已撤销"
+            return true
+        } catch {
+            handleAsyncError(prefix: "撤销会话失败", error: error)
+            return false
+        }
+    }
+
+    func logoutAllDevices() async -> Bool {
+        do {
+            let client = try apiClient()
+            try await client.logoutAll()
+            await client.clearAuth()
+            isAuthenticated = false
+            toastMessage = "已退出所有设备"
+            return true
+        } catch {
+            handleAsyncError(prefix: "退出所有设备失败", error: error)
+            return false
+        }
+    }
+
+    func fetchSensitiveLogs(
+        page: Int,
+        pageSize: Int = 20,
+        operationType: String?,
+        result: String?,
+    ) async -> PaginatedSensitiveLogsPayload {
+        do {
+            let client = try apiClient()
+            return try await client.fetchSensitiveLogs(
+                page: page,
+                pageSize: pageSize,
+                operationType: operationType,
+                result: result
+            )
+        } catch {
+            handleAsyncError(prefix: "加载敏感日志失败", error: error)
+            return PaginatedSensitiveLogsPayload(data: [], page: page, pageSize: pageSize, total: 0, totalPages: 0)
+        }
+    }
+
     func saveProfileField(field: ProfileField, value: String) async -> Bool {
         let cleaned = value.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
@@ -776,6 +1194,12 @@ private final class AuthFlowViewModel: ObservableObject {
         if requestLogs.count > 200 {
             requestLogs.removeFirst(requestLogs.count - 200)
         }
+    }
+
+    private func handleAsyncError(prefix: String, error: Error) {
+        let description = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        toastMessage = "\(prefix): \(description)"
+        appendLog("❌ \(prefix): \(description)")
     }
 
     private func apiClient() throws -> AuthAPIClient {
@@ -1014,7 +1438,16 @@ private struct MainTabView: View {
         TabView(selection: $selectedTab) {
             ForEach(MainTab.allCases, id: \.self) { tab in
                 NavigationStack {
-                    if tab == .profile {
+                    switch tab {
+                    case .home:
+                        HomeScreenView(
+                            profile: viewModel.profileUser,
+                            onRefresh: { await viewModel.refreshHomeData() },
+                            onOpenProfile: { selectedTab = .profile },
+                            onOpenSecurity: { selectedTab = .security },
+                            onOpenSessions: { selectedTab = .sessions }
+                        )
+                    case .profile:
                         ProfileScreenView(
                             profile: $viewModel.profileUser,
                             isBusy: viewModel.isBusy,
@@ -1023,8 +1456,12 @@ private struct MainTabView: View {
                                 await viewModel.saveProfileField(field: field, value: value)
                             }
                         )
-                    } else {
-                        TabPlaceholderView(tab: tab, onLogout: viewModel.logout)
+                    case .security:
+                        SecurityScreenView(viewModel: viewModel)
+                    case .sessions:
+                        SessionsScreenView(viewModel: viewModel)
+                    case .logs:
+                        LogsScreenView(viewModel: viewModel)
                     }
                 }
                 .tabItem {
@@ -1035,6 +1472,9 @@ private struct MainTabView: View {
             }
         }
         .environment(\.symbolVariants, .none)
+        .task {
+            await viewModel.refreshProfile()
+        }
     }
 }
 
@@ -1311,32 +1751,876 @@ private struct AboutAppView: View {
     }
 }
 
-private struct TabPlaceholderView: View {
-    let tab: MainTab
-    let onLogout: () -> Void
+private struct HomeScreenView: View {
+    let profile: ProfileUser
+    let onRefresh: () async -> Void
+    let onOpenProfile: () -> Void
+    let onOpenSecurity: () -> Void
+    let onOpenSessions: () -> Void
+
+    private var completionStats: (completed: Int, total: Int, percent: Int) {
+        let checks = [
+            profile.username.takeMeaningfulProfileText() != nil,
+            profile.avatarURL.takeMeaningfulProfileText() != nil,
+            profile.realName.takeMeaningfulProfileText() != nil,
+            profile.region.takeMeaningfulProfileText() != nil,
+            profile.bio.takeMeaningfulProfileText() != nil,
+        ]
+        let completed = checks.filter { $0 }.count
+        let total = checks.count
+        return (completed, total, total == 0 ? 0 : completed * 100 / total)
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: tab.systemImageName)
-                .imageScale(.large)
-                .font(.system(size: 34))
-            Text(tab.title)
-                .font(.title3.weight(.semibold))
-            Text("iOS \(tab.title) 页面待接入")
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle(tab.title)
-        .toolbar {
-            if tab == .home {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("退出") {
-                        onLogout()
+        ScrollView {
+            VStack(spacing: 12) {
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            AvatarPill(name: profile.username, avatarURL: profile.avatarURL)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("欢迎回来，\(profile.username.takeMeaningfulProfileText() ?? "你好")")
+                                    .font(.headline)
+                                Text(profile.email.takeMeaningfulProfileText() ?? "当前账号未绑定邮箱")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                Text(homeSecuritySummary(profile.settings))
+                                    .font(.footnote.weight(.medium))
+                                    .foregroundStyle(.blue)
+                            }
+                            Spacer()
+                        }
+                        HStack {
+                            Button("查看资料", action: onOpenProfile)
+                                .buttonStyle(.borderedProminent)
+                            Button("刷新状态") {
+                                Task { await onRefresh() }
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
+                }
+
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("账号安全")
+                            .font(.headline)
+                        statusRow("双重验证", profile.settings?.mfaEnabled == true ? "已开启" : "未开启")
+                        statusRow("异常登录提醒", profile.settings?.detectUnusualLogin == true ? "已开启" : "未开启")
+                        statusRow("敏感操作邮件提醒", profile.settings?.notifySensitiveActionEmail == true ? "已开启" : "未开启")
+                        Button("前往安全设置", action: onOpenSecurity)
+                            .buttonStyle(.bordered)
+                    }
+                }
+
+                GroupBox {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("常用功能")
+                            .font(.headline)
+                        quickAction("编辑资料", "修改头像、昵称、地区和简介", systemImage: "person.text.rectangle", onTap: onOpenProfile)
+                        quickAction("安全设置", "管理双重验证和敏感操作保护", systemImage: "lock.shield", onTap: onOpenSecurity)
+                        quickAction("设备会话", "查看当前登录设备并处理异常登录", systemImage: "rectangle.on.rectangle", onTap: onOpenSessions)
+                    }
+                }
+
+                GroupBox {
+                    let stats = completionStats
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("资料完善度")
+                            .font(.headline)
+                        Text("已完成 \(stats.completed)/\(stats.total) 项，当前完善度 \(stats.percent)%。")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        ProgressView(value: Double(stats.percent), total: 100)
+                        statusRow("用户名", profile.username.takeMeaningfulProfileText() != nil ? "已完成" : "待完善")
+                        statusRow("头像", profile.avatarURL.takeMeaningfulProfileText() != nil ? "已完成" : "待完善")
+                        statusRow("真实姓名", profile.realName.takeMeaningfulProfileText() != nil ? "已完成" : "待完善")
+                        statusRow("地区", profile.region.takeMeaningfulProfileText() != nil ? "已完成" : "待完善")
+                        statusRow("个人简介", profile.bio.takeMeaningfulProfileText() != nil ? "已完成" : "待完善")
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .navigationTitle("概览")
+        .refreshable {
+            await onRefresh()
+        }
+    }
+
+    private func statusRow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .foregroundStyle(.primary)
+            Spacer()
+            Text(value)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(value == "待完善" || value == "未开启" ? Color.secondary : Color.blue)
+        }
+    }
+
+    private func quickAction(_ title: String, _ subtitle: String, systemImage: String, onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .frame(width: 28, height: 28)
+                    .background(Color.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SecurityScreenView: View {
+    @ObservedObject var viewModel: AuthFlowViewModel
+    @State private var snapshot: SecuritySnapshot?
+    @State private var localSettings: UserSettingsPayload?
+    @State private var loading = true
+
+    var body: some View {
+        List {
+            Section("安全偏好") {
+                Toggle(
+                    "启用 MFA",
+                    isOn: Binding(
+                        get: { localSettings?.mfaEnabled ?? false },
+                        set: { newValue in
+                            updateLocalSettings(field: "mfaEnabled", value: newValue)
+                            Task {
+                                if let settings = await viewModel.updateSecurityBooleanSetting(field: "mfaEnabled", value: newValue) {
+                                    localSettings = settings
+                                } else {
+                                    await reload()
+                                }
+                            }
+                        }
+                    )
+                )
+                Toggle(
+                    "异地登录检测",
+                    isOn: Binding(
+                        get: { localSettings?.detectUnusualLogin ?? true },
+                        set: { newValue in
+                            updateLocalSettings(field: "detectUnusualLogin", value: newValue)
+                            Task {
+                                if let settings = await viewModel.updateSecurityBooleanSetting(field: "detectUnusualLogin", value: newValue) {
+                                    localSettings = settings
+                                } else {
+                                    await reload()
+                                }
+                            }
+                        }
+                    )
+                )
+                Toggle(
+                    "敏感操作邮件提醒",
+                    isOn: Binding(
+                        get: { localSettings?.notifySensitiveActionEmail ?? true },
+                        set: { newValue in
+                            updateLocalSettings(field: "notifySensitiveActionEmail", value: newValue)
+                            Task {
+                                if let settings = await viewModel.updateSecurityBooleanSetting(field: "notifySensitiveActionEmail", value: newValue) {
+                                    localSettings = settings
+                                } else {
+                                    await reload()
+                                }
+                            }
+                        }
+                    )
+                )
+                Picker(
+                    "首选 MFA",
+                    selection: Binding(
+                        get: { localSettings?.preferredMfaMethod ?? "totp" },
+                        set: { newValue in
+                            Task {
+                                if let settings = await viewModel.updateSecurityStringSetting(field: "preferredMfaMethod", value: newValue) {
+                                    localSettings = settings
+                                }
+                            }
+                        }
+                    )
+                ) {
+                    Text("TOTP").tag("totp")
+                    Text("Passkey").tag("passkey")
+                }
+                Picker(
+                    "首选敏感验证",
+                    selection: Binding(
+                        get: { localSettings?.preferredSensitiveMethod ?? "password" },
+                        set: { newValue in
+                            Task {
+                                if let settings = await viewModel.updateSecurityStringSetting(field: "preferredSensitiveMethod", value: newValue) {
+                                    localSettings = settings
+                                }
+                            }
+                        }
+                    )
+                ) {
+                    Text("密码").tag("password")
+                    Text("邮箱验证码").tag("email-code")
+                    Text("Passkey").tag("passkey")
+                    Text("TOTP").tag("totp")
+                }
+            }
+
+            if let snapshot {
+                Section("自适应连续认证") {
+                    statusLine("策略决策", adaptivePolicyLabel(snapshot.adaptiveStatus.policyDecision ?? "ALLOW"))
+                    statusLine("风险等级", adaptiveRiskLabel(snapshot.adaptiveStatus.riskLevel ?? "low"))
+                    statusLine("风险分", "\(snapshot.adaptiveStatus.riskScore ?? 0)")
+                    statusLine(
+                        "敏感验证",
+                        snapshot.adaptiveStatus.sensitiveVerified == true
+                        ? "有效 \(snapshot.adaptiveStatus.sensitiveVerificationRemainingSeconds ?? 0) 秒"
+                        : "未验证"
+                    )
+                    statusLine("当前环境", [snapshot.adaptiveStatus.currentLocation, snapshot.adaptiveStatus.deviceType].compactMap { $0 }.joined(separator: " / ").ifEmpty("-"))
+                    if snapshot.adaptiveStatus.sessionFrozen == true {
+                        Text("当前会话已被冻结，请重新登录后继续操作")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                    if !(snapshot.adaptiveStatus.reasons ?? []).isEmpty {
+                        ForEach(snapshot.adaptiveStatus.reasons ?? [], id: \.self) { reason in
+                            Text("• \(reason)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                Section("TOTP 验证器") {
+                    statusLine("状态", snapshot.totpStatus.enabled ? "已启用" : "未启用")
+                    statusLine("恢复码剩余", "\(snapshot.totpStatus.recoveryCodesCount)")
+                    Text(snapshot.totpStatus.enabled ? "使用验证器 App 与恢复码保护账号" : "尚未启用，可作为常用多因素验证方式")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Passkey") {
+                    if snapshot.passkeys.isEmpty {
+                        Text("还没有添加 Passkey，可用于更快捷的无密码登录。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(snapshot.passkeys) { passkey in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(passkey.name)
+                                Text("最近使用: \(formatAbsoluteTime(passkey.lastUsedAt))")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                Section("敏感操作验证") {
+                    statusLine("当前状态", snapshot.sensitiveStatus.verified ? "已验证（剩余 \(snapshot.sensitiveStatus.remainingSeconds) 秒）" : "未验证")
+                    statusLine("首选方式", sensitiveMethodDisplayName(snapshot.sensitiveStatus.preferredMethod))
+                    statusLine("可用方式", (snapshot.sensitiveStatus.methods ?? []).map(sensitiveMethodDisplayName).joined(separator: " / ").ifEmpty("-"))
+                }
+            } else if loading {
+                Section {
+                    ProgressView("加载中...")
+                }
+            } else {
+                Section {
+                    Text("安全数据加载失败，请下拉重试。")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                Button("退出全部设备", role: .destructive) {
+                    Task { _ = await viewModel.logoutAllDevices() }
+                }
+            } footer: {
+                Text("该操作会撤销所有会话（包括当前设备）。")
+            }
+        }
+        .navigationTitle("安全")
+        .task {
+            await reload()
+        }
+        .refreshable {
+            await reload()
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await reload() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
                 }
             }
         }
     }
+
+    private func statusLine(_ title: String, _ value: String) -> some View {
+        LabeledContent(title, value: value)
+            .font(.footnote)
+    }
+
+    private func updateLocalSettings(field: String, value: Bool) {
+        guard let localSettings else { return }
+        let updated = UserSettingsPayload(
+            mfaEnabled: field == "mfaEnabled" ? value : localSettings.mfaEnabled,
+            detectUnusualLogin: field == "detectUnusualLogin" ? value : localSettings.detectUnusualLogin,
+            notifySensitiveActionEmail: field == "notifySensitiveActionEmail" ? value : localSettings.notifySensitiveActionEmail,
+            subscribeNewsEmail: localSettings.subscribeNewsEmail,
+            preferredMfaMethod: localSettings.preferredMfaMethod,
+            preferredSensitiveMethod: localSettings.preferredSensitiveMethod
+        )
+        self.localSettings = updated
+    }
+
+    private func reload() async {
+        loading = true
+        defer { loading = false }
+        snapshot = await viewModel.fetchSecuritySnapshot()
+        localSettings = snapshot?.settings ?? viewModel.profileUser.settings
+    }
+}
+
+private struct SessionsScreenView: View {
+    @ObservedObject var viewModel: AuthFlowViewModel
+    @State private var sessions: [SessionItemPayload] = []
+    @State private var loading = true
+    @State private var targetSession: SessionItemPayload?
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("设备与登录")
+                            .font(.headline)
+                        Text("查看和管理已连接设备")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        Task { await reload() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+
+            if loading && sessions.isEmpty {
+                Section {
+                    ProgressView("加载会话中...")
+                }
+            } else if sessions.isEmpty {
+                Section {
+                    Text("当前没有活跃会话记录")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    ForEach(sessions) { session in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(sessionClientDisplayName(session))
+                                    .font(.headline)
+                                if session.current {
+                                    TagView(text: "当前", fg: .blue, bg: Color.blue.opacity(0.14))
+                                }
+                                TagView(
+                                    text: session.online ? "在线" : "离线",
+                                    fg: session.online ? .green : .secondary,
+                                    bg: session.online ? Color.green.opacity(0.16) : Color.secondary.opacity(0.1)
+                                )
+                                Spacer()
+                                if !session.current {
+                                    Button("撤销", role: .destructive) {
+                                        targetSession = session
+                                    }
+                                    .font(.footnote)
+                                }
+                            }
+                            Text("\(sessionSystemDisplayName(session)) · \(session.ipAddress)")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Text(session.ipLocation ?? "未知位置")
+                                .font(.footnote)
+                            Text("最近活动: \(formatAbsoluteTime(session.lastSeenAt))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+
+            Section {
+                Button("退出所有设备", role: .destructive) {
+                    Task { _ = await viewModel.logoutAllDevices() }
+                }
+            } footer: {
+                Text("该操作会撤销所有会话（包括当前设备），需要重新登录。")
+            }
+        }
+        .navigationTitle("会话")
+        .task {
+            await reload()
+        }
+        .refreshable {
+            await reload()
+        }
+        .alert("确认撤销会话", isPresented: Binding(
+            get: { targetSession != nil },
+            set: { visible in
+                if !visible {
+                    targetSession = nil
+                }
+            })
+        ) {
+            Button("取消", role: .cancel) {}
+            Button("确认", role: .destructive) {
+                guard let target = targetSession else { return }
+                targetSession = nil
+                Task {
+                    if await viewModel.revokeSession(sessionId: target.id) {
+                        await reload()
+                    }
+                }
+            }
+        } message: {
+            if let target = targetSession {
+                Text("将撤销 \(sessionClientDisplayName(target))（\(target.ipAddress)）的登录状态，确定继续吗？")
+            }
+        }
+    }
+
+    private func reload() async {
+        loading = true
+        defer { loading = false }
+        sessions = await viewModel.fetchSessions()
+    }
+}
+
+private struct LogsScreenView: View {
+    @ObservedObject var viewModel: AuthFlowViewModel
+    @State private var logs: [SensitiveLogItemPayload] = []
+    @State private var page = 1
+    @State private var total = 0
+    @State private var totalPages = 1
+    @State private var busy = true
+    @State private var selectedOperationType: String?
+    @State private var selectedResult: String?
+    @State private var appliedOperationType: String?
+    @State private var appliedResult: String?
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("近期敏感操作")
+                            .font(.headline)
+                        Text("查看安全相关操作记录与风险分数")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        Task { await reload() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
+
+            Section("筛选条件") {
+                Picker("操作类型", selection: $selectedOperationType) {
+                    Text("全部操作").tag(String?.none)
+                    Text("登录").tag(String?.some("LOGIN"))
+                    Text("注册").tag(String?.some("REGISTER"))
+                    Text("敏感验证").tag(String?.some("SENSITIVE_VERIFY"))
+                    Text("修改密码").tag(String?.some("CHANGE_PASSWORD"))
+                    Text("修改邮箱").tag(String?.some("CHANGE_EMAIL"))
+                    Text("新增 Passkey").tag(String?.some("ADD_PASSKEY"))
+                    Text("删除 Passkey").tag(String?.some("DELETE_PASSKEY"))
+                    Text("启用 TOTP").tag(String?.some("ENABLE_TOTP"))
+                    Text("禁用 TOTP").tag(String?.some("DISABLE_TOTP"))
+                }
+                Picker("结果", selection: $selectedResult) {
+                    Text("全部结果").tag(String?.none)
+                    Text("成功").tag(String?.some("SUCCESS"))
+                    Text("失败").tag(String?.some("FAILURE"))
+                }
+                HStack {
+                    Button("查询") {
+                        page = 1
+                        appliedOperationType = selectedOperationType
+                        appliedResult = selectedResult
+                        Task { await reload() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("重置") {
+                        page = 1
+                        selectedOperationType = nil
+                        selectedResult = nil
+                        appliedOperationType = nil
+                        appliedResult = nil
+                        Task { await reload() }
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                    Text("共 \(total) 条")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if busy && logs.isEmpty {
+                Section {
+                    ProgressView("加载日志中...")
+                }
+            } else if logs.isEmpty {
+                Section {
+                    Text("当前筛选条件下没有匹配记录")
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Section {
+                    ForEach(logs) { log in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text(logOperationTitle(log.operationType))
+                                    .font(.headline)
+                                ForEach(logOperationTags(log), id: \.self) { tag in
+                                    TagView(text: tag, fg: .blue, bg: Color.blue.opacity(0.12))
+                                }
+                                Spacer()
+                                RiskTag(score: log.riskScore)
+                            }
+                            HStack {
+                                TagView(
+                                    text: log.result.uppercased() == "SUCCESS" ? "成功" : "失败",
+                                    fg: log.result.uppercased() == "SUCCESS" ? .green : .red,
+                                    bg: log.result.uppercased() == "SUCCESS" ? Color.green.opacity(0.14) : Color.red.opacity(0.14)
+                                )
+                                Text("\(log.ipLocation ?? "未知位置") · \(log.ipAddress)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text("设备: \(log.deviceType ?? "未知设备") · 浏览器: \(log.browser ?? "未知浏览器")")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Text("时间: \(formatAbsoluteTime(log.createdAt))")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            if let reason = log.failureReason.takeMeaningfulProfileText() {
+                                Text("失败原因: \(reason)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+
+            Section {
+                HStack {
+                    Button("上一页") {
+                        guard page > 1 else { return }
+                        page -= 1
+                        Task { await reload() }
+                    }
+                    .disabled(page <= 1)
+                    Spacer()
+                    Text("第 \(page) / \(max(totalPages, 1)) 页")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("下一页") {
+                        guard page < totalPages else { return }
+                        page += 1
+                        Task { await reload() }
+                    }
+                    .disabled(page >= totalPages)
+                }
+            }
+        }
+        .navigationTitle("日志")
+        .task {
+            await reload()
+        }
+        .refreshable {
+            await reload()
+        }
+    }
+
+    private func reload() async {
+        busy = true
+        defer { busy = false }
+        let payload = await viewModel.fetchSensitiveLogs(
+            page: page,
+            operationType: appliedOperationType,
+            result: appliedResult
+        )
+        logs = payload.data
+        total = payload.total
+        totalPages = max(payload.totalPages, 1)
+    }
+}
+
+private struct AvatarPill: View {
+    let name: String
+    let avatarURL: String?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.blue.opacity(0.12))
+                .frame(width: 56, height: 56)
+            if let avatar = avatarURL.takeMeaningfulProfileText(), let url = URL(string: avatar) {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    ProgressView()
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Text(String((name.takeMeaningfulProfileText() ?? "我").prefix(1)))
+                    .font(.headline.bold())
+                    .foregroundStyle(.blue)
+            }
+        }
+    }
+}
+
+private struct TagView: View {
+    let text: String
+    let fg: Color
+    let bg: Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(fg)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(bg, in: Capsule())
+    }
+}
+
+private struct RiskTag: View {
+    let score: Int
+
+    var body: some View {
+        let fg: Color
+        let bg: Color
+        if score >= 70 {
+            fg = .red
+            bg = Color.red.opacity(0.16)
+        } else if score >= 40 {
+            fg = .orange
+            bg = Color.orange.opacity(0.16)
+        } else {
+            fg = .green
+            bg = Color.green.opacity(0.16)
+        }
+        return TagView(text: "风险 \(score)", fg: fg, bg: bg)
+    }
+}
+
+private func homeSecuritySummary(_ settings: UserSettingsPayload?) -> String {
+    guard let settings else { return "建议继续完善安全设置" }
+    if settings.mfaEnabled && settings.detectUnusualLogin {
+        return "账号保护较完整"
+    }
+    if settings.mfaEnabled {
+        return "双重验证已开启"
+    }
+    return "建议继续完善安全设置"
+}
+
+private func sensitiveMethodDisplayName(_ raw: String?) -> String {
+    switch raw?.lowercased() {
+    case "password":
+        return "密码"
+    case "email-code":
+        return "邮箱验证码"
+    case "passkey":
+        return "Passkey"
+    case "totp":
+        return "TOTP"
+    default:
+        return raw?.ifEmpty("-") ?? "-"
+    }
+}
+
+private func adaptivePolicyLabel(_ decision: String) -> String {
+    switch decision.uppercased() {
+    case "ALLOW":
+        return "放行"
+    case "STEP_UP":
+        return "补验"
+    case "FREEZE":
+        return "冻结"
+    default:
+        return decision
+    }
+}
+
+private func adaptiveRiskLabel(_ level: String) -> String {
+    switch level.lowercased() {
+    case "low":
+        return "低"
+    case "medium":
+        return "中"
+    case "high":
+        return "高"
+    default:
+        return level
+    }
+}
+
+private func sessionClientDisplayName(_ session: SessionItemPayload) -> String {
+    let ua = (session.userAgent ?? "").lowercased()
+    if ua.contains("ksuserauthdesktop") {
+        return "桌面端"
+    }
+    if ua.contains("ksuserauthmobile") {
+        return "移动端"
+    }
+    return browserDisplayName(session.browser ?? session.userAgent ?? "")
+}
+
+private func sessionSystemDisplayName(_ session: SessionItemPayload) -> String {
+    let ua = "\(session.userAgent ?? "") \(session.deviceType ?? "")".lowercased()
+    if ua.contains("android") { return "Android" }
+    if ua.contains("iphone") || ua.contains("ipad") || ua.contains("ios") { return "iOS" }
+    if ua.contains("windows") { return "Windows" }
+    if ua.contains("mac os") || ua.contains("macintosh") || ua.contains("mac") { return "macOS" }
+    if ua.contains("linux") { return "Linux" }
+    return session.deviceType?.ifEmpty("未知设备") ?? "未知设备"
+}
+
+private func browserDisplayName(_ raw: String) -> String {
+    let value = raw.lowercased()
+    if value.contains("edge") || value.contains("edg/") { return "Edge" }
+    if value.contains("firefox") { return "Firefox" }
+    if value.contains("opera") || value.contains("opr/") { return "Opera" }
+    if value.contains("chrome") { return "Chrome" }
+    if value.contains("safari") { return "Safari" }
+    return raw.ifEmpty("未知浏览器")
+}
+
+private func logOperationTitle(_ operationType: String) -> String {
+    switch operationType.uppercased() {
+    case "LOGIN":
+        return "登录"
+    case "REGISTER":
+        return "注册"
+    default:
+        return "敏感操作"
+    }
+}
+
+private func logOperationTags(_ log: SensitiveLogItemPayload) -> [String] {
+    let op = log.operationType.uppercased()
+    if op == "REGISTER" {
+        return []
+    }
+    if op == "LOGIN" {
+        let methods = (log.loginMethods ?? []).map(normalizeLoginMethod).filter { !$0.isEmpty }
+        if !methods.isEmpty {
+            return Array(Set(methods)).sorted()
+        }
+        if let loginMethod = log.loginMethod?.takeMeaningfulProfileText() {
+            return [normalizeLoginMethod(loginMethod)]
+        }
+        return []
+    }
+    return [operationDisplayName(log.operationType)]
+}
+
+private func operationDisplayName(_ raw: String) -> String {
+    switch raw.uppercased() {
+    case "SENSITIVE_VERIFY":
+        return "敏感验证"
+    case "CHANGE_PASSWORD":
+        return "修改密码"
+    case "CHANGE_EMAIL":
+        return "修改邮箱"
+    case "ADD_PASSKEY":
+        return "新增 Passkey"
+    case "DELETE_PASSKEY":
+        return "删除 Passkey"
+    case "ENABLE_TOTP":
+        return "启用 TOTP"
+    case "DISABLE_TOTP":
+        return "禁用 TOTP"
+    default:
+        return raw
+    }
+}
+
+private func normalizeLoginMethod(_ raw: String) -> String {
+    switch raw.uppercased() {
+    case "PASSKEY":
+        return "Passkey"
+    case "MFA":
+        return "MFA"
+    case "PASSWORD":
+        return "密码"
+    case "EMAIL", "EMAIL_CODE":
+        return "验证码"
+    case "TOTP":
+        return "TOTP"
+    case "QR":
+        return "扫码"
+    case "GOOGLE":
+        return "Google"
+    case "GITHUB":
+        return "GitHub"
+    case "MICROSOFT":
+        return "Microsoft"
+    case "QQ":
+        return "QQ"
+    case "WECHAT", "WEIXIN":
+        return "微信"
+    default:
+        return raw
+    }
+}
+
+private func formatAbsoluteTime(_ value: String?) -> String {
+    guard let value, !value.isEmpty else { return "-" }
+    let output = DateFormatter()
+    output.locale = Locale(identifier: "zh_CN")
+    output.dateFormat = "yyyy-MM-dd HH:mm:ss"
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let date = iso.date(from: value) {
+        return output.string(from: date)
+    }
+    let isoNoMs = ISO8601DateFormatter()
+    isoNoMs.formatOptions = [.withInternetDateTime]
+    if let date = isoNoMs.date(from: value) {
+        return output.string(from: date)
+    }
+    return value.replacingOccurrences(of: "T", with: " ")
 }
 
 private extension String {
@@ -1347,6 +2631,10 @@ private extension String {
             return nil
         }
         return normalized
+    }
+
+    func ifEmpty(_ fallback: String) -> String {
+        isEmpty ? fallback : self
     }
 }
 
@@ -1359,8 +2647,4 @@ private extension Optional where Wrapped == String {
             return value.takeMeaningfulProfileText()
         }
     }
-}
-
-#Preview {
-    ContentView()
 }
