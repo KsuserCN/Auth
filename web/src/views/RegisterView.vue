@@ -241,17 +241,20 @@ import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { Lock, Lightning, Key, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
+  bindPendingOAuthAccount,
   checkUsername,
   sendRegisterCode,
   register,
   getPasswordRequirement,
+  type OAuthProvider,
   type PasswordRequirement,
 } from '@/api/auth'
 import { finalizeWebLogin } from '@/utils/desktopBridge'
 
 const router = useRouter()
+const route = useRoute()
 
 // 表单引用
 const usernameFormRef = ref<FormInstance>()
@@ -584,6 +587,31 @@ const resendCode = async () => {
   }
 }
 
+const getPendingOAuthBind = (): { provider: OAuthProvider; bindToken: string } | null => {
+  const provider = route.query.oauthBindProvider
+  const bindToken = route.query.oauthBindToken
+  if (
+    (provider === 'qq' || provider === 'github' || provider === 'microsoft' || provider === 'google') &&
+    typeof bindToken === 'string' &&
+    bindToken.trim()
+  ) {
+    return {
+      provider,
+      bindToken: bindToken.trim(),
+    }
+  }
+  return null
+}
+
+const bindPendingOAuthAfterRegister = async () => {
+  const pending = getPendingOAuthBind()
+  if (!pending) {
+    return
+  }
+  const result = await bindPendingOAuthAccount(pending)
+  ElMessage.success(result.message || '第三方账号绑定成功')
+}
+
 const handleRegister = async () => {
   try {
     await codeFormRef.value?.validate()
@@ -604,6 +632,8 @@ const handleRegister = async () => {
         email: response.email,
       },
     })
+
+    await bindPendingOAuthAfterRegister()
 
     ElMessage.success(desktopSynced ? '注册成功，已同步到桌面端' : '注册成功')
     // 直接跳转到首页

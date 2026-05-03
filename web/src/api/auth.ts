@@ -1205,6 +1205,11 @@ export interface OAuthBindExistingRequest {
   password: string
 }
 
+export interface OAuthBindPendingRequest {
+  provider: OAuthProvider
+  bindToken: string
+}
+
 export interface OAuthRegisterBindRequest {
   provider: OAuthProvider
   bindToken: string
@@ -1624,6 +1629,16 @@ export const registerAndBindOAuthAccount = async (
     data,
   )
   return (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
+}
+
+export const bindPendingOAuthAccount = async (
+  data: OAuthBindPendingRequest,
+): Promise<OAuthBindCallbackResponse> => {
+  const response = await request.post<ApiResponse<OAuthBindCallbackResponse>>(
+    `/oauth/${data.provider}/bind-pending`,
+    data,
+  )
+  return (response as unknown as ApiResponse<OAuthBindCallbackResponse>).data
 }
 
 export interface OAuthAccountStatusItem {

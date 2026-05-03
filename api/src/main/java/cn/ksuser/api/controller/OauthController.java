@@ -802,6 +802,49 @@ public class OauthController {
         return issueOauthLoginResponse(newUser, provider, request, response, System.currentTimeMillis(), "注册并绑定并登录成功");
     }
 
+    @PostMapping({"/qq/bind-pending", "/github/bind-pending", "/microsoft/bind-pending", "/google/bind-pending"})
+    public ResponseEntity<ApiResponse<Object>> bindPendingToCurrentUser(@RequestBody cn.ksuser.api.dto.OauthBindRequest req,
+                                                                        HttpServletRequest request,
+                                                                        Authentication authentication) {
+        String provider = resolveProviderFromRequest(request, req.getProvider());
+        if (provider == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+        }
+        if (authentication == null
+            || authentication.getPrincipal() == null
+            || authentication instanceof AnonymousAuthenticationToken
+            || "anonymousUser".equals(authentication.getPrincipal().toString())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        var userOpt = userService.findByUuid(uuid);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        PendingOauthIdentity pending;
+        try {
+            pending = resolvePendingOauthIdentity(provider, req.getBindToken());
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+        }
+
+        User user = userOpt.get();
+        ResponseEntity<ApiResponse<Object>> conflict = ensureCanLinkOauth(provider, user, pending);
+        if (conflict != null) {
+            return conflict;
+        }
+        linkOauthAccount(provider, user, pending);
+        consumePendingOauthIdentity(req.getBindToken());
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("bound", true);
+        data.put("provider", provider);
+        data.put("message", providerDisplayName(provider) + " 绑定成功");
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, providerDisplayName(provider) + " 绑定成功", data));
+    }
+
     /**
      * GitHub OAuth 回调处理（登录和绑定）
      */

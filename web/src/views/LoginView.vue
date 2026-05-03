@@ -503,6 +503,7 @@ import {
   buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
+  bindPendingOAuthAccount,
   cancelMobileBridgeChallenge,
   exchangeSessionTransfer,
   initQrLogin,
@@ -512,6 +513,7 @@ import {
   type MFAMethod,
   type MFAChallenge,
   type LoginResponse,
+  type OAuthProvider,
   type QrChallengeStatusResponse,
 } from '@/api/auth'
 import {
@@ -766,7 +768,34 @@ const clearStoredPostLoginRedirect = () => {
   consumePostLoginRedirect()
 }
 
+const getPendingOAuthBind = (): { provider: OAuthProvider; bindToken: string } | null => {
+  const provider = route.query.oauthBindProvider
+  const bindToken = route.query.oauthBindToken
+  if (
+    (provider === 'qq' || provider === 'github' || provider === 'microsoft' || provider === 'google') &&
+    typeof bindToken === 'string' &&
+    bindToken.trim()
+  ) {
+    return {
+      provider,
+      bindToken: bindToken.trim(),
+    }
+  }
+  return null
+}
+
+const bindPendingOAuthAfterLogin = async () => {
+  const pending = getPendingOAuthBind()
+  if (!pending) {
+    return
+  }
+  const result = await bindPendingOAuthAccount(pending)
+  ElMessage.success(result.message || '第三方账号绑定成功')
+}
+
 const navigateAfterLogin = async () => {
+  await bindPendingOAuthAfterLogin()
+
   const directTarget = getDirectPostLoginTarget()
   if (directTarget) {
     clearStoredPostLoginRedirect()
