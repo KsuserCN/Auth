@@ -1,5 +1,6 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.dto.Oauth2AppCreateRequest;
 import cn.ksuser.api.entity.Oauth2Application;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
@@ -8,11 +9,13 @@ import cn.ksuser.api.repository.UserOauth2AuthorizationRepository;
 import cn.ksuser.api.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -20,9 +23,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class Oauth2PlatformServiceTest {
@@ -57,6 +62,7 @@ class Oauth2PlatformServiceTest {
             oauth2TokenService
         );
         ReflectionTestUtils.setField(service, "jwtSecret", "ksuser-very-secret-key-2026-abc-platform-test");
+        ReflectionTestUtils.setField(service, "maxAppsPerUser", 5);
     }
 
     @Test
@@ -166,6 +172,49 @@ class Oauth2PlatformServiceTest {
 
         assertEquals("access-token-demo", response.get("access_token"));
         assertEquals("profile", response.get("scope"));
+    }
+
+    @Test
+    void shouldCreateApplicationWithSemicolonSeparatedRedirectUris() {
+        User user = buildUser();
+        user.setVerificationType("personal");
+
+        when(applicationRepository.countByOwnerUserId(1L)).thenReturn(0L);
+        when(applicationRepository.existsByAppId(anyString())).thenReturn(false);
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-secret");
+        when(applicationRepository.save(any(Oauth2Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        Oauth2AppCreateRequest request = new Oauth2AppCreateRequest();
+        request.setAppName("OAuth Demo");
+        request.setRedirectUri("https://demo.example.com/oauth/callback; http://localhost:9000/callback;https://demo.example.com/oauth/callback");
+        request.setContactInfo("test@example.com");
+        request.setScopes(List.of("profile"));
+
+        service.createApplication(user, request);
+
+        ArgumentCaptor<Oauth2Application> captor = ArgumentCaptor.forClass(Oauth2Application.class);
+        verify(applicationRepository).save(captor.capture());
+        assertEquals("https://demo.example.com/oauth/callback;http://localhost:9000/callback", captor.getValue().getRedirectUri());
+    }
+
+    @Test
+    void shouldRejectNonHttpsNonLocalhostOauthRedirectUri() {
+        User user = buildUser();
+        user.setVerificationType("personal");
+        when(applicationRepository.countByOwnerUserId(1L)).thenReturn(0L);
+
+        Oauth2AppCreateRequest request = new Oauth2AppCreateRequest();
+        request.setAppName("OAuth Demo");
+        request.setRedirectUri("https://demo.example.com/oauth/callback;http://127.0.0.1:9000/callback");
+        request.setContactInfo("test@example.com");
+
+        Oauth2Exception exception = assertThrows(
+            Oauth2Exception.class,
+            () -> service.createApplication(user, request)
+        );
+
+        assertEquals("invalid_request", exception.getError());
+        assertEquals(400, exception.getStatus().value());
     }
 
     private Oauth2Application buildApplication() {

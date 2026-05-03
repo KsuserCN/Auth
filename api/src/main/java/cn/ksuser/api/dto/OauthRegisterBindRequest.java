@@ -1,12 +1,20 @@
 package cn.ksuser.api.dto;
 
 public class OauthRegisterBindRequest {
+    private String provider;
+    private String bindToken;
     private String openid;
     private String username;
     private String email;
     private String password;
 
     public OauthRegisterBindRequest() {}
+
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
+
+    public String getBindToken() { return bindToken; }
+    public void setBindToken(String bindToken) { this.bindToken = bindToken; }
 
     public String getOpenid() { return openid; }
     public void setOpenid(String openid) { this.openid = openid; }

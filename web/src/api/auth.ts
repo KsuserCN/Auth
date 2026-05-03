@@ -1186,12 +1186,31 @@ export interface OAuthLoginCallbackResponse {
   }
   // 未绑定用户 (HTTP 202)
   needBind?: boolean
+  provider?: OAuthProvider
+  oauthBindToken?: string
   openid?: string
   message?: string
   // MFA 场景 (HTTP 201)
   challengeId?: string
   method?: MFAMethod
   methods?: MFAMethod[]
+}
+
+export type OAuthProvider = 'qq' | 'github' | 'microsoft' | 'google'
+
+export interface OAuthBindExistingRequest {
+  provider: OAuthProvider
+  bindToken: string
+  email: string
+  password: string
+}
+
+export interface OAuthRegisterBindRequest {
+  provider: OAuthProvider
+  bindToken: string
+  username: string
+  email: string
+  password: string
 }
 
 export interface OAuthBindCallbackResponse {
@@ -1585,6 +1604,26 @@ export const handleQQCallback = async (
     data,
   )
   return (response as unknown as ApiResponse<QQLoginCallbackResponse>).data
+}
+
+export const bindExistingOAuthAccount = async (
+  data: OAuthBindExistingRequest,
+): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>(
+    `/oauth/${data.provider}/bind-existing`,
+    data,
+  )
+  return (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
+}
+
+export const registerAndBindOAuthAccount = async (
+  data: OAuthRegisterBindRequest,
+): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>(
+    `/oauth/${data.provider}/register-bind`,
+    data,
+  )
+  return (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
 }
 
 export interface OAuthAccountStatusItem {

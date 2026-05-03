@@ -128,8 +128,8 @@ public class SsoPlatformService {
         client.setClientId(clientId);
         client.setClientSecretHash(passwordEncoder.encode(clientSecret));
         client.setClientName(clientName);
-        client.setRedirectUris(joinValues(redirectUris));
-        client.setPostLogoutRedirectUris(joinValues(postLogoutRedirectUris));
+        client.setRedirectUris(joinUriValues(redirectUris));
+        client.setPostLogoutRedirectUris(joinUriValues(postLogoutRedirectUris));
         client.setScopes(joinValues(scopes));
         client.setAudiences(joinValues(audiences));
         client.setRequirePkce(request == null || request.getRequirePkce() == null || request.getRequirePkce());
@@ -154,8 +154,8 @@ public class SsoPlatformService {
         ensureAdminUser(user);
         OidcClient client = findManagedClient(clientId);
         client.setClientName(normalizeClientName(request == null ? null : request.getClientName()));
-        client.setRedirectUris(joinValues(normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUris())));
-        client.setPostLogoutRedirectUris(joinValues(normalizeAndValidateOptionalRedirectUris(
+        client.setRedirectUris(joinUriValues(normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUris())));
+        client.setPostLogoutRedirectUris(joinUriValues(normalizeAndValidateOptionalRedirectUris(
             request == null ? null : request.getPostLogoutRedirectUris()
         )));
         client.setScopes(joinValues(normalizeSsoScopes(request == null ? null : request.getScopes())));
@@ -272,7 +272,7 @@ public class SsoPlatformService {
         if (payload == null) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码无效、已过期或已使用");
         }
-        if (!client.getClientId().equals(payload.clientId()) || !containsValue(parseValues(client.getRedirectUris()), payload.redirectUri())) {
+        if (!client.getClientId().equals(payload.clientId()) || !containsValue(parseUriValues(client.getRedirectUris()), payload.redirectUri())) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码与当前客户端或回调地址不匹配");
         }
         validateCodeVerifier(client, payload, codeVerifier);
@@ -456,9 +456,11 @@ public class SsoPlatformService {
         }
         LinkedHashSet<String> normalized = new LinkedHashSet<>();
         for (String value : values) {
-            String uri = normalizeAndValidateRedirectUri(value);
-            if (requireLocalhostHttp || uri.startsWith("https://") || uri.startsWith("http://localhost")) {
-                normalized.add(uri);
+            for (String part : splitUriValues(value)) {
+                String uri = normalizeAndValidateRedirectUri(part);
+                if (requireLocalhostHttp || uri.startsWith("https://") || uri.startsWith("http://localhost")) {
+                    normalized.add(uri);
+                }
             }
         }
         return List.copyOf(normalized);
@@ -487,7 +489,7 @@ public class SsoPlatformService {
 
     private void validateRedirectUriMatches(OidcClient client, String redirectUri) {
         String normalized = normalizeAndValidateRedirectUri(redirectUri);
-        if (!containsValue(parseValues(client.getRedirectUris()), normalized)) {
+        if (!containsValue(parseUriValues(client.getRedirectUris()), normalized)) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "redirect_uri 与客户端登记信息不一致");
         }
     }
@@ -561,8 +563,8 @@ public class SsoPlatformService {
             client.getClientId(),
             client.getClientName(),
             client.getLogoUrl(),
-            parseValues(client.getRedirectUris()),
-            parseValues(client.getPostLogoutRedirectUris()),
+            parseUriValues(client.getRedirectUris()),
+            parseUriValues(client.getPostLogoutRedirectUris()),
             orderScopes(Oauth2ScopeUtil.parseScopeSet(client.getScopes())),
             parseValues(client.getAudiences()),
             Boolean.TRUE.equals(client.getRequirePkce()),
@@ -693,11 +695,47 @@ public class SsoPlatformService {
         return List.copyOf(values);
     }
 
+    private List<String> parseUriValues(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        for (String part : value.trim().split("[;\\s]+")) {
+            String normalized = normalizeOptional(part);
+            if (normalized != null) {
+                values.add(normalized);
+            }
+        }
+        return List.copyOf(values);
+    }
+
+    private List<String> splitUriValues(String value) {
+        String normalized = normalizeOptional(value);
+        if (normalized == null) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (String part : normalized.split(";")) {
+            String item = normalizeOptional(part);
+            if (item != null) {
+                values.add(item);
+            }
+        }
+        return values;
+    }
+
     private String joinValues(List<String> values) {
         if (values == null || values.isEmpty()) {
             return "";
         }
         return String.join(" ", values);
+    }
+
+    private String joinUriValues(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "";
+        }
+        return String.join(";", values);
     }
 
     private boolean containsValue(List<String> values, String target) {

@@ -673,12 +673,7 @@ public class OauthController {
 
             // 未绑定：记录尝试并返回 needBind（使用 202 表示需要用户在前端继续注册或绑定）
             sensitiveLogUtil.logLogin(request, null, "QQ", false, "Not bound", startTime);
-            java.util.Map<String,Object> data = new java.util.HashMap<>();
-            data.put("needBind", true);
-            data.put("openid", openid);
-            data.put("operationType", operationType);
-            data.put("env", env);
-            data.put("message", "未绑定，请使用绑定或注册接口完成账号关联");
+            java.util.Map<String,Object> data = createPendingOauthBindData("qq", openid, unionid, operationType, env);
             // 202 表示已接受，需前端引导用户注册或绑定
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
 
@@ -723,18 +718,22 @@ public class OauthController {
     /**
      * 绑定已有账号（前端传入 openid、email、password）
      */
-    @PostMapping("/qq/bind-existing")
-    public ResponseEntity<ApiResponse<Object>> bindExisting(@RequestBody cn.ksuser.api.dto.OauthBindRequest req) {
-        String openid = req.getOpenid();
+    @PostMapping({"/qq/bind-existing", "/github/bind-existing", "/microsoft/bind-existing", "/google/bind-existing"})
+    public ResponseEntity<ApiResponse<Object>> bindExisting(@RequestBody cn.ksuser.api.dto.OauthBindRequest req,
+                                                            HttpServletRequest request,
+                                                            HttpServletResponse response) {
+        String provider = resolveProviderFromRequest(request, req.getProvider());
         String email = req.getEmail();
         String password = req.getPassword();
-        if (openid == null || openid.isEmpty() || email == null || email.isEmpty() || password == null || password.isEmpty()) {
+        if (provider == null || email == null || email.isEmpty() || password == null || password.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
         }
 
-        // 检查 openid 是否已被绑定
-        if (oauthRepo.findByProviderAndProviderUserId("qq", openid).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "openid 已被绑定"));
+        PendingOauthIdentity pending;
+        try {
+            pending = resolvePendingOauthIdentity(provider, req.getBindToken());
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
         }
 
         // 验证用户凭据（使用 UserService.login）
@@ -744,38 +743,39 @@ public class OauthController {
         }
         var user = loginOpt.get();
 
-        // 绑定 openid
-        UserOauthAccount acct = new UserOauthAccount();
-        acct.setProvider("qq");
-        acct.setProviderUserId(openid);
-        acct.setUserId(user.getId());
-        acct.setIsEnabled(true);
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        acct.setLinkedAt(now);
-        acct.setCreatedAt(now);
-        oauthRepo.save(acct);
+        ResponseEntity<ApiResponse<Object>> conflict = ensureCanLinkOauth(provider, user, pending);
+        if (conflict != null) {
+            return conflict;
+        }
+        linkOauthAccount(provider, user, pending);
+        consumePendingOauthIdentity(req.getBindToken());
 
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "绑定成功"));
+        return issueOauthLoginResponse(user, provider, request, response, System.currentTimeMillis(), "绑定并登录成功");
     }
 
     /**
      * 注册并绑定（前端传入 openid, username, email, password）
      */
-    @PostMapping("/qq/register-bind")
+    @PostMapping({"/qq/register-bind", "/github/register-bind", "/microsoft/register-bind", "/google/register-bind"})
     public ResponseEntity<ApiResponse<Object>> registerAndBind(@RequestBody cn.ksuser.api.dto.OauthRegisterBindRequest req,
                                                                HttpServletRequest request,
                                                                HttpServletResponse response) {
-        String openid = req.getOpenid();
+        String provider = resolveProviderFromRequest(request, req.getProvider());
         String username = req.getUsername();
         String email = req.getEmail();
         String password = req.getPassword();
-        if (openid == null || openid.isEmpty() || username == null || username.isEmpty() || email == null || email.isEmpty() || password == null || password.isEmpty()) {
+        if (provider == null || username == null || username.isEmpty() || email == null || email.isEmpty() || password == null || password.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
         }
 
-        // 检查 openid 是否已被绑定
-        if (oauthRepo.findByProviderAndProviderUserId("qq", openid).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "openid 已被绑定"));
+        PendingOauthIdentity pending;
+        try {
+            pending = resolvePendingOauthIdentity(provider, req.getBindToken());
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+        }
+        if (findExistingOauthBinding(provider, pending).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, providerDisplayName(provider) + " 账号已被绑定"));
         }
 
         // 使用 UserService 注册
@@ -796,34 +796,10 @@ public class OauthController {
         // 为新注册用户初始化默认 settings，确保后续设置相关接口有稳定初始数据
         getOrCreateUserSettings(newUser.getId());
 
-        // 绑定 openid
-        UserOauthAccount acct = new UserOauthAccount();
-        acct.setProvider("qq");
-        acct.setProviderUserId(openid);
-        acct.setUserId(newUser.getId());
-        acct.setIsEnabled(true);
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        acct.setLinkedAt(now);
-        acct.setCreatedAt(now);
-        oauthRepo.save(acct);
+        linkOauthAccount(provider, newUser, pending);
+        consumePendingOauthIdentity(req.getBindToken());
 
-        // 签发 token 并创建 session（登录成功）
-        String refreshToken = jwtUtil.generateRefreshToken(newUser.getUuid());
-        String userAgent = rateLimitService.getClientUserAgent(request);
-        UserSession session = userSessionService.createSession(newUser, refreshToken, rateLimitService.getClientIp(request), userAgent);
-        int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
-        String accessTokenLocal = jwtUtil.generateAccessToken(newUser.getUuid(), session.getId(), sessionVersion);
-
-        // 设置 refreshToken Cookie
-        setRefreshTokenCookie(response, refreshToken);
-
-        // 记录登录日志
-        sensitiveLogUtil.logLogin(request, newUser.getId(), "QQ", true, null, System.currentTimeMillis());
-
-        java.util.Map<String,Object> data = new java.util.HashMap<>();
-        data.put("accessToken", accessTokenLocal);
-        data.put("user", newUser);
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "注册并绑定并登录成功", data));
+        return issueOauthLoginResponse(newUser, provider, request, response, System.currentTimeMillis(), "注册并绑定并登录成功");
     }
 
     /**
@@ -1098,12 +1074,7 @@ public class OauthController {
 
             // 未绑定
             sensitiveLogUtil.logLogin(request, null, "GITHUB", false, "Not bound", startTime);
-            java.util.Map<String,Object> data = new java.util.HashMap<>();
-            data.put("needBind", true);
-            data.put("openid", githubId);
-            data.put("operationType", operationType);
-            data.put("env", env);
-            data.put("message", "未绑定，请使用绑定或注册接口完成账号关联");
+            java.util.Map<String,Object> data = createPendingOauthBindData("github", githubId, null, operationType, env);
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
 
         } catch (Exception e) {
@@ -1363,12 +1334,7 @@ public class OauthController {
             }
 
             sensitiveLogUtil.logLogin(request, null, "GOOGLE", false, "Not bound", startTime);
-            java.util.Map<String, Object> data = new java.util.HashMap<>();
-            data.put("needBind", true);
-            data.put("openid", openid);
-            data.put("operationType", operationType);
-            data.put("env", env);
-            data.put("message", "该 Google 账号尚未绑定，请先绑定或注册账号");
+            java.util.Map<String, Object> data = createPendingOauthBindData("google", openid, null, operationType, env);
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
 
         } catch (Exception e) {
@@ -1861,12 +1827,7 @@ public class OauthController {
             }
 
             sensitiveLogUtil.logLogin(request, null, "MICROSOFT", false, "Not bound", startTime);
-            java.util.Map<String, Object> data = new java.util.HashMap<>();
-            data.put("needBind", true);
-            data.put("openid", openid);
-            data.put("operationType", operationType);
-            data.put("env", env);
-            data.put("message", "该 Microsoft 账号尚未绑定，请先绑定或注册账号");
+            java.util.Map<String, Object> data = createPendingOauthBindData("microsoft", openid, null, operationType, env);
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
 
         } catch (Exception e) {
@@ -2120,6 +2081,185 @@ public class OauthController {
         }
         return null;
     }
+
+    private java.util.Map<String, Object> createPendingOauthBindData(String provider,
+                                                                     String providerUserId,
+                                                                     String unionId,
+                                                                     String operationType,
+                                                                     String env) throws Exception {
+        String token = java.util.UUID.randomUUID().toString().replace("-", "");
+        java.util.Map<String, Object> pending = new java.util.HashMap<>();
+        pending.put("provider", provider);
+        pending.put("providerUserId", providerUserId);
+        pending.put("unionId", unionId);
+        redisTemplate.opsForValue().set(pendingOauthKey(token), objectMapper.writeValueAsString(pending), Duration.ofMinutes(15));
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("needBind", true);
+        data.put("provider", provider);
+        data.put("oauthBindToken", token);
+        data.put("openid", providerUserId);
+        data.put("operationType", operationType);
+        data.put("env", env);
+        data.put("message", "该 " + providerDisplayName(provider) + " 账号尚未绑定，请绑定已有 Ksuser 账号或注册新账号");
+        return data;
+    }
+
+    private String pendingOauthKey(String token) {
+        return "oauth:pending-bind:" + token;
+    }
+
+    private PendingOauthIdentity resolvePendingOauthIdentity(String provider, String bindToken) {
+        String normalizedProvider = normalizeOauthProvider(provider);
+        if (normalizedProvider == null) {
+            throw new IllegalArgumentException("不支持的第三方账号类型");
+        }
+
+        if (bindToken != null && !bindToken.isBlank()) {
+            String raw = redisTemplate.opsForValue().get(pendingOauthKey(bindToken.trim()));
+            if (raw == null || raw.isBlank()) {
+                throw new IllegalArgumentException("第三方登录状态已过期，请重新授权");
+            }
+            try {
+                JsonNode json = objectMapper.readTree(raw);
+                String tokenProvider = normalizeOauthProvider(json.path("provider").asText(null));
+                String providerUserId = json.path("providerUserId").asText(null);
+                String unionId = json.path("unionId").asText(null);
+                if (!normalizedProvider.equals(tokenProvider) || providerUserId == null || providerUserId.isBlank()) {
+                    throw new IllegalArgumentException("第三方登录状态无效，请重新授权");
+                }
+                if (unionId != null && unionId.isBlank()) {
+                    unionId = null;
+                }
+                return new PendingOauthIdentity(providerUserId, unionId);
+            } catch (IllegalArgumentException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("第三方登录状态无效，请重新授权");
+            }
+        }
+
+        throw new IllegalArgumentException("第三方登录状态缺失，请重新授权");
+    }
+
+    private void consumePendingOauthIdentity(String bindToken) {
+        if (bindToken != null && !bindToken.isBlank()) {
+            redisTemplate.delete(pendingOauthKey(bindToken.trim()));
+        }
+    }
+
+    private ResponseEntity<ApiResponse<Object>> ensureCanLinkOauth(String provider, User user, PendingOauthIdentity pending) {
+        String displayName = providerDisplayName(provider);
+        if (oauthRepo.findByProviderAndUserId(provider, user.getId()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 " + displayName));
+        }
+        if (findExistingOauthBinding(provider, pending).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 " + displayName + " 账号已被绑定"));
+        }
+        return null;
+    }
+
+    private java.util.Optional<UserOauthAccount> findExistingOauthBinding(String provider, PendingOauthIdentity pending) {
+        if (pending.unionId() != null && !pending.unionId().isBlank()) {
+            return oauthRepo.findByProviderAndUnionId(provider, pending.unionId());
+        }
+        return oauthRepo.findByProviderAndProviderUserId(provider, pending.providerUserId());
+    }
+
+    private void linkOauthAccount(String provider, User user, PendingOauthIdentity pending) {
+        UserOauthAccount acct = new UserOauthAccount();
+        acct.setProvider(provider);
+        acct.setProviderUserId(pending.providerUserId());
+        acct.setUnionId(pending.unionId());
+        acct.setUserId(user.getId());
+        acct.setIsEnabled(true);
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        acct.setLinkedAt(now);
+        acct.setCreatedAt(now);
+        oauthRepo.save(acct);
+    }
+
+    private ResponseEntity<ApiResponse<Object>> issueOauthLoginResponse(User user,
+                                                                        String provider,
+                                                                        HttpServletRequest request,
+                                                                        HttpServletResponse response,
+                                                                        long startTime,
+                                                                        String message) {
+        UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+        boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
+        if (mfaEnabled) {
+            List<String> mfaMethods = resolveOauthMfaMethods(user.getId());
+            if (!mfaMethods.isEmpty()) {
+                String clientIp = rateLimitService.getClientIp(request);
+                String userAgentReq = rateLimitService.getClientUserAgent(request);
+                String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgentReq,
+                    provider, new HashSet<>(mfaMethods));
+                java.util.Map<String, Object> resp = new java.util.HashMap<>();
+                resp.put("challengeId", challengeId);
+                resp.put("method", mfaMethods.get(0));
+                resp.put("methods", mfaMethods);
+                resp.put("provider", provider);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+            }
+        }
+
+        String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
+        String userAgent = rateLimitService.getClientUserAgent(request);
+        UserSession session = userSessionService.createSession(user, refreshToken, rateLimitService.getClientIp(request), userAgent);
+        int sessionVersion = session.getSessionVersion() == null ? 0 : session.getSessionVersion();
+        String accessTokenLocal = jwtUtil.generateAccessToken(user.getUuid(), session.getId(), sessionVersion);
+        setRefreshTokenCookie(response, refreshToken);
+        sensitiveLogUtil.logLogin(request, user.getId(), provider.toUpperCase(Locale.ROOT), true, null, startTime);
+
+        java.util.Map<String, Object> data = new java.util.HashMap<>();
+        data.put("accessToken", accessTokenLocal);
+        data.put("user", user);
+        data.put("provider", provider);
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, message, data));
+    }
+
+    private String resolveProviderFromRequest(HttpServletRequest request, String explicitProvider) {
+        String normalized = normalizeOauthProvider(explicitProvider);
+        if (normalized != null) {
+            return normalized;
+        }
+
+        String uri = request.getRequestURI();
+        if (uri == null) {
+            return null;
+        }
+        String[] parts = uri.split("/");
+        for (int i = 0; i < parts.length - 1; i++) {
+            if ("oauth".equals(parts[i])) {
+                return normalizeOauthProvider(parts[i + 1]);
+            }
+        }
+        return null;
+    }
+
+    private String normalizeOauthProvider(String provider) {
+        if (provider == null || provider.isBlank()) {
+            return null;
+        }
+        String normalized = provider.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "qq", "github", "microsoft", "google" -> normalized;
+            default -> null;
+        };
+    }
+
+    private String providerDisplayName(String provider) {
+        return switch (provider) {
+            case "qq" -> "QQ";
+            case "github" -> "GitHub";
+            case "microsoft" -> "Microsoft";
+            case "google" -> "Google";
+            default -> "第三方";
+        };
+    }
+
+    private record PendingOauthIdentity(String providerUserId, String unionId) {}
 
     private UserSettings getOrCreateUserSettings(Long userId) {
         return userSettingsRepository.findByUserId(userId)

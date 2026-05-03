@@ -37,6 +37,66 @@
           <p class="state-description">验证通过，正在为您跳转到首页...</p>
         </div>
 
+        <div v-else-if="state === 'needBind'" class="state-block need-bind">
+          <p class="state-title">完善 Ksuser 账号</p>
+          <p class="state-description">
+            该 {{ providerLabel }} 账号尚未关联 Ksuser。您可以绑定已有账号，或直接创建新账号。
+          </p>
+
+          <el-tabs v-model="bindMode" class="bind-tabs" stretch>
+            <el-tab-pane label="绑定已有账号" name="existing">
+              <el-form class="bind-form" :model="bindForm" label-position="top" @submit.prevent>
+                <el-form-item label="邮箱">
+                  <el-input v-model.trim="bindForm.email" type="email" autocomplete="email" />
+                </el-form-item>
+                <el-form-item label="密码">
+                  <el-input
+                    v-model="bindForm.password"
+                    type="password"
+                    show-password
+                    autocomplete="current-password"
+                  />
+                </el-form-item>
+                <el-button
+                  type="primary"
+                  class="wide-action"
+                  :loading="bindLoading"
+                  @click="submitBindExisting"
+                >
+                  绑定并登录
+                </el-button>
+              </el-form>
+            </el-tab-pane>
+
+            <el-tab-pane label="注册新账号" name="register">
+              <el-form class="bind-form" :model="registerForm" label-position="top" @submit.prevent>
+                <el-form-item label="用户名">
+                  <el-input v-model.trim="registerForm.username" autocomplete="username" />
+                </el-form-item>
+                <el-form-item label="邮箱">
+                  <el-input v-model.trim="registerForm.email" type="email" autocomplete="email" />
+                </el-form-item>
+                <el-form-item label="密码">
+                  <el-input
+                    v-model="registerForm.password"
+                    type="password"
+                    show-password
+                    autocomplete="new-password"
+                  />
+                </el-form-item>
+                <el-button
+                  type="primary"
+                  class="wide-action"
+                  :loading="registerLoading"
+                  @click="submitRegisterBind"
+                >
+                  注册并登录
+                </el-button>
+              </el-form>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+
         <div v-else-if="state === 'error'" class="state-block error">
           <div class="icon-ring ring-error">
             <el-icon class="state-icon error-icon">
@@ -70,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDark, useStorage } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -81,12 +141,15 @@ import {
   RefreshRight,
 } from '@element-plus/icons-vue'
 import {
+  bindExistingOAuthAccount,
   handleGoogleCallbackByOperation,
   handleGithubCallbackByOperation,
   handleMicrosoftCallbackByOperation,
   handleQQCallbackByOperation,
+  registerAndBindOAuthAccount,
 } from '@/api/auth'
 import type {
+  LoginResponse,
   OAuthBindCallbackResponse,
   OAuthLoginCallbackResponse,
   MicrosoftOAuthOperation,
@@ -98,8 +161,21 @@ import { consumePostLoginRedirect } from '@/utils/postLoginRedirect'
 const router = useRouter()
 const route = useRoute()
 
-const state = ref<'processing' | 'success' | 'error'>('processing')
+const state = ref<'processing' | 'success' | 'needBind' | 'error'>('processing')
 const errorMessage = ref<string>('')
+const oauthBindToken = ref('')
+const bindMode = ref<'existing' | 'register'>('existing')
+const bindLoading = ref(false)
+const registerLoading = ref(false)
+const bindForm = reactive({
+  email: '',
+  password: '',
+})
+const registerForm = reactive({
+  username: '',
+  email: '',
+  password: '',
+})
 const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')
 const isDark = useDark({
   storageKey: 'theme-preference',
@@ -289,15 +365,17 @@ const handleCallback = async () => {
 
       // 情况 1: 需要绑定账号 (HTTP 202，needBind=true)
       if (loginResponse.needBind === true) {
-        const warningMsg =
-          loginResponse.message || `该 ${providerLabel.value} 账号尚未绑定，请先绑定或注册账号`
-        ElMessage.warning(warningMsg)
+        if (!loginResponse.oauthBindToken) {
+          throw new Error('第三方登录状态缺失，请重新授权')
+        }
+        oauthBindToken.value = loginResponse.oauthBindToken
         if (loginResponse.openid) {
           sessionStorage.setItem(openIdStorageKey.value, loginResponse.openid)
         }
-        setTimeout(() => {
-          router.push('/login')
-        }, 1500)
+        state.value = 'needBind'
+        ElMessage.warning(
+          loginResponse.message || `该 ${providerLabel.value} 账号尚未绑定，请先绑定或注册账号`,
+        )
         return
       }
 
@@ -393,6 +471,109 @@ const retryCallback = () => {
   state.value = 'processing'
   errorMessage.value = ''
   handleCallback()
+}
+
+const completeOAuthLogin = async (accessToken: string, user?: unknown, message = '登录成功') => {
+  const desktopSynced = await finalizeWebLogin({
+    accessToken,
+    user: user as any,
+  })
+  const postLoginTarget = consumePostLoginRedirect()
+  state.value = 'success'
+  ElMessage.success(desktopSynced ? `${message}，已同步到桌面端` : message)
+  setTimeout(() => {
+    router.replace(postLoginTarget || '/home/overview')
+  }, 1000)
+}
+
+const continueToMfa = (challengeId: string, method?: string, methods?: string[]) => {
+  ElMessage.info('需要进行二步验证')
+  router.push({
+    path: '/login',
+    query: {
+      challengeId,
+      method: method || 'totp',
+      methods: Array.isArray(methods) ? methods.join(',') : undefined,
+      mfaFrom: provider.value,
+    },
+  })
+}
+
+const hasAccessToken = (
+  response: Awaited<ReturnType<typeof bindExistingOAuthAccount>>,
+): response is LoginResponse => {
+  return 'accessToken' in response && Boolean(response.accessToken)
+}
+
+const submitBindExisting = async () => {
+  if (!oauthBindToken.value) {
+    ElMessage.error('第三方登录状态已过期，请重新授权')
+    state.value = 'error'
+    errorMessage.value = '第三方登录状态已过期，请重新授权'
+    return
+  }
+  if (!bindForm.email || !bindForm.password) {
+    ElMessage.warning('请输入邮箱和密码')
+    return
+  }
+
+  bindLoading.value = true
+  try {
+    const response = await bindExistingOAuthAccount({
+      provider: provider.value,
+      bindToken: oauthBindToken.value,
+      email: bindForm.email,
+      password: bindForm.password,
+    })
+    if ('challengeId' in response && response.challengeId) {
+      continueToMfa(response.challengeId, response.method, response.methods)
+      return
+    }
+    if (!hasAccessToken(response)) {
+      throw new Error('绑定响应数据异常，请重试')
+    }
+    await completeOAuthLogin(response.accessToken, response.user, '绑定成功')
+  } catch (error) {
+    console.error(`OAuth ${providerLabel.value} bind existing failed:`, error)
+  } finally {
+    bindLoading.value = false
+  }
+}
+
+const submitRegisterBind = async () => {
+  if (!oauthBindToken.value) {
+    ElMessage.error('第三方登录状态已过期，请重新授权')
+    state.value = 'error'
+    errorMessage.value = '第三方登录状态已过期，请重新授权'
+    return
+  }
+  if (!registerForm.username || !registerForm.email || !registerForm.password) {
+    ElMessage.warning('请填写用户名、邮箱和密码')
+    return
+  }
+
+  registerLoading.value = true
+  try {
+    const response = await registerAndBindOAuthAccount({
+      provider: provider.value,
+      bindToken: oauthBindToken.value,
+      username: registerForm.username,
+      email: registerForm.email,
+      password: registerForm.password,
+    })
+    if ('challengeId' in response && response.challengeId) {
+      continueToMfa(response.challengeId, response.method, response.methods)
+      return
+    }
+    if (!hasAccessToken(response)) {
+      throw new Error('注册响应数据异常，请重试')
+    }
+    await completeOAuthLogin(response.accessToken, response.user, '注册成功')
+  } catch (error) {
+    console.error(`OAuth ${providerLabel.value} register bind failed:`, error)
+  } finally {
+    registerLoading.value = false
+  }
 }
 
 watch(
@@ -602,6 +783,33 @@ onMounted(() => {
   font-size: 14px;
   line-height: 1.7;
   color: var(--cb-text-sub);
+}
+
+.need-bind {
+  align-items: stretch;
+}
+
+.need-bind .state-title,
+.need-bind .state-description {
+  align-self: center;
+  text-align: center;
+}
+
+.bind-tabs {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.bind-form {
+  width: 100%;
+  padding-top: 8px;
+  text-align: left;
+}
+
+.wide-action {
+  width: 100%;
+  min-height: 42px;
+  border-radius: 10px;
 }
 
 .action-row {

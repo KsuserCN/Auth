@@ -331,7 +331,7 @@
 
         <el-form-item label="回调地址" prop="redirectUrisText">
           <el-input v-model="ssoCreateForm.redirectUrisText" type="textarea" :rows="4"
-            placeholder="每行一个回调地址，仅支持 https:// 或 http://localhost" />
+            placeholder="多个地址用 ; 隔开，仅支持 https:// 或 http://localhost" />
         </el-form-item>
 
         <el-row :gutter="12">
@@ -343,7 +343,7 @@
           <el-col :xs="24" :md="12">
             <el-form-item label="登出回调地址" prop="postLogoutRedirectUrisText">
               <el-input v-model="ssoCreateForm.postLogoutRedirectUrisText" type="textarea" :rows="2"
-                placeholder="可选，每行一个" />
+                placeholder="可选，多个地址用 ; 隔开" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -371,11 +371,11 @@
 
         <el-form-item label="回调地址" prop="redirectUrisText">
           <el-input v-model="ssoEditForm.redirectUrisText" type="textarea" :rows="4"
-            placeholder="每行一个回调地址，仅支持 https:// 或 http://localhost" />
+            placeholder="多个地址用 ; 隔开，仅支持 https:// 或 http://localhost" />
         </el-form-item>
 
         <el-form-item label="登出回调地址" prop="postLogoutRedirectUrisText">
-          <el-input v-model="ssoEditForm.postLogoutRedirectUrisText" type="textarea" :rows="3" placeholder="可选，每行一个" />
+          <el-input v-model="ssoEditForm.postLogoutRedirectUrisText" type="textarea" :rows="3" placeholder="可选，多个地址用 ; 隔开" />
         </el-form-item>
 
         <el-form-item label="Audience" prop="audiencesText">
@@ -598,6 +598,12 @@ const normalizeLines = (value: string) =>
     .map((item) => item.trim())
     .filter(Boolean)
 
+const normalizeUriTextValues = (value: string) =>
+  value
+    .split(/[;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+
 const normalizeSemicolonValues = (value: string) =>
   value
     .split(';')
@@ -658,7 +664,7 @@ const redirectUriValidator = (_rule: unknown, value: string, callback: (error?: 
 }
 
 const multilineUriValidator = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-  const lines = normalizeLines(value || '')
+  const lines = normalizeUriTextValues(value || '')
   if (!lines.length) {
     callback(new Error('请至少填写一个地址'))
     return
@@ -671,6 +677,9 @@ const multilineUriValidator = (_rule: unknown, value: string, callback: (error?:
       const isLocalhostHttp = url.protocol === 'http:' && url.hostname === 'localhost'
       if (!isHttps && !isLocalhostHttp) {
         throw new Error('地址只支持 https:// 或 http://localhost')
+      }
+      if (url.hash) {
+        throw new Error('地址不允许包含 URL fragment')
       }
     })
     callback()
@@ -865,8 +874,8 @@ const openSSOCreateDialog = () => {
 const openSSOEditDialog = (client: SSOClient) => {
   editingSSOClientId.value = client.clientId
   ssoEditForm.clientName = client.clientName
-  ssoEditForm.redirectUrisText = client.redirectUris.join('\n')
-  ssoEditForm.postLogoutRedirectUrisText = client.postLogoutRedirectUris.join('\n')
+  ssoEditForm.redirectUrisText = client.redirectUris.join(';')
+  ssoEditForm.postLogoutRedirectUrisText = client.postLogoutRedirectUris.join(';')
   ssoEditForm.audiencesText = client.audiences.join('\n')
   ssoEditForm.scopes = [...client.scopes]
   ssoEditForm.requirePkce = client.requirePkce
@@ -928,8 +937,8 @@ const handleSSOCreate = async () => {
   try {
     ssoCreatedClient.value = await createSSOClient({
       clientName: ssoCreateForm.clientName.trim(),
-      redirectUris: normalizeLines(ssoCreateForm.redirectUrisText),
-      postLogoutRedirectUris: normalizeLines(ssoCreateForm.postLogoutRedirectUrisText),
+      redirectUris: normalizeUriTextValues(ssoCreateForm.redirectUrisText),
+      postLogoutRedirectUris: normalizeUriTextValues(ssoCreateForm.postLogoutRedirectUrisText),
       scopes: [...ssoCreateForm.scopes],
       audiences: normalizeLines(ssoCreateForm.audiencesText),
       requirePkce: ssoCreateForm.requirePkce,
@@ -955,8 +964,8 @@ const handleSSOEdit = async () => {
   try {
     await updateSSOClient(editingSSOClientId.value, {
       clientName: ssoEditForm.clientName.trim(),
-      redirectUris: normalizeLines(ssoEditForm.redirectUrisText),
-      postLogoutRedirectUris: normalizeLines(ssoEditForm.postLogoutRedirectUrisText),
+      redirectUris: normalizeUriTextValues(ssoEditForm.redirectUrisText),
+      postLogoutRedirectUris: normalizeUriTextValues(ssoEditForm.postLogoutRedirectUrisText),
       scopes: [...ssoEditForm.scopes],
       audiences: normalizeLines(ssoEditForm.audiencesText),
       requirePkce: ssoEditForm.requirePkce,
