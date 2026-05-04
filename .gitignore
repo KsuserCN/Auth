@@ -16,3 +16,13 @@ mobile/android/app
 CLAUDE.md
 AGENTS.md
 build
+
+# 避免提交的文件夹
+*/miniprogram_npm
+*/node_modules
+*/.vscode
+
+# 避免提交的文件
+*/project.private.config.json
+*/yarn.lock
+*/yarn-error.lock
