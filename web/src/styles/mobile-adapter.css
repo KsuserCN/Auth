@@ -22,7 +22,7 @@
   .bridge-launch-card {
     width: 100% !important;
     max-width: none !important;
-    min-height: 100dvh;
+    min-height: calc(100dvh - var(--global-banner-height, 0px));
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;

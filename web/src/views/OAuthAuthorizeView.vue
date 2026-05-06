@@ -658,8 +658,8 @@ onMounted(() => {
 <style scoped>
 .consent-container {
   width: 100%;
-  height: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -667,7 +667,8 @@ onMounted(() => {
   background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .consent-container.dark {
@@ -1212,8 +1213,17 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
+  .consent-container {
+    height: auto;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
   .consent-box {
     flex-direction: column;
+    min-height: 100dvh;
+    border-radius: 0;
   }
 
   .consent-left {
@@ -1224,6 +1234,7 @@ onMounted(() => {
 
   .consent-right {
     padding: 32px;
+    justify-content: flex-start;
   }
 
   .consent-actions {
