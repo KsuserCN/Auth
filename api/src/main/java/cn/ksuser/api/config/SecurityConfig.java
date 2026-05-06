@@ -73,6 +73,7 @@ public class SecurityConfig {
                     "/oauth2/authorize/context", "/oauth2/authorize/context/",
                     "/sso/token", "/sso/token/",
                     "/sso/userinfo", "/sso/userinfo/",
+                    "/sso/jwks", "/sso/jwks/",
                     "/sso/authorize/context", "/sso/authorize/context/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
@@ -153,7 +154,8 @@ public class SecurityConfig {
                     "/oauth/google/register-bind", "/oauth/google/register-bind/",
                     "/oauth/google/bind-pending", "/oauth/google/bind-pending/",
                     "/oauth2/token", "/oauth2/token/",
-                    "/sso/token", "/sso/token/"
+                    "/sso/token", "/sso/token/",
+                    "/sso/jwks", "/sso/jwks/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URLEncoder;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
@@ -208,7 +209,8 @@ public class Oauth2PlatformService {
 
         String redirectUrl = UriComponentsBuilder.fromUriString(context.getRedirectUri())
             .queryParam("code", code)
-            .queryParamIfPresent("state", Optional.ofNullable(normalizedState))
+            .queryParamIfPresent("state", Optional.ofNullable(normalizedState)
+                .map(value -> URLEncoder.encode(value, StandardCharsets.UTF_8)))
             .build(true)
             .toUriString();
 

@@ -1,6 +1,8 @@
 package cn.ksuser.api.service;
 
 import cn.ksuser.api.dto.Oauth2AppCreateRequest;
+import cn.ksuser.api.dto.Oauth2AuthorizeApproveResponse;
+import cn.ksuser.api.dto.Oauth2AuthorizeRequest;
 import cn.ksuser.api.entity.Oauth2Application;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
@@ -172,6 +174,28 @@ class Oauth2PlatformServiceTest {
 
         assertEquals("access-token-demo", response.get("access_token"));
         assertEquals("profile", response.get("scope"));
+    }
+
+    @Test
+    void shouldEncodeStateWhenApprovingAuthorization() {
+        Oauth2Application application = buildApplication();
+        User user = buildUser();
+
+        when(applicationRepository.findByAppId("ksapp_demo")).thenReturn(Optional.of(application));
+
+        Oauth2AuthorizeRequest request = new Oauth2AuthorizeRequest();
+        request.setClientId("ksapp_demo");
+        request.setRedirectUri("http://localhost:9000/callback");
+        request.setResponseType("code");
+        request.setScope("profile email");
+        request.setState("abc+123==");
+
+        Oauth2AuthorizeApproveResponse response = service.approveAuthorization(user, request);
+
+        String redirectUrl = response.getRedirectUrl();
+        assertTrue(redirectUrl.contains("code=kscode_"));
+        assertTrue(redirectUrl.contains("state=abc%2B123%3D%3D"));
+        verify(valueOperations).set(eq("oauth2:auth-code:" + redirectUrl.substring(redirectUrl.indexOf("code=") + 5, redirectUrl.indexOf("&state="))), anyString(), any());
     }
 
     @Test

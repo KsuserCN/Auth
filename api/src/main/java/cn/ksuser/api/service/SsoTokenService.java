@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.PrivateKey;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -15,6 +16,12 @@ import java.util.Set;
 
 @Component
 public class SsoTokenService {
+
+    private final OidcRsaKeyService oidcRsaKeyService;
+
+    public SsoTokenService(OidcRsaKeyService oidcRsaKeyService) {
+        this.oidcRsaKeyService = oidcRsaKeyService;
+    }
 
     @Value("${jwt.secret}")
     private String secret;
@@ -27,6 +34,10 @@ public class SsoTokenService {
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private PrivateKey getIdTokenSigningKey() {
+        return oidcRsaKeyService.getPrivateKey();
     }
 
     public String generateAccessToken(String clientId, Long userId, String subject, String scope, String audience) {
@@ -67,11 +78,14 @@ public class SsoTokenService {
             claims.put("email_verified", true);
         }
         return Jwts.builder()
+            .header()
+            .keyId(oidcRsaKeyService.getKeyId())
+            .and()
             .claims(claims)
             .subject(subject)
             .issuedAt(new Date(now))
             .expiration(new Date(now + accessTokenExpirationSeconds * 1000))
-            .signWith(getSigningKey())
+            .signWith(getIdTokenSigningKey(), Jwts.SIG.RS256)
             .compact();
     }
 

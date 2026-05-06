@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URLEncoder;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
@@ -58,6 +59,7 @@ public class SsoPlatformService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final SsoTokenService ssoTokenService;
+    private final OidcRsaKeyService oidcRsaKeyService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -81,13 +83,15 @@ public class SsoPlatformService {
                               UserRepository userRepository,
                               PasswordEncoder passwordEncoder,
                               StringRedisTemplate redisTemplate,
-                              SsoTokenService ssoTokenService) {
+                              SsoTokenService ssoTokenService,
+                              OidcRsaKeyService oidcRsaKeyService) {
         this.oidcClientRepository = oidcClientRepository;
         this.authorizationRepository = authorizationRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.redisTemplate = redisTemplate;
         this.ssoTokenService = ssoTokenService;
+        this.oidcRsaKeyService = oidcRsaKeyService;
     }
 
     public SsoClientsOverviewResponse listClients(User user) {
@@ -234,7 +238,8 @@ public class SsoPlatformService {
 
         String redirectUrl = UriComponentsBuilder.fromUriString(context.getRedirectUri())
             .queryParam("code", code)
-            .queryParamIfPresent("state", Optional.ofNullable(normalizedState))
+            .queryParamIfPresent("state", Optional.ofNullable(normalizedState)
+                .map(value -> URLEncoder.encode(value, StandardCharsets.UTF_8)))
             .build(true)
             .toUriString();
         return new SsoAuthorizeApproveResponse(redirectUrl);
@@ -336,16 +341,21 @@ public class SsoPlatformService {
         response.put("authorization_endpoint", authorizationEndpoint);
         response.put("token_endpoint", normalizedIssuer + "/sso/token");
         response.put("userinfo_endpoint", normalizedIssuer + "/sso/userinfo");
+        response.put("jwks_uri", normalizedIssuer + "/sso/jwks");
         response.put("response_types_supported", List.of("code"));
         response.put("grant_types_supported", List.of("authorization_code"));
         response.put("subject_types_supported", List.of("pairwise"));
-        response.put("id_token_signing_alg_values_supported", List.of("HS256"));
+        response.put("id_token_signing_alg_values_supported", List.of("RS256"));
         response.put("token_endpoint_auth_methods_supported", List.of("client_secret_post"));
         response.put("scopes_supported", List.of("openid", "profile", "email"));
         response.put("claims_supported", List.of("sub", "nickname", "preferred_username", "picture", "email", "email_verified"));
         response.put("code_challenge_methods_supported", List.of("S256"));
         response.put("response_modes_supported", List.of("query"));
         return response;
+    }
+
+    public String buildJwks() {
+        return oidcRsaKeyService.getJwksJson();
     }
 
     public boolean isAdminUser(User user) {

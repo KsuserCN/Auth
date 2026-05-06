@@ -203,6 +203,14 @@ public class SsoPlatformController {
             .body(ssoPlatformService.buildUserInfo(token));
     }
 
+    @GetMapping(value = "/jwks", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> jwks() {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .header(HttpHeaders.PRAGMA, "no-cache")
+            .body(ssoPlatformService.buildJwks());
+    }
+
     @ExceptionHandler(Oauth2Exception.class)
     public ResponseEntity<?> handleOauth2Exception(Oauth2Exception ex, HttpServletRequest request) {
         if (isSsoProtocolRequest(request)) {
@@ -220,7 +228,9 @@ public class SsoPlatformController {
         return path.endsWith("/sso/token")
             || path.endsWith("/sso/token/")
             || path.endsWith("/sso/userinfo")
-            || path.endsWith("/sso/userinfo/");
+            || path.endsWith("/sso/userinfo/")
+            || path.endsWith("/sso/jwks")
+            || path.endsWith("/sso/jwks/");
     }
 
     private User requireUser(Authentication authentication) {
