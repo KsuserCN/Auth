@@ -26,3 +26,6 @@ node_modules
 project.private.config.json
 yarn.lock
 yarn-error.lock
+
+miniprogram
+mobile/harmony
