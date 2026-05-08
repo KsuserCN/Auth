@@ -54,6 +54,21 @@ fun assetStatementsValue(originHint: String): String {
     return """[{"include":"$normalizedOrigin/.well-known/assetlinks.json"}]"""
 }
 
+fun defaultUpdateManifestUrl(passkeyOriginHint: String): String {
+    val normalizedOrigin = runCatching {
+        val uri = URI(passkeyOriginHint.trim())
+        val scheme = uri.scheme?.lowercase()
+        val host = uri.host?.lowercase()
+        if (scheme != "https" || host.isNullOrBlank()) {
+            null
+        } else {
+            "$scheme://$host"
+        }
+    }.getOrNull() ?: "https://auth.ksuser.cn"
+
+    return "$normalizedOrigin/downloads/latest/android.json"
+}
+
 android {
     namespace = "cn.ksuser.auth"
     compileSdk {
@@ -77,9 +92,11 @@ android {
             val apiBaseUrl = envValue(debugEnv, "API_BASE_URL", "https://api.ksuser.cn")
             val passkeyRpId = envValue(debugEnv, "PASSKEY_RP_ID", "auth.ksuser.cn")
             val passkeyOriginHint = envValue(debugEnv, "PASSKEY_ORIGIN_HINT", "https://auth.ksuser.cn")
+            val updateManifestUrl = envValue(debugEnv, "UPDATE_MANIFEST_URL", defaultUpdateManifestUrl(passkeyOriginHint))
             buildConfigField("String", "API_BASE_URL", "\"${escapeGradleString(apiBaseUrl)}\"")
             buildConfigField("String", "PASSKEY_RP_ID", "\"${escapeGradleString(passkeyRpId)}\"")
             buildConfigField("String", "PASSKEY_ORIGIN_HINT", "\"${escapeGradleString(passkeyOriginHint)}\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"${escapeGradleString(updateManifestUrl)}\"")
             buildConfigField("String", "APP_ENV", "\"${envValue(debugEnv, "APP_ENV", "development")}\"")
             buildConfigField("boolean", "ENABLE_HTTP_LOGGING", envValue(debugEnv, "ENABLE_HTTP_LOGGING", "true"))
             resValue("string", "asset_statements", assetStatementsValue(passkeyOriginHint))
@@ -93,9 +110,11 @@ android {
             val apiBaseUrl = envValue(releaseEnv, "API_BASE_URL", "https://api.ksuser.cn")
             val passkeyRpId = envValue(releaseEnv, "PASSKEY_RP_ID", "auth.ksuser.cn")
             val passkeyOriginHint = envValue(releaseEnv, "PASSKEY_ORIGIN_HINT", "https://auth.ksuser.cn")
+            val updateManifestUrl = envValue(releaseEnv, "UPDATE_MANIFEST_URL", defaultUpdateManifestUrl(passkeyOriginHint))
             buildConfigField("String", "API_BASE_URL", "\"${escapeGradleString(apiBaseUrl)}\"")
             buildConfigField("String", "PASSKEY_RP_ID", "\"${escapeGradleString(passkeyRpId)}\"")
             buildConfigField("String", "PASSKEY_ORIGIN_HINT", "\"${escapeGradleString(passkeyOriginHint)}\"")
+            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"${escapeGradleString(updateManifestUrl)}\"")
             buildConfigField("String", "APP_ENV", "\"${envValue(releaseEnv, "APP_ENV", "production")}\"")
             buildConfigField("boolean", "ENABLE_HTTP_LOGGING", envValue(releaseEnv, "ENABLE_HTTP_LOGGING", "false"))
             resValue("string", "asset_statements", assetStatementsValue(passkeyOriginHint))
