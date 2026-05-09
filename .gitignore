@@ -28,4 +28,17 @@ yarn.lock
 yarn-error.lock
 
 miniprogram
-mobile/harmony
+
+
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+**/build
+/.hvigor
+.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/.appanalyzer
