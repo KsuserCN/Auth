@@ -81,6 +81,13 @@ sealed interface AuthResult {
         val methods: List<String>,
         val source: AuthSource,
     ) : AuthResult
+
+    data class NeedsOAuthBind(
+        val provider: String,
+        val bindToken: String,
+        val openid: String? = null,
+        val message: String? = null,
+    ) : AuthResult
 }
 
 data class PasskeyAuthenticationOptions(
@@ -251,6 +258,19 @@ data class QqMobileLoginRequest(
     val openid: String,
     val unionid: String,
     val expiresIn: String? = null,
+)
+
+data class OAuthBindPendingRequest(
+    val provider: String,
+    val bindToken: String,
+)
+
+data class OAuthBindCallbackResponse(
+    val bound: Boolean? = null,
+    val provider: String? = null,
+    val openid: String? = null,
+    val unionid: String? = null,
+    val message: String? = null,
 )
 
 data class SendCodeRequest(

@@ -25,11 +25,26 @@ data class AppUiState(
     val currentUser: UserProfile? = null,
     val passwordRequirement: PasswordRequirement? = null,
     val pendingMfa: AuthResult.NeedsMfa? = null,
+    val pendingOAuthBind: PendingOAuthBind? = null,
     val pendingMobileBridgeConfirmation: PendingMobileBridgeConfirmation? = null,
     val mobileBridgeReturnUrl: String? = null,
     val pendingQrConfirmation: PendingQrConfirmation? = null,
     val message: String? = null,
     val error: String? = null,
+)
+
+data class PendingOAuthBind(
+    val provider: String,
+    val bindToken: String,
+    val openid: String? = null,
+    val message: String? = null,
+)
+
+private data class RegisterCompletion(
+    val user: UserProfile,
+    val pendingOAuthBind: PendingOAuthBind?,
+    val message: String,
+    val error: String?,
 )
 
 data class PendingMobileBridgeConfirmation(
@@ -76,6 +91,7 @@ class AppViewModel(
                         it.copy(
                             isBootstrapping = false,
                             isAuthenticated = false,
+                            pendingOAuthBind = null,
                             pendingQrConfirmation = null,
                             passwordRequirement = requirement,
                         )
@@ -87,6 +103,7 @@ class AppViewModel(
                             isBootstrapping = false,
                             isAuthenticated = true,
                             currentUser = user,
+                            pendingOAuthBind = null,
                             pendingQrConfirmation = null,
                             passwordRequirement = requirement,
                         )
@@ -97,6 +114,7 @@ class AppViewModel(
                     it.copy(
                         isBootstrapping = false,
                         isAuthenticated = false,
+                        pendingOAuthBind = null,
                         pendingQrConfirmation = null,
                         error = throwable.toReadableMessage(),
                     )
@@ -307,6 +325,44 @@ class AppViewModel(
         }
     }
 
+    fun sendRegisterCode(
+        email: String,
+        onSent: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
+            runCatching { container.authRepository.sendRegisterCode(email) }
+                .onSuccess {
+                    onSent()
+                    _uiState.update { it.copy(isBusy = false, message = "注册验证码已发送") }
+                }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                }
+        }
+    }
+
+    fun checkUsernameAndThen(
+        username: String,
+        onAvailable: () -> Unit,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
+            runCatching { container.authRepository.checkUsernameAvailable(username) }
+                .onSuccess { available ->
+                    if (available) {
+                        onAvailable()
+                        _uiState.update { it.copy(isBusy = false, message = "用户名可用") }
+                    } else {
+                        _uiState.update { it.copy(isBusy = false, error = "用户名已被使用") }
+                    }
+                }
+                .onFailure { throwable ->
+                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                }
+        }
+    }
+
     fun register(
         username: String,
         email: String,
@@ -318,12 +374,31 @@ class AppViewModel(
             runCatching {
                 container.authRepository.register(username, email, password, code)
                 val user = container.authRepository.getCurrentUser()
+                val bindResult = runCatching { bindPendingOAuthIfNeeded() }
+                if (bindResult.isSuccess) {
+                    RegisterCompletion(
+                        user = user,
+                        pendingOAuthBind = null,
+                        message = bindResult.getOrNull() ?: "注册成功",
+                        error = null,
+                    )
+                } else {
+                    RegisterCompletion(
+                        user = user,
+                        pendingOAuthBind = _uiState.value.pendingOAuthBind,
+                        message = "注册成功",
+                        error = "QQ 绑定失败：${bindResult.exceptionOrNull()?.toReadableMessage() ?: "请稍后重试"}",
+                    )
+                }
+            }.onSuccess { completion ->
                 _uiState.update {
                     it.copy(
                         isBusy = false,
                         isAuthenticated = true,
-                        currentUser = user,
-                        message = "注册成功",
+                        currentUser = completion.user,
+                        pendingOAuthBind = completion.pendingOAuthBind,
+                        message = completion.message,
+                        error = completion.error,
                     )
                 }
             }.onFailure { throwable ->
@@ -436,6 +511,7 @@ class AppViewModel(
                     isAuthenticated = false,
                     currentUser = null,
                     pendingMfa = null,
+                    pendingOAuthBind = null,
                     pendingMobileBridgeConfirmation = null,
                     mobileBridgeReturnUrl = null,
                     pendingQrConfirmation = null,
@@ -453,6 +529,7 @@ class AppViewModel(
                     isAuthenticated = false,
                     currentUser = null,
                     pendingMfa = null,
+                    pendingOAuthBind = null,
                     pendingMobileBridgeConfirmation = null,
                     mobileBridgeReturnUrl = null,
                     pendingQrConfirmation = null,
@@ -649,6 +726,7 @@ class AppViewModel(
                                     isAuthenticated = true,
                                     currentUser = user,
                                     pendingMfa = null,
+                                    pendingOAuthBind = null,
                                     pendingMobileBridgeConfirmation = null,
                                     mobileBridgeReturnUrl = null,
                                     pendingQrConfirmation = null,
@@ -679,6 +757,7 @@ class AppViewModel(
                         isBusy = false,
                         isAuthenticated = false,
                         pendingMfa = result,
+                        pendingOAuthBind = null,
                         pendingMobileBridgeConfirmation = null,
                         mobileBridgeReturnUrl = null,
                         pendingQrConfirmation = null,
@@ -686,7 +765,44 @@ class AppViewModel(
                     )
                 }
             }
+
+            is AuthResult.NeedsOAuthBind -> {
+                val providerLabel = when (result.provider.lowercase()) {
+                    "qq" -> "QQ"
+                    else -> "第三方"
+                }
+                _uiState.update {
+                    it.copy(
+                        isBusy = false,
+                        isAuthenticated = false,
+                        pendingOAuthBind = PendingOAuthBind(
+                            provider = result.provider,
+                            bindToken = result.bindToken,
+                            openid = result.openid,
+                            message = result.message,
+                        ),
+                        pendingMfa = null,
+                        pendingMobileBridgeConfirmation = null,
+                        mobileBridgeReturnUrl = null,
+                        pendingQrConfirmation = null,
+                        message = result.message ?: "该 $providerLabel 账号尚未绑定，请注册新账号后继续",
+                    )
+                }
+            }
         }
+    }
+
+    fun clearPendingOAuthBind() {
+        _uiState.update { it.copy(pendingOAuthBind = null, message = null, error = null) }
+    }
+
+    private suspend fun bindPendingOAuthIfNeeded(): String? {
+        val pending = _uiState.value.pendingOAuthBind ?: return null
+        if (pending.provider.lowercase() != "qq") {
+            return null
+        }
+        val result = container.authRepository.bindPendingQqAccount(pending.bindToken)
+        return result.message?.takeIf { it.isNotBlank() } ?: "注册成功，QQ 账号已绑定"
     }
 
     private fun extractApproveCode(content: String): String? {

@@ -49,6 +49,7 @@ class PasskeyConfigTest {
         passkeyRpId = passkeyRpId,
         passkeyOriginHint = passkeyOriginHint,
         updateManifestUrl = "https://auth.ksuser.cn/downloads/latest/android.json",
+        qqMobileAppId = "",
         appEnv = "test",
         enableHttpLogging = false,
     )

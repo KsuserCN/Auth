@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -47,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +63,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
@@ -108,10 +110,6 @@ internal fun AuthFlowScreen(
         agreementAccepted = true
         agreementPrefs.edit().putBoolean(AGREEMENT_ACCEPTED_KEY, true).apply()
     }
-    val setAgreementAccepted: (Boolean) -> Unit = { accepted ->
-        agreementAccepted = accepted
-        agreementPrefs.edit().putBoolean(AGREEMENT_ACCEPTED_KEY, accepted).apply()
-    }
     val runWithAgreement: (() -> Unit) -> Unit = { action ->
         if (agreementAccepted) {
             action()
@@ -129,12 +127,20 @@ internal fun AuthFlowScreen(
             Toast.makeText(context, "相机权限被拒绝，无法扫码", Toast.LENGTH_SHORT).show()
         }
     }
+    var authMode by rememberSaveable { mutableStateOf(0) }
     var loginMethod by rememberSaveable { mutableStateOf(0) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var code by rememberSaveable { mutableStateOf("") }
+    var registerUsername by rememberSaveable { mutableStateOf("") }
+    var registerEmail by rememberSaveable { mutableStateOf("") }
+    var registerPassword by rememberSaveable { mutableStateOf("") }
+    var registerPasswordConfirm by rememberSaveable { mutableStateOf("") }
+    var registerCode by rememberSaveable { mutableStateOf("") }
+    var registerStep by rememberSaveable { mutableStateOf(RegisterStep.Username.name) }
     var mfaCode by rememberSaveable { mutableStateOf("") }
     var useRecoveryCode by rememberSaveable { mutableStateOf(false) }
+    val pendingOAuthBind = state.pendingOAuthBind
     val passkeyAvailability = remember(container) { container.passkeyManager.availability() }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
     val qqLoginConfigured = remember(container) { container.qqLoginManager.isConfigured }
@@ -152,6 +158,16 @@ internal fun AuthFlowScreen(
             } else {
                 showCameraPermissionReason = true
             }
+        }
+    }
+    LaunchedEffect(pendingOAuthBind?.bindToken) {
+        if (pendingOAuthBind != null) {
+            authMode = 1
+        }
+    }
+    LaunchedEffect(authMode) {
+        if (authMode == 1 && registerStep.isBlank()) {
+            registerStep = RegisterStep.Username.name
         }
     }
 
@@ -210,8 +226,12 @@ internal fun AuthFlowScreen(
                 Text(
                     if (state.pendingMfa != null) {
                         "继续完成账号验证"
+                    } else if (pendingOAuthBind != null) {
+                        "该 QQ 账号尚未绑定。注册 Ksuser 账号后将自动完成绑定。"
+                    } else if (authMode == 1) {
+                        "创建 Ksuser 账号，完成邮箱验证后即可登录。"
                     } else {
-                        "使用你的 Ksuser 账号继续。手机端当前仅开放登录，不提供注册入口。"
+                        "使用你的 Ksuser 账号继续，或创建一个新账号。"
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -290,91 +310,361 @@ internal fun AuthFlowScreen(
                     ) {
                         SectionCard(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                "账号登录",
+                                if (pendingOAuthBind != null) "注册并绑定 QQ" else "账号入口",
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                                 FilterChip(
-                                    selected = loginMethod == 0,
-                                    onClick = { loginMethod = 0 },
-                                    label = { Text("密码登录") },
+                                    selected = authMode == 0,
+                                    onClick = {
+                                        authMode = 0
+                                        if (pendingOAuthBind != null) {
+                                            viewModel.clearPendingOAuthBind()
+                                        }
+                                    },
+                                    label = { Text("登录") },
                                 )
                                 FilterChip(
-                                    selected = loginMethod == 1,
-                                    onClick = { loginMethod = 1 },
-                                    label = { Text("验证码登录") },
+                                    selected = authMode == 1,
+                                    onClick = { authMode = 1 },
+                                    label = { Text("注册") },
                                 )
                             }
                         }
 
-                        SectionCard(modifier = Modifier.fillMaxWidth()) {
-                            LoginLineField(
-                                value = email,
-                                onValueChange = { email = it },
-                                label = "邮箱",
-                            )
-                            when (loginMethod) {
-                                0 -> {
-                                    LoginLineField(
-                                        value = password,
-                                        onValueChange = { password = it },
-                                        label = "密码",
+                        if (authMode == 0) {
+                            SectionCard(modifier = Modifier.fillMaxWidth()) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                                    FilterChip(
+                                        selected = loginMethod == 0,
+                                        onClick = { loginMethod = 0 },
+                                        label = { Text("密码登录") },
                                     )
-                                SolidPrimaryButton(
-                                    text = "继续",
-                                    onClick = {
-                                        runWithAgreement {
-                                            viewModel.passwordLogin(email.trim(), password)
-                                        }
-                                    },
-                                    enabled = !state.isBusy && email.isNotBlank() && password.isNotBlank(),
-                                    isLoading = state.isBusy,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                LoginAgreementNotice(
-                                )
+                                    FilterChip(
+                                        selected = loginMethod == 1,
+                                        onClick = { loginMethod = 1 },
+                                        label = { Text("验证码登录") },
+                                    )
                                 }
-
-                                else -> {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                                LoginLineField(
+                                    value = email,
+                                    onValueChange = { email = it },
+                                    label = "邮箱",
+                                )
+                                when (loginMethod) {
+                                    0 -> {
                                         LoginLineField(
-                                            value = code,
-                                            onValueChange = { code = it },
-                                            label = "验证码",
-                                            modifier = Modifier.weight(1f),
+                                            value = password,
+                                            onValueChange = { password = it },
+                                            label = "密码",
+                                            isPassword = true,
                                         )
-                                        OutlinedButton(
+                                        SolidPrimaryButton(
+                                            text = "继续",
                                             onClick = {
                                                 runWithAgreement {
-                                                    viewModel.sendLoginCode(email.trim())
+                                                    viewModel.passwordLogin(email.trim(), password)
                                                 }
                                             },
-                                            enabled = !state.isBusy && email.isNotBlank(),
-                                            modifier = Modifier.height(56.dp),
-                                            shape = RoundedCornerShape(AppRadius.R12),
+                                            enabled = !state.isBusy && email.isNotBlank() && password.isNotBlank(),
+                                            isLoading = state.isBusy,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        LoginAgreementNotice()
+                                    }
+
+                                    else -> {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                                            LoginLineField(
+                                                value = code,
+                                                onValueChange = { code = it },
+                                                label = "验证码",
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            OutlinedButton(
+                                                onClick = {
+                                                    runWithAgreement {
+                                                        viewModel.sendLoginCode(email.trim())
+                                                    }
+                                                },
+                                                enabled = !state.isBusy && email.isNotBlank(),
+                                                modifier = Modifier.height(56.dp),
+                                                shape = RoundedCornerShape(AppRadius.R12),
+                                            ) {
+                                                LoadingButtonContent(text = "发送", isLoading = state.isBusy)
+                                            }
+                                        }
+                                        SolidPrimaryButton(
+                                            text = "继续",
+                                            onClick = {
+                                                runWithAgreement {
+                                                    viewModel.loginWithCode(email.trim(), code.trim())
+                                                }
+                                            },
+                                            enabled = !state.isBusy && email.isNotBlank() && code.isNotBlank(),
+                                            isLoading = state.isBusy,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        LoginAgreementNotice()
+                                    }
+                                }
+                            }
+                        } else {
+                            SectionCard(modifier = Modifier.fillMaxWidth()) {
+                                val currentRegisterStep = parseRegisterStep(registerStep)
+                                if (pendingOAuthBind != null) {
+                                    Text(
+                                        pendingOAuthBind.message
+                                            ?: "QQ 授权已完成，创建账号后会自动绑定。",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+
+                                RegisterStepHeader(currentRegisterStep)
+
+                                when (currentRegisterStep) {
+                                    RegisterStep.Username -> {
+                                        Text(
+                                            "3-20 个字符，支持中文、字母、数字、下划线和连字符",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        LoginLineField(
+                                            value = registerUsername,
+                                            onValueChange = { registerUsername = it },
+                                            label = "用户名",
+                                        )
+                                        RegisterStepActions(
+                                            primaryText = "下一步",
+                                            onPrimary = {
+                                                runWithAgreement {
+                                                    viewModel.checkUsernameAndThen(registerUsername.trim()) {
+                                                        registerStep = RegisterStep.Password.name
+                                                    }
+                                                }
+                                            },
+                                            primaryEnabled = !state.isBusy && isValidRegisterUsername(registerUsername),
+                                            isBusy = state.isBusy,
+                                            onLogin = {
+                                                authMode = 0
+                                                if (pendingOAuthBind != null) {
+                                                    viewModel.clearPendingOAuthBind()
+                                                }
+                                            },
+                                        )
+                                    }
+
+                                    RegisterStep.Password -> {
+                                        Text(
+                                            state.passwordRequirement?.requirementMessage
+                                                ?: "请设置符合安全策略的密码。",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        LoginLineField(
+                                            value = registerPassword,
+                                            onValueChange = { registerPassword = it },
+                                            label = "密码",
+                                            isPassword = true,
+                                        )
+                                        RegisterStepActions(
+                                            primaryText = "下一步",
+                                            onPrimary = { registerStep = RegisterStep.PasswordConfirm.name },
+                                            primaryEnabled = !state.isBusy &&
+                                                isPasswordAllowed(registerPassword, state.passwordRequirement),
+                                            isBusy = state.isBusy,
+                                            secondaryText = "返回",
+                                            onSecondary = { registerStep = RegisterStep.Username.name },
+                                            onLogin = {
+                                                authMode = 0
+                                                if (pendingOAuthBind != null) {
+                                                    viewModel.clearPendingOAuthBind()
+                                                }
+                                            },
+                                        )
+                                    }
+
+                                    RegisterStep.PasswordConfirm -> {
+                                        Text(
+                                            "请再次输入密码以确认",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        LoginLineField(
+                                            value = registerPasswordConfirm,
+                                            onValueChange = { registerPasswordConfirm = it },
+                                            label = "确认密码",
+                                            isPassword = true,
+                                        )
+                                        if (
+                                            registerPasswordConfirm.isNotBlank() &&
+                                            registerPassword != registerPasswordConfirm
                                         ) {
-                                            LoadingButtonContent(text = "发送", isLoading = state.isBusy)
+                                            Text(
+                                                "两次输入的密码不一致",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                        RegisterStepActions(
+                                            primaryText = "下一步",
+                                            onPrimary = { registerStep = RegisterStep.Email.name },
+                                            primaryEnabled = !state.isBusy &&
+                                                registerPasswordConfirm.isNotBlank() &&
+                                                registerPassword == registerPasswordConfirm,
+                                            isBusy = state.isBusy,
+                                            secondaryText = "返回",
+                                            onSecondary = { registerStep = RegisterStep.Password.name },
+                                            onLogin = {
+                                                authMode = 0
+                                                if (pendingOAuthBind != null) {
+                                                    viewModel.clearPendingOAuthBind()
+                                                }
+                                            },
+                                        )
+                                    }
+
+                                    RegisterStep.Email -> {
+                                        Text(
+                                            "用于接收验证码和系统通知",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        LoginLineField(
+                                            value = registerEmail,
+                                            onValueChange = { registerEmail = it },
+                                            label = "邮箱",
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                                            OutlinedButton(
+                                                onClick = { registerStep = RegisterStep.PasswordConfirm.name },
+                                                enabled = !state.isBusy,
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(46.dp),
+                                                shape = RoundedCornerShape(AppRadius.R12),
+                                            ) {
+                                                Text("返回")
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    runWithAgreement {
+                                                        viewModel.sendRegisterCode(registerEmail.trim()) {
+                                                            registerStep = RegisterStep.Code.name
+                                                        }
+                                                    }
+                                                },
+                                                enabled = !state.isBusy && isValidEmail(registerEmail),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(46.dp),
+                                                shape = RoundedCornerShape(AppRadius.R12),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = BrandButtonGradientStart,
+                                                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                                                ),
+                                            ) {
+                                                LoadingButtonContent(text = "发送验证码", isLoading = state.isBusy)
+                                            }
+                                        }
+                                        TextButton(
+                                            onClick = {
+                                                authMode = 0
+                                                if (pendingOAuthBind != null) {
+                                                    viewModel.clearPendingOAuthBind()
+                                                }
+                                            },
+                                            enabled = !state.isBusy,
+                                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                                        ) {
+                                            Text("已有账号，返回登录")
                                         }
                                     }
-                                SolidPrimaryButton(
-                                    text = "继续",
-                                    onClick = {
-                                        runWithAgreement {
-                                            viewModel.loginWithCode(email.trim(), code.trim())
+
+                                    RegisterStep.Code -> {
+                                        Text(
+                                            "验证码已发送至 ${registerEmail.ifBlank { "你的邮箱" }}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                registerEmail,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                            TextButton(
+                                                onClick = {
+                                                    registerCode = ""
+                                                    registerStep = RegisterStep.Email.name
+                                                },
+                                                enabled = !state.isBusy,
+                                            ) {
+                                                Text("修改邮箱")
+                                            }
                                         }
-                                    },
-                                    enabled = !state.isBusy && email.isNotBlank() && code.isNotBlank(),
-                                    isLoading = state.isBusy,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                LoginAgreementNotice(
-                                )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                                            LoginLineField(
+                                                value = registerCode,
+                                                onValueChange = { registerCode = it.filter(Char::isDigit).take(6) },
+                                                label = "验证码",
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            OutlinedButton(
+                                                onClick = {
+                                                    runWithAgreement {
+                                                        viewModel.sendRegisterCode(registerEmail.trim())
+                                                    }
+                                                },
+                                                enabled = !state.isBusy && isValidEmail(registerEmail),
+                                                modifier = Modifier.height(56.dp),
+                                                shape = RoundedCornerShape(AppRadius.R12),
+                                            ) {
+                                                LoadingButtonContent(text = "重发", isLoading = state.isBusy)
+                                            }
+                                        }
+                                        RegisterStepActions(
+                                            primaryText = if (pendingOAuthBind != null) "注册并绑定 QQ" else "创建账号",
+                                            onPrimary = {
+                                                runWithAgreement {
+                                                    viewModel.register(
+                                                        username = registerUsername.trim(),
+                                                        email = registerEmail.trim(),
+                                                        password = registerPassword,
+                                                        code = registerCode.trim(),
+                                                    )
+                                                }
+                                            },
+                                            primaryEnabled = !state.isBusy &&
+                                                registerUsername.isNotBlank() &&
+                                                isValidEmail(registerEmail) &&
+                                                registerPassword.isNotBlank() &&
+                                                registerPassword == registerPasswordConfirm &&
+                                                registerCode.length == 6,
+                                            isBusy = state.isBusy,
+                                            secondaryText = "返回",
+                                            onSecondary = { registerStep = RegisterStep.Email.name },
+                                            onLogin = {
+                                                authMode = 0
+                                                if (pendingOAuthBind != null) {
+                                                    viewModel.clearPendingOAuthBind()
+                                                }
+                                            },
+                                        )
+                                    }
                                 }
+
+                                LoginAgreementNotice()
                             }
                         }
                     }
 
-                    if (!isImeVisible) {
+                    if (authMode == 0 && !isImeVisible) {
                         SectionCard(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 "快捷登录",
@@ -442,29 +732,29 @@ internal fun AuthFlowScreen(
                                     }
                                 },
                                 enabled = !state.isBusy && passkeyAvailability == PasskeyAvailability.Available,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(AppRadius.R12),
-                        ) {
-                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
+                                shape = RoundedCornerShape(AppRadius.R12),
                             ) {
-                                if (state.isBusy) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        strokeWidth = 2.dp,
-                                    )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    if (state.isBusy) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                        Spacer(modifier = Modifier.width(AppSpacing.S8))
+                                    }
+                                    Icon(Icons.Outlined.Key, contentDescription = null)
                                     Spacer(modifier = Modifier.width(AppSpacing.S8))
+                                    Text("使用通行密钥(Passkey)登录")
                                 }
-                                Icon(Icons.Outlined.Key, contentDescription = null)
-                                Spacer(modifier = Modifier.width(AppSpacing.S8))
-                                Text("使用通行密钥(Passkey)登录")
                             }
                         }
                     }
                 }
-            }
             }
         }
     }
@@ -618,12 +908,114 @@ private fun AnnotatedString.Builder.appendAgreementLink(
     addStyle(style, start, length)
 }
 
+private enum class RegisterStep {
+    Username,
+    Password,
+    PasswordConfirm,
+    Email,
+    Code,
+}
+
+@Composable
+private fun RegisterStepHeader(step: RegisterStep) {
+    val title = when (step) {
+        RegisterStep.Username -> "选择用户名"
+        RegisterStep.Password -> "设置密码"
+        RegisterStep.PasswordConfirm -> "确认密码"
+        RegisterStep.Email -> "输入邮箱"
+        RegisterStep.Code -> "输入验证码"
+    }
+    val stepIndex = RegisterStep.entries.indexOf(step) + 1
+    Text(
+        title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Text(
+        "$stepIndex / ${RegisterStep.entries.size}",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun RegisterStepActions(
+    primaryText: String,
+    onPrimary: () -> Unit,
+    primaryEnabled: Boolean,
+    isBusy: Boolean,
+    secondaryText: String? = null,
+    onSecondary: (() -> Unit)? = null,
+    onLogin: () -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+        if (secondaryText != null && onSecondary != null) {
+            OutlinedButton(
+                onClick = onSecondary,
+                enabled = !isBusy,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(46.dp),
+                shape = RoundedCornerShape(AppRadius.R12),
+            ) {
+                Text(secondaryText)
+            }
+        }
+        SolidPrimaryButton(
+            text = primaryText,
+            onClick = onPrimary,
+            enabled = primaryEnabled,
+            isLoading = isBusy,
+            modifier = Modifier.weight(1f),
+        )
+    }
+    TextButton(
+        onClick = onLogin,
+        enabled = !isBusy,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text("已有账号，返回登录")
+    }
+}
+
+private fun isValidRegisterUsername(username: String): Boolean {
+    val trimmed = username.trim()
+    return trimmed.length in 3..20 && trimmed.all { char ->
+        char == '_' ||
+            char == '-' ||
+            char.isLetterOrDigit() ||
+            Character.UnicodeScript.of(char.code) == Character.UnicodeScript.HAN
+    }
+}
+
+private fun isValidEmail(email: String): Boolean {
+    return Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim())
+}
+
+private fun parseRegisterStep(raw: String): RegisterStep {
+    return RegisterStep.entries.firstOrNull { it.name == raw } ?: RegisterStep.Username
+}
+
+private fun isPasswordAllowed(
+    password: String,
+    requirement: cn.ksuser.auth.data.model.PasswordRequirement?,
+): Boolean {
+    val req = requirement ?: return password.isNotBlank()
+    if (password.length !in req.minLength..req.maxLength) return false
+    if (req.requireUppercase && password.none(Char::isUpperCase)) return false
+    if (req.requireLowercase && password.none(Char::isLowerCase)) return false
+    if (req.requireDigits && password.none(Char::isDigit)) return false
+    if (req.requireSpecialChars && password.none { it in "!@#$%^&*(),.?\":{}|<>" }) return false
+    return true
+}
+
 @Composable
 private fun LoginLineField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
     modifier: Modifier = Modifier,
+    isPassword: Boolean = false,
 ) {
     TextField(
         value = value,
@@ -633,6 +1025,11 @@ private fun LoginLineField(
             .height(56.dp),
         singleLine = true,
         label = { Text(label) },
+        visualTransformation = if (isPassword) {
+            PasswordVisualTransformation()
+        } else {
+            VisualTransformation.None
+        },
         shape = RoundedCornerShape(0.dp),
         colors = TextFieldDefaults.colors(
             focusedContainerColor = Color.Transparent,

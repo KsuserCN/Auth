@@ -11,6 +11,8 @@ import cn.ksuser.auth.data.model.MobileBridgeApproveRequest
 import cn.ksuser.auth.data.model.MobileBridgeApproveResponse
 import cn.ksuser.auth.data.model.MobileBridgeCancelRequest
 import cn.ksuser.auth.data.model.MobileBridgeStatusPayload
+import cn.ksuser.auth.data.model.OAuthBindCallbackResponse
+import cn.ksuser.auth.data.model.OAuthBindPendingRequest
 import cn.ksuser.auth.data.model.PasskeyAuthenticationOptions
 import cn.ksuser.auth.data.model.PasskeyAuthenticationVerifyRequest
 import cn.ksuser.auth.data.model.PasskeyInfo
@@ -94,6 +96,11 @@ interface KsuserApiService {
     suspend fun loginWithQqMobile(
         @Body request: QqMobileLoginRequest,
     ): Response<ApiEnvelope<JsonObject>>
+
+    @POST("/oauth/qq/bind-pending")
+    suspend fun bindPendingQqAccount(
+        @Body request: OAuthBindPendingRequest,
+    ): Response<ApiEnvelope<OAuthBindCallbackResponse>>
 
     @POST("/auth/passkey/authentication-options")
     suspend fun getPasskeyAuthenticationOptions(): Response<ApiEnvelope<PasskeyAuthenticationOptions>>

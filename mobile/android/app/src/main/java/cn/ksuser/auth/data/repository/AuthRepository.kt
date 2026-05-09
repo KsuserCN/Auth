@@ -12,6 +12,8 @@ import cn.ksuser.auth.data.model.LoginWithCodeRequest
 import cn.ksuser.auth.data.model.MobileBridgeApproveRequest
 import cn.ksuser.auth.data.model.MobileBridgeApproveResponse
 import cn.ksuser.auth.data.model.MobileBridgeStatusPayload
+import cn.ksuser.auth.data.model.OAuthBindCallbackResponse
+import cn.ksuser.auth.data.model.OAuthBindPendingRequest
 import cn.ksuser.auth.data.model.PasskeyAuthenticationPayload
 import cn.ksuser.auth.data.model.PasskeyAuthenticationVerifyRequest
 import cn.ksuser.auth.data.model.PasswordLoginRequest
@@ -142,6 +144,19 @@ class AuthRepository(
         return parseAuthEnvelope(envelope, AuthSource.QQ)
     }
 
+    suspend fun bindPendingQqAccount(bindToken: String): OAuthBindCallbackResponse {
+        val envelope = executeEnvelope(gson) {
+            api.bindPendingQqAccount(
+                OAuthBindPendingRequest(
+                    provider = "qq",
+                    bindToken = bindToken.trim(),
+                ),
+            )
+        }
+        requireCode(envelope, 200)
+        return envelope.data ?: OAuthBindCallbackResponse(bound = true, provider = "qq")
+    }
+
     suspend fun register(
         username: String,
         email: String,
@@ -257,6 +272,17 @@ class AuthRepository(
             val token = payload.get("accessToken").asString
             sessionRepository.persistAccessToken(token)
             return AuthResult.Success(token)
+        }
+        if (code == 202 && payload.get("needBind")?.asBoolean == true) {
+            val provider = payload.get("provider")?.asString?.takeIf { it.isNotBlank() } ?: "qq"
+            val bindToken = payload.get("oauthBindToken")?.asString?.takeIf { it.isNotBlank() }
+                ?: throw ApiException(code, "第三方登录状态缺失，请重新授权")
+            return AuthResult.NeedsOAuthBind(
+                provider = provider,
+                bindToken = bindToken,
+                openid = payload.get("openid")?.asString?.takeIf { it.isNotBlank() },
+                message = payload.get("message")?.asString?.takeIf { it.isNotBlank() },
+            )
         }
         throw ApiException(code, envelope.msg ?: "认证失败")
     }
