@@ -338,6 +338,7 @@ internal fun LogsScreen(
             verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
         ) {
             items(logs, key = { it.id }) { log ->
+                val showFailureReason = log.result.equals("FAILURE", true) && !log.failureReason.isNullOrBlank()
                 SectionCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -391,7 +392,7 @@ internal fun LogsScreen(
                         }
                         RiskPill(score = log.riskScore)
                     }
-                    if (!log.failureReason.isNullOrBlank()) {
+                    if (showFailureReason) {
                         Text(
                             "失败原因：${log.failureReason}",
                             color = MaterialTheme.colorScheme.error,
@@ -780,6 +781,7 @@ private val OperationTypeOptions = listOf(
     FilterOption("LOGIN", "登录"),
     FilterOption("REGISTER", "注册"),
     FilterOption("SENSITIVE_VERIFY", "敏感验证"),
+    FilterOption("ADAPTIVE_POLICY", "风控策略编排"),
     FilterOption("CHANGE_PASSWORD", "修改密码"),
     FilterOption("CHANGE_EMAIL", "修改邮箱"),
     FilterOption("ADD_PASSKEY", "新增 Passkey"),
@@ -804,6 +806,7 @@ private fun getOperationLabel(op: String?): String {
         "REGISTER" -> "注册"
         "LOGIN" -> "登录"
         "SENSITIVE_VERIFY" -> "敏感验证"
+        "ADAPTIVE_POLICY" -> "风控策略编排"
         "CHANGE_PASSWORD" -> "修改密码"
         "CHANGE_EMAIL" -> "修改邮箱"
         "ADD_PASSKEY" -> "新增 Passkey"
@@ -818,6 +821,7 @@ private fun getOperationTitle(op: String?): String {
     return when (op?.uppercase(Locale.getDefault())) {
         "LOGIN" -> "登录"
         "REGISTER" -> "注册"
+        "ADAPTIVE_POLICY" -> "风控编排"
         else -> "敏感操作"
     }
 }
