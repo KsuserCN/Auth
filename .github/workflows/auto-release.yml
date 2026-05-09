@@ -1,0 +1,287 @@
+name: Auto Release
+
+on:
+  pull_request:
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      contains(github.event.pull_request.labels.*.name, 'release')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      release_name: ${{ steps.version.outputs.release_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python3 - <<'PY'
+          import pathlib
+          import re
+
+          gradle_file = pathlib.Path('mobile/android/app/build.gradle.kts')
+          gradle_text = gradle_file.read_text(encoding='utf-8')
+          gradle_match = re.search(r'versionName\s*=\s*"([^"]+)"', gradle_text)
+
+          if gradle_match:
+              print(gradle_match.group(1))
+          else:
+              pubspec_file = pathlib.Path('desktop/pubspec.yaml')
+              pubspec_text = pubspec_file.read_text(encoding='utf-8')
+              pubspec_match = re.search(r'^version:\s*([^+\\s]+)', pubspec_text, re.MULTILINE)
+              print(pubspec_match.group(1) if pubspec_match else '')
+          PY
+          )"
+
+          if [ -z "$VERSION" ]; then
+            echo "Failed to read version from mobile/android/app/build.gradle.kts or desktop/pubspec.yaml"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release_name=Release v$VERSION" >> "$GITHUB_OUTPUT"
+
+  build_api:
+    name: Build API
+    needs: prepare
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: dragonwell
+          java-version: '21'
+          cache: gradle
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build
+        run: ./gradlew build --no-daemon
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-jar
+          path: api/build/libs/*.jar
+          if-no-files-found: error
+
+  build_web:
+    name: Build Web
+    needs: prepare
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Archive build output
+        run: zip -r web-dist.zip dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/web-dist.zip
+          if-no-files-found: error
+
+  build_desktop:
+    name: Build Desktop (${{ matrix.platform }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            artifact_name: ksuser-auth-desktop-macos
+          - os: windows-latest
+            platform: windows
+            artifact_name: ksuser-auth-desktop-windows-x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable desktop platform
+        run: flutter config --enable-${{ matrix.platform }}-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build macOS
+        if: matrix.platform == 'macos'
+        run: flutter build macos --release
+
+      - name: Archive macOS app
+        if: matrix.platform == 'macos'
+        run: |
+          APP_PATH="$(find build/macos/Build/Products/Release -maxdepth 1 -name '*.app' -print -quit)"
+          if [ -z "$APP_PATH" ]; then
+            echo "No macOS app bundle found under build/macos/Build/Products/Release"
+            exit 1
+          fi
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "${{ matrix.artifact_name }}.zip"
+
+      - name: Build Windows
+        if: matrix.platform == 'windows'
+        run: flutter build windows --release
+
+      - name: Archive Windows app
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath "${{ matrix.artifact_name }}.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: desktop/${{ matrix.artifact_name }}.zip
+          if-no-files-found: error
+
+  build_mobile_android:
+    name: Build Mobile Android Release
+    needs: prepare
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile/android
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: oracle
+          java-version: '21'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android-release-apk
+          path: mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    needs:
+      - prepare
+      - build_api
+      - build_web
+      - build_desktop
+      - build_mobile_android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download API artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: api-jar
+          path: artifacts/api-jar
+
+      - name: Download Web artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: web-dist
+          path: artifacts/web-dist
+
+      - name: Download Desktop macOS artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ksuser-auth-desktop-macos
+          path: artifacts/ksuser-auth-desktop-macos
+
+      - name: Download Desktop Windows artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: ksuser-auth-desktop-windows-x64
+          path: artifacts/ksuser-auth-desktop-windows-x64
+
+      - name: Download Mobile Android artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: mobile-android-release-apk
+          path: artifacts/mobile-android-release-apk
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.release_name }}
+          target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
+          generate_release_notes: true
+          files: |
+            artifacts/api-jar/*.jar
+            artifacts/web-dist/*.zip
+            artifacts/ksuser-auth-desktop-macos/*.zip
+            artifacts/ksuser-auth-desktop-windows-x64/*.zip
+            artifacts/mobile-android-release-apk/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

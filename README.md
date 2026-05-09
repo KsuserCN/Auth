@@ -179,8 +179,9 @@ npm run dev:web
 - `.github/workflows/build-web.yml`
 - `.github/workflows/build-desktop.yml`
 - `.github/workflows/build-mobile-android.yml`
+- `.github/workflows/auto-release.yml`
 
-这些工作流会在对应目录变更时触发，也支持手动触发。
+构建类工作流会在对应目录变更时触发，也支持手动触发；`auto-release.yml` 会在带有 `release` 标签的 PR 合并到 `main` 后触发。
 
 ## 目录协作建议
 
