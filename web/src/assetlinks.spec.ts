@@ -29,9 +29,12 @@ describe('Android Digital Asset Links', () => {
     )
   })
 
-  it('contains the Android apk-key-hash certificate and no typo variant', () => {
+  it('contains the Android apk-key-hash certificates used by current builds', () => {
     expect(passkeyTarget.sha256_cert_fingerprints).toContain(
       'D8:FE:BE:29:A8:8C:67:97:FD:EA:B6:42:6F:C2:BC:A5:EF:B0:76:C2:01:66:2C:FC:92:83:F0:70:B4:FA:A7:10',
+    )
+    expect(passkeyTarget.sha256_cert_fingerprints).toContain(
+      'D8:FE:BE:29:A8:8C:67:97:FD:EA:B6:42:6F:C2:BC:A5:EF:B0:76:C9:41:66:2C:FC:92:83:F0:70:B4:FA:A7:10',
     )
   })
 })
