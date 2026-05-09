@@ -32,20 +32,35 @@ jobs:
         shell: bash
         run: |
           VERSION="$(python3 - <<'PY'
+          import sys
           import pathlib
           import re
 
           gradle_file = pathlib.Path('mobile/android/app/build.gradle.kts')
-          gradle_text = gradle_file.read_text(encoding='utf-8')
-          gradle_match = re.search(r'versionName\s*=\s*"([^"]+)"', gradle_text)
+          if gradle_file.exists():
+              gradle_text = gradle_file.read_text(encoding='utf-8')
+              gradle_match = re.search(r'versionName\s*=\s*"([^"]+)"', gradle_text)
+          else:
+              gradle_match = None
 
           if gradle_match:
               print(gradle_match.group(1))
           else:
               pubspec_file = pathlib.Path('desktop/pubspec.yaml')
-              pubspec_text = pubspec_file.read_text(encoding='utf-8')
-              pubspec_match = re.search(r'^version:\s*([^+\s]+)', pubspec_text, re.MULTILINE)
-              print(pubspec_match.group(1) if pubspec_match else '')
+              if pubspec_file.exists():
+                  pubspec_text = pubspec_file.read_text(encoding='utf-8')
+                  pubspec_match = re.search(r'^version:\s*([^+\s]+)', pubspec_text, re.MULTILINE)
+                  if pubspec_match:
+                      print(pubspec_match.group(1))
+                      sys.exit(0)
+                  print('No `version:` value found in desktop/pubspec.yaml', file=sys.stderr)
+              else:
+                  print('desktop/pubspec.yaml is missing and fallback version cannot be read', file=sys.stderr)
+              if gradle_file.exists():
+                  print('No `versionName = \"...\"` found in mobile/android/app/build.gradle.kts', file=sys.stderr)
+              else:
+                  print('mobile/android/app/build.gradle.kts is missing', file=sys.stderr)
+              sys.exit(1)
           PY
           )"
 
@@ -148,6 +163,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: 3.35.x
           channel: stable
           cache: true
 
