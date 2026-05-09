@@ -44,7 +44,7 @@ jobs:
           else:
               pubspec_file = pathlib.Path('desktop/pubspec.yaml')
               pubspec_text = pubspec_file.read_text(encoding='utf-8')
-              pubspec_match = re.search(r'^version:\s*([^+\\s]+)', pubspec_text, re.MULTILINE)
+              pubspec_match = re.search(r'^version:\s*([^+\s]+)', pubspec_text, re.MULTILINE)
               print(pubspec_match.group(1) if pubspec_match else '')
           PY
           )"
