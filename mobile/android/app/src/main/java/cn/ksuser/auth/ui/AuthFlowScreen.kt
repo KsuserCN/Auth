@@ -10,7 +10,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,7 +35,6 @@ import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,10 +58,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import cn.ksuser.auth.R
 import cn.ksuser.auth.data.AppContainer
 import cn.ksuser.auth.data.model.PasskeyAvailability
@@ -325,8 +331,6 @@ internal fun AuthFlowScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                                 LoginAgreementNotice(
-                                    accepted = agreementAccepted,
-                                    onAcceptedChange = setAgreementAccepted,
                                 )
                                 }
 
@@ -363,8 +367,6 @@ internal fun AuthFlowScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                                 LoginAgreementNotice(
-                                    accepted = agreementAccepted,
-                                    onAcceptedChange = setAgreementAccepted,
                                 )
                                 }
                             }
@@ -507,84 +509,67 @@ private fun AgreementConfirmDialog(
 
 @Composable
 private fun LoginAgreementNotice(
-    accepted: Boolean,
-    onAcceptedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Checkbox(
-            checked = accepted,
-            onCheckedChange = onAcceptedChange,
-            modifier = Modifier.size(32.dp),
+    val linkColor = MaterialTheme.colorScheme.primary
+    val agreementText = remember(linkColor) {
+        buildAgreementText(
+            linkColor = linkColor,
         )
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "登录或注册即代表您同意",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                AgreementLinkText(
-                    text = "服务协议",
-                    onClick = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(USER_AGREEMENT_URL)),
-                        )
-                    },
-                )
-                Text(
-                    text = "与",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                AgreementLinkText(
-                    text = "隐私政策",
-                    onClick = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)),
-                        )
-                    },
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "使用第三方登录，即代表您已阅读并同意",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                AgreementLinkText(
-                    text = "第三方信息共享清单",
-                    onClick = {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(THIRD_PARTY_INFORMATION_SHARING_URL)),
-                        )
-                    },
-                )
-            }
-        }
+    }
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    Text(
+        text = agreementText,
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(context, textLayoutResult) {
+                detectTapGestures { offset ->
+                    val layoutResult = textLayoutResult ?: return@detectTapGestures
+                    val position = layoutResult.getOffsetForPosition(offset)
+                    val annotation = agreementText
+                        .getStringAnnotations(AGREEMENT_LINK_TAG, position, position)
+                        .firstOrNull()
+                        ?: return@detectTapGestures
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item)))
+                }
+            },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        onTextLayout = { textLayoutResult = it },
+    )
+}
+
+private fun buildAgreementText(
+    linkColor: Color,
+): AnnotatedString {
+    val linkStyle = SpanStyle(
+        color = linkColor,
+        fontWeight = FontWeight.SemiBold,
+        textDecoration = TextDecoration.None,
+    )
+    return buildAnnotatedString {
+        append("使用登录、注册或扫码等功能即代表您同意")
+        appendAgreementLink("服务协议", USER_AGREEMENT_URL, linkStyle)
+        append("与")
+        appendAgreementLink("隐私政策", PRIVACY_POLICY_URL, linkStyle)
+        append("\n使用第三方登录，即代表您已阅读并同意")
+        appendAgreementLink("第三方信息共享清单", THIRD_PARTY_INFORMATION_SHARING_URL, linkStyle)
     }
 }
 
-@Composable
-private fun AgreementLinkText(
+private fun AnnotatedString.Builder.appendAgreementLink(
     text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    url: String,
+    style: SpanStyle,
 ) {
-    Text(
-        text = text,
-        modifier = modifier.clickable(onClick = onClick),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.SemiBold,
-    )
+    val start = length
+    pushStringAnnotation(AGREEMENT_LINK_TAG, url)
+    withStyle(style) {
+        append(text)
+    }
+    pop()
+    addStyle(style, start, length)
 }
 
 @Composable
@@ -650,3 +635,4 @@ private const val THIRD_PARTY_INFORMATION_SHARING_URL =
     "https://www.ksuser.cn/agreement/third-party-information-sharing.html"
 private const val AGREEMENT_PREFS_NAME = "login_agreement"
 private const val AGREEMENT_ACCEPTED_KEY = "accepted"
+private const val AGREEMENT_LINK_TAG = "agreement_url"

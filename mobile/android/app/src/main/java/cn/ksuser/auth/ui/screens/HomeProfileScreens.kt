@@ -575,21 +575,21 @@ internal fun AboutScreen(container: AppContainer) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        OverviewCard(
-            title = "环境与 Passkey",
-            subtitle = passkeyAvailabilityMessage,
-            body = buildString {
-                appendLine("API 前缀: ${EnvironmentProvider.current.apiBaseUrl}")
-                appendLine("RP ID: ${EnvironmentProvider.current.passkeyRpId}")
-                appendLine("Origin Hint: ${EnvironmentProvider.current.passkeyOriginHint}")
-                appendLine("Asset Links: ${EnvironmentProvider.current.passkeyOriginHint.trimEnd('/')}/.well-known/assetlinks.json")
-                appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-                appendLine("UA: ${AppIdentityProvider.userAgent()}")
-                appendLine("包名: ${appIdentity.packageName}")
-                appendLine("版本: ${appIdentity.versionName} (${appIdentity.versionCode})")
-                append("签名 SHA-256: ${appIdentity.signingSha256.joinToString(" / ").ifBlank { "未知" }}")
-            },
-        )
+//        OverviewCard(
+//            title = "环境与 Passkey",
+//            subtitle = passkeyAvailabilityMessage,
+//            body = buildString {
+//                appendLine("API 前缀: ${EnvironmentProvider.current.apiBaseUrl}")
+//                appendLine("RP ID: ${EnvironmentProvider.current.passkeyRpId}")
+//                appendLine("Origin Hint: ${EnvironmentProvider.current.passkeyOriginHint}")
+//                appendLine("Asset Links: ${EnvironmentProvider.current.passkeyOriginHint.trimEnd('/')}/.well-known/assetlinks.json")
+//                appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+//                appendLine("UA: ${AppIdentityProvider.userAgent()}")
+//                appendLine("包名: ${appIdentity.packageName}")
+//                appendLine("版本: ${appIdentity.versionName} (${appIdentity.versionCode})")
+//                append("签名 SHA-256: ${appIdentity.signingSha256.joinToString(" / ").ifBlank { "未知" }}")
+//            },
+//        )
         SectionCard(modifier = Modifier.fillMaxWidth()) {
             AboutLinkRow(
                 title = "服务条款",
@@ -606,6 +606,15 @@ internal fun AboutScreen(container: AppContainer) {
                 onClick = {
                     context.startActivity(
                         Intent(Intent.ACTION_VIEW, Uri.parse("https://www.ksuser.cn/agreement/privacy.html")),
+                    )
+                },
+            )
+            AboutLinkRow(
+                title = "第三方信息共享清单",
+                url = "https://www.ksuser.cn/agreement/third-party-information-sharing.html",
+                onClick = {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.ksuser.cn/agreement/third-party-information-sharing.html")),
                     )
                 },
             )
