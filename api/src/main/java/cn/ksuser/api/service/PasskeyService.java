@@ -174,8 +174,9 @@ public class PasskeyService {
                 .readValue(attestationObjectBytes, AttestationObject.class);
 
         // 构建 ServerProperty（包含 origin, rpId, challenge）
+        Set<Origin> effectiveOrigins = getEffectiveOrigins();
         ServerProperty serverProperty = new ServerProperty(
-                getEffectiveOrigins(),
+                effectiveOrigins,
                 getEffectiveRpId(),
                 new DefaultChallenge(Base64.getUrlDecoder().decode(storedChallenge)),
                 null // tokenBindingId (通常为 null)
@@ -202,6 +203,8 @@ public class PasskeyService {
             RegistrationData result = webAuthnManager.validate(registrationRequest, registrationParameters);
             registrationData = result;
         } catch (Exception e) {
+            log.warn("Passkey registration validation failed. clientOrigin={}, allowedOrigins={}",
+                    readClientOrigin(clientDataJSONBytes), effectiveOrigins, e);
             throw new IllegalArgumentException("Passkey 注册验证失败: " + e.getMessage(), e);
         }
 
@@ -311,8 +314,9 @@ public class PasskeyService {
         byte[] signatureBytes = Base64.getUrlDecoder().decode(request.getSignature());
 
         // 构建 ServerProperty
+        Set<Origin> effectiveOrigins = getEffectiveOrigins();
         ServerProperty serverProperty = new ServerProperty(
-                getEffectiveOrigins(),
+                effectiveOrigins,
                 getEffectiveRpId(),
                 new DefaultChallenge(Base64.getUrlDecoder().decode(storedChallenge)),
                 null
@@ -360,6 +364,8 @@ public class PasskeyService {
             AuthenticationData result = webAuthnManager.validate(authenticationRequest, authenticationParameters);
             authenticationData = result;
         } catch (Exception e) {
+            log.warn("Passkey authentication validation failed. clientOrigin={}, allowedOrigins={}",
+                    readClientOrigin(clientDataJSONBytes), effectiveOrigins, e);
             throw new IllegalArgumentException("Passkey 认证验证失败: " + e.getMessage(), e);
         }
 
@@ -441,8 +447,9 @@ public class PasskeyService {
         byte[] signatureBytes = Base64.getUrlDecoder().decode(request.getSignature());
 
         // 构建 ServerProperty
+        Set<Origin> effectiveOrigins = getEffectiveOrigins();
         ServerProperty serverProperty = new ServerProperty(
-                getEffectiveOrigins(),
+                effectiveOrigins,
                 getEffectiveRpId(),
                 new DefaultChallenge(Base64.getUrlDecoder().decode(storedChallenge)),
                 null
@@ -490,6 +497,8 @@ public class PasskeyService {
             AuthenticationData result = webAuthnManager.validate(authenticationRequest, authenticationParameters);
             authenticationData = result;
         } catch (Exception e) {
+            log.warn("Passkey sensitive validation failed. clientOrigin={}, allowedOrigins={}",
+                    readClientOrigin(clientDataJSONBytes), effectiveOrigins, e);
             throw new IllegalArgumentException("敏感操作验证失败: " + e.getMessage(), e);
         }
 
@@ -675,5 +684,13 @@ public class PasskeyService {
             data[i / 2] = (byte) Integer.parseInt(hex.substring(i, i + 2), 16);
         }
         return data;
+    }
+
+    private String readClientOrigin(byte[] clientDataJSONBytes) {
+        try {
+            return objectMapper.readTree(clientDataJSONBytes).path("origin").asText("");
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 }

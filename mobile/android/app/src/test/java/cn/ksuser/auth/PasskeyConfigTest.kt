@@ -48,6 +48,7 @@ class PasskeyConfigTest {
         apiBaseUrl = "https://api.ksuser.cn",
         passkeyRpId = passkeyRpId,
         passkeyOriginHint = passkeyOriginHint,
+        updateManifestUrl = "https://auth.ksuser.cn/downloads/latest/android.json",
         appEnv = "test",
         enableHttpLogging = false,
     )

@@ -24,7 +24,7 @@ object AppIdentityProvider {
             @Suppress("DEPRECATION")
             context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
         }
-1
+
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             packageInfo.signingInfo?.apkContentsSigners.orEmpty().map { it.toByteArray() }
         } else {

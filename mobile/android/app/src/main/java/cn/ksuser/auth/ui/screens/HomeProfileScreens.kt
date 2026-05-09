@@ -573,20 +573,21 @@ internal fun AboutScreen(container: AppContainer) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-//        OverviewCard(
-//            title = "环境与 Passkey",
-//            subtitle = passkeyAvailabilityMessage,
-//            body = buildString {
-//                appendLine("API 前缀: ${EnvironmentProvider.current.apiBaseUrl}")
-//                appendLine("RP ID: ${EnvironmentProvider.current.passkeyRpId}")
-//                appendLine("Origin Hint: ${EnvironmentProvider.current.passkeyOriginHint}")
-//                appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
-//                appendLine("UA: ${AppIdentityProvider.userAgent()}")
-//                appendLine("包名: ${appIdentity.packageName}")
-//                appendLine("版本: ${appIdentity.versionName} (${appIdentity.versionCode})")
-//                append("签名 SHA-256: ${appIdentity.signingSha256.joinToString(" / ").ifBlank { "未知" }}")
-//            },
-//        )
+        OverviewCard(
+            title = "环境与 Passkey",
+            subtitle = passkeyAvailabilityMessage,
+            body = buildString {
+                appendLine("API 前缀: ${EnvironmentProvider.current.apiBaseUrl}")
+                appendLine("RP ID: ${EnvironmentProvider.current.passkeyRpId}")
+                appendLine("Origin Hint: ${EnvironmentProvider.current.passkeyOriginHint}")
+                appendLine("Asset Links: ${EnvironmentProvider.current.passkeyOriginHint.trimEnd('/')}/.well-known/assetlinks.json")
+                appendLine("系统: Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                appendLine("UA: ${AppIdentityProvider.userAgent()}")
+                appendLine("包名: ${appIdentity.packageName}")
+                appendLine("版本: ${appIdentity.versionName} (${appIdentity.versionCode})")
+                append("签名 SHA-256: ${appIdentity.signingSha256.joinToString(" / ").ifBlank { "未知" }}")
+            },
+        )
         SectionCard(modifier = Modifier.fillMaxWidth()) {
             AboutLinkRow(
                 title = "服务条款",

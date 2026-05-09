@@ -6,9 +6,10 @@
     ],
     "target": {
       "namespace": "android_app",
-      "package_name": "cn.ksuser.auth.android",
+      "package_name": "cn.ksuser.auth",
       "sha256_cert_fingerprints": [
-        "92:4D:95:F0:A6:40:57:32:91:E9:A8:83:91:ED:85:52:E4:2A:4A:B5:98:43:12:F7:FA:75:53:70:5F:34:0F:AB"
+        "92:4D:95:F0:A6:40:57:32:91:E9:A8:83:91:ED:85:52:E4:2A:4A:B5:98:43:12:F7:FA:75:53:70:5F:34:0F:AB",
+        "D8:FE:BE:29:A8:8C:67:97:FD:EA:B6:42:6F:C2:BC:A5:EF:B0:76:C2:01:66:2C:FC:92:83:F0:70:B4:FA:A7:10"
       ]
     }
   }

@@ -169,10 +169,14 @@ class PasskeyManager(
             -> domExceptionMessage(fallbackMessage, assetLinksUrl)
 
             is SecurityException ->
-                "系统拒绝了当前 Passkey 请求。请确认应用已关联到 ${environment.passkeyRpId.trim()}，并且 $assetLinksUrl 已正确配置包名与签名。"
+                assetValidationMessage(assetLinksUrl)
 
             else -> {
-                if (fallbackMessage.contains("RP ID cannot be validated", ignoreCase = true)) {
+                if (
+                    fallbackMessage.contains("RP ID cannot be validated", ignoreCase = true) ||
+                    fallbackMessage.contains("asset_not_support", ignoreCase = true) ||
+                    fallbackMessage.contains("vendor validate failed", ignoreCase = true)
+                ) {
                     domExceptionMessage(fallbackMessage, assetLinksUrl)
                 } else {
                     fallbackMessage
@@ -193,10 +197,24 @@ class PasskeyManager(
                 append("并且其中的包名与签名和当前 APK 完全一致。")
             }
         }
+        if (
+            originalMessage.contains("asset_not_support", ignoreCase = true) ||
+            originalMessage.contains("vendor validate failed", ignoreCase = true)
+        ) {
+            return assetValidationMessage(assetLinksUrl)
+        }
         if (originalMessage.contains("permission", ignoreCase = true)) {
             return "系统拒绝了当前 Passkey 请求。通常是 RP 域、Digital Asset Links 或系统凭据提供方未就绪。"
         }
         return originalMessage
+    }
+
+    private fun assetValidationMessage(assetLinksUrl: String?): String {
+        return buildString {
+            append("设备厂商未通过 Passkey 应用关联校验。请确认 ")
+            append(assetLinksUrl ?: "assetlinks.json")
+            append(" 中的 package_name 和 sha256_cert_fingerprints 与当前正式 APK 完全一致，并等待系统/厂商缓存刷新后重试。")
+        }
     }
 }
 
