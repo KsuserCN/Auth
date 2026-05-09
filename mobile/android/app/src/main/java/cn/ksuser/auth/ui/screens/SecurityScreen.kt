@@ -882,14 +882,14 @@ internal fun SecurityScreen(
                 }
             },
             onOpenRecoveryPage = {
-                val currentTicket = accountRecoveryTicket
-                if (currentTicket == null) {
-                    onMessage("恢复授权尚未生成")
+                val recoveryCode = accountRecoveryTicket?.recoveryCode?.trim().orEmpty()
+                if (recoveryCode.isBlank()) {
+                    onMessage("恢复码尚未生成")
                 } else {
                     val recoveryUri = buildAccountRecoveryUri(
                         passkeyOrigin = EnvironmentProvider.current.passkeyOriginHint,
                         apiBaseUrl = EnvironmentProvider.current.apiBaseUrl,
-                        recoveryCode = currentTicket.recoveryCode,
+                        recoveryCode = recoveryCode,
                     )
                     context.startActivity(Intent(Intent.ACTION_VIEW, recoveryUri))
                 }
@@ -1187,12 +1187,18 @@ private fun AccountRecoveryDialog(
     onCopyRecoveryCode: () -> Unit,
     onOpenRecoveryPage: () -> Unit,
 ) {
-    val recoveryUrl = remember(ticket?.recoveryCode) {
-        ticket?.takeIf { it.recoveryCode.isNotBlank() }?.let {
+    val recoveryCode = ticket?.recoveryCode?.trim().orEmpty()
+    val username = ticket?.username?.takeUnless { it.isBlank() } ?: "当前账号"
+    val maskedEmail = ticket?.maskedEmail?.takeUnless { it.isBlank() } ?: "未绑定邮箱"
+    val sponsorClientName = ticket?.sponsorClientName?.takeUnless { it.isBlank() } ?: "当前设备"
+    val sponsorIpLocation = ticket?.sponsorIpLocation?.takeUnless { it.isBlank() } ?: "未知位置"
+
+    val recoveryUrl = remember(recoveryCode) {
+        recoveryCode.takeIf { it.isNotBlank() }?.let {
             buildAccountRecoveryUri(
                 passkeyOrigin = EnvironmentProvider.current.passkeyOriginHint,
                 apiBaseUrl = EnvironmentProvider.current.apiBaseUrl,
-                recoveryCode = it.recoveryCode,
+                recoveryCode = it,
             ).toString()
         }
     }
@@ -1227,7 +1233,7 @@ private fun AccountRecoveryDialog(
                         )
                     }
                     Text(
-                        "恢复码：${ticket.recoveryCode}",
+                        "恢复码：${recoveryCode.ifBlank { "生成中..." }}",
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
@@ -1236,16 +1242,16 @@ private fun AccountRecoveryDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "${ticket.username} · ${ticket.maskedEmail}",
+                        "$username · $maskedEmail",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     Text(
-                        "背书设备：${ticket.sponsorClientName.ifBlank { "当前设备" }}",
+                        "背书设备：$sponsorClientName",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        "位置：${ticket.sponsorIpLocation.ifBlank { "未知位置" }}",
+                        "位置：$sponsorIpLocation",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
