@@ -25,14 +25,32 @@ class MainActivity : ComponentActivity() {
                     incomingDeepLink = pendingDeepLink,
                     onDeepLinkConsumed = { pendingDeepLink = null },
                     onExitApp = { finishAffinity() },
+                    onRegisterActivityResultHandler = { handler ->
+                        qqActivityResultHandler = handler
+                    },
+                    onRegisterNewIntentHandler = { handler ->
+                        qqNewIntentHandler = handler
+                    },
                 )
             }
         }
     }
 
+    private var qqActivityResultHandler: ((Int, Int, Intent?) -> Boolean)? = null
+    private var qqNewIntentHandler: ((Intent) -> Unit)? = null
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        qqNewIntentHandler?.invoke(intent)
         pendingDeepLink = intent.data
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (qqActivityResultHandler?.invoke(requestCode, resultCode, data) == true) {
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 }

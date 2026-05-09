@@ -137,6 +137,7 @@ internal fun AuthFlowScreen(
     var useRecoveryCode by rememberSaveable { mutableStateOf(false) }
     val passkeyAvailability = remember(container) { container.passkeyManager.availability() }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
+    val qqLoginConfigured = remember(container) { container.qqLoginManager.isConfigured }
     val backgroundBrush = rememberAppBackgroundBrush()
     val density = LocalDensity.current
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
@@ -375,6 +376,51 @@ internal fun AuthFlowScreen(
 
                     if (!isImeVisible) {
                         SectionCard(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                "快捷登录",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    if (activity == null) {
+                                        Toast.makeText(context, "当前上下文不支持 QQ 登录", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        runWithAgreement { viewModel.loginWithQq(activity) }
+                                    }
+                                },
+                                enabled = !state.isBusy && qqLoginConfigured,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(AppRadius.R12),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                ) {
+                                    if (state.isBusy) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                        Spacer(modifier = Modifier.width(AppSpacing.S8))
+                                    }
+                                    Image(
+                                        painter = painterResource(id = R.drawable.qq_symbol),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(AppSpacing.S8))
+                                    Text("使用 QQ 登录")
+                                }
+                            }
+                            if (!qqLoginConfigured) {
+                                Text(
+                                    "QQ 登录未配置",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                             Text(
                                 "使用通行密钥(Passkey)登录",
                                 style = MaterialTheme.typography.titleSmall,

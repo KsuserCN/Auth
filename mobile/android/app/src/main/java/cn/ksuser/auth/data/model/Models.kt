@@ -67,6 +67,7 @@ enum class AuthSource {
     PASSWORD,
     EMAIL_CODE,
     PASSKEY,
+    QQ,
 }
 
 sealed interface AuthResult {
@@ -242,6 +243,14 @@ data class PasswordLoginRequest(
 data class LoginWithCodeRequest(
     val email: String,
     val code: String,
+)
+
+data class QqMobileLoginRequest(
+    val appId: String,
+    val accessToken: String,
+    val openid: String,
+    val unionid: String,
+    val expiresIn: String? = null,
 )
 
 data class SendCodeRequest(

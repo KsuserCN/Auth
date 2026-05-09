@@ -3,6 +3,7 @@ package cn.ksuser.api.controller;
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.OauthCallbackRequest;
+import cn.ksuser.api.dto.QqMobileLoginRequest;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserOauthAccount;
 import cn.ksuser.api.entity.UserSession;
@@ -71,6 +72,9 @@ public class OauthController {
 
     @Value("${app.qq.oauth.app-key:}")
     private String qqClientSecret;
+
+    @Value("${app.qq.mobile.app-id:${app.qq.oauth.app-id:}}")
+    private String qqMobileAppId;
 
     @Value("${app.github.oauth.app-id:}")
     private String githubClientId;
@@ -219,6 +223,71 @@ public class OauthController {
     public ResponseEntity<ApiResponse<Object>> qqUnbindCallback(HttpServletRequest request,
                                                                 Authentication authentication) {
         return unbindQQ(authentication, request);
+    }
+
+    /**
+     * QQ 移动端 SDK 登录回调。
+     */
+    @PostMapping("/qq/mobile-login")
+    public ResponseEntity<ApiResponse<Object>> qqMobileLogin(@RequestBody QqMobileLoginRequest req,
+                                                             HttpServletRequest request,
+                                                             HttpServletResponse response) {
+        String appId = req.getAppId() == null ? "" : req.getAppId().trim();
+        String accessToken = req.getAccessToken() == null ? "" : req.getAccessToken().trim();
+        String openid = req.getOpenid() == null ? "" : req.getOpenid().trim();
+        String unionid = req.getUnionid() == null ? "" : req.getUnionid().trim();
+
+        if (appId.isBlank() || accessToken.isBlank() || openid.isBlank() || unionid.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+        }
+        if (qqMobileAppId == null || qqMobileAppId.isBlank() || !qqMobileAppId.equals(appId)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ 移动应用 AppId 未配置或不匹配"));
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+        if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+        }
+        rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
+
+        long startTime = System.currentTimeMillis();
+        try {
+            QqMobileIdentity identity = verifyQqMobileIdentity(appId, accessToken, openid, unionid);
+            var bound = oauthRepo.findByProviderAndUnionId("qq", identity.unionid());
+            if (bound.isPresent() && Boolean.TRUE.equals(bound.get().getIsEnabled())) {
+                var userOpt = userRepository.findById(bound.get().getUserId());
+                if (userOpt.isPresent()) {
+                    UserOauthAccount acct = bound.get();
+                    acct.setLastLoginAt(java.time.LocalDateTime.now());
+                    oauthRepo.save(acct);
+                    return issueOauthLoginResponse(
+                        userOpt.get(),
+                        "qq",
+                        request,
+                        response,
+                        startTime,
+                        "QQ 登录成功"
+                    );
+                }
+            }
+
+            sensitiveLogUtil.logLogin(request, null, "QQ", false, "Not bound", startTime);
+            java.util.Map<String, Object> data = createPendingOauthBindData(
+                "qq",
+                identity.openid(),
+                identity.unionid(),
+                "login",
+                "mobile"
+            );
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+        } catch (IllegalArgumentException ex) {
+            sensitiveLogUtil.logLogin(request, null, "QQ", false, ex.getMessage(), startTime);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+        } catch (Exception ex) {
+            logger.error("QQ mobile login failed", ex);
+            sensitiveLogUtil.logLogin(request, null, "QQ", false, "QQ mobile login failed", startTime);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+        }
     }
 
     /**
@@ -517,6 +586,9 @@ public class OauthController {
             if (openid == null) {
                 return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 QQ 返回 openid"));
             }
+            if (unionid == null) {
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 QQ 返回 unionid，请确认已开通 getUnionId 权限"));
+            }
 
             // bind 操作：为当前登录用户直接写入 QQ 绑定关系
             if ("bind".equals(operationType)) {
@@ -529,12 +601,7 @@ public class OauthController {
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 QQ"));
                 }
 
-                java.util.Optional<UserOauthAccount> existingBinding;
-                if (unionid != null) {
-                    existingBinding = oauthRepo.findByProviderAndUnionId("qq", unionid);
-                } else {
-                    existingBinding = oauthRepo.findByProviderAndProviderUserId("qq", openid);
-                }
+                java.util.Optional<UserOauthAccount> existingBinding = oauthRepo.findByProviderAndUnionId("qq", unionid);
                 if (existingBinding.isPresent()) {
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 QQ 账号已被绑定"));
                 }
@@ -564,9 +631,8 @@ public class OauthController {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "unbind 操作需要有效登录态"));
                 }
 
-                String callbackIdentity = unionid != null ? unionid : openid;
-                if (callbackIdentity == null || callbackIdentity.isBlank()) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "未从 QQ 返回可用于解绑校验的身份标识"));
+                if (unionid.isBlank()) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "未从 QQ 返回可用于解绑校验的 unionid"));
                 }
 
                 String uuid = user.getUuid();
@@ -584,10 +650,7 @@ public class OauthController {
                 }
                 var acct = acctOpt.get();
 
-                String boundIdentity = (acct.getUnionId() != null && !acct.getUnionId().isBlank())
-                    ? acct.getUnionId()
-                    : acct.getProviderUserId();
-                if (!callbackIdentity.equals(boundIdentity)) {
+                if (!unionid.equals(acct.getUnionId())) {
                     return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前授权的 QQ 账号与已绑定账号不一致"));
                 }
 
@@ -615,7 +678,7 @@ public class OauthController {
             long startTime = System.currentTimeMillis();
 
             // 3) 查询是否已绑定
-            var bound = oauthRepo.findByProviderAndProviderUserId("qq", openid);
+            var bound = oauthRepo.findByProviderAndUnionId("qq", unionid);
             if (bound.isPresent() && Boolean.TRUE.equals(bound.get().getIsEnabled())) {
                 UserOauthAccount acct = bound.get();
                 var userOpt = userRepository.findById(acct.getUserId());
@@ -713,6 +776,43 @@ public class OauthController {
             }
         }
         return null;
+    }
+
+    private QqMobileIdentity verifyQqMobileIdentity(String appId, String accessToken, String openid, String unionid) throws Exception {
+        String meUrl = String.format(
+            "https://graph.qq.com/oauth2.0/me?access_token=%s&fmt=json&unionid=1",
+            URLEncoder.encode(accessToken, StandardCharsets.UTF_8)
+        );
+        String meResp = restTemplate.getForObject(meUrl, String.class);
+        if (meResp == null || meResp.isBlank()) {
+            throw new IllegalArgumentException("QQ me 接口无响应");
+        }
+
+        JsonNode meJson = objectMapper.readTree(meResp);
+        if (meJson.has("error")) {
+            String err = meJson.path("error_description").asText(meJson.path("error").asText());
+            throw new IllegalArgumentException("QQ me 错误: " + err);
+        }
+
+        String returnedOpenid = meJson.path("openid").asText(null);
+        String returnedClientId = meJson.path("client_id").asText(null);
+        String returnedUnionid = meJson.path("unionid").asText(null);
+        if (returnedUnionid != null && returnedUnionid.isBlank()) {
+            returnedUnionid = null;
+        }
+        if (returnedOpenid == null || !returnedOpenid.equals(openid)) {
+            throw new IllegalArgumentException("QQ openid 校验失败");
+        }
+        if (returnedUnionid == null) {
+            throw new IllegalArgumentException("QQ 未返回 unionid，请确认已开通 getUnionId 权限");
+        }
+        if (!returnedUnionid.equals(unionid)) {
+            throw new IllegalArgumentException("QQ unionid 校验失败");
+        }
+        if (returnedClientId != null && !returnedClientId.isBlank() && !returnedClientId.equals(appId)) {
+            throw new IllegalArgumentException("QQ AppId 校验失败");
+        }
+        return new QqMobileIdentity(returnedOpenid, returnedUnionid);
     }
 
     /**
@@ -2203,6 +2303,12 @@ public class OauthController {
     }
 
     private java.util.Optional<UserOauthAccount> findExistingOauthBinding(String provider, PendingOauthIdentity pending) {
+        if ("qq".equals(provider)) {
+            if (pending.unionId() == null || pending.unionId().isBlank()) {
+                throw new IllegalArgumentException("QQ unionid 缺失，请重新授权");
+            }
+            return oauthRepo.findByProviderAndUnionId(provider, pending.unionId());
+        }
         if (pending.unionId() != null && !pending.unionId().isBlank()) {
             return oauthRepo.findByProviderAndUnionId(provider, pending.unionId());
         }
@@ -2303,6 +2409,8 @@ public class OauthController {
     }
 
     private record PendingOauthIdentity(String providerUserId, String unionId) {}
+
+    private record QqMobileIdentity(String openid, String unionid) {}
 
     private UserSettings getOrCreateUserSettings(Long userId) {
         return userSettingsRepository.findByUserId(userId)

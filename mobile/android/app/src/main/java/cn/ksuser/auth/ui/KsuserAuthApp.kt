@@ -25,6 +25,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,6 +56,8 @@ fun KsuserAuthApp(
     incomingDeepLink: Uri? = null,
     onDeepLinkConsumed: () -> Unit = {},
     onExitApp: () -> Unit = {},
+    onRegisterActivityResultHandler: (((Int, Int, Intent?) -> Boolean)?) -> Unit = {},
+    onRegisterNewIntentHandler: (((Intent) -> Unit)?) -> Unit = {},
 ) {
     val context = LocalContext.current
     val container = remember(context) { (context.applicationContext as KsuserAuthApplication).appContainer }
@@ -84,6 +87,19 @@ fun KsuserAuthApp(
             .onFailure { throwable ->
                 startupUpdateError = throwable.message ?: "检查更新失败"
             }
+    }
+
+    DisposableEffect(container) {
+        onRegisterActivityResultHandler { requestCode, resultCode, data ->
+            container.qqLoginManager.handleActivityResult(requestCode, resultCode, data)
+        }
+        onRegisterNewIntentHandler { intent ->
+            container.qqLoginManager.handleNewIntent(intent)
+        }
+        onDispose {
+            onRegisterActivityResultHandler(null)
+            onRegisterNewIntentHandler(null)
+        }
     }
 
     LaunchedEffect(state.message, state.error) {

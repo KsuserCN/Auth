@@ -352,6 +352,26 @@ class AppViewModel(
         }
     }
 
+    fun loginWithQq(activity: Activity) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
+            runCatching {
+                val credential = container.qqLoginManager.login(activity)
+                container.authRepository.loginWithQqMobile(
+                    appId = credential.appId,
+                    accessToken = credential.accessToken,
+                    openid = credential.openid,
+                    unionid = credential.unionid,
+                    expiresIn = credential.expiresIn,
+                )
+            }.onSuccess { result ->
+                completeAuthResult(result, successMessage = "QQ 登录成功")
+            }.onFailure { throwable ->
+                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+            }
+        }
+    }
+
     fun verifyTotpMfa(code: String? = null, recoveryCode: String? = null) {
         val pending = _uiState.value.pendingMfa ?: return
         viewModelScope.launch {
@@ -652,6 +672,7 @@ class AppViewModel(
                     AuthSource.PASSWORD -> "密码"
                     AuthSource.EMAIL_CODE -> "验证码"
                     AuthSource.PASSKEY -> "Passkey"
+                    AuthSource.QQ -> "QQ"
                 }
                 _uiState.update {
                     it.copy(

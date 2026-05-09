@@ -6,6 +6,26 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <queries>
+        <package android:name="com.tencent.mobileqq" />
+        <package android:name="com.tencent.tim" />
+        <package android:name="com.qzone" />
+        <package android:name="com.tencent.minihd.qq" />
+
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="mqqapi" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="mqqopensdkapiV2" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="mqqopensdkapiV3" />
+        </intent>
+    </queries>
+
     <application
         android:name=".KsuserAuthApplication"
         android:allowBackup="true"
@@ -19,6 +39,9 @@
         <meta-data
             android:name="asset_statements"
             android:resource="@string/asset_statements" />
+        <meta-data
+            android:name="com.tencent.tauth.AppId"
+            android:value="${QQ_MOBILE_APP_ID}" />
 
         <activity
             android:name=".MainActivity"
@@ -43,6 +66,26 @@
                     android:pathPrefix="/app/bridge-login" />
             </intent-filter>
         </activity>
+        <activity
+            android:name="com.tencent.tauth.AuthActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="${QQ_MOBILE_APP_SCHEME}" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.tencent.connect.common.AssistActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="false"
+            android:screenOrientation="behind"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>
 
 </manifest>

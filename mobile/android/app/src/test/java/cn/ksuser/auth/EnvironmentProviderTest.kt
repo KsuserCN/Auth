@@ -19,4 +19,10 @@ class EnvironmentProviderTest {
         assertTrue(env.passkeyRpId.isNotBlank())
         assertTrue(env.passkeyOriginHint.startsWith("http"))
     }
+
+    @Test
+    fun qqMobileAppId_isAvailable() {
+        val env = EnvironmentProvider.current
+        assertTrue(env.qqMobileAppId is String)
+    }
 }

@@ -69,6 +69,36 @@ fun defaultUpdateManifestUrl(passkeyOriginHint: String): String {
     return "$normalizedOrigin/downloads/latest/android.json"
 }
 
+fun com.android.build.api.dsl.ApplicationBuildType.configureEnvironment(
+    env: Map<String, String>,
+    appEnvDefault: String,
+) {
+    val apiBaseUrl = envValue(env, "API_BASE_URL", "https://api.ksuser.cn")
+    val passkeyRpId = envValue(env, "PASSKEY_RP_ID", "auth.ksuser.cn")
+    val passkeyOriginHint = envValue(env, "PASSKEY_ORIGIN_HINT", "https://auth.ksuser.cn")
+    val updateManifestUrl = envValue(env, "UPDATE_MANIFEST_URL", defaultUpdateManifestUrl(passkeyOriginHint))
+    val qqMobileAppId = envValue(env, "QQ_MOBILE_APP_ID", "1903977704")
+
+    buildConfigField("String", "API_BASE_URL", "\"${escapeGradleString(apiBaseUrl)}\"")
+    buildConfigField("String", "PASSKEY_RP_ID", "\"${escapeGradleString(passkeyRpId)}\"")
+    buildConfigField("String", "PASSKEY_ORIGIN_HINT", "\"${escapeGradleString(passkeyOriginHint)}\"")
+    buildConfigField("String", "UPDATE_MANIFEST_URL", "\"${escapeGradleString(updateManifestUrl)}\"")
+    buildConfigField("String", "QQ_MOBILE_APP_ID", "\"${escapeGradleString(qqMobileAppId)}\"")
+    buildConfigField("String", "APP_ENV", "\"${envValue(env, "APP_ENV", appEnvDefault)}\"")
+    buildConfigField(
+        "boolean",
+        "ENABLE_HTTP_LOGGING",
+        envValue(env, "ENABLE_HTTP_LOGGING", if (appEnvDefault == "development") "true" else "false"),
+    )
+    resValue("string", "asset_statements", assetStatementsValue(passkeyOriginHint))
+    manifestPlaceholders["QQ_MOBILE_APP_ID"] = qqMobileAppId
+    manifestPlaceholders["QQ_MOBILE_APP_SCHEME"] = if (qqMobileAppId.isBlank()) {
+        "ksuserqqnotconfigured"
+    } else {
+        "tencent$qqMobileAppId"
+    }
+}
+
 android {
     namespace = "cn.ksuser.auth"
     compileSdk {
@@ -81,25 +111,15 @@ android {
         applicationId = "cn.ksuser.auth"
         minSdk = 24
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.0.5"
+        versionCode = 10
+        versionName = "1.0.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         debug {
-            val apiBaseUrl = envValue(debugEnv, "API_BASE_URL", "https://api.ksuser.cn")
-            val passkeyRpId = envValue(debugEnv, "PASSKEY_RP_ID", "auth.ksuser.cn")
-            val passkeyOriginHint = envValue(debugEnv, "PASSKEY_ORIGIN_HINT", "https://auth.ksuser.cn")
-            val updateManifestUrl = envValue(debugEnv, "UPDATE_MANIFEST_URL", defaultUpdateManifestUrl(passkeyOriginHint))
-            buildConfigField("String", "API_BASE_URL", "\"${escapeGradleString(apiBaseUrl)}\"")
-            buildConfigField("String", "PASSKEY_RP_ID", "\"${escapeGradleString(passkeyRpId)}\"")
-            buildConfigField("String", "PASSKEY_ORIGIN_HINT", "\"${escapeGradleString(passkeyOriginHint)}\"")
-            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"${escapeGradleString(updateManifestUrl)}\"")
-            buildConfigField("String", "APP_ENV", "\"${envValue(debugEnv, "APP_ENV", "development")}\"")
-            buildConfigField("boolean", "ENABLE_HTTP_LOGGING", envValue(debugEnv, "ENABLE_HTTP_LOGGING", "true"))
-            resValue("string", "asset_statements", assetStatementsValue(passkeyOriginHint))
+            configureEnvironment(debugEnv, "development")
         }
         release {
             isMinifyEnabled = false
@@ -107,17 +127,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            val apiBaseUrl = envValue(releaseEnv, "API_BASE_URL", "https://api.ksuser.cn")
-            val passkeyRpId = envValue(releaseEnv, "PASSKEY_RP_ID", "auth.ksuser.cn")
-            val passkeyOriginHint = envValue(releaseEnv, "PASSKEY_ORIGIN_HINT", "https://auth.ksuser.cn")
-            val updateManifestUrl = envValue(releaseEnv, "UPDATE_MANIFEST_URL", defaultUpdateManifestUrl(passkeyOriginHint))
-            buildConfigField("String", "API_BASE_URL", "\"${escapeGradleString(apiBaseUrl)}\"")
-            buildConfigField("String", "PASSKEY_RP_ID", "\"${escapeGradleString(passkeyRpId)}\"")
-            buildConfigField("String", "PASSKEY_ORIGIN_HINT", "\"${escapeGradleString(passkeyOriginHint)}\"")
-            buildConfigField("String", "UPDATE_MANIFEST_URL", "\"${escapeGradleString(updateManifestUrl)}\"")
-            buildConfigField("String", "APP_ENV", "\"${envValue(releaseEnv, "APP_ENV", "production")}\"")
-            buildConfigField("boolean", "ENABLE_HTTP_LOGGING", envValue(releaseEnv, "ENABLE_HTTP_LOGGING", "false"))
-            resValue("string", "asset_statements", assetStatementsValue(passkeyOriginHint))
+            configureEnvironment(releaseEnv, "production")
         }
     }
     compileOptions {
@@ -137,6 +147,7 @@ android {
 }
 
 dependencies {
+    implementation(files("libs/open_sdk_3.5.19_r9483ffc7_lite.jar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

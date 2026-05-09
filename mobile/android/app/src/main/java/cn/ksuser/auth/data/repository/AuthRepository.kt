@@ -17,6 +17,7 @@ import cn.ksuser.auth.data.model.PasskeyAuthenticationVerifyRequest
 import cn.ksuser.auth.data.model.PasswordLoginRequest
 import cn.ksuser.auth.data.model.QrApproveRequest
 import cn.ksuser.auth.data.model.QrScanPreview
+import cn.ksuser.auth.data.model.QqMobileLoginRequest
 import cn.ksuser.auth.data.model.PasswordRequirement
 import cn.ksuser.auth.data.model.RegisterRequest
 import cn.ksuser.auth.data.model.RegisterResponse
@@ -118,6 +119,27 @@ class AuthRepository(
     suspend fun loginWithCode(email: String, code: String): AuthResult {
         val envelope = executeEnvelope(gson) { api.loginWithCode(LoginWithCodeRequest(email, code)) }
         return parseAuthEnvelope(envelope, AuthSource.EMAIL_CODE)
+    }
+
+    suspend fun loginWithQqMobile(
+        appId: String,
+        accessToken: String,
+        openid: String,
+        unionid: String,
+        expiresIn: String?,
+    ): AuthResult {
+        val envelope = executeEnvelope(gson) {
+            api.loginWithQqMobile(
+                QqMobileLoginRequest(
+                    appId = appId,
+                    accessToken = accessToken,
+                    openid = openid,
+                    unionid = unionid,
+                    expiresIn = expiresIn,
+                ),
+            )
+        }
+        return parseAuthEnvelope(envelope, AuthSource.QQ)
     }
 
     suspend fun register(

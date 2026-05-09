@@ -76,6 +76,7 @@ public class SecurityConfig {
                     "/sso/jwks", "/sso/jwks/",
                     "/sso/authorize/context", "/sso/authorize/context/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
+                    "/oauth/qq/mobile-login", "/oauth/qq/mobile-login/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
                     "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
                     "/oauth/github/bind-existing", "/oauth/github/bind-existing/",
@@ -128,6 +129,7 @@ public class SecurityConfig {
                 .ignoringRequestMatchers(
                     "/auth/check-username", "/auth/check-username/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
+                    "/oauth/qq/mobile-login", "/oauth/qq/mobile-login/",
                     "/oauth/qq/callback/bind", "/oauth/qq/callback/bind/",
                     "/oauth/qq/callback/unbind", "/oauth/qq/callback/unbind/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",

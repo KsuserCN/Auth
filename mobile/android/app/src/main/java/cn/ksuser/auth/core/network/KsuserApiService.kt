@@ -26,6 +26,7 @@ import cn.ksuser.auth.data.model.PasswordRequirement
 import cn.ksuser.auth.data.model.AccountRecoveryTicket
 import cn.ksuser.auth.data.model.QrApproveRequest
 import cn.ksuser.auth.data.model.QrScanPreview
+import cn.ksuser.auth.data.model.QqMobileLoginRequest
 import cn.ksuser.auth.data.model.RegisterRequest
 import cn.ksuser.auth.data.model.RegisterResponse
 import cn.ksuser.auth.data.model.SendCodeRequest
@@ -87,6 +88,11 @@ interface KsuserApiService {
     @POST("/auth/login-with-code")
     suspend fun loginWithCode(
         @Body request: LoginWithCodeRequest,
+    ): Response<ApiEnvelope<JsonObject>>
+
+    @POST("/oauth/qq/mobile-login")
+    suspend fun loginWithQqMobile(
+        @Body request: QqMobileLoginRequest,
     ): Response<ApiEnvelope<JsonObject>>
 
     @POST("/auth/passkey/authentication-options")

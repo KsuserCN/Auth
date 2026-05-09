@@ -10,6 +10,7 @@ import cn.ksuser.auth.core.network.KsuserApiService
 import cn.ksuser.auth.core.network.PersistentCookieJar
 import cn.ksuser.auth.core.network.UnauthorizedRetryInterceptor
 import cn.ksuser.auth.core.passkey.PasskeyManager
+import cn.ksuser.auth.core.qq.QqLoginManager
 import cn.ksuser.auth.core.session.SecureSessionStorage
 import cn.ksuser.auth.core.session.SessionRepository
 import cn.ksuser.auth.data.repository.AuthRepository
@@ -93,6 +94,9 @@ class AppContainer(
             gson = gson,
             environment = environment,
         )
+    }
+    val qqLoginManager: QqLoginManager by lazy {
+        QqLoginManager(environment)
     }
 
     private fun retrofit(client: OkHttpClient): Retrofit {
