@@ -141,6 +141,7 @@ internal fun AuthFlowScreen(
     var mfaCode by rememberSaveable { mutableStateOf("") }
     var useRecoveryCode by rememberSaveable { mutableStateOf(false) }
     val pendingOAuthBind = state.pendingOAuthBind
+    val showRegisterFlow = pendingOAuthBind != null || authMode == 1
     val passkeyAvailability = remember(container) { container.passkeyManager.availability() }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
     val qqLoginConfigured = remember(container) { container.qqLoginManager.isConfigured }
@@ -160,13 +161,8 @@ internal fun AuthFlowScreen(
             }
         }
     }
-    LaunchedEffect(pendingOAuthBind?.bindToken) {
-        if (pendingOAuthBind != null) {
-            authMode = 1
-        }
-    }
-    LaunchedEffect(authMode) {
-        if (authMode == 1 && registerStep.isBlank()) {
+    LaunchedEffect(showRegisterFlow) {
+        if (showRegisterFlow && registerStep.isBlank()) {
             registerStep = RegisterStep.Username.name
         }
     }
@@ -228,7 +224,7 @@ internal fun AuthFlowScreen(
                         "继续完成账号验证"
                     } else if (pendingOAuthBind != null) {
                         "该 QQ 账号尚未绑定。注册 Ksuser 账号后将自动完成绑定。"
-                    } else if (authMode == 1) {
+                    } else if (showRegisterFlow) {
                         "创建 Ksuser 账号，完成邮箱验证后即可登录。"
                     } else {
                         "使用你的 Ksuser 账号继续，或创建一个新账号。"
@@ -315,7 +311,7 @@ internal fun AuthFlowScreen(
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                                 FilterChip(
-                                    selected = authMode == 0,
+                                    selected = !showRegisterFlow,
                                     onClick = {
                                         authMode = 0
                                         if (pendingOAuthBind != null) {
@@ -325,14 +321,14 @@ internal fun AuthFlowScreen(
                                     label = { Text("登录") },
                                 )
                                 FilterChip(
-                                    selected = authMode == 1,
+                                    selected = showRegisterFlow,
                                     onClick = { authMode = 1 },
                                     label = { Text("注册") },
                                 )
                             }
                         }
 
-                        if (authMode == 0) {
+                        if (!showRegisterFlow) {
                             SectionCard(modifier = Modifier.fillMaxWidth()) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                                     FilterChip(
@@ -664,7 +660,7 @@ internal fun AuthFlowScreen(
                         }
                     }
 
-                    if (authMode == 0 && !isImeVisible) {
+                    if (!showRegisterFlow && !isImeVisible) {
                         SectionCard(modifier = Modifier.fillMaxWidth()) {
                             Text(
                                 "快捷登录",
