@@ -29,12 +29,14 @@ import androidx.compose.material.icons.outlined.Devices
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -623,6 +625,7 @@ internal fun ProfileEditScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isBusy by remember { mutableStateOf(false) }
+    var showAvatarPickerReason by rememberSaveable { mutableStateOf(false) }
     val singleLine = fieldKey != "bio"
     val title = when (fieldKey) {
         "username" -> "编辑用户名"
@@ -678,11 +681,7 @@ internal fun ProfileEditScreen(
                     )
                 }
                 OutlinedButton(
-                    onClick = {
-                        pickAvatarLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
-                    },
+                    onClick = { showAvatarPickerReason = true },
                     enabled = !isBusy,
                 ) { Text("选择并上传头像") }
             } else {
@@ -711,6 +710,31 @@ internal fun ProfileEditScreen(
                 )
             }
         }
+    }
+
+    if (showAvatarPickerReason) {
+        AlertDialog(
+            onDismissRequest = { showAvatarPickerReason = false },
+            title = { Text("需要选择头像图片") },
+            text = {
+                Text(
+                    "修改头像时，Ksuser 会打开系统图片选择器，并只读取你主动选择的那一张图片，用来上传并更新账号头像。应用不会浏览、扫描或上传你的整个图库。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAvatarPickerReason = false
+                        pickAvatarLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                ) { Text("选择图片") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAvatarPickerReason = false }) { Text("取消") }
+            },
+        )
     }
 }
 

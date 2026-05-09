@@ -13,6 +13,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -64,6 +66,7 @@ internal fun MainShell(
     val destinations = MainDestination.entries
     val context = LocalContext.current
     var showQrScanner by rememberSaveable { mutableStateOf(false) }
+    var showCameraPermissionReason by rememberSaveable { mutableStateOf(false) }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -81,7 +84,7 @@ internal fun MainShell(
         if (granted) {
             showQrScanner = true
         } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            showCameraPermissionReason = true
         }
     }
 
@@ -236,4 +239,36 @@ internal fun MainShell(
             onMessage = onMessage,
         )
     }
+
+    if (showCameraPermissionReason) {
+        CameraPermissionReasonDialog(
+            onDismiss = { showCameraPermissionReason = false },
+            onConfirm = {
+                showCameraPermissionReason = false
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            },
+        )
+    }
+}
+
+@Composable
+private fun CameraPermissionReasonDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("需要相机权限") },
+        text = {
+            Text(
+                "扫码授权时，Ksuser 需要使用相机实时读取取景框中的二维码内容，用来确认登录、账号安全或敏感操作请求。相机画面仅用于本次扫码识别，不会用于拍照保存。",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("继续授权") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
 }

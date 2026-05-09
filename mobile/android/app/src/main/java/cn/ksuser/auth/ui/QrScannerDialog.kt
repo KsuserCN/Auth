@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +83,7 @@ internal fun QrScannerDialog(
     }
     val analysisExecutor = remember { Executors.newSingleThreadExecutor() }
     val consumed = remember { AtomicBoolean(false) }
+    var showGalleryReason by rememberSaveable { mutableStateOf(false) }
     val pickImageLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
@@ -202,11 +208,7 @@ internal fun QrScannerDialog(
             }
 
             FloatingActionButton(
-                onClick = {
-                    pickImageLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                    )
-                },
+                onClick = { showGalleryReason = true },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
@@ -220,6 +222,31 @@ internal fun QrScannerDialog(
                 )
             }
         }
+    }
+
+    if (showGalleryReason) {
+        AlertDialog(
+            onDismissRequest = { showGalleryReason = false },
+            title = { Text("需要选择图片") },
+            text = {
+                Text(
+                    "从相册识别二维码时，Ksuser 会打开系统图片选择器，并只读取你主动选择的那一张图片，用来解析其中的二维码内容。应用不会浏览、扫描或上传你的整个图库。",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showGalleryReason = false
+                        pickImageLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                ) { Text("选择图片") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGalleryReason = false }) { Text("取消") }
+            },
+        )
     }
 }
 

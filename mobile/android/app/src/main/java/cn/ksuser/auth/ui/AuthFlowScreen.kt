@@ -2,11 +2,15 @@ package cn.ksuser.auth.ui
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -31,6 +35,8 @@ import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -82,6 +89,31 @@ internal fun AuthFlowScreen(
     val activity = context as? Activity
     val scope = rememberCoroutineScope()
     var showQrScanner by rememberSaveable { mutableStateOf(false) }
+    var showCameraPermissionReason by rememberSaveable { mutableStateOf(false) }
+    var showAgreementConfirm by rememberSaveable { mutableStateOf(false) }
+    var pendingAgreementAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val agreementPrefs = remember(context) {
+        context.getSharedPreferences(AGREEMENT_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var agreementAccepted by rememberSaveable {
+        mutableStateOf(agreementPrefs.getBoolean(AGREEMENT_ACCEPTED_KEY, false))
+    }
+    val acceptAgreement = {
+        agreementAccepted = true
+        agreementPrefs.edit().putBoolean(AGREEMENT_ACCEPTED_KEY, true).apply()
+    }
+    val setAgreementAccepted: (Boolean) -> Unit = { accepted ->
+        agreementAccepted = accepted
+        agreementPrefs.edit().putBoolean(AGREEMENT_ACCEPTED_KEY, accepted).apply()
+    }
+    val runWithAgreement: (() -> Unit) -> Unit = { action ->
+        if (agreementAccepted) {
+            action()
+        } else {
+            pendingAgreementAction = action
+            showAgreementConfirm = true
+        }
+    }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -103,14 +135,16 @@ internal fun AuthFlowScreen(
     val density = LocalDensity.current
     val isImeVisible = WindowInsets.ime.getBottom(density) > 0
     val openQrScanner = {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.CAMERA,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            showQrScanner = true
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        runWithAgreement {
+            val granted = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.CAMERA,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                showQrScanner = true
+            } else {
+                showCameraPermissionReason = true
+            }
         }
     }
 
@@ -205,7 +239,7 @@ internal fun AuthFlowScreen(
                                 if (activity == null) {
                                     Toast.makeText(context, "当前上下文不支持 Passkey", Toast.LENGTH_SHORT).show()
                                 } else {
-                                    viewModel.verifyPasskeyMfa(activity)
+                                    runWithAgreement { viewModel.verifyPasskeyMfa(activity) }
                                 }
                             },
                             enabled = !state.isBusy,
@@ -281,10 +315,18 @@ internal fun AuthFlowScreen(
                                     )
                                 SolidPrimaryButton(
                                     text = "继续",
-                                    onClick = { viewModel.passwordLogin(email.trim(), password) },
+                                    onClick = {
+                                        runWithAgreement {
+                                            viewModel.passwordLogin(email.trim(), password)
+                                        }
+                                    },
                                     enabled = !state.isBusy && email.isNotBlank() && password.isNotBlank(),
                                     isLoading = state.isBusy,
                                     modifier = Modifier.fillMaxWidth(),
+                                )
+                                LoginAgreementNotice(
+                                    accepted = agreementAccepted,
+                                    onAcceptedChange = setAgreementAccepted,
                                 )
                                 }
 
@@ -297,7 +339,11 @@ internal fun AuthFlowScreen(
                                             modifier = Modifier.weight(1f),
                                         )
                                         OutlinedButton(
-                                            onClick = { viewModel.sendLoginCode(email.trim()) },
+                                            onClick = {
+                                                runWithAgreement {
+                                                    viewModel.sendLoginCode(email.trim())
+                                                }
+                                            },
                                             enabled = !state.isBusy && email.isNotBlank(),
                                             modifier = Modifier.height(56.dp),
                                             shape = RoundedCornerShape(AppRadius.R12),
@@ -307,10 +353,18 @@ internal fun AuthFlowScreen(
                                     }
                                 SolidPrimaryButton(
                                     text = "继续",
-                                    onClick = { viewModel.loginWithCode(email.trim(), code.trim()) },
+                                    onClick = {
+                                        runWithAgreement {
+                                            viewModel.loginWithCode(email.trim(), code.trim())
+                                        }
+                                    },
                                     enabled = !state.isBusy && email.isNotBlank() && code.isNotBlank(),
                                     isLoading = state.isBusy,
                                     modifier = Modifier.fillMaxWidth(),
+                                )
+                                LoginAgreementNotice(
+                                    accepted = agreementAccepted,
+                                    onAcceptedChange = setAgreementAccepted,
                                 )
                                 }
                             }
@@ -336,7 +390,7 @@ internal fun AuthFlowScreen(
                                     if (activity == null) {
                                         Toast.makeText(context, "当前上下文不支持 Passkey", Toast.LENGTH_SHORT).show()
                                     } else {
-                                        viewModel.loginWithPasskey(activity)
+                                        runWithAgreement { viewModel.loginWithPasskey(activity) }
                                     }
                                 },
                                 enabled = !state.isBusy && passkeyAvailability == PasskeyAvailability.Available,
@@ -379,6 +433,158 @@ internal fun AuthFlowScreen(
             },
         )
     }
+
+    if (showCameraPermissionReason) {
+        CameraPermissionReasonDialog(
+            onDismiss = { showCameraPermissionReason = false },
+            onConfirm = {
+                showCameraPermissionReason = false
+                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+            },
+        )
+    }
+
+    if (showAgreementConfirm) {
+        AgreementConfirmDialog(
+            onDismiss = {
+                showAgreementConfirm = false
+                pendingAgreementAction = null
+            },
+            onConfirm = {
+                showAgreementConfirm = false
+                acceptAgreement()
+                pendingAgreementAction?.invoke()
+                pendingAgreementAction = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun CameraPermissionReasonDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("需要相机权限") },
+        text = {
+            Text(
+                "扫码登录或授权时，Ksuser 需要使用相机实时读取取景框中的二维码内容，用来确认网页端、桌面端或敏感操作请求。相机画面仅用于本次扫码识别，不会用于拍照保存。",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("继续授权") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+@Composable
+private fun AgreementConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("请先阅读并同意") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                Text("登录或注册即代表您同意服务协议与隐私政策")
+                Text("使用第三方登录，即代表您已阅读并同意第三方信息共享清单")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("同意并继续") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        },
+    )
+}
+
+@Composable
+private fun LoginAgreementNotice(
+    accepted: Boolean,
+    onAcceptedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Checkbox(
+            checked = accepted,
+            onCheckedChange = onAcceptedChange,
+            modifier = Modifier.size(32.dp),
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "登录或注册即代表您同意",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AgreementLinkText(
+                    text = "服务协议",
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(USER_AGREEMENT_URL)),
+                        )
+                    },
+                )
+                Text(
+                    text = "与",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AgreementLinkText(
+                    text = "隐私政策",
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL)),
+                        )
+                    },
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "使用第三方登录，即代表您已阅读并同意",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                AgreementLinkText(
+                    text = "第三方信息共享清单",
+                    onClick = {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(THIRD_PARTY_INFORMATION_SHARING_URL)),
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AgreementLinkText(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        modifier = modifier.clickable(onClick = onClick),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+    )
 }
 
 @Composable
@@ -437,3 +643,10 @@ private fun SolidPrimaryButton(
         LoadingButtonContent(text = text, isLoading = isLoading)
     }
 }
+
+private const val USER_AGREEMENT_URL = "https://www.ksuser.cn/agreement/user.html"
+private const val PRIVACY_POLICY_URL = "https://www.ksuser.cn/agreement/privacy.html"
+private const val THIRD_PARTY_INFORMATION_SHARING_URL =
+    "https://www.ksuser.cn/agreement/third-party-information-sharing.html"
+private const val AGREEMENT_PREFS_NAME = "login_agreement"
+private const val AGREEMENT_ACCEPTED_KEY = "accepted"
