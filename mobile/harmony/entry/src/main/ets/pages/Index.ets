@@ -1,48 +1,65 @@
 import { BOTTOM_BAR_DESTINATIONS, BottomBarDestination, KsuserBottomBar, MainDestination } from '../components/KsuserBottomBar';
+import { KsuserLoginPage } from '../components/KsuserLoginPage';
 
 @Entry
 @Component
 struct Index {
+  @State isAuthenticated: boolean = false;
   @State selectedRoute: MainDestination = MainDestination.HOME;
 
   build() {
-    Column() {
-      Column({ space: 12 }) {
-        Text(this.currentTitle())
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor('#FF1F1B13')
+    if (this.isAuthenticated) {
+      Column() {
+        this.MainContent()
 
-        Text(this.currentDescription())
-          .fontSize(15)
-          .lineHeight(22)
-          .fontColor('#FF5B5344')
-
-        Row() {
-          Text('当前底部栏已按 Android 端的入口顺序与文案实现，后续可把这里替换为对应业务页面。')
-            .fontSize(13)
-            .lineHeight(20)
-            .fontColor('#FF5B5344')
-        }
-        .padding(14)
-        .borderRadius(18)
-        .backgroundColor('#FFFFF6E6')
+        KsuserBottomBar({
+          selectedRoute: this.selectedRoute,
+          onDestinationSelected: (route: MainDestination) => {
+            this.selectedRoute = route;
+          },
+        })
       }
-      .layoutWeight(1)
+      .height('100%')
       .width('100%')
-      .padding({ left: 24, right: 24, top: 42 })
-      .justifyContent(FlexAlign.Start)
-
-      KsuserBottomBar({
-        selectedRoute: this.selectedRoute,
-        onDestinationSelected: (route: MainDestination) => {
-          this.selectedRoute = route;
+      .backgroundColor('#FFF6F5F2')
+    } else {
+      KsuserLoginPage({
+        loginSuccessHandler: () => {
+          this.isAuthenticated = true;
+          this.selectedRoute = MainDestination.HOME;
         },
       })
     }
+  }
+
+  @Builder
+  MainContent() {
+    Column({ space: 12 }) {
+      Text(this.currentTitle())
+        .fontSize(28)
+        .fontWeight(FontWeight.Bold)
+        .fontColor('#FF1F1B13')
+
+      Text(this.currentDescription())
+        .fontSize(15)
+        .lineHeight(22)
+        .fontColor('#FF5B5344')
+
+      Row() {
+        Text('当前底部栏已按 Android 端的入口顺序与文案实现，后续可把这里替换为对应业务页面。')
+          .fontSize(13)
+          .lineHeight(20)
+          .fontColor('#FF5B5344')
+      }
+      .padding(14)
+      .borderRadius(18)
+      .backgroundColor('#FFFFF6E6')
+    }
+    .layoutWeight(1)
     .height('100%')
     .width('100%')
-    .backgroundColor('#FFF6F5F2')
+    .padding({ left: 24, right: 24, top: 42 })
+    .justifyContent(FlexAlign.Start)
   }
 
   private currentTitle(): string {
