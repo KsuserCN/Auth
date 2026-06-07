@@ -4,7 +4,7 @@ Ksuser 桌面认证中心，当前支持 `macOS` 和 `Windows`。
 
 ## 平台说明
 
-- `macOS`：支持完整桌面体验，包括菜单栏驻留；Passkey 继续保留原来的浏览器桥接流程。
+- `macOS`：支持完整桌面体验，包括菜单栏驻留；Passkey 登录、MFA、敏感验证和新增登记改为调用系统原生 Passkey。
 - `Windows`：支持账号登录、二维码登录、网页登录回流、工作台管理；Passkey 登录、MFA 和敏感验证改为调用系统原生 Passkey。
 - “手机扫码登录” 使用系统本地认证保护：
   `macOS` 继续走原来的系统本地认证，`Windows` 走系统身份验证（Windows Hello / PIN / 其他可用系统解锁方式）。

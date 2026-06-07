@@ -7,7 +7,7 @@ class MainFlutterWindow: NSWindow {
   private let appDisplayName =
     (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ??
     (Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String) ??
-    "Ksuser认证中心"
+    "Ksuser安全"
   private var passkeyBridge: PasskeyBridge?
   private var appMenuBridge: AppMenuBridge?
   private var localAuthBridge: LocalAuthBridge?
@@ -229,6 +229,8 @@ private final class PasskeyBridge: NSObject {
       result(isPasskeyAvailable())
     case "performAssertion":
       performAssertion(call.arguments, result: result)
+    case "performRegistration":
+      performRegistration(call.arguments, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -314,6 +316,88 @@ private final class PasskeyBridge: NSObject {
     self.coordinator = coordinator
     coordinator.start()
   }
+
+  private func performRegistration(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard #available(macOS 13.5, *) else {
+      result(
+        FlutterError(
+          code: "unsupported_os",
+          message: "Passkey 需要 macOS 13.5 或更高版本",
+          details: nil
+        )
+      )
+      return
+    }
+
+    guard coordinator == nil else {
+      result(
+        FlutterError(
+          code: "busy",
+          message: "已有进行中的 Passkey 请求",
+          details: nil
+        )
+      )
+      return
+    }
+
+    guard let args = arguments as? [String: Any] else {
+      result(FlutterError(code: "bad_args", message: "Passkey 参数缺失", details: nil))
+      return
+    }
+
+    guard let challenge = args["challenge"] as? String, !challenge.isEmpty else {
+      result(FlutterError(code: "bad_args", message: "challenge 不能为空", details: nil))
+      return
+    }
+    guard let rpId = args["rpId"] as? String, !rpId.isEmpty else {
+      result(FlutterError(code: "bad_args", message: "rpId 不能为空", details: nil))
+      return
+    }
+    guard let origin = args["origin"] as? String, !origin.isEmpty else {
+      result(
+        FlutterError(
+          code: "bad_args",
+          message: "Passkey origin 未配置，请检查 FLUTTER_PASSKEY_ORIGIN",
+          details: nil
+        )
+      )
+      return
+    }
+    guard let userId = args["userId"] as? String, !userId.isEmpty else {
+      result(FlutterError(code: "bad_args", message: "userId 不能为空", details: nil))
+      return
+    }
+    guard let challengeData = Data.fromBase64OrBase64URL(challenge) else {
+      result(FlutterError(code: "bad_args", message: "challenge 格式无效", details: nil))
+      return
+    }
+    guard let userIdData = Data.fromBase64OrBase64URL(userId) else {
+      result(FlutterError(code: "bad_args", message: "userId 格式无效", details: nil))
+      return
+    }
+
+    let request = PasskeyRegistrationRequest(
+      challengeData: challengeData,
+      rpId: rpId,
+      origin: origin,
+      name: (args["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+      displayName: (args["displayName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+      userIdData: userIdData,
+      userVerification: args["userVerification"] as? String,
+      attestation: args["attestation"] as? String
+    )
+
+    let coordinator = PasskeyRegistrationCoordinator(
+      request: request,
+      windowProvider: windowProvider
+    ) { [weak self] response in
+      self?.coordinator = nil
+      result(response)
+    }
+
+    self.coordinator = coordinator
+    coordinator.start()
+  }
 }
 
 private struct AllowedCredential {
@@ -339,6 +423,18 @@ private struct PasskeyAssertionRequest {
   let origin: String
   let userVerification: String?
   let allowCredentials: [AllowedCredential]
+}
+
+@available(macOS 13.5, *)
+private struct PasskeyRegistrationRequest {
+  let challengeData: Data
+  let rpId: String
+  let origin: String
+  let name: String?
+  let displayName: String?
+  let userIdData: Data
+  let userVerification: String?
+  let attestation: String?
 }
 
 @available(macOS 13.5, *)
@@ -499,6 +595,136 @@ private final class PasskeyAssertionCoordinator: NSObject,
       }
     } else {
       message = nsError.localizedDescription.isEmpty ? "Passkey 验证失败" : nsError.localizedDescription
+    }
+
+    completion(FlutterError(code: "authorization_failed", message: message, details: nil))
+  }
+}
+
+@available(macOS 13.5, *)
+private final class PasskeyRegistrationCoordinator: NSObject,
+  ASAuthorizationControllerDelegate,
+  ASAuthorizationControllerPresentationContextProviding
+{
+  private let request: PasskeyRegistrationRequest
+  private let windowProvider: () -> NSWindow?
+  private let completion: (Any?) -> Void
+  private var authorizationController: ASAuthorizationController?
+
+  init(
+    request: PasskeyRegistrationRequest,
+    windowProvider: @escaping () -> NSWindow?,
+    completion: @escaping (Any?) -> Void
+  ) {
+    self.request = request
+    self.windowProvider = windowProvider
+    self.completion = completion
+    super.init()
+  }
+
+  func start() {
+    let clientData = ASPublicKeyCredentialClientData(
+      challenge: request.challengeData,
+      origin: request.origin
+    )
+    let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(
+      relyingPartyIdentifier: request.rpId
+    )
+    let registrationRequest = provider.createCredentialRegistrationRequest(
+      clientData: clientData,
+      name: request.name?.isEmpty == false ? request.name! : request.displayName ?? "Ksuser Desktop",
+      userID: request.userIdData
+    )
+    registrationRequest.userVerificationPreference = userVerificationPreference(from: request.userVerification)
+    registrationRequest.attestationPreference = attestationPreference(from: request.attestation)
+
+    let controller = ASAuthorizationController(authorizationRequests: [registrationRequest])
+    controller.delegate = self
+    controller.presentationContextProvider = self
+    authorizationController = controller
+    controller.performRequests()
+  }
+
+  private func userVerificationPreference(
+    from value: String?
+  ) -> ASAuthorizationPublicKeyCredentialUserVerificationPreference {
+    switch value?.lowercased() {
+    case "required":
+      return .required
+    case "discouraged":
+      return .discouraged
+    default:
+      return .preferred
+    }
+  }
+
+  private func attestationPreference(
+    from value: String?
+  ) -> ASAuthorizationPublicKeyCredentialAttestationKind {
+    switch value?.lowercased() {
+    case "direct":
+      return .direct
+    case "indirect":
+      return .indirect
+    default:
+      return .none
+    }
+  }
+
+  func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    if let window = windowProvider() ?? NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow {
+      return window
+    }
+    return NSApplication.shared.windows.first ?? NSWindow()
+  }
+
+  func authorizationController(
+    controller: ASAuthorizationController,
+    didCompleteWithAuthorization authorization: ASAuthorization
+  ) {
+    guard let credential = authorization.credential as? ASAuthorizationPublicKeyCredentialRegistration else {
+      completion(
+        FlutterError(
+          code: "invalid_credential",
+          message: "未获取到有效的 Passkey 注册凭证",
+          details: nil
+        )
+      )
+      return
+    }
+
+    completion(
+      [
+        "credentialRawId": credential.credentialID.base64URLEncodedString(),
+        "clientDataJSON": credential.rawClientDataJSON.base64URLEncodedString(),
+        "attestationObject": credential.rawAttestationObject?.base64URLEncodedString() ?? "",
+        "transports": "internal",
+      ]
+    )
+  }
+
+  func authorizationController(
+    controller: ASAuthorizationController,
+    didCompleteWithError error: Error
+  ) {
+    let nsError = error as NSError
+    let message: String
+    if nsError.domain == ASAuthorizationError.errorDomain,
+      let code = ASAuthorizationError.Code(rawValue: nsError.code)
+    {
+      if code == .canceled {
+        message = "用户取消了 Passkey 创建"
+      } else if code == .invalidResponse {
+        message = "Passkey 返回了无效注册响应"
+      } else if code == .notHandled {
+        message = "系统未处理当前 Passkey 创建请求"
+      } else if code == .notInteractive {
+        message = "系统当前无法展示 Passkey 创建界面"
+      } else {
+        message = nsError.localizedDescription.isEmpty ? "Passkey 创建失败" : nsError.localizedDescription
+      }
+    } else {
+      message = nsError.localizedDescription.isEmpty ? "Passkey 创建失败" : nsError.localizedDescription
     }
 
     completion(FlutterError(code: "authorization_failed", message: message, details: nil))

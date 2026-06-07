@@ -6,7 +6,7 @@ class AppDelegate: FlutterAppDelegate {
   private let appDisplayName =
     (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ??
     (Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String) ??
-    "Ksuser认证中心"
+    "Ksuser安全"
   private var statusItem: NSStatusItem?
   private var isMenuBarVisible = false
   private var menuBarAuthenticated = false

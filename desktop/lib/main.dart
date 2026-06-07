@@ -13,7 +13,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 const Color kPrimaryColor = Color(0xFFFFB90F);
 const Color kSurfaceTint = Color(0xFFFFF2CC);
 const String kDefaultApiBaseUrl = 'https://api.ksuser.cn';
-const String kDesktopAppName = 'Ksuser认证中心';
+const String kDesktopAppName = 'Ksuser安全';
 const String kDesktopAppVersion = '1.0.0';
 const int kDesktopSessionBridgePort = 43921;
 const String kSidebarLogoAsset = 'assets/logo/sidebar_logo.png';
@@ -1288,8 +1288,26 @@ String themeModeLabel(ThemeMode mode) {
   }
 }
 
+String nativePasskeyPlatformName() {
+  if (Platform.isMacOS) {
+    return 'macOS';
+  }
+  if (Platform.isWindows) {
+    return 'Windows';
+  }
+  return '系统';
+}
+
+String nativePasskeyAvailableDescription({String action = '验证'}) {
+  return '将直接调用 ${nativePasskeyPlatformName()} 系统原生 Passkey 完成$action。';
+}
+
+String nativePasskeyUnavailableDescription() {
+  return '当前设备未启用 ${nativePasskeyPlatformName()} 原生 Passkey。';
+}
+
 class PasskeyPlatform {
-  static bool get supportsAssertion => Platform.isWindows;
+  static bool get supportsAssertion => Platform.isWindows || Platform.isMacOS;
 
   static Future<bool> isAvailable() async {
     if (!supportsAssertion) {
@@ -1333,6 +1351,41 @@ class PasskeyPlatform {
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
           : 'Passkey 验证失败';
+      throw ApiException(message);
+    }
+  }
+
+  static Future<PasskeyRegistrationResult> createCredential({
+    required PasskeyRegistrationOptions options,
+    required String origin,
+  }) async {
+    if (!supportsAssertion) {
+      throw ApiException('当前平台暂不支持原生 Passkey');
+    }
+
+    try {
+      final Map<dynamic, dynamic>? result = await _passkeyChannel
+          .invokeMethod<Map<dynamic, dynamic>>(
+            'performRegistration',
+            <String, dynamic>{
+              'challenge': options.challenge,
+              'rpId': options.rpId,
+              'origin': origin,
+              'name': options.userName,
+              'displayName': options.userDisplayName,
+              'userId': options.userId,
+              'userVerification': options.userVerification,
+              'attestation': options.attestation,
+            },
+          );
+      if (result == null) {
+        throw ApiException('未创建 Passkey 凭证');
+      }
+      return PasskeyRegistrationResult.fromChannelMap(result);
+    } on PlatformException catch (error) {
+      final String message = error.message?.trim().isNotEmpty == true
+          ? error.message!.trim()
+          : 'Passkey 创建失败';
       throw ApiException(message);
     }
   }
@@ -1905,16 +1958,30 @@ class AppController extends ChangeNotifier {
     return PasskeyAssertionOptions.fromJson(asMap(data));
   }
 
+  Future<PasskeyRegistrationOptions> getPasskeyRegistrationOptions({
+    String? preferredName,
+  }) async {
+    final dynamic data = await _apiClient.post(
+      '/auth/passkey/registration-options',
+      authorized: true,
+      body: <String, dynamic>{
+        'passkeyName': preferredName ?? 'Ksuser Desktop',
+        'authenticatorType': 'auto',
+      },
+    );
+    return PasskeyRegistrationOptions.fromJson(asMap(data));
+  }
+
   bool get supportsBrowserPasskeyBridge =>
       BrowserPasskeyBridge.isSupported(passkeyOrigin);
 
-  bool get usesNativePasskey => Platform.isWindows;
+  bool get usesNativePasskey => Platform.isWindows || Platform.isMacOS;
 
-  bool get usesBrowserPasskeyBridge => Platform.isMacOS;
+  bool get usesBrowserPasskeyBridge => false;
 
   String get passkeyUnavailableMessage {
     if (usesNativePasskey) {
-      return '当前设备未启用 Windows 原生 Passkey';
+      return nativePasskeyUnavailableDescription();
     }
     if (usesBrowserPasskeyBridge) {
       return '当前环境未配置可用的 Passkey 浏览器桥接地址';
@@ -2074,8 +2141,41 @@ class AppController extends ChangeNotifier {
     });
   }
 
-  Future<void> registerPasskeyInBrowser({String? preferredName}) async {
-    await runBusyAction('正在等待浏览器完成 Passkey 登记...', () async {
+  Future<void> registerPasskey({String? preferredName}) async {
+    await runBusyAction('正在等待 Passkey 登记...', () async {
+      if (usesNativePasskey) {
+        if (!await PasskeyPlatform.isAvailable()) {
+          throw ApiException(passkeyUnavailableMessage);
+        }
+        final String passkeyName = preferredName?.trim().isNotEmpty == true
+            ? preferredName!.trim()
+            : 'Ksuser Desktop';
+        final PasskeyRegistrationOptions options =
+            await getPasskeyRegistrationOptions(preferredName: passkeyName);
+        final PasskeyRegistrationResult credential =
+            await PasskeyPlatform.createCredential(
+              options: options,
+              origin: passkeyOrigin,
+            );
+        await _apiClient.post(
+          '/auth/passkey/registration-verify',
+          authorized: true,
+          body: <String, dynamic>{
+            ...credential.toJson(),
+            'passkeyName': passkeyName,
+          },
+        );
+        await refreshPasskeys();
+        return;
+      }
+
+      if (!usesBrowserPasskeyBridge) {
+        throw ApiException(passkeyUnavailableMessage);
+      }
+      if (!supportsBrowserPasskeyBridge) {
+        throw ApiException(passkeyUnavailableMessage);
+      }
+
       try {
         final BrowserPasskeyBridgeResponse response =
             await BrowserPasskeyBridge.start(
@@ -3461,10 +3561,10 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                       Text(
                                         widget.controller.usesNativePasskey
                                             ? _nativePasskeyAvailable
-                                                  ? '将直接调用 Windows 系统原生 Passkey 完成验证。'
-                                                  : '当前设备未启用 Windows 原生 Passkey。'
+                                                  ? nativePasskeyAvailableDescription()
+                                                  : nativePasskeyUnavailableDescription()
                                             : _passkeyAvailable
-                                            ? '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn。'
+                                            ? 'Passkey 已可用，将按当前平台能力完成验证。'
                                             : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
                                       ),
                                     ],
@@ -4962,7 +5062,7 @@ class SecurityPage extends StatelessWidget {
               Expanded(
                 child: _SectionCard(
                   title: 'Passkey 列表',
-                  subtitle: '当前该功能使用新增能力改为浏览器桥接完成',
+                  subtitle: '使用系统原生 Passkey 完成登录与敏感验证',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -4971,7 +5071,7 @@ class SecurityPage extends StatelessWidget {
                         child: FilledButton.tonalIcon(
                           onPressed: () async {
                             try {
-                              await controller.registerPasskeyInBrowser(
+                              await controller.registerPasskey(
                                 preferredName:
                                     'Ksuser Desktop (${Platform.localHostname})',
                               );
@@ -5711,12 +5811,8 @@ class _MfaPanel extends StatelessWidget {
             _DisabledCapabilityCard(
               title: passkeyAvailable ? '使用 Passkey 完成二次验证' : 'Passkey 当前不可用',
               description: passkeyAvailable
-                  ? Platform.isWindows
-                        ? '将直接调用 Windows 系统原生 Passkey 完成二次验证。'
-                        : '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn 后回到桌面端继续。'
-                  : Platform.isWindows
-                  ? '当前设备未启用 Windows 原生 Passkey。'
-                  : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
+                  ? nativePasskeyAvailableDescription(action: '二次验证')
+                  : nativePasskeyUnavailableDescription(),
               icon: Icons.fingerprint_rounded,
             ),
           const SizedBox(height: 14),
@@ -7024,9 +7120,7 @@ class _SensitiveVerificationDialogState
           if (mounted) {
             showAppMessage(
               context,
-              Platform.isWindows
-                  ? '即将调用 Windows 系统 Passkey'
-                  : '即将打开浏览器完成 Passkey 验证',
+              '即将调用 ${nativePasskeyPlatformName()} 系统 Passkey',
             );
           }
           await widget.controller.performPasskeySensitiveVerification();
@@ -7213,9 +7307,7 @@ class _SensitiveVerificationDialogState
                             ? 'Passkey 验证已接入'
                             : 'Passkey 当前不可用',
                         description: _passkeyAvailable
-                            ? Platform.isWindows
-                                  ? '将直接调用 Windows 系统原生 Passkey 完成验证。'
-                                  : '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn。'
+                            ? nativePasskeyAvailableDescription()
                             : widget.controller.passkeyUnavailableMessage,
                         icon: Icons.fingerprint_rounded,
                       ),
@@ -7853,9 +7945,7 @@ String sensitiveVerificationMethodDescription(
     case SensitiveVerificationMethod.totp:
       return '输入身份验证器生成的 6 位动态码。';
     case SensitiveVerificationMethod.passkey:
-      return Platform.isWindows
-          ? '将直接调用 Windows 系统原生 Passkey 完成验证。'
-          : '将保持原来的浏览器桥接流程，在默认浏览器中完成 WebAuthn。';
+      return nativePasskeyAvailableDescription();
     case SensitiveVerificationMethod.qr:
       return '使用已登录手机端扫码确认当前敏感操作。';
   }
@@ -8561,6 +8651,100 @@ class PasskeyAssertionResult {
       'clientDataJSON': clientDataJSON,
       'authenticatorData': authenticatorData,
       'signature': signature,
+    };
+  }
+}
+
+class PasskeyRegistrationOptions {
+  const PasskeyRegistrationOptions({
+    required this.challenge,
+    required this.rpId,
+    required this.userId,
+    required this.userName,
+    required this.userDisplayName,
+    required this.timeout,
+    required this.attestation,
+    required this.userVerification,
+  });
+
+  factory PasskeyRegistrationOptions.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> rp = _decodeNestedJsonObject(json['rp']);
+    final Map<String, dynamic> user = _decodeNestedJsonObject(json['user']);
+    final Map<String, dynamic> authenticatorSelection = _decodeNestedJsonObject(
+      json['authenticatorSelection'],
+    );
+
+    return PasskeyRegistrationOptions(
+      challenge: asString(json['challenge']) ?? '',
+      rpId: asString(rp['id']) ?? '',
+      userId: asString(user['id']) ?? '',
+      userName: asString(user['name']) ?? '',
+      userDisplayName:
+          asString(user['displayName']) ?? asString(user['name']) ?? '',
+      timeout: asString(json['timeout']) ?? '300000',
+      attestation: asString(json['attestation']) ?? 'none',
+      userVerification:
+          asString(authenticatorSelection['userVerification']) ?? 'preferred',
+    );
+  }
+
+  final String challenge;
+  final String rpId;
+  final String userId;
+  final String userName;
+  final String userDisplayName;
+  final String timeout;
+  final String attestation;
+  final String userVerification;
+
+  static Map<String, dynamic> _decodeNestedJsonObject(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.map(
+        (dynamic key, dynamic item) => MapEntry(key.toString(), item),
+      );
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        return asMap(jsonDecode(value));
+      } catch (_) {
+        return <String, dynamic>{};
+      }
+    }
+    return <String, dynamic>{};
+  }
+}
+
+class PasskeyRegistrationResult {
+  const PasskeyRegistrationResult({
+    required this.credentialRawId,
+    required this.clientDataJSON,
+    required this.attestationObject,
+    required this.transports,
+  });
+
+  factory PasskeyRegistrationResult.fromChannelMap(Map<dynamic, dynamic> map) {
+    return PasskeyRegistrationResult(
+      credentialRawId: map['credentialRawId']?.toString() ?? '',
+      clientDataJSON: map['clientDataJSON']?.toString() ?? '',
+      attestationObject: map['attestationObject']?.toString() ?? '',
+      transports: map['transports']?.toString() ?? 'internal',
+    );
+  }
+
+  final String credentialRawId;
+  final String clientDataJSON;
+  final String attestationObject;
+  final String transports;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'credentialRawId': credentialRawId,
+      'clientDataJSON': clientDataJSON,
+      'attestationObject': attestationObject,
+      'transports': transports,
     };
   }
 }
