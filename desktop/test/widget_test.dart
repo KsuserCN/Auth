@@ -3,9 +3,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ksuser_auth_desktop/main.dart';
 
 void main() {
-  testWidgets('shows desktop auth shell', (WidgetTester tester) async {
-    await tester.pumpWidget(const KsuserDesktopApp());
-    await tester.pump();
+  AppController buildController({bool agreementsAccepted = true}) {
+    return AppController(
+      KsuserApiClient(baseUrl: 'http://localhost:8000'),
+      environmentName: 'Development',
+      passkeyOrigin: 'http://localhost:5173',
+      loadAgreementAcceptance: () async => agreementsAccepted,
+    );
+  }
+
+  testWidgets('shows agreement gate before first use', (
+    WidgetTester tester,
+  ) async {
+    final AppController controller = buildController(agreementsAccepted: false);
+
+    await tester.pumpWidget(
+      MaterialApp(home: DesktopRoot(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('开始使用前请确认'), findsOneWidget);
+    expect(find.text('服务条款'), findsOneWidget);
+    expect(find.text('隐私政策'), findsOneWidget);
+    expect(find.text('第三方信息共享清单'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '同意并继续'), findsOneWidget);
+  });
+
+  testWidgets('shows desktop auth shell after agreements accepted', (
+    WidgetTester tester,
+  ) async {
+    final AppController controller = buildController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: DesktopRoot(controller: controller)),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.text(kDesktopAppName), findsOneWidget);
     expect(find.text('二维码登录'), findsOneWidget);
@@ -14,11 +46,7 @@ void main() {
   testWidgets('desktop workspace renders with sidebar content', (
     WidgetTester tester,
   ) async {
-    final AppController controller = AppController(
-      KsuserApiClient(baseUrl: 'http://localhost:8000'),
-      environmentName: 'Development',
-      passkeyOrigin: 'http://localhost:5173',
-    );
+    final AppController controller = buildController();
 
     controller.user = UserDetails(
       uuid: 'uuid-1',

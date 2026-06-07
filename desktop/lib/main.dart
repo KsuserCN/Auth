@@ -17,6 +17,11 @@ const String kDesktopAppName = 'Ksuser安全';
 const String kDesktopAppVersion = '1.0.0';
 const int kDesktopSessionBridgePort = 43921;
 const String kSidebarLogoAsset = 'assets/logo/sidebar_logo.png';
+const String kUserAgreementUrl = 'https://docs.ksuser.cn/agreement/user.html';
+const String kPrivacyPolicyUrl =
+    'https://docs.ksuser.cn/agreement/privacy.html';
+const String kThirdPartySharingUrl =
+    'https://docs.ksuser.cn/agreement/third-party-information-sharing.html';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -342,11 +347,295 @@ class DesktopRoot extends StatelessWidget {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
+        if (controller.agreementLoading) {
+          return const DesktopAgreementSplash();
+        }
+        if (!controller.agreementsAccepted) {
+          return DesktopAgreementGate(controller: controller);
+        }
         if (controller.isAuthenticated) {
           return DesktopWorkspace(controller: controller);
         }
         return DesktopAuthPortal(controller: controller);
       },
+    );
+  }
+}
+
+class DesktopAgreementSplash extends StatelessWidget {
+  const DesktopAgreementSplash({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.6),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              '正在检查使用协议...',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DesktopAgreementGate extends StatefulWidget {
+  const DesktopAgreementGate({super.key, required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<DesktopAgreementGate> createState() => _DesktopAgreementGateState();
+}
+
+class _DesktopAgreementGateState extends State<DesktopAgreementGate> {
+  bool _accepted = false;
+  bool _busy = false;
+
+  Future<void> _openAgreement(String url) async {
+    try {
+      await openExternalUrl(url);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showAppMessage(context, error.toString(), error: true);
+    }
+  }
+
+  Future<void> _continue() async {
+    if (!_accepted || _busy) {
+      return;
+    }
+    setState(() {
+      _busy = true;
+    });
+    try {
+      await widget.controller.acceptAgreements();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showAppMessage(context, error.toString(), error: true);
+      setState(() {
+        _busy = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final bool isDark = theme.brightness == Brightness.dark;
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: <Widget>[
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: kPrimaryColor.withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Icon(
+                              Icons.verified_user_rounded,
+                              color: Color(0xFF9A6500),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '开始使用前请确认',
+                                  style: theme.textTheme.headlineSmall
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  kDesktopAppName,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        '首次安装并使用本应用前，请阅读并同意以下协议和清单。未同意前将无法继续登录或使用桌面端功能。',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          height: 1.55,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      _AgreementLinkTile(
+                        icon: Icons.description_outlined,
+                        title: '服务条款',
+                        url: kUserAgreementUrl,
+                        onPressed: () => _openAgreement(kUserAgreementUrl),
+                      ),
+                      const SizedBox(height: 10),
+                      _AgreementLinkTile(
+                        icon: Icons.privacy_tip_outlined,
+                        title: '隐私政策',
+                        url: kPrivacyPolicyUrl,
+                        onPressed: () => _openAgreement(kPrivacyPolicyUrl),
+                      ),
+                      const SizedBox(height: 10),
+                      _AgreementLinkTile(
+                        icon: Icons.hub_outlined,
+                        title: '第三方信息共享清单',
+                        url: kThirdPartySharingUrl,
+                        onPressed: () => _openAgreement(kThirdPartySharingUrl),
+                      ),
+                      const SizedBox(height: 22),
+                      Material(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : const Color(0xFFFFFBF0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: BorderSide(
+                            color: kPrimaryColor.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: CheckboxListTile(
+                          value: _accepted,
+                          onChanged: _busy
+                              ? null
+                              : (bool? value) {
+                                  setState(() {
+                                    _accepted = value ?? false;
+                                  });
+                                },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          title: Text(
+                            '我已阅读并同意以上服务条款、隐私政策和第三方信息共享清单',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: _accepted && !_busy ? _continue : null,
+                          icon: _busy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.arrow_forward_rounded),
+                          label: Text(_busy ? '正在保存...' : '同意并继续'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgreementLinkTile extends StatelessWidget {
+  const _AgreementLinkTile({
+    required this.icon,
+    required this.title,
+    required this.url,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String title;
+  final String url;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 22),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  url,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Icon(Icons.open_in_new_rounded, size: 18),
+        ],
+      ),
     );
   }
 }
@@ -442,6 +731,66 @@ class DesktopWindowPlatform {
           : '窗口收起到菜单栏失败';
       throw ApiException(message);
     }
+  }
+}
+
+class AgreementAcceptanceStore {
+  static const String _fileName = 'agreement_acceptance.json';
+
+  static Future<bool> isAccepted() async {
+    final File file = await _file();
+    if (!await file.exists()) {
+      return false;
+    }
+    try {
+      final Object? decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map<String, dynamic>) {
+        return false;
+      }
+      return decoded['accepted'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> markAccepted() async {
+    final File file = await _file();
+    await file.parent.create(recursive: true);
+    final Map<String, Object> payload = <String, Object>{
+      'accepted': true,
+      'acceptedAt': DateTime.now().toUtc().toIso8601String(),
+      'appVersion': kDesktopAppVersion,
+      'agreements': <String, String>{
+        'userAgreement': kUserAgreementUrl,
+        'privacyPolicy': kPrivacyPolicyUrl,
+        'thirdPartyInformationSharing': kThirdPartySharingUrl,
+      },
+    };
+    await file.writeAsString(jsonEncode(payload));
+  }
+
+  static Future<File> _file() async {
+    final Directory directory = await _appSupportDirectory();
+    return File('${directory.path}${Platform.pathSeparator}$_fileName');
+  }
+
+  static Future<Directory> _appSupportDirectory() async {
+    final Map<String, String> environment = Platform.environment;
+    if (Platform.isMacOS) {
+      final String home = environment['HOME'] ?? Directory.current.path;
+      return Directory('$home/Library/Application Support/ksuser_auth_desktop');
+    }
+    if (Platform.isWindows) {
+      final String base =
+          environment['APPDATA'] ??
+          environment['LOCALAPPDATA'] ??
+          Directory.current.path;
+      return Directory('$base${Platform.pathSeparator}ksuser_auth_desktop');
+    }
+    final String base =
+        environment['XDG_CONFIG_HOME'] ??
+        '${environment['HOME'] ?? Directory.current.path}/.config';
+    return Directory('$base${Platform.pathSeparator}ksuser_auth_desktop');
   }
 }
 
@@ -1451,13 +1800,18 @@ class AppController extends ChangeNotifier {
     this._apiClient, {
     required this.environmentName,
     required this.passkeyOrigin,
+    Future<bool> Function()? loadAgreementAcceptance,
   }) {
+    _loadAgreementAcceptanceValue =
+        loadAgreementAcceptance ?? AgreementAcceptanceStore.isAccepted;
     _apiClient.onSessionExpired = _handleSessionExpired;
+    unawaited(_loadAgreementAcceptance());
   }
 
   final KsuserApiClient _apiClient;
   final String environmentName;
   final String passkeyOrigin;
+  late final Future<bool> Function() _loadAgreementAcceptanceValue;
 
   DesktopSection selectedSection = DesktopSection.overview;
   UserDetails? user;
@@ -1473,6 +1827,8 @@ class AppController extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.system;
   bool compactMode = false;
   bool reduceMotion = false;
+  bool agreementLoading = true;
+  bool agreementsAccepted = false;
   String? workspaceError;
   final List<String> _busyLabelStack = <String>[];
 
@@ -1491,6 +1847,24 @@ class AppController extends ChangeNotifier {
       return '正在同步桌面数据...';
     }
     return '正在处理中...';
+  }
+
+  Future<void> _loadAgreementAcceptance() async {
+    try {
+      agreementsAccepted = await _loadAgreementAcceptanceValue();
+    } catch (_) {
+      agreementsAccepted = false;
+    } finally {
+      agreementLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> acceptAgreements() async {
+    await AgreementAcceptanceStore.markAccepted();
+    agreementLoading = false;
+    agreementsAccepted = true;
+    notifyListeners();
   }
 
   Future<T> runBusyAction<T>(String label, Future<T> Function() action) async {
