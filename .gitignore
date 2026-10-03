@@ -13,6 +13,11 @@ release
 
 mobile/android/app/build
 
+# Xcode local user settings and build output
+mobile/ios/**/xcuserdata/
+mobile/ios/**/*.xcuserstate
+mobile/ios/DerivedData/
+
 CLAUDE.md
 AGENTS.md
 build
