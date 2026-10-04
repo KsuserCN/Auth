@@ -113,6 +113,7 @@
                 @change="handlePreferredMfaMethodChange">
                 <el-option label="Passkey" value="passkey" :disabled="!passkeyEnabled" />
                 <el-option label="TOTP" value="totp" :disabled="!totpEnabled" />
+                <el-option v-if="appleBound" label="Apple" value="apple" />
                 <el-option label="手机扫码" value="qr" />
               </el-select>
             </div>
@@ -412,6 +413,7 @@ import { useRouter } from 'vue-router'
 	} from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
+  getAppleStatus,
   getAdaptiveAuthStatus,
   getAdaptiveRiskMetrics,
   getPasskeyList,
@@ -437,9 +439,10 @@ const passkeyLoading = ref(true)
 const totpLoading = ref(true)
 const mfaEnabled = ref(false)
 const preferredMfaMethod = ref<'totp' | 'passkey' | 'qr'>('totp')
-const preferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp'>('password')
+const preferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp' | 'apple'>('password')
 const committedPreferredMfaMethod = ref<'totp' | 'passkey' | 'qr'>('totp')
-const committedPreferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp'>('password')
+const committedPreferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp' | 'apple'>('password')
+const appleBound = ref(false)
 const geoLoginEnabled = ref(false)
 const sensitiveEmailEnabled = ref(false)
 const settingsReady = ref(false)
@@ -728,6 +731,7 @@ const loadAdaptiveAuthStatus = async () => {
 }
 
 onMounted(async () => {
+  appleBound.value = await getAppleStatus().then((result) => result.enabled).catch(() => false)
   try {
     passkeyLoading.value = true
     const passkeys = await getPasskeyList()
@@ -858,7 +862,7 @@ const handlePreferredMfaMethodChange = async (value: 'totp' | 'passkey' | 'qr') 
 }
 
 const handlePreferredSensitiveMethodChange = async (
-  value: 'password' | 'email-code' | 'passkey' | 'totp',
+  value: 'password' | 'email-code' | 'passkey' | 'totp' | 'apple',
 ) => {
   const prev = committedPreferredSensitiveMethod.value
   const success = await updateStringSetting('preferred_sensitive_method', value, () => {

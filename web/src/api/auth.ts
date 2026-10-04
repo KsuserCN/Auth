@@ -30,7 +30,7 @@ export interface UserSettings {
   notifySensitiveActionEmail: boolean
   subscribeNewsEmail: boolean
   preferredMfaMethod?: MFAMethod
-  preferredSensitiveMethod?: 'password' | 'email-code' | 'passkey' | 'totp'
+  preferredSensitiveMethod?: 'password' | 'email-code' | 'passkey' | 'totp' | 'apple'
 }
 
 export type MFAMethod = 'totp' | 'passkey' | 'qr'
@@ -697,7 +697,7 @@ export const sendSensitiveVerificationCode = async (): Promise<void> => {
 export interface SensitiveVerificationStatus {
   verified: boolean
   remainingSeconds: number
-  preferredMethod?: 'password' | 'email-code' | 'passkey' | 'totp'
+  preferredMethod?: 'password' | 'email-code' | 'passkey' | 'totp' | 'apple'
   methods?: Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>
 }
 
@@ -1642,7 +1642,7 @@ export const bindPendingOAuthAccount = async (
 }
 
 export interface OAuthAccountStatusItem {
-  provider: 'wechat' | 'qq' | 'microsoft' | 'github' | 'google'
+  provider: 'wechat' | 'qq' | 'microsoft' | 'github' | 'google' | 'apple'
   bound: boolean
   lastLoginAt: string | null
 }
@@ -1687,4 +1687,67 @@ export const unbindMicrosoft = async (): Promise<void> => {
  */
 export const unbindGoogle = async (): Promise<void> => {
   await request.post('/oauth/google/unbind')
+}
+
+export interface AppleChallenge {
+  challengeId: string
+  nonce: string
+  state: string
+  expiresInSeconds: number
+}
+
+export interface AppleLoginResponse extends OAuthLoginCallbackResponse {
+  canRegister?: boolean
+  emailConflict?: boolean
+}
+
+export const createAppleChallenge = async (purpose: 'login' | 'bind' | 'sensitive'): Promise<AppleChallenge> => {
+  const response = await request.post<ApiResponse<AppleChallenge>>('/oauth/apple/challenge', {
+    purpose,
+    clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
+  })
+  return (response as unknown as ApiResponse<AppleChallenge>).data
+}
+
+export const submitAppleCredential = async (data: {
+  challengeId: string
+  identityToken: string
+  authorizationCode: string
+  state: string
+  givenName?: string
+  familyName?: string
+}): Promise<AppleLoginResponse> => {
+  const response = await request.post<ApiResponse<AppleLoginResponse>>('/oauth/apple/mobile-login', data)
+  return (response as unknown as ApiResponse<AppleLoginResponse>).data
+}
+
+export const registerPendingApple = async (oauthBindToken: string, acceptTerms: boolean, username: string): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>('/oauth/apple/register-pending', {
+    oauthBindToken,
+    acceptTerms,
+    username,
+  })
+  return (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
+}
+
+export const bindPendingApple = async (oauthBindToken: string): Promise<void> => {
+  await request.post('/oauth/apple/bind-pending', { oauthBindToken })
+}
+
+export const unbindApple = async (): Promise<void> => {
+  await request.post('/oauth/apple/unbind')
+}
+
+export const getAppleStatus = async (): Promise<{ bound: boolean; enabled: boolean; canUnbind: boolean }> => {
+  const response = await request.get<ApiResponse<{ bound: boolean; enabled: boolean; canUnbind: boolean }>>('/oauth/apple/status')
+  return (response as unknown as ApiResponse<{ bound: boolean; enabled: boolean; canUnbind: boolean }>).data
+}
+
+export const verifyAppleSensitive = async (data: {
+  challengeId: string
+  identityToken: string
+  authorizationCode: string
+  state: string
+}): Promise<void> => {
+  await request.post('/oauth/apple/sensitive-verify', data)
 }

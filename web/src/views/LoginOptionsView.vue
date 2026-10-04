@@ -346,16 +346,17 @@ import {
   regenerateRecoveryCodes,
   disableTotp,
   buildGoogleAuthorizationUrl,
-  buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
   unbindGoogle,
-  unbindGithub,
+  bindPendingApple,
+  unbindApple,
   unbindMicrosoft,
   unbindQQ,
   getOAuthAccountsStatus,
   type OAuthAccountStatusItem,
 } from '@/api/auth'
+import { prepareAppleSignIn, signInWithApple } from '@/utils/appleSignIn'
 import {
   isWebAuthnSupported,
 } from '@/utils/webauthn'
@@ -368,7 +369,7 @@ const userEmail = computed(() => userStore.user?.email || '—')
 const emailLoading = ref(false)
 const passwordLoading = ref(false)
 type OAuthProviderItem = {
-  key: 'wechat' | 'qq' | 'github' | 'microsoft' | 'google'
+  key: 'wechat' | 'qq' | 'apple' | 'microsoft' | 'google'
   label: string
   iconClass: string
   supported: boolean
@@ -380,7 +381,7 @@ type OAuthProviderItem = {
 const oauthProviders = ref<OAuthProviderItem[]>([
   { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, lastLoginAt: null, loading: false },
   { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, lastLoginAt: null, loading: false },
-  { key: 'github', label: 'GitHub', iconClass: 'fa-brands fa-github', supported: true, bound: false, lastLoginAt: null, loading: false },
+  { key: 'apple', label: 'Apple', iconClass: 'fa-brands fa-apple', supported: true, bound: false, lastLoginAt: null, loading: false },
   { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: true, bound: false, lastLoginAt: null, loading: false },
   { key: 'google', label: 'Google', iconClass: 'fa-brands fa-google', supported: true, bound: false, lastLoginAt: null, loading: false },
 ])
@@ -408,6 +409,7 @@ const sensitiveDialogDisableQr = ref(false)
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 
 onMounted(async () => {
+  void prepareAppleSignIn().catch(() => {})
   await userStore.fetchUserInfo()
   await loadOAuthStatus()
   isPasskeySupported.value = isWebAuthnSupported()
@@ -838,48 +840,37 @@ const handleQQUnbind = async (provider: OAuthProviderItem) => {
   })
 }
 
-const handleGithubBind = async (provider: OAuthProviderItem) => {
-  if (provider.loading) return
-
-  provider.loading = true
-  try {
-    const randomString = generateRandomString()
-    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
-    const state = `${randomString};bind;${debugState}`
-
-    sessionStorage.setItem('github_oauth_state', state)
-    window.location.href = buildGithubAuthorizationUrl(state)
-  } catch (error) {
-    console.error('GitHub bind failed:', error)
-    ElMessage.error('GitHub 绑定跳转失败，请重试')
-    provider.loading = false
-  }
-}
-
-const handleGithubUnbind = async (provider: OAuthProviderItem) => {
-  if (provider.loading) return
+const handleAppleBind = async (provider: OAuthProviderItem) => {
   await runWithSensitiveVerification(async () => {
-    try {
-      await ElMessageBox.confirm('解绑后您将无法使用 GitHub 快速登录，是否继续？', '确认解绑', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
-
     provider.loading = true
     try {
-      await unbindGithub()
-      provider.bound = false
-      provider.lastLoginAt = null
-      ElMessage.success('GitHub 解绑成功')
-
+      const result = await signInWithApple('bind')
+      if (!result.oauthBindToken) throw new Error('Apple 绑定票据缺失，请重新授权')
+      await bindPendingApple(result.oauthBindToken)
+      ElMessage.success('Apple 绑定成功')
       await loadOAuthStatus()
-    } catch (error) {
-      console.error('GitHub unbind failed:', error)
-      ElMessage.error('GitHub 解绑失败，请稍后重试')
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : 'Apple 绑定失败，请重试')
+    } finally {
+      provider.loading = false
+    }
+  })
+}
+
+const handleAppleUnbind = async (provider: OAuthProviderItem) => {
+  await runWithSensitiveVerification(async () => {
+    try {
+      await ElMessageBox.confirm('解绑后您将无法使用 Apple 登录，是否继续？', '确认解绑', {
+        confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+      })
+    } catch { return }
+    provider.loading = true
+    try {
+      await unbindApple()
+      ElMessage.success('Apple 解绑成功')
+      await loadOAuthStatus()
+    } catch (error: unknown) {
+      ElMessage.error(error instanceof Error ? error.message : 'Apple 解绑失败，请重试')
     } finally {
       provider.loading = false
     }
@@ -996,11 +987,11 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
     return
   }
 
-  if (provider.key === 'github') {
+  if (provider.key === 'apple') {
     if (provider.bound) {
-      await handleGithubUnbind(provider)
+      await handleAppleUnbind(provider)
     } else {
-      await handleGithubBind(provider)
+      await handleAppleBind(provider)
     }
     return
   }

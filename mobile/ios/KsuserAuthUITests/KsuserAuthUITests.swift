@@ -219,6 +219,37 @@ import XCTest
         XCTAssertTrue(app.staticTexts["192.0.2.1"].exists)
     }
 
+    func testLogFiltersKeepTheListReadable() {
+        let app = launch(authenticated: true)
+        navigate(app, to: "日志")
+        XCTAssertTrue(app.staticTexts["安全活动"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 条记录 · 最近的账号操作"].exists)
+        XCTAssertTrue(app.staticTexts["2026-10-04"].exists)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "登录，成功")).firstMatch.exists)
+        attach(app, name: "Logs list")
+
+        app.buttons["logFilterButton"].tap()
+        XCTAssertTrue(app.navigationBars["筛选日志"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["操作结果"].exists)
+        XCTAssertTrue(app.buttons["查看记录"].exists)
+        attach(app, name: "Logs filter")
+        let typePicker = app.buttons["操作类型"]
+        XCTAssertTrue(typePicker.exists)
+        typePicker.tap()
+        print(app.debugDescription)
+        let policy = app.staticTexts["风控策略"]
+        XCTAssertTrue(policy.waitForExistence(timeout: 5))
+        policy.tap()
+        app.buttons["查看记录"].tap()
+        XCTAssertTrue(app.staticTexts["操作类型：风控策略"].waitForExistence(timeout: 5))
+
+        app.buttons["logFilterButton"].tap()
+        app.buttons["重置"].tap()
+        app.buttons["查看记录"].tap()
+        XCTAssertFalse(app.staticTexts["操作类型：风控策略"].exists)
+        XCTAssertTrue(app.staticTexts["安全活动"].exists)
+    }
+
     func testThemeChoicePersistsAndRendersDarkMode() {
         var app = launch(authenticated: true)
         app.buttons["aboutButton"].tap()

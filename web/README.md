@@ -25,6 +25,8 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 
 ## OAuth 文档
 
+- [Apple 网页登录接入说明](./APPLE_LOGIN_ADAPTATION.md)
+
 - [QQ OAuth 适配说明](./QQ_LOGIN_LATEST_ADAPTATION.md)
 - [GitHub OAuth 适配说明](./GITHUB_OAUTH_ADAPTATION.md)
 - [Microsoft OAuth 适配说明](./MICROSOFT_OAUTH_ADAPTATION.md)

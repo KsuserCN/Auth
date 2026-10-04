@@ -438,7 +438,7 @@ public class OauthController {
             accountByProvider.put(account.getProvider().toLowerCase(), account);
         }
 
-        List<String> providers = Arrays.asList("wechat", "qq", "microsoft", "github", "google");
+        List<String> providers = Arrays.asList("wechat", "qq", "microsoft", "github", "google", "apple");
         List<Map<String, Object>> data = new java.util.ArrayList<>();
         for (String provider : providers) {
             UserOauthAccount account = accountByProvider.get(provider);

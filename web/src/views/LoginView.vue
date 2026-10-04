@@ -449,8 +449,8 @@
                   <button class="icon-btn" @click="handleQQLogin" aria-label="QQ 登录" type="button">
                     <i class="fa-brands fa-qq" aria-hidden="true"></i>
                   </button>
-                  <button class="icon-btn" @click="handleGithubLogin" aria-label="Github 登录" type="button">
-                    <i class="fa-brands fa-github" aria-hidden="true"></i>
+                  <button class="icon-btn" @click="handleAppleLogin" aria-label="Apple 登录" type="button">
+                    <i class="fa-brands fa-apple" aria-hidden="true"></i>
                   </button>
                   <!-- <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
                     <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
@@ -500,7 +500,6 @@ import {
   verifyPasskeyForLoginMFA,
   verifyTOTPForLogin,
   buildGoogleAuthorizationUrl,
-  buildGithubAuthorizationUrl,
   buildMicrosoftAuthorizationUrl,
   buildQQAuthorizationUrl,
   bindPendingOAuthAccount,
@@ -524,6 +523,7 @@ import {
   syncCurrentWebSessionToDesktop,
   type DesktopBridgeUser,
 } from '@/utils/desktopBridge'
+import { prepareAppleSignIn, signInWithApple } from '@/utils/appleSignIn'
 import {
   buildMobileBridgeReturnUrl,
   createMobileBridgeLogin,
@@ -700,6 +700,7 @@ const mfaSource = ref<
   | 'qr-login'
   | 'qq'
   | 'github'
+  | 'apple'
   | 'microsoft'
   | 'google'
   | null
@@ -1100,6 +1101,7 @@ const startMfaFlow = (
     | 'qr-login'
     | 'qq'
     | 'github'
+    | 'apple'
     | 'microsoft'
     | 'google'
     | null,
@@ -1155,6 +1157,7 @@ const startMfaFlow = (
 }
 
 onMounted(() => {
+  void prepareAppleSignIn().catch(() => {})
   isPasskeySupported.value = isWebAuthnSupported()
   void initializeLoginView()
 
@@ -1180,7 +1183,7 @@ onMounted(() => {
     }
 
     const source =
-      mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' || mfaFrom === 'google'
+      mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' || mfaFrom === 'google' || mfaFrom === 'apple'
         ? mfaFrom
         : null
 
@@ -1594,20 +1597,38 @@ const handleQQLogin = async () => {
   }
 }
 
-const handleGithubLogin = async () => {
+const handleAppleLogin = async () => {
   try {
     persistCurrentPostLoginRedirect()
-    const randomString = generateRandomString()
-    const debugState = import.meta.env.VITE_DEBUG_STATE || 'dev'
-    const state = `${randomString};login;${debugState}`
-
-    sessionStorage.setItem('github_oauth_state', state)
-
-    const authUrl = buildGithubAuthorizationUrl(state)
-    window.location.href = authUrl
+    const response = await signInWithApple('login')
+    if (response.needBind) {
+      if (!response.oauthBindToken) throw new Error('Apple 注册票据缺失，请重新授权')
+      if (response.emailConflict || !response.canRegister) {
+        ElMessage.warning(response.message || '请登录已有账号后，在账号设置中绑定 Apple')
+        return
+      }
+      sessionStorage.setItem('apple_register_ticket', response.oauthBindToken)
+      await router.push('/register/apple')
+    } else if (response.challengeId) {
+      await router.push({ path: '/login', query: {
+        challengeId: response.challengeId,
+        method: response.method || 'totp',
+        methods: response.methods?.join(','),
+        mfaFrom: 'apple',
+      } })
+      startMfaFlow({
+        challengeId: response.challengeId,
+        method: response.method || 'totp',
+        methods: response.methods,
+      }, 'apple')
+    } else if (response.accessToken) {
+      await finalizeWebLogin({ accessToken: response.accessToken, user: response.user })
+      await navigateAfterLogin()
+    } else {
+      throw new Error('Apple 登录响应无效')
+    }
   } catch (error: unknown) {
-    console.error('GitHub login failed:', error)
-    ElMessage.error('GitHub 登录失败，请重试')
+    ElMessage.error(error instanceof Error ? error.message : 'Apple 登录失败，请重试')
   }
 }
 

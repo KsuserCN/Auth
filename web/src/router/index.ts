@@ -71,6 +71,11 @@ const router = createRouter({
       component: () => import('../views/RegisterView.vue'),
     },
     {
+      path: '/register/apple',
+      name: 'apple-register',
+      component: () => import('../views/AppleRegisterView.vue'),
+    },
+    {
       path: '/sensitive-verification',
       name: 'sensitive-verification',
       component: () => import('../views/SensitiveVerificationView.vue'),

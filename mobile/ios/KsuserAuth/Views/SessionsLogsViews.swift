@@ -61,41 +61,82 @@ struct LogsView: View {
     @Environment(AppModel.self) private var model
     @State private var operation = ""
     @State private var result = ""
-    @State private var filterExpanded = false
+    @State private var showingFilters = false
     @State private var detail: SensitiveLogItem?
-    private let types = ["", "LOGIN", "REGISTER", "SENSITIVE_VERIFY", "ADAPTIVE_POLICY", "CHANGE_PASSWORD", "CHANGE_EMAIL", "ADD_PASSKEY", "DELETE_PASSKEY", "ENABLE_TOTP", "DISABLE_TOTP"]
-    var body: some View {
-        PageScroll {
-            AppCard {
-                CardHeader(title: "安全活动记录", subtitle: "了解登录、账号修改与验证操作的结果。", icon: "clock.arrow.circlepath")
-                DisclosureGroup("筛选日志", isExpanded: $filterExpanded) {
-                    VStack(spacing: 12) {
-                        Picker("操作类型", selection: $operation) { ForEach(types, id: \.self) { Text(operationTitle($0)).tag($0) } }
-                        Picker("操作结果", selection: $result) { Text("全部结果").tag(""); Text("成功").tag("SUCCESS"); Text("失败").tag("FAILURE") }
-                        AsyncActionButton(title: "应用筛选", isBusy: model.isBusy) { await reload(); filterExpanded = false }
-                    }.padding(.top, 12)
-                }
+
+    private var dayGroups: [LogDayGroup] {
+        var groups: [LogDayGroup] = []
+        for log in model.logs {
+            let day = String(displayDate(log.createdAt).prefix(10))
+            if let index = groups.firstIndex(where: { $0.id == day }) {
+                groups[index].logs.append(log)
+            } else {
+                groups.append(LogDayGroup(id: day, logs: [log]))
             }
+        }
+        return groups
+    }
+
+    var body: some View {
+        PageScroll(spacing: 16) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("安全活动").font(.title3.weight(.bold))
+                    Text("\(model.logsTotal) 条记录 · 最近的账号操作")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 12)
+                Button { showingFilters = true } label: {
+                    Label("筛选", systemImage: "line.3.horizontal.decrease")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14).frame(minHeight: 40)
+                        .background(Brand.card, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("logFilterButton")
+            }
+
+            HStack(spacing: 8) {
+                resultButton("全部", value: "")
+                resultButton("成功", value: "SUCCESS")
+                resultButton("失败", value: "FAILURE")
+            }
+
+            if !operation.isEmpty {
+                HStack(spacing: 8) {
+                    Text("操作类型：\(operationTitle(operation))")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Button("清除", systemImage: "xmark") {
+                        operation = ""
+                        Task { await reload() }
+                    }
+                    .labelStyle(.titleAndIcon)
+                    .font(.subheadline)
+                    .disabled(model.isBusy)
+                }
+                .padding(.horizontal, 4)
+            }
+
             if model.logs.isEmpty {
                 if model.isBusy { ProgressView("正在读取日志…").frame(maxWidth: .infinity).padding() }
                 else { ContentUnavailableView("暂无符合条件的记录", systemImage: "doc.text.magnifyingglass", description: Text("调整筛选条件，或下拉重新加载。")) }
             }
-            ForEach(model.logs) { log in
-                Button { detail = log } label: {
-                    AppCard {
-                        HStack(alignment: .top) {
-                            Image(systemName: log.result.uppercased() == "SUCCESS" ? "checkmark.circle.fill" : "exclamationmark.circle.fill").foregroundStyle(log.result.uppercased() == "SUCCESS" ? Brand.success : Brand.danger)
-                            VStack(alignment: .leading, spacing: 7) {
-                                Text(operationTitle(log.operationType)).font(.headline).foregroundStyle(.primary)
-                                ScrollableDateText(value: log.createdAt).font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+            ForEach(dayGroups) { group in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(group.id).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary).padding(.horizontal, 4)
+                    VStack(spacing: 0) {
+                        ForEach(group.logs.indices, id: \.self) { index in
+                            let log = group.logs[index]
+                            if index > 0 { Divider().padding(.leading, 54) }
+                            Button { detail = log } label: { LogListRow(log: log) }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(operationTitle(log.operationType))，\(log.result.uppercased() == "SUCCESS" ? "成功" : "失败")，\(displayDate(log.createdAt))")
                         }
-                        Text([log.ipLocation, log.browser, log.deviceType].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)
-                        if let failure = log.failureReason, !failure.isEmpty { Text(failure).font(.caption).foregroundStyle(Brand.danger).lineLimit(2) }
                     }
-                }.buttonStyle(.plain).accessibilityLabel("\(operationTitle(log.operationType))，\(log.result.uppercased() == "SUCCESS" ? "成功" : "失败")，\(displayDate(log.createdAt))")
+                    .background(Brand.card, in: RoundedRectangle(cornerRadius: 20))
+                }
             }
             if model.totalPages > 1 {
                 HStack {
@@ -108,9 +149,141 @@ struct LogsView: View {
             }
         }.refreshable { await reload() }.task { await reload() }
             .sheet(item: $detail) { log in AppNavigationStack { LogDetailView(log: log) } }
+            .sheet(isPresented: $showingFilters) {
+                AppNavigationStack {
+                    LogFilterView(operation: operation, result: result) { selectedOperation, selectedResult in
+                        operation = selectedOperation
+                        result = selectedResult
+                        Task { await reload() }
+                    }
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+    }
+    private func resultButton(_ title: String, value: String) -> some View {
+        Button {
+            guard result != value else { return }
+            result = value
+            Task { await reload() }
+        } label: {
+            Text(title).font(.subheadline.weight(result == value ? .semibold : .regular))
+                .foregroundStyle(result == value ? Brand.gold : Color.secondary)
+                .frame(maxWidth: .infinity, minHeight: 40)
+                .background(result == value ? Brand.subtleGold : Brand.card, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isBusy)
+        .accessibilityAddTraits(result == value ? .isSelected : [])
     }
     private func reload() async { await load(page: 1) }
     private func load(page: Int) async { await model.loadLogs(page: page, operationType: operation.isEmpty ? nil : operation, result: result.isEmpty ? nil : result) }
+}
+
+private struct LogDayGroup: Identifiable {
+    let id: String
+    var logs: [SensitiveLogItem]
+}
+
+private struct LogListRow: View {
+    let log: SensitiveLogItem
+    private var succeeded: Bool { log.result.uppercased() == "SUCCESS" }
+    private var context: String {
+        [log.ipLocation, log.browser, log.deviceType]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+    private var time: String {
+        let date = displayDate(log.createdAt)
+        return date.count >= 16 ? String(date.dropFirst(11).prefix(5)) : date
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: succeeded ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .font(.system(size: 19)).foregroundStyle(succeeded ? Brand.success : Brand.danger)
+                .frame(width: 26).padding(.top, 1).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(operationTitle(log.operationType)).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    Text(time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                }
+                HStack(spacing: 6) {
+                    Text(succeeded ? "成功" : "失败")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(succeeded ? Brand.success : Brand.danger)
+                    if !context.isEmpty {
+                        Text("·").foregroundStyle(.tertiary)
+                        Text(context).lineLimit(1).truncationMode(.tail)
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
+                if !succeeded, let failure = log.failureReason, !failure.isEmpty {
+                    Text(failure).font(.caption).foregroundStyle(Brand.danger).lineLimit(2)
+                }
+            }
+            Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                .padding(.top, 4).accessibilityHidden(true)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+private struct LogFilterView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedOperation: String
+    @State private var selectedResult: String
+    let onApply: (String, String) -> Void
+    private let types = ["", "LOGIN", "REGISTER", "SENSITIVE_VERIFY", "ADAPTIVE_POLICY", "CHANGE_PASSWORD", "CHANGE_EMAIL", "ADD_PASSKEY", "DELETE_PASSKEY", "ENABLE_TOTP", "DISABLE_TOTP", "UPDATE_PROFILE", "DELETE_ACCOUNT"]
+
+    init(operation: String, result: String, onApply: @escaping (String, String) -> Void) {
+        _selectedOperation = State(initialValue: operation)
+        _selectedResult = State(initialValue: result)
+        self.onApply = onApply
+    }
+
+    var body: some View {
+        Form {
+            Section("操作结果") {
+                Picker("操作结果", selection: $selectedResult) {
+                    Text("全部").tag("")
+                    Text("成功").tag("SUCCESS")
+                    Text("失败").tag("FAILURE")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            Section("操作类型") {
+                Picker("操作类型", selection: $selectedOperation) {
+                    ForEach(types, id: \.self) { Text(operationTitle($0)).tag($0) }
+                }
+                .pickerStyle(.navigationLink)
+            }
+        }
+        .navigationTitle("筛选日志")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) { Button("取消") { dismiss() } }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("重置") { selectedOperation = ""; selectedResult = "" }
+                    .disabled(selectedOperation.isEmpty && selectedResult.isEmpty)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button("查看记录") {
+                onApply(selectedOperation, selectedResult)
+                dismiss()
+            }
+            .buttonStyle(GoldButtonStyle())
+            .padding(20)
+            .background(Brand.background)
+        }
+    }
 }
 
 struct LogDetailView: View {
@@ -130,7 +303,9 @@ struct LogDetailView: View {
                 InfoRow(title: "风险评分", value: String(log.riskScore))
                 InfoRow(title: "响应耗时", value: log.durationMs.map { "\($0) 毫秒" } ?? "暂无记录")
                 if let action = log.actionTaken { InfoRow(title: "执行措施", value: action) }
-                if let failure = log.failureReason { Text(failure).font(.subheadline).foregroundStyle(Brand.danger).textSelection(.enabled) }
+                if let note = log.failureReason, !note.isEmpty {
+                    InfoRow(title: log.result.uppercased() == "SUCCESS" ? "备注" : "失败原因", value: note)
+                }
                 if log.triggeredMultiErrorLock { Label("触发连续错误保护", systemImage: "lock.fill").foregroundStyle(Brand.gold) }
                 if log.triggeredRateLimitLock { Label("触发请求频率保护", systemImage: "timer").foregroundStyle(Brand.gold) }
             }

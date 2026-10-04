@@ -42,6 +42,10 @@
             <p class="step-subtitle">选择一种方式来验证您的身份</p>
 
             <div class="method-list">
+              <div v-if="appleBound" class="method-option" :class="{ 'is-disabled': appleLoading }" @click="handleAppleVerify">
+                <i class="fa-brands fa-apple method-icon" aria-hidden="true"></i>
+                <div class="method-info"><h3>使用 Apple 验证</h3><p>通过 Apple 账号确认身份</p></div>
+              </div>
               <!-- 密码验证 -->
               <div
                 class="method-option"
@@ -377,6 +381,7 @@ import { getStoredAccessToken } from '@/utils/authSession'
 import { useUserStore } from '@/stores/user'
 import {
   checkSensitiveVerification,
+  getAppleStatus,
   getPasskeySensitiveVerificationOptions,
   initQrSensitive,
   pollQrStatus,
@@ -385,6 +390,7 @@ import {
   verifyPasskeySensitiveOperation,
   verifySensitiveOperation,
 } from '@/api/auth'
+import { prepareAppleSignIn, verifySensitiveWithApple } from '@/utils/appleSignIn'
 import {
   isWebAuthnSupported,
   getPasskeyCredential,
@@ -393,6 +399,23 @@ import {
 
 const router = useRouter()
 const userStore = useUserStore()
+const appleBound = ref(false)
+const appleLoading = ref(false)
+
+const handleAppleVerify = async () => {
+  if (appleLoading.value || !appleBound.value) return
+  appleLoading.value = true
+  try {
+    await verifySensitiveWithApple()
+    ElMessage.success('Apple 身份验证成功')
+    const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
+    await router.push(returnTo)
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : 'Apple 验证失败，请重试')
+  } finally {
+    appleLoading.value = false
+  }
+}
 
 // 表单引用
 const passwordFormRef = ref<FormInstance>()
@@ -534,6 +557,8 @@ onMounted(async () => {
   if (!ensureAuthenticated()) return
   await userStore.fetchUserInfo()
   isPasskeySupported.value = isWebAuthnSupported()
+  appleBound.value = await getAppleStatus().then((result) => result.enabled).catch(() => false)
+  if (appleBound.value) void prepareAppleSignIn().catch(() => {})
 
   try {
     const status = await checkSensitiveVerification()
@@ -563,7 +588,7 @@ onMounted(async () => {
         item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'),
     ) as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr' | undefined
 
-    if (defaultMethod) {
+    if (defaultMethod && !(appleBound.value && status.preferredMethod === 'apple')) {
       await selectMethod(defaultMethod)
     }
   } catch (error) {

@@ -8,6 +8,9 @@
         </div>
         <h1 class="login-title">创建账户</h1>
         <p class="login-description">开始您的安全之旅，创建一个新账户</p>
+        <el-button type="primary" plain :loading="appleLoading" @click="handleAppleRegister">
+          <i class="fa-brands fa-apple" aria-hidden="true"></i>&nbsp; 使用 Apple 注册
+        </el-button>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
@@ -252,9 +255,44 @@ import {
   type PasswordRequirement,
 } from '@/api/auth'
 import { finalizeWebLogin } from '@/utils/desktopBridge'
+import { prepareAppleSignIn, signInWithApple } from '@/utils/appleSignIn'
 
 const router = useRouter()
 const route = useRoute()
+const appleLoading = ref(false)
+
+const handleAppleRegister = async () => {
+  if (appleLoading.value) return
+  appleLoading.value = true
+  try {
+    const response = await signInWithApple('login')
+    if (response.needBind) {
+      if (!response.oauthBindToken) throw new Error('Apple 注册票据缺失，请重新授权')
+      if (response.emailConflict || !response.canRegister) {
+        ElMessage.warning(response.message || '该邮箱已有账号，请登录后绑定 Apple')
+        return
+      }
+      sessionStorage.setItem('apple_register_ticket', response.oauthBindToken)
+      await router.push('/register/apple')
+    } else if (response.challengeId) {
+      await router.push({ path: '/login', query: {
+        challengeId: response.challengeId,
+        method: response.method || 'totp',
+        methods: response.methods?.join(','),
+        mfaFrom: 'apple',
+      } })
+    } else if (response.accessToken) {
+      await finalizeWebLogin({ accessToken: response.accessToken, user: response.user })
+      await router.replace('/home/overview')
+    } else {
+      throw new Error('Apple 登录响应无效')
+    }
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : 'Apple 注册失败，请重试')
+  } finally {
+    appleLoading.value = false
+  }
+}
 
 // 表单引用
 const usernameFormRef = ref<FormInstance>()
@@ -440,6 +478,7 @@ const requirementItems = computed(() => {
 })
 
 onMounted(async () => {
+  void prepareAppleSignIn().catch(() => {})
   try {
     passwordRequirement.value = await getPasswordRequirement()
   } catch (error) {

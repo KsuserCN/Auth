@@ -6,6 +6,9 @@
 
     <div v-else-if="step === 'method'" class="panel">
       <p class="subtitle">请选择一种方式验证身份</p>
+      <el-button v-if="appleBound" :loading="appleLoading" @click="handleAppleVerify">
+        <i class="fa-brands fa-apple" aria-hidden="true"></i>&nbsp; 使用 Apple 验证
+      </el-button>
       <div class="method-list">
         <button v-for="method in allMethods" :key="method" type="button" class="method-item"
           :disabled="methodSelecting || !isMethodSelectable(method)" @click="selectMethod(method)">
@@ -104,6 +107,7 @@ import type { FormInstance } from 'element-plus'
 import QRCode from 'qrcode'
 import {
   checkSensitiveVerification,
+  getAppleStatus,
   getPasskeySensitiveVerificationOptions,
   initQrSensitive,
   pollQrStatus,
@@ -112,6 +116,7 @@ import {
   verifyPasskeySensitiveOperation,
   verifySensitiveOperation,
 } from '@/api/auth'
+import { prepareAppleSignIn, verifySensitiveWithApple } from '@/utils/appleSignIn'
 import { extractAuthenticationData, getPasskeyCredential, isWebAuthnSupported } from '@/utils/webauthn'
 
 const props = withDefaults(defineProps<{
@@ -162,6 +167,23 @@ const availableMethods = ref<Array<'password' | 'email-code' | 'passkey' | 'totp
   'qr',
 ])
 const passkeySupported = ref(false)
+const appleBound = ref(false)
+const appleLoading = ref(false)
+
+const handleAppleVerify = async () => {
+  if (appleLoading.value) return
+  appleLoading.value = true
+  try {
+    await verifySensitiveWithApple()
+    ElMessage.success('Apple 身份验证成功')
+    emit('success')
+    setVisible(false)
+  } catch (error: unknown) {
+    ElMessage.error(error instanceof Error ? error.message : 'Apple 验证失败，请重试')
+  } finally {
+    appleLoading.value = false
+  }
+}
 
 const passwordFormRef = ref<FormInstance>()
 const codeFormRef = ref<FormInstance>()
@@ -259,6 +281,8 @@ const initDialog = async () => {
 
   try {
     const status = await checkSensitiveVerification()
+    appleBound.value = await getAppleStatus().then((result) => result.enabled).catch(() => false)
+    if (appleBound.value) void prepareAppleSignIn().catch(() => {})
     if (status.verified && status.remainingSeconds > 0) {
       emit('success')
       setVisible(false)
@@ -266,6 +290,10 @@ const initDialog = async () => {
     }
 
     const methods = status.methods ?? allMethods
+    if (appleBound.value && status.preferredMethod === 'apple') {
+      step.value = 'method'
+      return
+    }
     const sanitizedMethods = methods.filter((item): item is typeof allMethods[number] =>
       allMethods.includes(item),
     )
