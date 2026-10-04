@@ -65,9 +65,20 @@ struct ContentView: View {
         .sheet(isPresented: $showAbout) { AppNavigationStack { AboutView() } }
         .onOpenURL(perform: handleIncomingURL)
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in if let url = activity.webpageURL { handleIncomingURL(url) } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.validateAppleCredential() } } }
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.shortcutNotification)) { notification in
+            let type = AppDelegate.takePendingShortcutType() ?? (notification.object as? String)
+            if let type { performShortcut(type) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            if let type = AppDelegate.takePendingShortcutType() { performShortcut(type) }
+            Task { await model.validateAppleCredential() }
+        }
         .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in Task { await model.handleAppleCredentialRevocation() } }
-        .task { await model.restoreSession() }
+        .task {
+            await model.restoreSession()
+            if let type = AppDelegate.takePendingShortcutType() { performShortcut(type) }
+        }
     }
 
     private var shell: some View {
@@ -124,5 +135,20 @@ struct ContentView: View {
     private func handleIncomingURL(_ url: URL) {
         guard !NativeAuthenticationProvider.handleCallback(url) else { return }
         Task { await model.handleURL(url) }
+    }
+
+    private func performShortcut(_ type: String) {
+        switch type {
+        case AppDelegate.scanShortcut:
+            showScanner = true
+        case AppDelegate.securityShortcut:
+            destination = .security
+        case AppDelegate.sessionsShortcut:
+            destination = .sessions
+        case AppDelegate.profileShortcut:
+            destination = .profile
+        default:
+            break
+        }
     }
 }

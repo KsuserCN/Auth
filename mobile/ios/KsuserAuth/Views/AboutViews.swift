@@ -8,6 +8,7 @@ struct AboutView: View {
     @AppStorage("appearance") private var appearance = AppTheme.system.rawValue
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0" }
     private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1" }
+    private var currentYear: Int { Calendar.current.component(.year, from: .now) }
     private var filingNumber: String {
         guard let value = Bundle.main.object(forInfoDictionaryKey: "KSUSER_ICP_NUMBER") as? String,
               !value.isEmpty, !value.hasPrefix("$(") else { return "沪ICP备2025144703号-3A" }
@@ -53,22 +54,36 @@ struct AboutView: View {
                 .padding(.horizontal, 16).padding(.vertical, 4)
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
             }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("帮助与反馈").font(.headline).padding(.horizontal, 4)
+                VStack(spacing: 0) {
+                    externalLink("问题反馈", subtitle: "提交问题或建议", icon: "bubble.left.and.bubble.right", url: "https://github.com/KsuserCN/Auth/issues")
+                }
+                .padding(.horizontal, 16).padding(.vertical, 4)
+                .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
+            }
         }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                Button { openURL(URL(string: "https://beian.miit.gov.cn/")!) } label: {
-                    HStack(spacing: 4) {
-                        Text(filingNumber)
-                        Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold)).accessibilityHidden(true)
+                VStack(spacing: 0) {
+                    Text("\(currentYear.formatted(.number.grouping(.never))) Ksuser | KsuserKqy")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                    Button { openURL(URL(string: "https://beian.miit.gov.cn/")!) } label: {
+                        HStack(spacing: 4) {
+                            Text(filingNumber)
+                            Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold)).accessibilityHidden(true)
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .contentShape(Rectangle())
                     }
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(filingNumber)
+                    .accessibilityHint("在应用内打开工信部备案管理系统")
+                    .accessibilityIdentifier("icpFilingNumber")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(filingNumber)
-                .accessibilityHint("在应用内打开工信部备案管理系统")
-                .accessibilityIdentifier("icpFilingNumber")
                 .padding(.horizontal, 20)
                 .background(Brand.background)
             }
@@ -101,7 +116,11 @@ struct AboutView: View {
     }
 
     private func legalLink(_ title: String, subtitle: String, icon: String, path: String) -> some View {
-        Button { openURL(URL(string: "https://docs.ksuser.cn/agreement/" + path)!) } label: {
+        externalLink(title, subtitle: subtitle, icon: icon, url: "https://docs.ksuser.cn/agreement/" + path)
+    }
+
+    private func externalLink(_ title: String, subtitle: String, icon: String, url: String) -> some View {
+        Button { openURL(URL(string: url)!) } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 17))

@@ -18,6 +18,43 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.scan</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>扫码授权</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>扫描登录或安全验证二维码</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>qrcode.viewfinder</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.security</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>安全中心</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>shield.lefthalf.filled</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.sessions</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>设备会话</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>laptopcomputer.and.iphone</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.profile</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>账号资料</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>person.crop.circle</string>
+		</dict>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIApplicationSceneManifest</key>
