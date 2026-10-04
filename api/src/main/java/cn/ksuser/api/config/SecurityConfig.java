@@ -77,6 +77,10 @@ public class SecurityConfig {
                     "/sso/authorize/context", "/sso/authorize/context/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/mobile-login", "/oauth/qq/mobile-login/",
+                    "/oauth/apple/challenge", "/oauth/apple/challenge/",
+                    "/oauth/apple/mobile-login", "/oauth/apple/mobile-login/",
+                    "/oauth/apple/register-pending", "/oauth/apple/register-pending/",
+                    "/oauth/apple/notifications", "/oauth/apple/notifications/",
                     "/oauth/qq/bind-existing", "/oauth/qq/bind-existing/",
                     "/oauth/qq/register-bind", "/oauth/qq/register-bind/",
                     "/oauth/github/bind-existing", "/oauth/github/bind-existing/",
@@ -127,6 +131,7 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
                 // 只为查询接口排除 CSRF 检查
                 .ignoringRequestMatchers(
+                    "/oauth/apple/notifications", "/oauth/apple/notifications/",
                     "/auth/check-username", "/auth/check-username/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/mobile-login", "/oauth/qq/mobile-login/",

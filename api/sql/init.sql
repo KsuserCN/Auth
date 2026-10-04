@@ -61,12 +61,17 @@ CREATE TABLE user_oauth_accounts (
     'qq',
     'microsoft',
     'github',
-    'google'
+    'google',
+    'apple'
   ) NOT NULL COMMENT 'OAuth提供方',
 
   provider_user_id VARCHAR(128) NOT NULL COMMENT '提供方用户强调唯一ID（openid / sub / github id）',
 
   union_id VARCHAR(128) DEFAULT NULL COMMENT '跨应用唯一ID（如 wechat / qq unionid）',
+
+  apple_client_id VARCHAR(255) DEFAULT NULL,
+  apple_refresh_token_encrypted TEXT DEFAULT NULL,
+  apple_email_forwarding_enabled TINYINT(1) DEFAULT NULL,
 
   is_enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用该第三方账号绑定',
 
@@ -525,3 +530,15 @@ CREATE TABLE user_sensitive_logs (
 COMMENT='用户敏感操作日志表（支持安全审计、风险分析、异常检测）';
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+-- Apple revocations survive user deletion and retry after provider outages.
+DROP TABLE IF EXISTS apple_revocation_tasks;
+CREATE TABLE apple_revocation_tasks (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  client_id VARCHAR(255) NOT NULL,
+  encrypted_token TEXT NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  next_attempt_at DATETIME NOT NULL,
+  KEY idx_apple_revocations_due (next_attempt_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

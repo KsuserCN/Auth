@@ -620,3 +620,9 @@ jwt.refresh-token-expiration=604800000  # 7天（毫秒）
 spring.redis.host=localhost
 spring.redis.port=6379
 ```
+
+
+## iOS 原生 Apple 登录
+
+- [Apple 登录、无密码注册、绑定、敏感验证与撤销](apple-native-auth.md)
+- [现有数据库增量升级与本次 JAR 部署](deploy-ios-first-release.md)

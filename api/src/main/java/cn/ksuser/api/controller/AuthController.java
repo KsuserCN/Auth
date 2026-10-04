@@ -56,6 +56,8 @@ public class AuthController {
     private static final String AVATAR_STORAGE_DIR = "static/avatars";
     private static final String QR_TEXT_PREFIX = "KSUSER-AUTH-QR:";
 
+    private final cn.ksuser.api.repository.UserOauthAccountRepository appleAccounts;
+
     private final UserService userService;
     private final UserSessionService userSessionService;
     private final JwtUtil jwtUtil;
@@ -92,8 +94,10 @@ public class AuthController {
                           AccountRecoveryService accountRecoveryService,
                           QrChallengeService qrChallengeService,
                           AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService,
-                          AdaptiveRiskMetricsService adaptiveRiskMetricsService) {
+                          AdaptiveRiskMetricsService adaptiveRiskMetricsService,
+                          cn.ksuser.api.repository.UserOauthAccountRepository appleAccounts) {
         this.userService = userService;
+        this.appleAccounts = appleAccounts;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
         this.emailService = emailService;
@@ -739,6 +743,7 @@ public class AuthController {
             );
         }
 
+        userInfo.setHasPassword(user.getHasPassword());
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, "获取成功", userInfo));
     }
@@ -838,7 +843,7 @@ public class AuthController {
                 String preferredSensitiveMethod = normalizeSensitiveMethod(updateUserSettingRequest.getStringValue());
                 if (preferredSensitiveMethod == null) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "敏感验证优先方式只能是 password、email-code、passkey 或 totp"));
+                        .body(new ApiResponse<>(400, "敏感验证优先方式只能是 password、email-code、passkey、totp 或 apple"));
                 }
                 List<String> availableSensitiveMethods = resolveSensitiveMethods(user);
                 if (!availableSensitiveMethods.contains(preferredSensitiveMethod)) {
@@ -2502,10 +2507,12 @@ public class AuthController {
         // TOTP 验证
         if ("totp".equals(method)) {
             String code = verifySensitiveOperationRequest.getCode();
-            if (code == null || code.trim().isEmpty()) {
+            String recoveryCode = verifySensitiveOperationRequest.getRecoveryCode();
+            boolean usingRecoveryCode = recoveryCode != null && !recoveryCode.isBlank();
+            if (!usingRecoveryCode && (code == null || code.isBlank())) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码不能为空"));
+                    .body(new ApiResponse<>(400, "验证码或恢复码不能为空"));
             }
 
             // 检查是否已启用 TOTP
@@ -2516,12 +2523,13 @@ public class AuthController {
             }
 
             try {
-                byte[] masterKey = encryptionUtil.getMasterKey();
-                boolean ok = totpService.verifyTotpCode(user.getId(), code, masterKey);
+                boolean ok = usingRecoveryCode
+                    ? totpService.verifyRecoveryCode(user.getId(), recoveryCode)
+                    : totpService.verifyTotpCode(user.getId(), code, encryptionUtil.getMasterKey());
                 if (!ok) {
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_invalid_or_expired", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, usingRecoveryCode ? "recovery_code_invalid_or_used" : "verification_code_invalid_or_expired", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "验证码错误或已过期"));
+                        .body(new ApiResponse<>(400, usingRecoveryCode ? "恢复码错误或已使用" : "验证码错误或已过期"));
                 }
             } catch (Exception e) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, e.getMessage(), startTime);
@@ -2711,6 +2719,9 @@ public class AuthController {
         }
         
         List<String> sensitiveMethods = resolveSensitiveMethods(user);
+        if (!UserAgentParserService.isNativeIosClient(rateLimitService.getClientUserAgent(request))) {
+            sensitiveMethods.remove("apple");
+        }
         String preferredSensitiveMethod = resolvePreferredSensitiveMethod(user, sensitiveMethods);
 
         SensitiveVerificationStatusResponse response = new SensitiveVerificationStatusResponse(
@@ -3483,7 +3494,10 @@ public class AuthController {
         if (user.getPasswordHash() != null && !user.getPasswordHash().isBlank()) {
             methods.add("password");
         }
-        if (user.getEmail() != null && !user.getEmail().isBlank()) {
+        boolean appleRelayDisabled = cn.ksuser.api.service.AppleAuthService.isRelayEmail(user.getEmail())
+            && appleAccounts.findByProviderAndUserId("apple", user.getId())
+                .map(a -> Boolean.FALSE.equals(a.getAppleEmailForwardingEnabled())).orElse(false);
+        if (user.getEmail() != null && !user.getEmail().isBlank() && !appleRelayDisabled) {
             methods.add("email-code");
         }
         if (!passkeyService.getUserPasskeys(user.getId()).isEmpty()) {
@@ -3491,6 +3505,10 @@ public class AuthController {
         }
         if (totpService.isTotpEnabled(user.getId())) {
             methods.add("totp");
+        }
+
+        if (appleAccounts.findByProviderAndUserId("apple", user.getId()).map(a -> Boolean.TRUE.equals(a.getIsEnabled())).orElse(false)) {
+            methods.add("apple");
         }
 
         String preferredSensitiveMethod = userSettingsRepository.findByUserId(user.getId())
@@ -3536,7 +3554,8 @@ public class AuthController {
         if ("password".equals(normalized)
                 || "email-code".equals(normalized)
                 || "passkey".equals(normalized)
-                || "totp".equals(normalized)) {
+                || "totp".equals(normalized)
+                || "apple".equals(normalized)) {
             return normalized;
         }
         return null;

@@ -4,6 +4,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class UserInfoResponse {
+    private boolean hasPassword;
+    public boolean getHasPassword() { return hasPassword; }
+    public void setHasPassword(boolean value) { hasPassword=value; }
     private String uuid;
     private String username;
     private String email;
@@ -24,7 +27,7 @@ public class UserInfoResponse {
                             String verificationType, UserSettingsResponse settings) {
         this.uuid = uuid;
         this.username = username;
-        this.email = email;
+        this.email = email == null ? "" : email;
         this.avatarUrl = avatarUrl;
         this.verificationType = verificationType;
         this.settings = settings;
@@ -37,7 +40,7 @@ public class UserInfoResponse {
                            UserSettingsResponse settings) {
         this.uuid = uuid;
         this.username = username;
-        this.email = email;
+        this.email = email == null ? "" : email;
         this.avatarUrl = avatarUrl;
         this.realName = realName;
         this.gender = gender;
@@ -70,7 +73,7 @@ public class UserInfoResponse {
     }
 
     public void setEmail(String email) {
-        this.email = email;
+        this.email = email == null ? "" : email;
     }
 
     public String getAvatarUrl() {

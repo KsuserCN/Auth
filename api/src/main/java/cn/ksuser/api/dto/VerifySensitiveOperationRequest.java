@@ -4,6 +4,7 @@ public class VerifySensitiveOperationRequest {
     private String method; // "password"、"email-code" 或 "totp"
     private String password; // 当 method=password 时需要
     private String code; // 当 method=email-code 或 totp 时需要
+    private String recoveryCode; // 当 method=totp 且使用一次性恢复码时需要
 
     public VerifySensitiveOperationRequest() {
     }
@@ -28,6 +29,14 @@ public class VerifySensitiveOperationRequest {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getRecoveryCode() {
+        return recoveryCode;
+    }
+
+    public void setRecoveryCode(String recoveryCode) {
+        this.recoveryCode = recoveryCode;
     }
 
     public String getCode() {

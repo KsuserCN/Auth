@@ -47,3 +47,8 @@ miniprogram
 /.clang-tidy
 **/.test
 /.appanalyzer
+
+# iOS developer-only environment overrides
+mobile/ios/Config/Local.xcconfig
+
+docs/

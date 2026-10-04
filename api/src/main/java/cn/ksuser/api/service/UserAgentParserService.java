@@ -16,6 +16,8 @@ public class UserAgentParserService {
     private static final Logger logger = LoggerFactory.getLogger(UserAgentParserService.class);
     private static final Pattern KSUSER_DESKTOP_PATTERN = Pattern.compile("(?i)KsuserAuthDesktop/([\\d.]+)");
 
+    private static final Pattern KSUSER_MOBILE_PATTERN = Pattern.compile("(?i)KsuserAuth(?:iOS|Android|Mobile)/([\\d.]+)");
+
     // 常见浏览器模式（优先匹配 Edge）
     private static final String[] BROWSER_PATTERNS = {
         "(?i)EdgA/([\\d.]+)",
@@ -34,6 +36,14 @@ public class UserAgentParserService {
         "Microsoft Edge", "Microsoft Edge", "Microsoft Edge", "Microsoft Edge",
         "Opera", "Chrome", "Firefox", "Safari", "IE", "IE"
     };
+
+    /** Capability hint only; authorization still requires signed Apple credentials. */
+    public static boolean isNativeIosClient(String userAgent) {
+        if (userAgent == null) return false;
+        String normalized=userAgent.toLowerCase(java.util.Locale.ROOT);
+        return (normalized.startsWith("ksuserauthmobile/") || normalized.startsWith("ksuserauthios/"))
+            && normalized.contains("(ios ");
+    }
 
     /**
      * 解析User-Agent字符串
@@ -57,6 +67,8 @@ public class UserAgentParserService {
      * 从User-Agent提取浏览器信息
      */
     private String parseBrowser(String userAgent) {
+        Matcher mobileMatcher = KSUSER_MOBILE_PATTERN.matcher(userAgent);
+        if (mobileMatcher.find()) { return "Ksuser Auth Mobile " + mobileMatcher.group(1); }
         Matcher desktopMatcher = KSUSER_DESKTOP_PATTERN.matcher(userAgent);
         if (desktopMatcher.find()) {
             return "Ksuser Auth Desktop " + desktopMatcher.group(1);
@@ -81,6 +93,9 @@ public class UserAgentParserService {
         String ua = userAgent.toLowerCase();
         if (ua.contains("bot") || ua.contains("spider") || ua.contains("crawler")) {
             return "Bot";
+        }
+        if (ua.contains("iphone") || ua.contains("ipad") || ua.contains("ios")) {
+            return "iOS";
         }
         if (ua.contains("macos")) {
             return "Mac";
@@ -121,6 +136,9 @@ public class UserAgentParserService {
         String browser = info.getBrowser();
         String deviceType = normalizeDeviceLabel(info.getDeviceType());
 
+        if (browser != null && browser.startsWith("Ksuser Auth Mobile")) {
+            return "Ksuser 移动版（" + deviceType + "）";
+        }
         if (browser != null && browser.startsWith("Ksuser Auth Desktop")) {
             if ("未知系统".equals(deviceType)) {
                 return "Ksuser 桌面版";

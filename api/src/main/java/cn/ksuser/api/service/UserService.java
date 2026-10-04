@@ -16,10 +16,12 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AppleRevocationService appleRevocations;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, AppleRevocationService appleRevocations) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.appleRevocations = appleRevocations;
     }
 
     /**
@@ -95,7 +97,7 @@ public class UserService {
      * @return 是否匹配
      */
     public boolean verifyPassword(String password, String passwordHash) {
-        return passwordEncoder.matches(password, passwordHash);
+        return passwordHash != null && !passwordHash.isBlank() && passwordEncoder.matches(password, passwordHash);
     }
 
     /**
@@ -111,7 +113,7 @@ public class UserService {
         }
 
         User user = userOpt.get();
-        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+        if (!verifyPassword(password, user.getPasswordHash())) {
             return Optional.empty();
         }
 
@@ -190,7 +192,9 @@ public class UserService {
      * 删除用户账号
      * @param user 用户对象
      */
+    @org.springframework.transaction.annotation.Transactional
     public void deleteUser(User user) {
+        appleRevocations.enqueueForUser(user.getId());
         userRepository.delete(user);
     }
 }

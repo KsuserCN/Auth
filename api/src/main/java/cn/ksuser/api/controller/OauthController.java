@@ -76,6 +76,9 @@ public class OauthController {
     @Value("${app.qq.mobile.app-id:${app.qq.oauth.app-id:}}")
     private String qqMobileAppId;
 
+    @Value("${app.qq.mobile.allowed-app-ids:}")
+    private String qqMobileAllowedAppIds;
+
     @Value("${app.github.oauth.app-id:}")
     private String githubClientId;
 
@@ -163,7 +166,8 @@ public class OauthController {
         
         // 检查是否为最后可登录方式
         // 1. 检查是否设置了密码
-        boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isEmpty();
+        boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isEmpty()
+            && user.getEmail() != null && !user.getEmail().isBlank();
         
         // 2. 检查是否绑定了 Passkey
         boolean hasPasskey = !userPasskeyRepository.findByUserId(user.getId()).isEmpty();
@@ -172,7 +176,8 @@ public class OauthController {
         // 目前只有 QQ OAuth，所以不需要检查
         
         // 如果既没有密码也没有 Passkey，则不允许解绑（因为解绑后用户将无法登录）
-        if (!hasPassword && !hasPasskey) {
+        boolean hasApple = oauthRepo.findByProviderAndUserId("apple", user.getId()).map(a -> Boolean.TRUE.equals(a.getIsEnabled())).orElse(false);
+        if (!hasPassword && !hasPasskey && !hasApple) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("canUnbind", false);
             data.put("reason", "last_login_method");
@@ -240,7 +245,10 @@ public class OauthController {
         if (appId.isBlank() || accessToken.isBlank() || openid.isBlank() || unionid.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
         }
-        if (qqMobileAppId == null || qqMobileAppId.isBlank() || !qqMobileAppId.equals(appId)) {
+        java.util.Set<String> trustedMobileAppIds = new java.util.HashSet<>();
+        if (qqMobileAppId != null && !qqMobileAppId.isBlank()) trustedMobileAppIds.add(qqMobileAppId.trim());
+        if (qqMobileAllowedAppIds != null) Arrays.stream(qqMobileAllowedAppIds.split(",")).map(String::trim).filter(v -> !v.isBlank()).forEach(trustedMobileAppIds::add);
+        if (!trustedMobileAppIds.contains(appId)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ 移动应用 AppId 未配置或不匹配"));
         }
 
@@ -809,7 +817,7 @@ public class OauthController {
         if (!returnedUnionid.equals(unionid)) {
             throw new IllegalArgumentException("QQ unionid 校验失败");
         }
-        if (returnedClientId != null && !returnedClientId.isBlank() && !returnedClientId.equals(appId)) {
+        if (!appId.equals(returnedClientId)) {
             throw new IllegalArgumentException("QQ AppId 校验失败");
         }
         return new QqMobileIdentity(returnedOpenid, returnedUnionid);

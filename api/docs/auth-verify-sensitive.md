@@ -47,7 +47,8 @@ Authorization: Bearer <accessToken>
   - passkey: 使用 Passkey 验证（需走 Passkey 专用接口）
   - totp: 使用 TOTP 动态验证码验证
 - password: 用户密码（当 method=password 时必填）
-- code: 验证码（当 method=email-code 或 totp 时必填）
+- code: 验证码（method=email-code 时必填；method=totp 时与 recoveryCode 二选一）
+- recoveryCode: 8 位英文字母的 TOTP 一次性恢复码；仅用于 method=totp。服务端按当前已登录用户查验并消费，不接受客户端指定其他用户。
 
 ## 验证方式说明
 
@@ -88,7 +89,15 @@ curl -X POST \
 ```
 
 ### 3. TOTP 验证
-使用已启用 TOTP 的动态验证码进行验证。
+使用已启用 TOTP 的动态验证码或一次性恢复码进行验证。
+
+使用恢复码的请求：
+
+```json
+{"method":"totp","recoveryCode":"ABCDEFGH"}
+```
+
+恢复码会规范化空格与大小写，每个码只能成功使用一次。恢复码错误或已使用返回 400；验证成功沿用同一 IP 下 15 分钟敏感验证有效期。客户端每次只传 code 或 recoveryCode；同时传入时使用非空 recoveryCode。
 
 **请求示例**：
 ```bash

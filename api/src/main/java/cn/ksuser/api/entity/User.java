@@ -1,6 +1,8 @@
 package cn.ksuser.api.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonGetter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -12,7 +14,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "uuid", length = 36, columnDefinition = "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin")
+    @Column(name = "uuid", length = 36, nullable = false, columnDefinition = "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin")
     private String uuid;
 
     @Column(name = "username", length = 50, nullable = false, unique = true)
@@ -48,7 +50,7 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     public User() {
@@ -89,14 +91,21 @@ public class User {
         this.username = username;
     }
 
+    @JsonIgnore
     public String getEmail() {
         return email;
     }
+
+    @JsonGetter("email")
+    public String getPublicEmail() { return email == null ? "" : email; }
+
+    public boolean getHasPassword() { return passwordHash != null && !passwordHash.isBlank(); }
 
     public void setEmail(String email) {
         this.email = email;
     }
 
+    @JsonIgnore
     public String getPasswordHash() {
         return passwordHash;
     }

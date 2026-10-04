@@ -3,17 +3,66 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 90;
+	objectVersion = 77;
 	objects = {
+
+/* Begin PBXBuildFile section */
+		12B35391CB50AA4F365534FD /* Vendor/TencentOpenAPI.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F24A3F1CEC89D24335042CB /* Vendor/TencentOpenAPI.xcframework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A2266A88949C40E9518C2AA5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = KsuserAuth;
+		};
+		E8FD176359CDB13211982A5B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = KsuserAuth;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* KsuserAuth.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KsuserAuth.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3D30414FE17B7CAD65FA656D /* Config/Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Release.xcconfig; sourceTree = "<group>"; };
+		7F24A3F1CEC89D24335042CB /* Vendor/TencentOpenAPI.xcframework */ = {isa = PBXFileReference; expectedSignature = "AppleDeveloperProgram:HKB8WPFBR9:Tencent Technology (Shenzhen) Co., Ltd"; lastKnownFileType = wrapper.xcframework; path = Vendor/TencentOpenAPI.xcframework; sourceTree = "<group>"; };
+		8E6833DD0175AF62B8796330 /* KsuserAuthTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = KsuserAuthTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8F30099BE85C9D73DADDDA61 /* KsuserAuthUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = KsuserAuthUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A23FEFCA89AA9C53BBF90721 /* Config/Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Debug.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		41599B114EB4419831004991 /* Exceptions for "KsuserAuth" folder in "KsuserAuth" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 000000000000000100000000 /* KsuserAuth */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* KsuserAuth */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				41599B114EB4419831004991 /* Exceptions for "KsuserAuth" folder in "KsuserAuth" target */,
+			);
 			path = KsuserAuth;
+			sourceTree = "<group>";
+		};
+		6FE3352D6B3FE500C3289468 /* KsuserAuthUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KsuserAuthUITests;
+			sourceTree = "<group>";
+		};
+		8DE41ED4357D5F447865DC12 /* KsuserAuthTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = KsuserAuthTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -21,8 +70,25 @@
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				12B35391CB50AA4F365534FD /* Vendor/TencentOpenAPI.xcframework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		1CB77849E4E6A051AE2A080C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5B95BCEA8BADE24128C1F033 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
@@ -32,6 +98,11 @@
 			children = (
 				000000000000000000000010 /* KsuserAuth */,
 				000000000000000000000020 /* Products */,
+				A23FEFCA89AA9C53BBF90721 /* Config/Debug.xcconfig */,
+				3D30414FE17B7CAD65FA656D /* Config/Release.xcconfig */,
+				7F24A3F1CEC89D24335042CB /* Vendor/TencentOpenAPI.xcframework */,
+				8DE41ED4357D5F447865DC12 /* KsuserAuthTests */,
+				6FE3352D6B3FE500C3289468 /* KsuserAuthUITests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -39,6 +110,8 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* KsuserAuth.app */,
+				8E6833DD0175AF62B8796330 /* KsuserAuthTests.xctest */,
+				8F30099BE85C9D73DADDDA61 /* KsuserAuthUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -56,6 +129,8 @@
 			);
 			buildRules = (
 			);
+			dependencies = (
+			);
 			fileSystemSynchronizedGroups = (
 				000000000000000000000010 /* KsuserAuth */,
 			);
@@ -63,6 +138,48 @@
 			productName = MyApp;
 			productReference = 000000000000000000000120 /* KsuserAuth.app */;
 			productType = "com.apple.product-type.application";
+		};
+		02CAB647F70B434A290A511B /* KsuserAuthTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FD6DFF2A543A6B621BF2FA97 /* Build configuration list for PBXNativeTarget "KsuserAuthTests" */;
+			buildPhases = (
+				68EAB19BFC8A938F3BD3F201 /* Sources */,
+				1CB77849E4E6A051AE2A080C /* Frameworks */,
+				F2047271B3219BB9B3B8160B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8638C5DD2FFB97B39D303A5B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8DE41ED4357D5F447865DC12 /* KsuserAuthTests */,
+			);
+			name = KsuserAuthTests;
+			productName = KsuserAuthTests;
+			productReference = 8E6833DD0175AF62B8796330 /* KsuserAuthTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		237BBBCFAA01042B3A01778C /* KsuserAuthUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 37C29B0F0FA6A1A3E7EE36E6 /* Build configuration list for PBXNativeTarget "KsuserAuthUITests" */;
+			buildPhases = (
+				D6D3172F59A42B89A62FAB05 /* Sources */,
+				5B95BCEA8BADE24128C1F033 /* Frameworks */,
+				40BDB475E6CB722629EA3C18 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8109FD1A71B46710545DC867 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				6FE3352D6B3FE500C3289468 /* KsuserAuthUITests */,
+			);
+			name = KsuserAuthUITests;
+			productName = KsuserAuthUITests;
+			productReference = 8F30099BE85C9D73DADDDA61 /* KsuserAuthUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
@@ -77,23 +194,34 @@
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
 					};
+					02CAB647F70B434A290A511B = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 000000000000000100000000;
+					};
+					237BBBCFAA01042B3A01778C = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 000000000000000100000000;
+					};
 				};
 			};
 			buildConfigurationList = 000000000000000010000000 /* Build configuration list for PBXProject "KsuserAuth" */;
-			developmentRegion = en;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				"zh-Hans",
 				en,
 				Base,
 			);
 			mainGroup = 000000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 90;
+			preferredProjectObjectVersion = 77;
 			productRefGroup = 000000000000000000000020 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* KsuserAuth */,
+				02CAB647F70B434A290A511B /* KsuserAuthTests */,
+				237BBBCFAA01042B3A01778C /* KsuserAuthUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -101,21 +229,66 @@
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000140000000 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		40BDB475E6CB722629EA3C18 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F2047271B3219BB9B3B8160B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000120000000 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
 			files = (
 			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		68EAB19BFC8A938F3BD3F201 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D6D3172F59A42B89A62FAB05 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		8109FD1A71B46710545DC867 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* KsuserAuth */;
+			targetProxy = A2266A88949C40E9518C2AA5 /* PBXContainerItemProxy */;
+		};
+		8638C5DD2FFB97B39D303A5B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* KsuserAuth */;
+			targetProxy = E8FD176359CDB13211982A5B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		000000000000000011000000 /* Debug configuration for PBXProject "KsuserAuth" */ = {
+		000000000000000011000000 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -169,13 +342,14 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PROJECT_UNIQUE_VALUE = EOPSRL34;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -185,7 +359,7 @@
 			};
 			name = Debug;
 		};
-		000000000000000012000000 /* Release configuration for PBXProject "KsuserAuth" */ = {
+		000000000000000012000000 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -233,12 +407,13 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MACOSX_DEPLOYMENT_TARGET = 27.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PROJECT_UNIQUE_VALUE = EOPSRL34;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				TVOS_DEPLOYMENT_TARGET = 27.0;
@@ -247,9 +422,12 @@
 			};
 			name = Release;
 		};
-		000000000000000111000000 /* Debug configuration for PBXNativeTarget "KsuserAuth" */ = {
+		000000000000000111000000 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A23FEFCA89AA9C53BBF90721 /* Config/Debug.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = KsuserAuth/KsuserAuth.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -257,7 +435,8 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KsuserAuth/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Ksuser安全";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -270,28 +449,46 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+					"-lc++",
+					"-lz",
+					"-lsqlite3",
+					"-liconv",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					CoreTelephony,
+					"-framework",
+					WebKit,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = cn.ksuser.auth;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "KsuserAuth/Native/KsuserAuth-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		000000000000000112000000 /* Release configuration for PBXNativeTarget "KsuserAuth" */ = {
+		000000000000000112000000 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3D30414FE17B7CAD65FA656D /* Config/Release.xcconfig */;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = KsuserAuth/KsuserAuth.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -299,7 +496,8 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = KsuserAuth/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Ksuser安全";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -312,24 +510,125 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+					"-lc++",
+					"-lz",
+					"-lsqlite3",
+					"-liconv",
+					"-framework",
+					SystemConfiguration,
+					"-framework",
+					CoreTelephony,
+					"-framework",
+					WebKit,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = cn.ksuser.auth;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
-				SDKROOT = auto;
+				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "KsuserAuth/Native/KsuserAuth-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
+		};
+		8FF932CDFF2D355F7FD08907 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8LDARH2S3X;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = cn.ksuser.auth.KsuserAuthUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = KsuserAuth;
+			};
+			name = Release;
+		};
+		B48467FD7FEEF5E50A680649 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8LDARH2S3X;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = cn.ksuser.auth.KsuserAuthTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KsuserAuth.app/KsuserAuth";
+			};
+			name = Release;
+		};
+		BBFB5EDA3C948A88184CD624 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8LDARH2S3X;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = cn.ksuser.auth.KsuserAuthTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KsuserAuth.app/KsuserAuth";
+			};
+			name = Debug;
+		};
+		C290513E2A7BDCEBB8E0ADD4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 8LDARH2S3X;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = cn.ksuser.auth.KsuserAuthUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = KsuserAuth;
+			};
+			name = Debug;
 		};
 /* End XCBuildConfiguration section */
 
@@ -337,17 +636,37 @@
 		000000000000000010000000 /* Build configuration list for PBXProject "KsuserAuth" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				000000000000000011000000 /* Debug configuration for PBXProject "KsuserAuth" */,
-				000000000000000012000000 /* Release configuration for PBXProject "KsuserAuth" */,
+				000000000000000011000000 /* Debug */,
+				000000000000000012000000 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 		000000000000000110000000 /* Build configuration list for PBXNativeTarget "KsuserAuth" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				000000000000000111000000 /* Debug configuration for PBXNativeTarget "KsuserAuth" */,
-				000000000000000112000000 /* Release configuration for PBXNativeTarget "KsuserAuth" */,
+				000000000000000111000000 /* Debug */,
+				000000000000000112000000 /* Release */,
 			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		37C29B0F0FA6A1A3E7EE36E6 /* Build configuration list for PBXNativeTarget "KsuserAuthUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C290513E2A7BDCEBB8E0ADD4 /* Debug */,
+				8FF932CDFF2D355F7FD08907 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FD6DFF2A543A6B621BF2FA97 /* Build configuration list for PBXNativeTarget "KsuserAuthTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BBFB5EDA3C948A88184CD624 /* Debug */,
+				B48467FD7FEEF5E50A680649 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */

@@ -36,7 +36,7 @@
 - 后端：Java 21, Spring Boot, Spring Security, JPA, MySQL, Redis
 - 前端：Vue 3, Vite, TypeScript, Pinia, Element Plus
 - 桌面端：Flutter
-- 移动端：Kotlin, Jetpack Compose
+- Android：Kotlin, Jetpack Compose；iOS：SwiftUI, AuthenticationServices
 - Demo：Python 3
 
 ## 环境要求
@@ -48,6 +48,7 @@
 - Web：`Node.js 20+`、`npm`
 - Desktop：Flutter Stable，对应桌面平台工具链
 - Mobile Android：Android SDK、JDK 17/21、Gradle
+- Mobile iOS：macOS、Xcode 26.5+、iOS 模拟器；真机发布需 Apple 开发者签名
 - Demos：`Python 3`
 
 ## 快速开始
@@ -158,10 +159,12 @@ npm run dev:web
 
 ### Mobile iOS
 
-- Xcode 项目：`mobile/ios/Ksuser Auth.xcodeproj`
-- 运行时读取环境变量 `API_BASE_URL`，默认 `https://api.ksuser.cn`
-- 会话通过 Keychain / `UserDefaults` 存储 `accessToken` + Cookie-based `refreshToken`
-- 最低支持 iOS 15.0
+- Xcode 项目：`mobile/ios/KsuserAuth.xcodeproj`，共享 Scheme：`KsuserAuth`
+- 构建配置：`mobile/ios/Config/Shared.xcconfig`，本地覆盖：`Config/Local.xcconfig`；默认 `https://api.ksuser.cn`
+- 会话令牌、持久 Cookie 保存至 Keychain，主题与协议偏好保存至 UserDefaults
+- 最低 iOS 17，支持 iPhone/iPad 和系统、浅色、深色主题
+- 构建、测试、Archive：`dev:mobile:ios`、`build:mobile:ios`、`test:mobile:ios`、`archive:mobile:ios`
+- 原生认证配置和发布验收：[iOS 文档](./docs/ios/README.md)
 
 ## 子项目文档
 
@@ -169,6 +172,7 @@ npm run dev:web
 - [API 详细接口索引](./api/docs/README.md)
 - [Web 文档](./web/README.md)
 - [Desktop 文档](./desktop/README.md)
+- [iOS 文档](./docs/ios/README.md)
 - [Demo 索引](./demos/README.md)
 
 ## CI / 构建工作流
@@ -179,6 +183,7 @@ npm run dev:web
 - `.github/workflows/build-web.yml`
 - `.github/workflows/build-desktop.yml`
 - `.github/workflows/build-mobile-android.yml`
+- `.github/workflows/build-mobile-ios.yml`
 
 这些工作流会在对应目录变更时触发，也支持手动触发。
 

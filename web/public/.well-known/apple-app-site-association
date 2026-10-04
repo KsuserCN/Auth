@@ -1,0 +1,26 @@
+{
+  "webcredentials": {
+    "apps": [
+      "8LDARH2S3X.cn.ksuser.auth"
+    ]
+  },
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "8LDARH2S3X.cn.ksuser.auth"
+        ],
+        "components": [
+          {
+            "/": "/app/bridge-login",
+            "comment": "Ksuser mobile browser authorization"
+          },
+          {
+            "/": "/app/qq/*",
+            "comment": "QQ native login callback"
+          }
+        ]
+      }
+    ]
+  }
+}

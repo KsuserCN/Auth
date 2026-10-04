@@ -1,6 +1,7 @@
 package cn.ksuser.api.entity;
 
 import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 @Entity
@@ -38,6 +39,15 @@ public class UserOauthAccount {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "apple_client_id", length = 255)
+    private String appleClientId;
+
+    @Column(name = "apple_refresh_token_encrypted", columnDefinition = "TEXT")
+    private String appleRefreshTokenEncrypted;
+
+    @Column(name = "apple_email_forwarding_enabled")
+    private Boolean appleEmailForwardingEnabled;
+
     public UserOauthAccount() {
     }
 
@@ -59,6 +69,13 @@ public class UserOauthAccount {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    @JsonIgnore public String getAppleClientId() { return appleClientId; }
+    public void setAppleClientId(String value) { appleClientId=value; }
+    @JsonIgnore public String getAppleRefreshTokenEncrypted() { return appleRefreshTokenEncrypted; }
+    public void setAppleRefreshTokenEncrypted(String value) { appleRefreshTokenEncrypted=value; }
+    public Boolean getAppleEmailForwardingEnabled() { return appleEmailForwardingEnabled; }
+    public void setAppleEmailForwardingEnabled(Boolean value) { appleEmailForwardingEnabled=value; }
 
     // Getters and setters
     public Long getId() { return id; }
