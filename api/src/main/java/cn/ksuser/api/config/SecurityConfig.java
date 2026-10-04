@@ -1,6 +1,7 @@
 package cn.ksuser.api.config;
 
 import cn.ksuser.api.filter.JwtAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -45,6 +46,9 @@ public class SecurityConfig {
             .cors(cors -> {})
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
+                // Preserve the original failure when the servlet container dispatches to /error.
+                // Normal requests still require the endpoint's authentication and CSRF checks.
+                .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/", "/auth/health", "/auth/health/",
                     "/auth/csrf-token", "/auth/csrf-token/",

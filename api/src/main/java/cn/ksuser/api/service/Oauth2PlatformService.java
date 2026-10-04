@@ -195,7 +195,9 @@ public class Oauth2PlatformService {
             grantMode,
             request == null ? null : request.getGrantTtlSeconds()
         );
-        recordAuthorization(user, application, context.getRequestedScopes(), context.getRedirectUri(), grantMode, grantTtlSeconds);
+        UserOauth2Authorization authorization = recordAuthorization(
+            user, application, context.getRequestedScopes(), context.getRedirectUri(), grantMode, grantTtlSeconds
+        );
         String code = generateOpaqueValue("kscode_", 32);
         String normalizedState = request == null ? null : normalizeOptional(request.getState());
         AuthorizationCodePayload payload = new AuthorizationCodePayload(
@@ -203,7 +205,8 @@ public class Oauth2PlatformService {
             application.getOwnerUserId(),
             application.getAppId(),
             context.getRedirectUri(),
-            joinScopes(context.getRequestedScopes())
+            joinScopes(context.getRequestedScopes()),
+            authorization.getId()
         );
         storeAuthorizationCode(code, payload);
 
@@ -254,6 +257,9 @@ public class Oauth2PlatformService {
 
         User user = userRepository.findById(payload.userId())
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权用户不存在"));
+        if (!hasMatchingAuthorization(payload.userId(), application.getAppId(), payload.authorizationId(), payload.scope())) {
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权已撤销或已过期");
+        }
 
         String openid = buildOpenId(application.getAppId(), user.getUuid());
         String unionid = buildUnionId(payload.ownerUserId(), user.getUuid());
@@ -265,7 +271,8 @@ public class Oauth2PlatformService {
             user.getUuid(),
             scope,
             openid,
-            unionid
+            unionid,
+            payload.authorizationId()
         );
 
         Map<String, Object> response = new LinkedHashMap<>();
@@ -285,6 +292,9 @@ public class Oauth2PlatformService {
         }
 
         Oauth2Application application = findActiveApplication(parsed.clientId(), HttpStatus.UNAUTHORIZED);
+        if (!hasMatchingAuthorization(parsed.userId(), parsed.clientId(), parsed.authorizationId(), parsed.scope())) {
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "授权已撤销或已过期");
+        }
         User user = userRepository.findById(parsed.userId())
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 对应用户不存在"));
 
@@ -538,8 +548,8 @@ public class Oauth2PlatformService {
             .filter(record -> new LinkedHashSet<>(parseScopes(record.getScopes())).containsAll(requestedScopes));
     }
 
-    private void recordAuthorization(User user, Oauth2Application application, List<String> requestedScopes,
-                                     String redirectUri, String grantMode, Integer grantTtlSeconds) {
+    private UserOauth2Authorization recordAuthorization(User user, Oauth2Application application, List<String> requestedScopes,
+                                                        String redirectUri, String grantMode, Integer grantTtlSeconds) {
         UserOauth2Authorization record = authorizationRepository.findByUserIdAndAppId(user.getId(), application.getAppId())
             .orElseGet(UserOauth2Authorization::new);
         LocalDateTime now = LocalDateTime.now();
@@ -562,7 +572,19 @@ public class Oauth2PlatformService {
         record.setGrantMode(grantMode);
         record.setExpiresAt(AuthorizationGrantPolicy.calculateExpiresAt(now, grantMode, grantTtlSeconds));
         record.setLastAuthorizedAt(now);
-        authorizationRepository.save(record);
+        return authorizationRepository.save(record);
+    }
+
+    private boolean hasMatchingAuthorization(Long userId, String appId, Long authorizationId, String scope) {
+        if (authorizationId == null) {
+            return false;
+        }
+        return authorizationRepository.findByUserIdAndAppId(userId, appId)
+            .filter(record -> authorizationId.equals(record.getId()))
+            .filter(record -> !AuthorizationGrantPolicy.MODE_TIME_LIMITED.equals(record.getGrantMode())
+                || (record.getExpiresAt() != null && record.getExpiresAt().isAfter(LocalDateTime.now())))
+            .filter(record -> new LinkedHashSet<>(parseScopes(record.getScopes())).containsAll(parseScopes(scope)))
+            .isPresent();
     }
 
     private String generateUniqueAppId() {
@@ -649,6 +671,7 @@ public class Oauth2PlatformService {
                                             Long ownerUserId,
                                             String clientId,
                                             String redirectUri,
-                                            String scope) {
+                                            String scope,
+                                            Long authorizationId) {
     }
 }

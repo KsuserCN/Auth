@@ -1731,7 +1731,17 @@ export const registerPendingApple = async (oauthBindToken: string, acceptTerms: 
 }
 
 export const bindPendingApple = async (oauthBindToken: string): Promise<void> => {
-  await request.post('/oauth/apple/bind-pending', { oauthBindToken })
+  const response = await request.post<ApiResponse<{ bound?: boolean; needVerification?: boolean }>>(
+    '/oauth/apple/bind-pending',
+    { oauthBindToken },
+  )
+  const result = response as unknown as ApiResponse<{ bound?: boolean; needVerification?: boolean }>
+  if (result.code !== 200) {
+    throw new Error(result.msg || 'Apple 绑定未完成，请重试')
+  }
+  if (result.data?.bound !== true) {
+    throw new Error('Apple 绑定未完成，请重新授权')
+  }
 }
 
 export const unbindApple = async (): Promise<void> => {

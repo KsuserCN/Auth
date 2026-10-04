@@ -33,7 +33,7 @@ public class Oauth2TokenService {
     }
 
     public String generateAccessToken(String clientId, Long ownerUserId, Long userId, String userUuid,
-                                      String scope, String openid, String unionid) {
+                                      String scope, String openid, String unionid, Long authorizationId) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
             .subject(userUuid)
@@ -41,6 +41,7 @@ public class Oauth2TokenService {
             .claim("client_id", clientId)
             .claim("owner_user_id", ownerUserId)
             .claim("user_id", userId)
+            .claim("authorization_id", authorizationId)
             .claim("scope", scope == null ? "" : scope)
             .claim("openid", openid)
             .claim("unionid", unionid)
@@ -117,6 +118,7 @@ public class Oauth2TokenService {
                 claims.get("scope", String.class),
                 claims.get("openid", String.class),
                 claims.get("unionid", String.class),
+                toLong(claims.get("authorization_id")),
                 expiration
             );
         } catch (Exception e) {
@@ -200,6 +202,7 @@ public class Oauth2TokenService {
                                           String scope,
                                           String openid,
                                           String unionid,
+                                          Long authorizationId,
                                           Date expiresAt) {
     }
 

@@ -224,7 +224,9 @@ public class SsoPlatformService {
             grantMode,
             request == null ? null : request.getGrantTtlSeconds()
         );
-        recordAuthorization(user, client, context.getRequestedScopes(), context.getRedirectUri(), grantMode, grantTtlSeconds);
+        UserSsoAuthorization authorization = recordAuthorization(
+            user, client, context.getRequestedScopes(), context.getRedirectUri(), grantMode, grantTtlSeconds
+        );
         AuthorizationCodePayload payload = new AuthorizationCodePayload(
             user.getId(),
             client.getClientId(),
@@ -232,7 +234,8 @@ public class SsoPlatformService {
             joinValues(resolveRequestedScopes(client, request == null ? null : request.getScope())),
             normalizeOptional(request == null ? null : request.getNonce()),
             normalizeOptional(request == null ? null : request.getCodeChallenge()),
-            normalizeOptional(request == null ? null : request.getCodeChallengeMethod())
+            normalizeOptional(request == null ? null : request.getCodeChallengeMethod()),
+            authorization.getId()
         );
         storeAuthorizationCode(code, payload);
 
@@ -284,11 +287,16 @@ public class SsoPlatformService {
 
         User user = userRepository.findById(payload.userId())
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权用户不存在"));
+        if (!hasMatchingAuthorization(payload.userId(), client.getClientId(), payload.authorizationId(), payload.scope())) {
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权已撤销或已过期");
+        }
 
         String subject = buildSubject(client.getClientId(), user.getUuid());
         String scope = payload.scope() == null ? "openid" : payload.scope();
         String audience = firstValue(parseValues(client.getAudiences()), "ksuser-auth");
-        String accessToken = ssoTokenService.generateAccessToken(client.getClientId(), user.getId(), subject, scope, audience);
+        String accessToken = ssoTokenService.generateAccessToken(
+            client.getClientId(), user.getId(), subject, scope, audience, payload.authorizationId()
+        );
         String idToken = ssoTokenService.generateIdToken(
             client.getClientId(),
             subject,
@@ -314,6 +322,9 @@ public class SsoPlatformService {
             throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 无效或已过期");
         }
         OidcClient client = findActiveClient(parsed.clientId(), HttpStatus.UNAUTHORIZED);
+        if (!hasMatchingAuthorization(parsed.userId(), parsed.clientId(), parsed.authorizationId(), parsed.scope())) {
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "授权已撤销或已过期");
+        }
         User user = userRepository.findById(parsed.userId())
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 对应用户不存在"));
 
@@ -609,8 +620,8 @@ public class SsoPlatformService {
             .filter(record -> Oauth2ScopeUtil.parseScopeSet(record.getScopes()).containsAll(requestedScopes));
     }
 
-    private void recordAuthorization(User user, OidcClient client, List<String> requestedScopes, String redirectUri,
-                                     String grantMode, Integer grantTtlSeconds) {
+    private UserSsoAuthorization recordAuthorization(User user, OidcClient client, List<String> requestedScopes, String redirectUri,
+                                                     String grantMode, Integer grantTtlSeconds) {
         UserSsoAuthorization record = authorizationRepository.findByUserIdAndClientId(user.getId(), client.getClientId())
             .orElseGet(UserSsoAuthorization::new);
         LocalDateTime now = LocalDateTime.now();
@@ -632,7 +643,20 @@ public class SsoPlatformService {
         record.setGrantMode(grantMode);
         record.setExpiresAt(AuthorizationGrantPolicy.calculateExpiresAt(now, grantMode, grantTtlSeconds));
         record.setLastAuthorizedAt(now);
-        authorizationRepository.save(record);
+        return authorizationRepository.save(record);
+    }
+
+    private boolean hasMatchingAuthorization(Long userId, String clientId, Long authorizationId, String scope) {
+        if (authorizationId == null) {
+            return false;
+        }
+        return authorizationRepository.findByUserIdAndClientId(userId, clientId)
+            .filter(record -> authorizationId.equals(record.getId()))
+            .filter(record -> !AuthorizationGrantPolicy.MODE_TIME_LIMITED.equals(record.getGrantMode())
+                || (record.getExpiresAt() != null && record.getExpiresAt().isAfter(LocalDateTime.now())))
+            .filter(record -> Oauth2ScopeUtil.parseScopeSet(record.getScopes())
+                .containsAll(Oauth2ScopeUtil.parseScopeSet(scope)))
+            .isPresent();
     }
 
     private void storeAuthorizationCode(String code, AuthorizationCodePayload payload) {
@@ -778,6 +802,7 @@ public class SsoPlatformService {
                                             String scope,
                                             String nonce,
                                             String codeChallenge,
-                                            String codeChallengeMethod) {
+                                            String codeChallengeMethod,
+                                            Long authorizationId) {
     }
 }

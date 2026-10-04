@@ -40,13 +40,15 @@ public class SsoTokenService {
         return oidcRsaKeyService.getPrivateKey();
     }
 
-    public String generateAccessToken(String clientId, Long userId, String subject, String scope, String audience) {
+    public String generateAccessToken(String clientId, Long userId, String subject, String scope, String audience,
+                                      Long authorizationId) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
             .subject(subject)
             .claim("type", "sso_access")
             .claim("client_id", clientId)
             .claim("user_id", userId)
+            .claim("authorization_id", authorizationId)
             .claim("scope", scope == null ? "" : scope)
             .claim("aud", audience)
             .issuedAt(new Date(now))
@@ -113,6 +115,7 @@ public class SsoTokenService {
                 claims.getSubject(),
                 claims.get("scope", String.class),
                 firstStringValue(claims.get("aud")),
+                toLong(claims.get("authorization_id")),
                 expiration
             );
         } catch (Exception e) {
@@ -156,6 +159,7 @@ public class SsoTokenService {
                                        String subject,
                                        String scope,
                                        String audience,
+                                       Long authorizationId,
                                        Date expiresAt) {
     }
 }

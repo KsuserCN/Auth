@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -245,10 +246,7 @@ public class OauthController {
         if (appId.isBlank() || accessToken.isBlank() || openid.isBlank() || unionid.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
         }
-        java.util.Set<String> trustedMobileAppIds = new java.util.HashSet<>();
-        if (qqMobileAppId != null && !qqMobileAppId.isBlank()) trustedMobileAppIds.add(qqMobileAppId.trim());
-        if (qqMobileAllowedAppIds != null) Arrays.stream(qqMobileAllowedAppIds.split(",")).map(String::trim).filter(v -> !v.isBlank()).forEach(trustedMobileAppIds::add);
-        if (!trustedMobileAppIds.contains(appId)) {
+        if (!isTrustedQqMobileAppId(appId)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ 移动应用 AppId 未配置或不匹配"));
         }
 
@@ -294,6 +292,71 @@ public class OauthController {
         } catch (Exception ex) {
             logger.error("QQ mobile login failed", ex);
             sensitiveLogUtil.logLogin(request, null, "QQ", false, "QQ mobile login failed", startTime);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+        }
+    }
+
+    /**
+     * 使用 QQ iOS/Android SDK 凭据绑定当前登录账号，不签发或切换登录会话。
+     */
+    @PostMapping("/qq/mobile-bind")
+    public ResponseEntity<ApiResponse<Object>> qqMobileBind(@RequestBody QqMobileLoginRequest req,
+                                                            HttpServletRequest request,
+                                                            Authentication authentication) {
+        if (authentication == null
+            || authentication.getPrincipal() == null
+            || authentication instanceof AnonymousAuthenticationToken
+            || "anonymousUser".equals(authentication.getPrincipal().toString())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+        }
+
+        String uuid = authentication.getPrincipal().toString();
+        var userOpt = userService.findByUuid(uuid);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+        }
+
+        String appId = req.getAppId() == null ? "" : req.getAppId().trim();
+        String accessToken = req.getAccessToken() == null ? "" : req.getAccessToken().trim();
+        String openid = req.getOpenid() == null ? "" : req.getOpenid().trim();
+        String unionid = req.getUnionid() == null ? "" : req.getUnionid().trim();
+        if (appId.isBlank() || accessToken.isBlank() || openid.isBlank() || unionid.isBlank()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+        }
+        if (!isTrustedQqMobileAppId(appId)) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ 移动应用 AppId 未配置或不匹配"));
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202,
+                "需要完成敏感操作验证", Map.of("needVerification", true)));
+        }
+        if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+        }
+        rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
+
+        User user = userOpt.get();
+        long startTime = System.currentTimeMillis();
+        try {
+            QqMobileIdentity identity = verifyQqMobileIdentity(appId, accessToken, openid, unionid);
+            PendingOauthIdentity pending = new PendingOauthIdentity(identity.openid(), identity.unionid());
+            ResponseEntity<ApiResponse<Object>> conflict = ensureCanLinkOauth("qq", user, pending);
+            if (conflict != null) {
+                return conflict;
+            }
+            linkOauthAccount("qq", user, pending);
+            sensitiveLogUtil.log(request, user.getId(), "BIND_OAUTH", "qq",
+                cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, startTime);
+            return ResponseEntity.ok(new ApiResponse<>(200, "QQ 绑定成功",
+                Map.of("bound", true, "provider", "qq")));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+        } catch (DataIntegrityViolationException ex) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "QQ 账号已被绑定，请刷新后重试"));
+        } catch (Exception ex) {
+            logger.error("QQ mobile bind failed", ex);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
         }
     }
@@ -598,32 +661,19 @@ public class OauthController {
                 return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 QQ 返回 unionid，请确认已开通 getUnionId 权限"));
             }
 
-            // bind 操作：为当前登录用户直接写入 QQ 绑定关系
+            // Web 和移动端在校验 QQ 凭据后复用相同的绑定规则。
             if ("bind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "bind 操作需要有效登录态"));
                 }
 
-                if (oauthRepo.findByProviderAndUserId("qq", user.getId()).isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 QQ"));
+                PendingOauthIdentity pending = new PendingOauthIdentity(openid, unionid);
+                ResponseEntity<ApiResponse<Object>> conflict = ensureCanLinkOauth("qq", user, pending);
+                if (conflict != null) {
+                    return conflict;
                 }
-
-                java.util.Optional<UserOauthAccount> existingBinding = oauthRepo.findByProviderAndUnionId("qq", unionid);
-                if (existingBinding.isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 QQ 账号已被绑定"));
-                }
-
-                UserOauthAccount acct = new UserOauthAccount();
-                acct.setProvider("qq");
-                acct.setProviderUserId(openid);
-                acct.setUnionId(unionid);
-                acct.setUserId(user.getId());
-                acct.setIsEnabled(true);
-                java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                acct.setLinkedAt(now);
-                acct.setCreatedAt(now);
-                oauthRepo.save(acct);
+                linkOauthAccount("qq", user, pending);
 
                 java.util.Map<String, Object> data = new java.util.HashMap<>();
                 data.put("bound", true);
@@ -784,6 +834,20 @@ public class OauthController {
             }
         }
         return null;
+    }
+
+    private boolean isTrustedQqMobileAppId(String appId) {
+        java.util.Set<String> trustedMobileAppIds = new java.util.HashSet<>();
+        if (qqMobileAppId != null && !qqMobileAppId.isBlank()) {
+            trustedMobileAppIds.add(qqMobileAppId.trim());
+        }
+        if (qqMobileAllowedAppIds != null) {
+            Arrays.stream(qqMobileAllowedAppIds.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .forEach(trustedMobileAppIds::add);
+        }
+        return trustedMobileAppIds.contains(appId);
     }
 
     private QqMobileIdentity verifyQqMobileIdentity(String appId, String accessToken, String openid, String unionid) throws Exception {

@@ -93,3 +93,23 @@ Authorization: Bearer <accessToken>
 - 请求频繁：HTTP 429
 - 上游异常：HTTP 502
 - 服务异常：HTTP 500
+
+## 移动端 SDK 绑定接口
+
+移动端可使用 `POST /oauth/qq/mobile-bind` 将腾讯 SDK 授权的 QQ 身份绑定到**当前登录账号**。该接口需要 AccessToken、CSRF 令牌及已完成的敏感操作验证，不签发新的登录令牌或会话。
+
+Web 回调接收 `code`、`state`，移动端接收 SDK 的令牌与身份字段。两种入口分别校验凭据，随后共用已有的账号归属检查和绑定关系写入方法。
+
+请求体与 `/oauth/qq/mobile-login` 相同：
+
+```json
+{
+  "appId": "1903977704",
+  "accessToken": "QQ_SDK_ACCESS_TOKEN",
+  "openid": "QQ_OPENID",
+  "unionid": "QQ_UNIONID",
+  "expiresIn": "3600"
+}
+```
+
+服务端先核对受信任的移动应用 AppId，再向 QQ 校验凭据与 `openid`、`unionid`。成功返回 HTTP 200、`data.bound=true`；未完成敏感验证返回 HTTP 202；当前账号或其他账号已有 QQ 绑定返回 HTTP 409。调用方只有在响应 `code=200` 时才能显示绑定成功。

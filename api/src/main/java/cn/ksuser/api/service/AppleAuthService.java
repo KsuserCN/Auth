@@ -46,7 +46,7 @@ public class AppleAuthService {
     public record Credential(String challengeId, String identityToken, String authorizationCode, String state,
                              String fullName, String givenName, String familyName) {}
     public record Pending(String purpose, String clientId, String sub, String email, String name, String encryptedToken, Context context) {}
-    public record PendingRequest(@JsonAlias("bindToken") String oauthBindToken, boolean acceptTerms, String username) {}
+    public record PendingRequest(@JsonAlias("bindToken") String oauthBindToken, Boolean acceptTerms, String username) {}
     public record Verified(Pending identity, User user) {}
 
     public Challenge challenge(String purpose, String clientId, Context context) {
@@ -97,7 +97,7 @@ public class AppleAuthService {
 
     @Transactional
     public User register(PendingRequest request,Context context) {
-        if (!request.acceptTerms()) throw new IllegalArgumentException("请先同意服务协议与隐私政策");
+        if (!Boolean.TRUE.equals(request.acceptTerms())) throw new IllegalArgumentException("请先同意服务协议与隐私政策");
         Pending pending=take("apple:pending:",request.oauthBindToken(),Pending.class);
         if (!"login".equals(pending.purpose())) throw new IllegalArgumentException("此 Apple 身份只能绑定已有账号");
         validateContext(pending.context(),context,false);
