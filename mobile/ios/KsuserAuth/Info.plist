@@ -4,68 +4,16 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Ksuser安全</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UIApplicationShortcutItems</key>
-	<array>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>cn.ksuser.auth.shortcut.scan</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>扫码授权</string>
-			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>扫描登录或安全验证二维码</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>qrcode.viewfinder</string>
-		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>cn.ksuser.auth.shortcut.security</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>安全中心</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>shield.lefthalf.filled</string>
-		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>cn.ksuser.auth.shortcut.sessions</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>设备会话</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>laptopcomputer.and.iphone</string>
-		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemType</key>
-			<string>cn.ksuser.auth.shortcut.profile</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>账号资料</string>
-			<key>UIApplicationShortcutItemIconSymbolName</key>
-			<string>person.crop.circle</string>
-		</dict>
-	</array>
-	<key>UILaunchScreen</key>
-	<dict/>
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<false/>
-	</dict>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>用于实时识别登录、账号安全和恢复授权二维码，相机画面不会保存或上传。</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -78,6 +26,18 @@
 			</array>
 		</dict>
 	</array>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>KSUSER_API_BASE_URL</key>
+	<string>$(KSUSER_API_BASE_URL)</string>
+	<key>KSUSER_ICP_NUMBER</key>
+	<string>$(KSUSER_ICP_NUMBER)</string>
+	<key>KSUSER_PASSKEY_RP_ID</key>
+	<string>$(KSUSER_PASSKEY_RP_ID)</string>
+	<key>KSUSER_QQ_APP_ID</key>
+	<string>$(KSUSER_QQ_APP_ID)</string>
+	<key>KSUSER_QQ_UNIVERSAL_LINK</key>
+	<string>$(KSUSER_QQ_UNIVERSAL_LINK)</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>mqq</string>
@@ -88,6 +48,56 @@
 		<string>mqqopensdkapiV2</string>
 		<string>mqqOpensdkSSoLogin</string>
 	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>用于实时识别登录、账号安全和恢复授权二维码，相机画面不会保存或上传。</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>qrcode.viewfinder</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>扫描登录或安全验证二维码</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>扫码授权</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.scan</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>shield.lefthalf.filled</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>安全中心</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.security</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>laptopcomputer.and.iphone</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>设备会话</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.sessions</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>person.crop.circle</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>账号资料</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>cn.ksuser.auth.shortcut.profile</string>
+		</dict>
+	</array>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -101,15 +111,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>KSUSER_API_BASE_URL</key>
-	<string>$(KSUSER_API_BASE_URL)</string>
-	<key>KSUSER_PASSKEY_RP_ID</key>
-	<string>$(KSUSER_PASSKEY_RP_ID)</string>
-	<key>KSUSER_QQ_APP_ID</key>
-	<string>$(KSUSER_QQ_APP_ID)</string>
-	<key>KSUSER_QQ_UNIVERSAL_LINK</key>
-	<string>$(KSUSER_QQ_UNIVERSAL_LINK)</string>
-	<key>KSUSER_ICP_NUMBER</key>
-	<string>$(KSUSER_ICP_NUMBER)</string>
 </dict>
 </plist>
