@@ -37,11 +37,11 @@ struct AboutView: View {
             }
             AppCard {
                 CardHeader(title: "协议与隐私", icon: "doc.text")
-                linkRow("服务协议", path: "user.html")
+                linkRow("服务协议", path: "user")
                 Divider()
-                linkRow("隐私政策", path: "privacy.html")
+                linkRow("隐私政策", path: "privacy")
                 Divider()
-                linkRow("第三方信息共享清单", path: "third-party-information-sharing.html")
+                linkRow("第三方信息共享清单", path: "third-party-information-sharing")
             }
             Text("安全连接，安心使用。").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.vertical, 8)
         }.navigationTitle("关于与设置").navigationBarTitleDisplayMode(.inline)
@@ -50,7 +50,7 @@ struct AboutView: View {
             .preferredColorScheme(AppTheme(rawValue: appearance)?.colorScheme)
     }
     private func linkRow(_ title: String, path: String) -> some View {
-        ActionRow(title: title, icon: "arrow.up.right.square") { openURL(URL(string: "https://www.ksuser.cn/agreement/" + path)!) }
+        ActionRow(title: title, icon: "arrow.up.right.square") { openURL(URL(string: "https://docs.ksuser.cn/agreement/" + path)!) }
     }
 }
 

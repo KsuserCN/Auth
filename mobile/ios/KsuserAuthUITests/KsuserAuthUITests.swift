@@ -22,8 +22,9 @@ import XCTest
         app.buttons["keyboardDone"].tap()
         app.switches["agreementToggle"].tap()
         let login = app.buttons["loginButton"]
+        let loginFrame = login.frame
         login.tap()
-        assertLoading(app, message: "正在登录…", name: "Login loading")
+        assertLoading(app, message: "正在登录…", name: "Login loading", anchor: login, originalFrame: loginFrame)
         XCTAssertTrue(login.isEnabled)
     }
 
@@ -36,8 +37,9 @@ import XCTest
             if provider.isHittable { break }
             app.swipeUp()
         }
+        let providerFrame = provider.frame
         provider.tap()
-        assertLoading(app, message: "正在使用 QQ 登录…", name: "QQ login loading")
+        assertLoading(app, message: "正在使用 QQ 登录…", name: "QQ login loading", anchor: provider, originalFrame: providerFrame)
         XCTAssertTrue(provider.isEnabled)
     }
 
@@ -51,19 +53,28 @@ import XCTest
             app.swipeUp()
         }
         row.tap()
+        let rowFrame = row.frame
         app.buttons.matching(identifier: "confirmLogoutCurrent").firstMatch.tap()
-        assertLoading(app, message: "正在退出登录…", name: "Logout loading")
+        assertLoading(app, message: "正在退出登录…", name: "Logout loading", anchor: row, originalFrame: rowFrame)
         XCTAssertTrue(row.isEnabled)
     }
 
-    private func assertLoading(_ app: XCUIApplication, message: String, name: String) {
+    private func assertLoading(_ app: XCUIApplication, message: String, name: String, anchor: XCUIElement, originalFrame: CGRect) {
         let banner = app.descendants(matching: .any).matching(identifier: "loadingBanner").firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 2))
         XCTAssertTrue(banner.isHittable)
         XCTAssertTrue(banner.label.contains(message))
+        XCTAssertGreaterThanOrEqual(banner.frame.minY, app.navigationBars.firstMatch.frame.maxY)
+        assertPosition(anchor, matches: originalFrame)
         attach(app, name: name)
         let finished = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !banner.exists }, object: nil)
         XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 8), .completed)
+        assertPosition(anchor, matches: originalFrame)
+    }
+
+    private func assertPosition(_ element: XCUIElement, matches expected: CGRect, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(element.frame.minX, expected.minX, accuracy: 1, file: file, line: line)
+        XCTAssertEqual(element.frame.minY, expected.minY, accuracy: 1, file: file, line: line)
     }
 
     func testLoginRequiresAgreementAndValidInput() {
@@ -226,18 +237,29 @@ import XCTest
         XCTAssertTrue(app.segmentedControls["themePicker"].buttons["深色"].isSelected)
     }
 
-    func testStatusMessagesStayBelowNavigationAndDismiss() {
+    func testStatusMessagesFloatBelowNavigationWithoutMovingContent() {
+        let baseline = launch()
+        let baselineHeading = baseline.staticTexts["loginHeading"]
+        XCTAssertTrue(baselineHeading.waitForExistence(timeout: 10))
+        let headingFrame = baselineHeading.frame
+        let emailFrame = baseline.textFields["邮箱"].frame
+        let loginFrame = baseline.buttons["loginButton"].frame
+        baseline.terminate()
         for argument in ["--ui-test-notice", "--ui-test-error"] {
             let app = launch(arguments: [argument])
             let banner = app.otherElements["statusBanner"]
             XCTAssertTrue(banner.waitForExistence(timeout: 10))
             XCTAssertEqual(app.buttons.matching(identifier: "dismissStatusBanner").count, 1)
             XCTAssertGreaterThanOrEqual(banner.frame.minY, app.navigationBars.firstMatch.frame.maxY)
-            let title = app.staticTexts["loginHeading"]
-            XCTAssertGreaterThanOrEqual(title.frame.minY, banner.frame.maxY)
+            assertPosition(app.staticTexts["loginHeading"], matches: headingFrame)
+            assertPosition(app.textFields["邮箱"], matches: emailFrame)
+            assertPosition(app.buttons["loginButton"], matches: loginFrame)
             attach(app, name: argument == "--ui-test-notice" ? "Success banner" : "Error banner")
             app.buttons["dismissStatusBanner"].tap()
             XCTAssertFalse(banner.exists)
+            assertPosition(app.staticTexts["loginHeading"], matches: headingFrame)
+            assertPosition(app.textFields["邮箱"], matches: emailFrame)
+            assertPosition(app.buttons["loginButton"], matches: loginFrame)
             XCTAssertFalse(app.buttons["loginButton"].isEnabled)
             app.terminate()
         }

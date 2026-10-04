@@ -123,9 +123,8 @@ struct LoadingStatusBanner: View {
                     }
                     .padding(16)
                     .background(Brand.subtleGold, in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal, 20).padding(.vertical, 8)
-                    .frame(maxWidth: 760).frame(maxWidth: .infinity)
-                    .background(Brand.background)
+                    .overlay { RoundedRectangle(cornerRadius: 16).strokeBorder(Brand.gold.opacity(0.15), lineWidth: 1) }
+                    .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
                     .accessibilityElement(children: .combine).accessibilityIdentifier("loadingBanner")
                 }
             }
@@ -214,17 +213,18 @@ struct PageScroll<Content: View>: View {
             }
                 .padding(20).frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
         }.background(Brand.background).scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    if let activity = model.loadingActivity { LoadingStatusBanner(activity: activity) }
-                    if let message = model.errorMessage ?? model.noticeMessage {
-                        StatusMessageBanner(message: message, isError: model.errorMessage != nil) {
-                            model.errorMessage = nil; model.noticeMessage = nil
+            .overlay(alignment: .top) {
+                if model.loadingActivity != nil || model.errorMessage != nil || model.noticeMessage != nil {
+                    VStack(spacing: 8) {
+                        if let activity = model.loadingActivity { LoadingStatusBanner(activity: activity) }
+                        if let message = model.errorMessage ?? model.noticeMessage {
+                            StatusMessageBanner(message: message, isError: model.errorMessage != nil) {
+                                model.errorMessage = nil; model.noticeMessage = nil
+                            }
                         }
-                        .padding(.horizontal, 20).padding(.vertical, 8)
-                        .frame(maxWidth: 760).frame(maxWidth: .infinity)
-                        .background(Brand.background)
                     }
+                    .padding(.horizontal, 20).padding(.vertical, 8)
+                    .frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
                 }
             }
             .toolbar {

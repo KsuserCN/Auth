@@ -593,28 +593,28 @@ internal fun AboutScreen(container: AppContainer) {
         SectionCard(modifier = Modifier.fillMaxWidth()) {
             AboutLinkRow(
                 title = "服务条款",
-                url = "https://www.ksuser.cn/agreement/user.html",
+                url = "https://docs.ksuser.cn/agreement/user",
                 onClick = {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.ksuser.cn/agreement/user.html")),
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.ksuser.cn/agreement/user")),
                     )
                 },
             )
             AboutLinkRow(
                 title = "隐私协议",
-                url = "https://www.ksuser.cn/agreement/privacy.html",
+                url = "https://docs.ksuser.cn/agreement/privacy",
                 onClick = {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.ksuser.cn/agreement/privacy.html")),
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.ksuser.cn/agreement/privacy")),
                     )
                 },
             )
             AboutLinkRow(
                 title = "第三方信息共享清单",
-                url = "https://www.ksuser.cn/agreement/third-party-information-sharing.html",
+                url = "https://docs.ksuser.cn/agreement/third-party-information-sharing",
                 onClick = {
                     context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.ksuser.cn/agreement/third-party-information-sharing.html")),
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://docs.ksuser.cn/agreement/third-party-information-sharing")),
                     )
                 },
             )

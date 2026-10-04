@@ -222,7 +222,7 @@ private struct LoginAgreementView: View {
             Toggle("我已阅读并同意相关条款", isOn: $accepted)
                 .toggleStyle(LoginAgreementToggleStyle()).accessibilityIdentifier("agreementToggle")
                 .frame(width: 36)
-            Text("我已阅读并同意 [服务协议](https://www.ksuser.cn/agreement/user.html) 和 [隐私政策](https://www.ksuser.cn/agreement/privacy.html)，以及 [第三方信息共享清单](https://www.ksuser.cn/agreement/third-party-information-sharing.html)。")
+            Text("我已阅读并同意 [服务协议](https://docs.ksuser.cn/agreement/user) 和 [隐私政策](https://docs.ksuser.cn/agreement/privacy)，以及 [第三方信息共享清单](https://docs.ksuser.cn/agreement/third-party-information-sharing)。")
                 .font(.caption).foregroundStyle(.secondary).tint(Brand.gold).lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 6)
         }
@@ -247,10 +247,10 @@ struct AgreementView: View {
         VStack(alignment: .leading, spacing: 10) {
             Toggle(isOn: $accepted) { Text("我已阅读并同意以下条款").font(.subheadline) }.toggleStyle(.switch).frame(minHeight: 44).accessibilityIdentifier("agreementToggle")
             HStack(spacing: 14) {
-                Link("服务协议", destination: URL(string: "https://www.ksuser.cn/agreement/user.html")!)
-                Link("隐私政策", destination: URL(string: "https://www.ksuser.cn/agreement/privacy.html")!)
+                Link("服务协议", destination: URL(string: "https://docs.ksuser.cn/agreement/user")!)
+                Link("隐私政策", destination: URL(string: "https://docs.ksuser.cn/agreement/privacy")!)
             }.font(.caption)
-            Link("第三方信息共享清单", destination: URL(string: "https://www.ksuser.cn/agreement/third-party-information-sharing.html")!).font(.caption)
+            Link("第三方信息共享清单", destination: URL(string: "https://docs.ksuser.cn/agreement/third-party-information-sharing")!).font(.caption)
         }.padding(.horizontal, 4)
     }
 }

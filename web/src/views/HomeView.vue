@@ -123,11 +123,14 @@
 
     <footer class="overview-footer">
       <div class="footer-left">
-        <a href="https://www.ksuser.cn/agreement/user.html" target="_blank" rel="noopener noreferrer">
+        <a href="https://docs.ksuser.cn/agreement/user" target="_blank" rel="noopener noreferrer">
           服务条款
         </a>
-        <a href="https://www.ksuser.cn/agreement/privacy.html" target="_blank" rel="noopener noreferrer">
+        <a href="https://docs.ksuser.cn/agreement/privacy" target="_blank" rel="noopener noreferrer">
           隐私协议
+        </a>
+        <a href="https://docs.ksuser.cn/agreement/third-party-information-sharing" target="_blank" rel="noopener noreferrer">
+          第三方信息共享清单
         </a>
       </div>
       <div class="footer-right">

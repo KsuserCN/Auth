@@ -1068,10 +1068,10 @@ private fun SolidPrimaryButton(
     }
 }
 
-private const val USER_AGREEMENT_URL = "https://www.ksuser.cn/agreement/user.html"
-private const val PRIVACY_POLICY_URL = "https://www.ksuser.cn/agreement/privacy.html"
+private const val USER_AGREEMENT_URL = "https://docs.ksuser.cn/agreement/user"
+private const val PRIVACY_POLICY_URL = "https://docs.ksuser.cn/agreement/privacy"
 private const val THIRD_PARTY_INFORMATION_SHARING_URL =
-    "https://www.ksuser.cn/agreement/third-party-information-sharing.html"
+    "https://docs.ksuser.cn/agreement/third-party-information-sharing"
 private const val AGREEMENT_PREFS_NAME = "login_agreement"
 private const val AGREEMENT_ACCEPTED_KEY = "accepted"
 private const val AGREEMENT_LINK_TAG = "agreement_url"
