@@ -42,17 +42,18 @@ struct GoldButtonStyle: ButtonStyle {
 struct LoginProviderButtonStyle: ButtonStyle {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.isEnabled) private var isEnabled
+    var outlined = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline)
+            .font(.subheadline.weight(.semibold))
             .padding(.horizontal, 16).padding(.vertical, 12)
             .frame(maxWidth: .infinity, minHeight: 50)
-            .foregroundStyle(Color.white)
-            .background(colorScheme == .dark ? Color(uiColor: .tertiarySystemGroupedBackground) : Color.black, in: RoundedRectangle(cornerRadius: 12))
-            .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Color.white.opacity(colorScheme == .dark ? 0.16 : 0), lineWidth: 1) }
-            .contentShape(RoundedRectangle(cornerRadius: 12))
-            .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.75 : 1)
+            .foregroundStyle(outlined ? Color.primary : Color.white)
+            .background(outlined ? Brand.card : colorScheme == .dark ? Color(uiColor: .tertiarySystemGroupedBackground) : Color.black, in: RoundedRectangle(cornerRadius: 14))
+            .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(outlined ? Color.primary.opacity(0.10) : Color.white.opacity(colorScheme == .dark ? 0.16 : 0), lineWidth: 1) }
+            .contentShape(RoundedRectangle(cornerRadius: 14))
+            .opacity(!isEnabled ? 0.5 : configuration.isPressed ? 0.75 : 1)
     }
 }
 
@@ -60,17 +61,81 @@ struct LoginProviderLabel: View {
     let title: String
     var icon: String? = nil
     var imageAsset: String? = nil
+    var isBusy = false
+    var outlined = false
 
     var body: some View {
         HStack(spacing: 10) {
             Group {
-                if let imageAsset {
-                    Image(imageAsset).renderingMode(.template).resizable().scaledToFit()
+                if isBusy {
+                    ProgressView().tint(outlined ? Brand.gold : .white)
+                } else if let imageAsset {
+                    Image(imageAsset).renderingMode(.original).resizable().scaledToFit()
                 } else if let icon {
                     Image(systemName: icon).font(.system(size: 20, weight: .medium))
                 }
             }.frame(width: 24, height: 24).accessibilityHidden(true)
             Text(title)
+        }
+    }
+}
+
+struct AsyncLoginProviderButton: View {
+    let title: String
+    var icon: String? = nil
+    var imageAsset: String? = nil
+    var outlined = false
+    var disabled = false
+    let action: () async -> Void
+    @State private var isPerforming = false
+
+    var body: some View {
+        Button {
+            guard !isPerforming, !disabled else { return }
+            isPerforming = true
+            Task {
+                defer { isPerforming = false }
+                await action()
+            }
+        } label: {
+            LoginProviderLabel(title: title, icon: icon, imageAsset: imageAsset, isBusy: isPerforming, outlined: outlined)
+        }.buttonStyle(LoginProviderButtonStyle(outlined: outlined)).disabled(disabled || isPerforming)
+    }
+}
+
+struct LoadingStatusBanner: View {
+    let activity: LoadingActivity
+    @State private var isVisible = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if isVisible {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    HStack(spacing: 12) {
+                        ProgressView().tint(Brand.gold).accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(activity.message ?? "正在加载…").font(.subheadline.weight(.medium))
+                            if context.date.timeIntervalSince(activity.startedAt) >= 8 {
+                                Text("仍在处理中，请稍候…").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(16)
+                    .background(Brand.subtleGold, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal, 20).padding(.vertical, 8)
+                    .frame(maxWidth: 760).frame(maxWidth: .infinity)
+                    .background(Brand.background)
+                    .accessibilityElement(children: .combine).accessibilityIdentifier("loadingBanner")
+                }
+            }
+        }
+        .task(id: activity.id) {
+            isVisible = false
+            // Keep fast requests from flashing a banner; retain elapsed time across page changes.
+            let delay = max(0, 0.3 - Date().timeIntervalSince(activity.startedAt))
+            do { try await Task.sleep(for: .seconds(delay)); isVisible = true }
+            catch { }
         }
     }
 }
@@ -137,22 +202,29 @@ struct CardHeader: View {
 struct PageScroll<Content: View>: View {
     @Environment(AppModel.self) private var model
     private let content: Content
-    init(@ViewBuilder content: () -> Content) { self.content = content() }
+    private let maxWidth: CGFloat
+    private let spacing: CGFloat
+    init(maxWidth: CGFloat = 760, spacing: CGFloat = 18, @ViewBuilder content: () -> Content) {
+        self.maxWidth = maxWidth; self.spacing = spacing; self.content = content()
+    }
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: spacing) {
                 content
             }
-                .padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
+                .padding(20).frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
         }.background(Brand.background).scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .top, spacing: 0) {
-                if let message = model.errorMessage ?? model.noticeMessage {
-                    StatusMessageBanner(message: message, isError: model.errorMessage != nil) {
-                        model.errorMessage = nil; model.noticeMessage = nil
+                VStack(spacing: 0) {
+                    if let activity = model.loadingActivity { LoadingStatusBanner(activity: activity) }
+                    if let message = model.errorMessage ?? model.noticeMessage {
+                        StatusMessageBanner(message: message, isError: model.errorMessage != nil) {
+                            model.errorMessage = nil; model.noticeMessage = nil
+                        }
+                        .padding(.horizontal, 20).padding(.vertical, 8)
+                        .frame(maxWidth: 760).frame(maxWidth: .infinity)
+                        .background(Brand.background)
                     }
-                    .padding(.horizontal, 20).padding(.vertical, 8)
-                    .frame(maxWidth: 760).frame(maxWidth: .infinity)
-                    .background(Brand.background)
                 }
             }
             .toolbar {
@@ -183,6 +255,7 @@ extension View {
 }
 
 struct ActionRow: View {
+    @Environment(AppModel.self) private var model
     let title: String
     let icon: String
     var subtitle: String? = nil
@@ -199,7 +272,7 @@ struct ActionRow: View {
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
             }.frame(minHeight: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain)
+        }.buttonStyle(.plain).disabled(model.isBusy)
     }
 }
 
@@ -265,14 +338,26 @@ struct StatusPill: View {
 }
 
 struct AsyncActionButton: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isPerforming = false
     let title: String
     var isBusy = false
     var disabled = false
     let action: () async -> Void
     var body: some View {
-        Button { Task { await action() } } label: {
-            HStack(spacing: 10) { if isBusy { ProgressView().tint(.black) }; Text(title) }
-        }.buttonStyle(GoldButtonStyle()).disabled(isBusy || disabled).opacity(disabled ? 0.5 : 1)
+        Button {
+            guard !isPerforming, !isBusy, !disabled else { return }
+            isPerforming = true
+            Task {
+                defer { isPerforming = false }
+                await action()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                if isPerforming { ProgressView().tint(colorScheme == .dark ? .white : .black) }
+                Text(title)
+            }
+        }.buttonStyle(GoldButtonStyle()).disabled(isPerforming || isBusy || disabled).opacity(disabled ? 0.5 : 1)
     }
 }
 

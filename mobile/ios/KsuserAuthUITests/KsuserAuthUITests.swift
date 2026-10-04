@@ -13,6 +13,59 @@ import XCTest
         return app
     }
 
+    func testSlowLoginShowsLoadingAndRestoresControls() {
+        let app = launch(arguments: ["--ui-test-loading"])
+        let email = app.textFields["邮箱"]
+        XCTAssertTrue(email.waitForExistence(timeout: 10))
+        email.tap(); email.typeText("fixture@example.invalid")
+        replaceSecureText(app.secureTextFields["密码"], with: "Fixture1234")
+        app.buttons["keyboardDone"].tap()
+        app.switches["agreementToggle"].tap()
+        let login = app.buttons["loginButton"]
+        login.tap()
+        assertLoading(app, message: "正在登录…", name: "Login loading")
+        XCTAssertTrue(login.isEnabled)
+    }
+
+    func testSlowProviderLoginShowsLoadingOnSelectedButton() {
+        let app = launch(arguments: ["--ui-test-loading"])
+        XCTAssertTrue(app.switches["agreementToggle"].waitForExistence(timeout: 10))
+        app.switches["agreementToggle"].tap()
+        let provider = app.buttons["qqLoginButton"]
+        for _ in 0..<4 {
+            if provider.isHittable { break }
+            app.swipeUp()
+        }
+        provider.tap()
+        assertLoading(app, message: "正在使用 QQ 登录…", name: "QQ login loading")
+        XCTAssertTrue(provider.isEnabled)
+    }
+
+    func testSlowLogoutShowsLoadingAboveScrolledContent() {
+        let app = launch(authenticated: true, arguments: ["--ui-test-loading"])
+        XCTAssertTrue(app.staticTexts["welcomeUsername"].waitForExistence(timeout: 10))
+        navigate(app, to: "安全")
+        let row = app.buttons["logoutCurrentRow"]
+        for _ in 0..<6 {
+            if row.isHittable { break }
+            app.swipeUp()
+        }
+        row.tap()
+        app.buttons.matching(identifier: "confirmLogoutCurrent").firstMatch.tap()
+        assertLoading(app, message: "正在退出登录…", name: "Logout loading")
+        XCTAssertTrue(row.isEnabled)
+    }
+
+    private func assertLoading(_ app: XCUIApplication, message: String, name: String) {
+        let banner = app.descendants(matching: .any).matching(identifier: "loadingBanner").firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 2))
+        XCTAssertTrue(banner.isHittable)
+        XCTAssertTrue(banner.label.contains(message))
+        attach(app, name: name)
+        let finished = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !banner.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 8), .completed)
+    }
+
     func testLoginRequiresAgreementAndValidInput() {
         let app = launch()
         let login = app.buttons["loginButton"]
@@ -52,9 +105,46 @@ import XCTest
         attach(app, name: "Quick login dark")
     }
 
+    func testLoginMethodSwitchingPreservesInputAndPasswordVisibility() {
+        let app = launch()
+        XCTAssertTrue(app.staticTexts["loginHeading"].waitForExistence(timeout: 10))
+        attach(app, name: "Login redesigned light")
+        let email = app.textFields["邮箱"]
+        email.tap(); email.typeText("fixture@example.invalid")
+        replaceSecureText(app.secureTextFields["密码"], with: "Fixture1234")
+        let visibility = app.buttons["passwordVisibilityButton"]
+        visibility.tap()
+        XCTAssertEqual(app.textFields["密码"].value as? String, "Fixture1234")
+        visibility.tap()
+        XCTAssertTrue(app.secureTextFields["密码"].exists)
+        app.buttons["keyboardDone"].tap()
+        app.buttons["codeLoginTab"].tap()
+        let send = app.buttons["sendLoginCodeButton"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        XCTAssertFalse(send.isEnabled)
+        XCTAssertFalse(app.buttons["loginButton"].isEnabled)
+        app.switches["agreementToggle"].tap()
+        XCTAssertTrue(send.isEnabled)
+        let code = app.textFields["验证码"]
+        code.tap(); code.typeText("123456")
+        app.buttons["keyboardDone"].tap()
+        XCTAssertTrue(app.buttons["loginButton"].isEnabled)
+        attach(app, name: "Login redesigned email code")
+        app.buttons["passwordLoginTab"].tap()
+        XCTAssertEqual(email.value as? String, "fixture@example.invalid")
+        XCTAssertTrue(app.buttons["loginButton"].isEnabled)
+        visibility.tap()
+        XCTAssertEqual(app.textFields["密码"].value as? String, "Fixture1234")
+    }
+
     func testRegistrationUsernameValidationAndFiveSteps() {
         let app = launch()
-        app.buttons["还没有账号？注册"].tap()
+        let registration = app.buttons["registrationLink"]
+        for _ in 0..<4 {
+            if registration.isHittable { break }
+            app.swipeUp()
+        }
+        registration.tap()
         let next = app.buttons["registrationContinue"]
         XCTAssertTrue(next.waitForExistence(timeout: 5))
         XCTAssertFalse(next.isEnabled)
@@ -143,7 +233,7 @@ import XCTest
             XCTAssertTrue(banner.waitForExistence(timeout: 10))
             XCTAssertEqual(app.buttons.matching(identifier: "dismissStatusBanner").count, 1)
             XCTAssertGreaterThanOrEqual(banner.frame.minY, app.navigationBars.firstMatch.frame.maxY)
-            let title = app.staticTexts["安全，从这里开始。"]
+            let title = app.staticTexts["loginHeading"]
             XCTAssertGreaterThanOrEqual(title.frame.minY, banner.frame.maxY)
             attach(app, name: argument == "--ui-test-notice" ? "Success banner" : "Error banner")
             app.buttons["dismissStatusBanner"].tap()

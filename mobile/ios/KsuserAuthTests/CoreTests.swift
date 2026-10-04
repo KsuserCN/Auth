@@ -2,6 +2,68 @@ import XCTest
 @testable import KsuserAuth
 
 final class CoreTests: XCTestCase {
+    @MainActor func testLoginLoadingCoversNestedRequestsAndIgnoresDuplicateLogin() async {
+        let transport = LoadingGateTransport(mode: .scanAfterLogin, paths: ["/auth/login", "/auth/totp/status"])
+        let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        let login = Task { await model.login(email: "fixture@example.invalid", password: "fixture") }
+        await transport.waitForRequest("/auth/login")
+        XCTAssertTrue(model.isBusy)
+        XCTAssertEqual(model.loadingActivity?.message, "正在登录…")
+        let activityID = model.loadingActivity?.id
+        await model.login(email: "fixture@example.invalid", password: "fixture")
+        let loginRequests = await transport.requestCount("/auth/login")
+        XCTAssertEqual(loginRequests, 1)
+        await transport.release("/auth/login")
+        await transport.waitForRequest("/auth/totp/status")
+        XCTAssertTrue(model.isAuthenticated)
+        XCTAssertTrue(model.isBusy)
+        XCTAssertEqual(model.loadingActivity?.id, activityID)
+        await transport.release("/auth/totp/status")
+        await login.value
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNil(model.loadingActivity)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor func testLoadingEndsAfterFailureAndCancellation() async {
+        for cancellation in [false, true] {
+            let transport = LoadingGateTransport(mode: .scanAfterLogin, paths: ["/auth/login"])
+            let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: APIClient(environment: environment, storage: MemorySessionStore(), transport: transport)), environment: environment)
+            let login = Task { await model.login(email: "fixture@example.invalid", password: "fixture") }
+            await transport.waitForRequest("/auth/login")
+            XCTAssertTrue(model.isBusy)
+            await transport.release("/auth/login", error: cancellation ? CancellationError() : URLError(.timedOut))
+            await login.value
+            XCTAssertFalse(model.isBusy)
+            XCTAssertNil(model.loadingActivity)
+            XCTAssertFalse(model.isAuthenticated)
+            XCTAssertEqual(model.errorMessage == nil, cancellation)
+        }
+    }
+
+    @MainActor func testConcurrentLoadingKeepsRemainingOperationVisible() async {
+        let transport = LoadingGateTransport(mode: .normalizedInput, paths: ["/auth/send-code", "/auth/logout"])
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "fixture-access")), transport: transport)), environment: environment)
+        model.user = UserProfile(uuid: "fixture", username: "fixture", email: "fixture@example.invalid")
+        let send = Task { await model.sendCode(email: "fixture@example.invalid", type: "login") }
+        await transport.waitForRequest("/auth/send-code")
+        let logout = Task { await model.logout() }
+        await transport.waitForRequest("/auth/logout")
+        await model.logout()
+        let logoutRequests = await transport.requestCount("/auth/logout")
+        XCTAssertEqual(logoutRequests, 1)
+        await transport.release("/auth/send-code")
+        await send.value
+        XCTAssertTrue(model.isBusy)
+        XCTAssertEqual(model.loadingActivity?.message, "正在退出登录…")
+        await transport.release("/auth/logout")
+        await logout.value
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNil(model.loadingActivity)
+        XCTAssertFalse(model.isAuthenticated)
+    }
+
     func testDateDisplayKeepsLocalTimeAndRemovesISOSeparator() {
         XCTAssertEqual(displayDate("2026-10-04T10:02:03"), "2026-10-04 10:02:03")
         XCTAssertEqual(displayDate("2026-10-04T10:02:03.123456789"), "2026-10-04 10:02:03.123456789")
@@ -292,6 +354,27 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(url?.absoluteString, destination.hasPrefix("https:") ? destination : nil)
             XCTAssertNil(model.bridgeConfirmation)
         }
+    }
+}
+
+private actor LoadingGateTransport: HTTPTransport {
+    private let base: FixtureTransport
+    private let paths: Set<String>
+    private var gates: [String: CheckedContinuation<Void, Error>] = [:]
+    private var counts: [String: Int] = [:]
+
+    init(mode: FixtureTransport.Mode, paths: Set<String>) { base = FixtureTransport(mode: mode); self.paths = paths }
+    func requestCount(_ path: String) -> Int { counts[path, default: 0] }
+    func waitForRequest(_ path: String) async { while gates[path] == nil { await Task.yield() } }
+    func release(_ path: String, error: Error? = nil) {
+        let gate = gates.removeValue(forKey: path)
+        if let error { gate?.resume(throwing: error) } else { gate?.resume() }
+    }
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let path = request.url!.path
+        counts[path, default: 0] += 1
+        if paths.contains(path) { try await withCheckedThrowingContinuation { gates[path] = $0 } }
+        return try await base.data(for: request)
     }
 }
 

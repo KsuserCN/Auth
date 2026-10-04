@@ -3,6 +3,7 @@ import AuthenticationServices
 
 struct AuthenticationView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage("agreementAccepted") private var agreementAccepted = false
     @State private var email = ""
     @State private var password = ""
@@ -11,58 +12,93 @@ struct AuthenticationView: View {
     @State private var showAbout = false
     @State private var showScanner = false
     @State private var resendAt = Date.distantPast
+    @FocusState private var focusedField: LoginField?
     var isLinking = false
 
-    var body: some View {
-        PageScroll {
-            VStack(alignment: .leading, spacing: 18) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 24).fill(Brand.subtleGold).frame(width: 86, height: 86)
-                    Image(systemName: "shield.lefthalf.filled").font(.system(size: 40, weight: .medium)).foregroundStyle(Brand.gold)
-                }.accessibilityHidden(true)
-                Text(isLinking ? "绑定已有账号" : "安全，从这里开始。")
-                    .font(.largeTitle.weight(.bold)).fixedSize(horizontal: false, vertical: true)
-                Text(isLinking ? "登录你已有的 Ksuser 账号，完成身份验证后绑定。" : "一个账号，连接你的数字生活。")
-                    .font(.subheadline).foregroundStyle(.secondary)
-            }.padding(.top, 22).padding(.bottom, 8)
+    private var canLogin: Bool {
+        agreementAccepted && validEmail(email) && !(useCode ? code : password).isEmpty
+    }
 
-            AppCard {
-                AdaptivePicker("登录方式", selection: $useCode) { Text("密码登录").tag(false); Text("验证码登录").tag(true) }
-                FormField(title: "邮箱", text: $email, keyboard: .emailAddress, contentType: .username)
-                if useCode {
-                    FormField(title: "验证码", text: $code, keyboard: .numberPad, contentType: .oneTimeCode)
-                    CodeSendButton(email: email, type: "login", resendAt: $resendAt, allowed: agreementAccepted)
-                } else { FormField(title: "密码", text: $password, secure: true, contentType: .password) }
-                AsyncActionButton(title: "登录", isBusy: model.isBusy, disabled: !agreementAccepted || !validEmail(email) || (useCode ? code.isEmpty : password.isEmpty)) {
-                    if useCode { await model.loginWithCode(email: email.trimmingCharacters(in: .whitespacesAndNewlines), code: code) }
-                    else { await model.login(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password) }
-                    if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
+    var body: some View {
+        PageScroll(maxWidth: 460, spacing: 18) {
+            header
+
+            VStack(alignment: .leading, spacing: 16) {
+                LoginMethodPicker(useCode: $useCode).disabled(model.isBusy)
+                VStack(spacing: 16) {
+                    LoginInputField(title: "邮箱", placeholder: "输入你的邮箱", icon: "envelope", text: $email,
+                                    field: .email, focus: $focusedField, keyboard: .emailAddress, contentType: .username) {
+                        focusedField = useCode ? .code : .password
+                    }
+                    if useCode {
+                        let layout = dynamicTypeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                            : AnyLayout(HStackLayout(alignment: .bottom, spacing: 10))
+                        layout {
+                            LoginInputField(title: "验证码", placeholder: "输入验证码", icon: "number", text: $code,
+                                            field: .code, focus: $focusedField, keyboard: .numberPad, contentType: .oneTimeCode, submitLabel: .go) {
+                                Task { await authenticate() }
+                            }
+                            CodeSendButton(email: email, type: "login", resendAt: $resendAt, allowed: agreementAccepted)
+                                .font(.caption.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 5)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .background(Brand.subtleGold, in: RoundedRectangle(cornerRadius: 14))
+                                .accessibilityIdentifier("sendLoginCodeButton")
+                        }
+                    } else {
+                        LoginInputField(title: "密码", placeholder: "输入你的密码", icon: "lock", text: $password,
+                                        field: .password, focus: $focusedField, secure: true, contentType: .password, submitLabel: .go) {
+                            Task { await authenticate() }
+                        }
+                    }
+                }.disabled(model.isBusy)
+                AsyncActionButton(title: isLinking ? "登录并绑定" : "登录", isBusy: model.isBusy, disabled: !canLogin) {
+                    await authenticate()
                 }.accessibilityIdentifier("loginButton")
-                if !isLinking {
-                    NavigationLink { RegistrationView() } label: { Text("还没有账号？注册") }.frame(maxWidth: .infinity, minHeight: 44)
+                LoginAgreementView(accepted: $agreementAccepted)
+            }
+            .padding(20).background(Brand.card, in: RoundedRectangle(cornerRadius: 24))
+            .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.primary.opacity(0.04), lineWidth: 1) }
+
+            VStack(spacing: 14) {
+                HStack(spacing: 14) {
+                    Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
+                    Text("其他登录方式").font(.caption).foregroundStyle(.secondary).fixedSize()
+                    Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
+                }.accessibilityHidden(true)
+                AsyncLoginProviderButton(title: "使用 Passkey 登录", icon: "person.badge.key.fill", disabled: !agreementAccepted || model.isBusy) {
+                    focusedField = nil
+                    await model.loginWithPasskey(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
+                }.accessibilityIdentifier("passkeyLoginButton")
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
+                layout {
+                    AsyncLoginProviderButton(title: "Apple", icon: "apple.logo", outlined: true, disabled: !agreementAccepted || model.isBusy) {
+                        focusedField = nil
+                        await model.loginWithApple(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
+                    }.accessibilityLabel("通过 Apple 登录").accessibilityIdentifier("appleLoginButton")
+                    AsyncLoginProviderButton(title: "QQ", imageAsset: "QQLogo", outlined: true, disabled: !agreementAccepted || model.isBusy) {
+                        focusedField = nil
+                        await model.loginWithQQ(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
+                    }.accessibilityLabel("使用 QQ 登录").accessibilityIdentifier("qqLoginButton")
                 }
             }
 
-            AgreementView(accepted: $agreementAccepted)
-
-            AppCard {
-                CardHeader(title: "快捷登录", subtitle: "使用设备上已有的安全凭据", icon: "key.fill")
-                Button { Task { await model.loginWithPasskey(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() } } } label: {
-                    LoginProviderLabel(title: "使用 Passkey", icon: "person.badge.key.fill")
-                }.buttonStyle(LoginProviderButtonStyle()).disabled(!agreementAccepted || model.isBusy).accessibilityIdentifier("passkeyLoginButton")
-                Button { Task { await model.loginWithQQ(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() } } } label: {
-                    LoginProviderLabel(title: "使用 QQ 登录", imageAsset: "QQLogo")
-                }.buttonStyle(LoginProviderButtonStyle()).disabled(!agreementAccepted || model.isBusy).accessibilityIdentifier("qqLoginButton")
-                Button { Task { await model.loginWithApple(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() } } } label: {
-                    LoginProviderLabel(title: "通过 Apple 登录", icon: "apple.logo")
-                }.buttonStyle(LoginProviderButtonStyle()).disabled(!agreementAccepted || model.isBusy).accessibilityIdentifier("appleLoginButton")
-            }
-
             if !isLinking {
-                NavigationLink { AccountRecoveryEntryView() } label: { Label("无法登录？恢复账号", systemImage: "lifepreserver") }.frame(maxWidth: .infinity, minHeight: 44)
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 16))
+                layout {
+                    NavigationLink { RegistrationView() } label: { Text("注册账号").frame(minHeight: 44) }
+                        .accessibilityLabel("还没有账号？注册").accessibilityIdentifier("registrationLink")
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Circle().fill(Color.secondary.opacity(0.4)).frame(width: 3, height: 3).accessibilityHidden(true)
+                    }
+                    NavigationLink { AccountRecoveryEntryView() } label: { Text("恢复账号").frame(minHeight: 44) }
+                        .foregroundStyle(.secondary).accessibilityLabel("无法登录？恢复账号")
+                }.font(.footnote).frame(maxWidth: .infinity)
             }
         }
-        .navigationTitle(isLinking ? "绑定账号" : "Ksuser 安全")
+        .navigationTitle(isLinking ? "绑定账号" : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !isLinking {
@@ -72,6 +108,136 @@ struct AuthenticationView: View {
         }
         .sheet(isPresented: $showAbout) { AppNavigationStack { AboutView() } }
         .sheet(isPresented: $showScanner) { ScannerSheet { value in showScanner = false; Task { await model.previewQRCode(value) } } }
+        .onChange(of: useCode) { _, _ in
+            if focusedField != nil { focusedField = useCode ? .code : .password }
+        }
+    }
+
+    private var header: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                Image("AppLogo").resizable().scaledToFit().frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 13)).accessibilityHidden(true)
+                Text(isLinking ? "绑定已有账号" : "登录 Ksuser")
+                    .font(.title.weight(.bold)).accessibilityAddTraits(.isHeader).accessibilityIdentifier("loginHeading")
+            }.padding(.bottom, 4)
+            Text(isLinking ? "登录已有账号，安全关联你的身份。" : "一个账号，连接你的数字生活。")
+                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity).padding(.top, 6).padding(.bottom, 2)
+    }
+
+    private func authenticate() async {
+        guard canLogin, !model.isBusy else { return }
+        focusedField = nil
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if useCode { await model.loginWithCode(email: address, code: code) }
+        else { await model.login(email: address, password: password) }
+        if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
+    }
+}
+
+private enum LoginField: Hashable { case email, password, visiblePassword, code }
+
+private struct LoginMethodPicker: View {
+    @Binding var useCode: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            method("密码登录", code: false)
+            method("验证码登录", code: true)
+        }.overlay(alignment: .bottom) {
+            Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 1)
+        }
+    }
+
+    private func method(_ title: String, code: Bool) -> some View {
+        Button { withAnimation(.easeInOut(duration: 0.18)) { useCode = code } } label: {
+            Text(title).font(.subheadline.weight(.semibold))
+                .foregroundStyle(useCode == code ? Color.primary : Color.secondary)
+                .padding(.horizontal, 8).padding(.bottom, 8).frame(maxWidth: .infinity, minHeight: 44)
+                .overlay(alignment: .bottom) {
+                    if useCode == code { Capsule().fill(Brand.gold).frame(width: 28, height: 3).padding(.bottom, 1) }
+                }.contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityAddTraits(useCode == code ? .isSelected : [])
+            .accessibilityIdentifier(code ? "codeLoginTab" : "passwordLoginTab")
+    }
+}
+
+private struct LoginInputField: View {
+    let title: String
+    let placeholder: String
+    let icon: String
+    @Binding var text: String
+    let field: LoginField
+    var focus: FocusState<LoginField?>.Binding
+    var secure = false
+    var keyboard: UIKeyboardType = .default
+    var contentType: UITextContentType? = nil
+    var submitLabel: SubmitLabel = .next
+    var onSubmit: () -> Void
+    @State private var revealed = false
+    private var focusTarget: LoginField { secure && revealed ? .visiblePassword : field }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.system(size: 17)).foregroundStyle(.secondary)
+                    .frame(width: 20).accessibilityHidden(true)
+                Group {
+                    if secure && !revealed { SecureField(placeholder, text: $text) }
+                    else { TextField(placeholder, text: $text).keyboardType(keyboard) }
+                }
+                .font(.body).textContentType(contentType).textInputAutocapitalization(.never).autocorrectionDisabled()
+                .focused(focus, equals: focusTarget).submitLabel(submitLabel).onSubmit(onSubmit)
+                .accessibilityLabel(title).accessibilityIdentifier(title)
+                if secure {
+                    Button {
+                        let wasFocused = focus.wrappedValue == focusTarget
+                        revealed.toggle()
+                        if wasFocused { focus.wrappedValue = focusTarget }
+                    } label: {
+                        Image(systemName: revealed ? "eye.slash" : "eye").font(.system(size: 16))
+                            .foregroundStyle(.secondary).frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel(revealed ? "隐藏密码" : "显示密码")
+                        .accessibilityIdentifier("passwordVisibilityButton")
+                }
+            }
+            .padding(.leading, 14).padding(.trailing, secure ? 4 : 14).padding(.vertical, secure ? 5 : 16)
+            .frame(minHeight: 54).background(Brand.background, in: RoundedRectangle(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(focus.wrappedValue == focusTarget ? Brand.gold.opacity(0.5) : Color.clear, lineWidth: 1)
+            }
+        }
+    }
+}
+
+private struct LoginAgreementView: View {
+    @Binding var accepted: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 2) {
+            Toggle("我已阅读并同意相关条款", isOn: $accepted)
+                .toggleStyle(LoginAgreementToggleStyle()).accessibilityIdentifier("agreementToggle")
+                .frame(width: 36)
+            Text("我已阅读并同意 [服务协议](https://www.ksuser.cn/agreement/user.html) 和 [隐私政策](https://www.ksuser.cn/agreement/privacy.html)，以及 [第三方信息共享清单](https://www.ksuser.cn/agreement/third-party-information-sharing.html)。")
+                .font(.caption).foregroundStyle(.secondary).tint(Brand.gold).lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true).padding(.top, 6)
+        }
+    }
+}
+
+private struct LoginAgreementToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            Image(systemName: configuration.isOn ? "checkmark.square.fill" : "square")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(configuration.isOn ? Brand.gold : Color.secondary.opacity(0.6))
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityRepresentation { Toggle("我已阅读并同意相关条款", isOn: configuration.$isOn).toggleStyle(.switch) }
     }
 }
 
@@ -95,16 +261,25 @@ struct CodeSendButton: View {
     let type: String
     @Binding var resendAt: Date
     var allowed = true
+    @State private var isSending = false
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(0, Int(resendAt.timeIntervalSince(context.date).rounded(.up)))
             Button {
+                guard !isSending, !model.isBusy else { return }
+                isSending = true
                 Task {
+                    defer { isSending = false }
                     await model.sendCode(email: email, type: type)
                     if model.errorMessage == nil { resendAt = Date().addingTimeInterval(60) }
                 }
-            } label: { Text(remaining > 0 ? "\(remaining) 秒后重发" : "发送验证码").frame(minHeight: 44) }
-                .disabled(remaining > 0 || model.isBusy || !allowed || (email != nil && !validEmail(email!)))
+            } label: {
+                HStack(spacing: 8) {
+                    if isSending { ProgressView().tint(Brand.gold) }
+                    Text(isSending ? "正在发送…" : remaining > 0 ? "\(remaining) 秒后重发" : "发送验证码")
+                }.frame(minHeight: 44)
+            }
+                .disabled(isSending || remaining > 0 || model.isBusy || !allowed || (email != nil && !validEmail(email!)))
         }
     }
 }

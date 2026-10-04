@@ -1,10 +1,17 @@
 import Foundation
 import Observation
 
+struct LoadingActivity: Identifiable {
+    let id = UUID()
+    let message: String?
+    let startedAt = Date()
+}
+
 @MainActor @Observable final class AppModel {
     let environment: AppEnvironment
     var user: UserProfile?
-    var isBusy: Bool { busyCount > 0 }
+    var isBusy: Bool { !loadingActivities.isEmpty }
+    var loadingActivity: LoadingActivity? { loadingActivities.first(where: { $0.message != nil }) ?? loadingActivities.first }
     var isAuthenticated: Bool { user != nil }
     var errorMessage: String?
     var noticeMessage: String?
@@ -34,7 +41,9 @@ import Observation
     @ObservationIgnored private let native: any NativeAuthenticationProviding
     @ObservationIgnored private var authenticationRepository: KsuserRepository?
     @ObservationIgnored private var sensitiveContinuation: (@MainActor () async throws -> Void)?
-    private var busyCount = 0
+    private var loadingActivities: [LoadingActivity] = []
+    @ObservationIgnored private var authenticationInProgress = false
+    @ObservationIgnored private var logoutInProgress = false
     @ObservationIgnored private var didRestore = false
     @ObservationIgnored private var logOperationType: String?
     @ObservationIgnored private var logResult: String?
@@ -65,7 +74,7 @@ import Observation
         let snapshot = await repository.client.snapshot()
         user = snapshot.profile
         guard await repository.client.hasSession() else { user = nil; return }
-        await run {
+        await run(message: "正在恢复登录状态…") {
             if snapshot.accessToken == nil { _ = try await self.repository.client.restoreAccessToken() }
             let profile = try await self.repository.currentUser()
             try await self.repository.client.cacheUser(profile); self.user = profile
@@ -83,7 +92,7 @@ import Observation
         return available
     }
     func sendCode(email: String? = nil, type: String) async {
-        await run { try await self.repository.sendCode(email: email, type: type); self.noticeMessage = "验证码已发送，请检查邮箱" }
+        await run(message: "正在发送验证码…") { try await self.repository.sendCode(email: email, type: type); self.noticeMessage = "验证码已发送，请检查邮箱" }
     }
     func login(email: String, password: String) async {
         await authenticate { try await $0.login(email: email, password: password) }
@@ -92,24 +101,24 @@ import Observation
         await authenticate(source: "email-code") { try await $0.loginWithCode(email: email, code: code) }
     }
     func loginWithPasskey() async {
-        await authenticate(source: "passkey") { staged in
+        await authenticate(source: "passkey", message: "正在使用 Passkey 登录…") { staged in
             let options = try await staged.passkeyAuthenticationOptions()
             let payload = try await self.native.authenticatePasskey(options: options)
             return try await staged.loginWithPasskey(options: options, payload: payload)
         }
     }
     func loginWithQQ() async {
-        await authenticate(source: "qq") { staged in try await staged.loginWithQQ(self.native.signInWithQQ()) }
+        await authenticate(source: "qq", message: "正在使用 QQ 登录…") { staged in try await staged.loginWithQQ(self.native.signInWithQQ()) }
     }
     func loginWithApple() async {
-        await authenticate(source: "apple") { staged in
+        await authenticate(source: "apple", message: "正在通过 Apple 登录…") { staged in
             let challenge = try await staged.appleChallenge(purpose: "login")
             let credential = try await self.native.signInWithApple(challenge: challenge)
             return try await staged.loginWithApple(challenge: challenge, credential: credential)
         }
     }
     func register(username: String, email: String, password: String, code: String) async {
-        await authenticate { staged in
+        await authenticate(message: "正在注册账号…") { staged in
             if let error = self.passwordRequirement?.validationError(for: password) { throw APIError.server(400, error) }
             return .success(try await staged.register(username: username, email: email, password: password, code: code))
         }
@@ -117,7 +126,7 @@ import Observation
     func verifyMFA(code: String? = nil, recoveryCode: String? = nil) async {
         guard let challenge = mfaChallenge, let staged = authenticationRepository else { return }
         let generation = authGeneration
-        await run {
+        await run(message: "正在完成双重验证…") {
             let token = try await staged.verifyMFA(challenge: challenge, code: code, recoveryCode: recoveryCode)
             guard generation == self.authGeneration else { throw APIError.cancelled }
             try await self.finishAuthentication(token: token, staged: staged, expectedGeneration: generation, source: challenge.source)
@@ -126,7 +135,7 @@ import Observation
     func verifyMFAPasskey() async {
         guard let challenge = mfaChallenge, let staged = authenticationRepository, challenge.methods.contains("passkey") else { return }
         let generation = authGeneration
-        await run {
+        await run(message: "正在使用 Passkey 验证…") {
             let options = try await staged.passkeyAuthenticationOptions()
             let payload = try await self.native.authenticatePasskey(options: options)
             let token = try await staged.verifyMFAPasskey(challenge: challenge, options: options, payload: payload)
@@ -229,7 +238,7 @@ import Observation
         }
     }
     func requireSensitive(title: String = "验证身份", action: @MainActor @escaping () async throws -> Void) async {
-        await run {
+        await run(message: "正在\(title)…") {
             let status = try await self.repository.sensitiveStatus()
             if status.verified { try await action() }
             else { self.sensitiveContinuation = action; self.sensitiveRequest = SensitiveRequest(title: title, status: status) }
@@ -237,7 +246,7 @@ import Observation
     }
     func verifySensitive(method: String, password: String? = nil, code: String? = nil, recoveryCode: String? = nil) async {
         guard sensitiveRequest != nil else { return }
-        await run {
+        await run(message: "正在验证身份…") {
             if method == "passkey" {
                 let options = try await self.repository.sensitivePasskeyOptions()
                 let payload = try await self.native.authenticatePasskey(options: options)
@@ -313,12 +322,15 @@ import Observation
         }
     }
     func logout(allDevices: Bool = false) async {
+        guard !logoutInProgress else { return }
+        logoutInProgress = true
+        defer { logoutInProgress = false }
         if allDevices {
             await requireSensitive(title: "退出全部设备") {
                 try await self.repository.logout(all: true); try await self.clearSessionAndUser()
             }
         } else {
-            await run {
+            await run(message: "正在退出登录…") {
                 do { try await self.repository.logout() } catch {
                     try await self.clearSessionAndUser(); throw error
                 }
@@ -404,8 +416,8 @@ import Observation
         }
         return returnURL
     }
-    func checkUpdate() async {
-        await run(reportError: false) {
+    func checkUpdate(showLoading: Bool = false) async {
+        await run(message: showLoading ? "正在检查更新…" : nil, reportError: false) {
             var request = URLRequest(url: self.environment.updateManifestURL); request.setValue("application/json", forHTTPHeaderField: "Accept")
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.server(503, "检查更新失败，请稍后重试") }
@@ -413,17 +425,20 @@ import Observation
         }
     }
     func manualCheckUpdate() async {
-        await checkUpdate()
+        await checkUpdate(showLoading: true)
         if updateInfo == nil { errorMessage = "检查更新失败，请稍后重试" }
         else if updateInfo?.available == false { noticeMessage = "当前已是最新版本" }
     }
 
-    private func authenticate(source: String = "password", preservePending: Bool = true, operation: @MainActor (KsuserRepository) async throws -> AuthResult) async {
+    private func authenticate(source: String = "password", preservePending: Bool = true, message: String = "正在登录…", operation: @MainActor (KsuserRepository) async throws -> AuthResult) async {
+        guard !authenticationInProgress else { return }
+        authenticationInProgress = true
+        defer { authenticationInProgress = false }
         authGeneration += 1
         let generation = authGeneration
-        let staged = KsuserRepository(client: await repository.client.stagedClient())
-        bindingAfterAuthentication = preservePending && pendingOAuth != nil
-        await run {
+        await run(message: message) {
+            let staged = KsuserRepository(client: await self.repository.client.stagedClient())
+            self.bindingAfterAuthentication = preservePending && self.pendingOAuth != nil
             let result = try await operation(staged)
             guard generation == self.authGeneration else { throw APIError.cancelled }
             switch result {
@@ -475,12 +490,22 @@ import Observation
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; totpSetup = nil
         totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0); recoveryCodes = []; qrConfirmation = nil; pendingRawQRCode = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
     }
-    private func run(reportError: Bool = true, operation: @MainActor () async throws -> Void) async {
-        guard !isUITesting else { return }
-        busyCount += 1
+    private func run(message: String? = nil, reportError: Bool = true, operation: @MainActor () async throws -> Void) async {
+        #if DEBUG
+        let simulatesLoading = isUITesting && ProcessInfo.processInfo.arguments.contains("--ui-test-loading") && message != nil
+        #else
+        let simulatesLoading = false
+        #endif
+        guard !isUITesting || simulatesLoading else { return }
+        let activity = LoadingActivity(message: message)
+        // Silent background checks must not disable actions or show a loading banner.
+        if reportError || message != nil { loadingActivities.append(activity) }
         if reportError { errorMessage = nil; noticeMessage = nil }
-        defer { busyCount -= 1 }
-        do { try await operation() }
+        defer { loadingActivities.removeAll { $0.id == activity.id } }
+        do {
+            if simulatesLoading { try await Task.sleep(for: .seconds(5)) }
+            else { try await operation() }
+        }
         catch is CancellationError { }
         catch APIError.cancelled { }
         catch {
