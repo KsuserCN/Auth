@@ -3,13 +3,11 @@ import Foundation
 struct AppEnvironment: Sendable {
     let apiBaseURL: URL
     let passkeyRPID: String
-    let updateManifestURL: URL
     let qqAppID: String
     let webURL: URL
     static let current = AppEnvironment(
         apiBaseURL: URL(string: value("KSUSER_API_BASE_URL", fallback: "https://api.ksuser.cn"))!,
         passkeyRPID: value("KSUSER_PASSKEY_RP_ID", fallback: "auth.ksuser.cn"),
-        updateManifestURL: URL(string: value("KSUSER_IOS_UPDATE_URL", fallback: "https://auth.ksuser.cn/mobile/ios/update.json"))!,
         qqAppID: value("KSUSER_QQ_APP_ID", fallback: "1903977704"),
         webURL: URL(string: "https://auth.ksuser.cn")!
     )

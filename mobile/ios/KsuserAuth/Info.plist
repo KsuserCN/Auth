@@ -68,14 +68,10 @@
 	<string>$(KSUSER_API_BASE_URL)</string>
 	<key>KSUSER_PASSKEY_RP_ID</key>
 	<string>$(KSUSER_PASSKEY_RP_ID)</string>
-	<key>KSUSER_IOS_UPDATE_URL</key>
-	<string>$(KSUSER_IOS_UPDATE_URL)</string>
 	<key>KSUSER_QQ_APP_ID</key>
 	<string>$(KSUSER_QQ_APP_ID)</string>
 	<key>KSUSER_QQ_UNIVERSAL_LINK</key>
 	<string>$(KSUSER_QQ_UNIVERSAL_LINK)</string>
-	<key>KSUSER_APP_STORE_ID</key>
-	<string>$(KSUSER_APP_STORE_ID)</string>
 	<key>KSUSER_ICP_NUMBER</key>
 	<string>$(KSUSER_ICP_NUMBER)</string>
 </dict>

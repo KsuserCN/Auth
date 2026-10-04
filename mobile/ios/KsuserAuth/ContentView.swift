@@ -21,7 +21,6 @@ struct ContentView: View {
     @State private var destination: MainDestination = .home
     @State private var showScanner = false
     @State private var showAbout = false
-    @State private var showUpdate = false
     @State private var presentedChallengeID: String?
     @State private var pendingBrowserPage: BrowserPage?
     @State private var browserPage: BrowserPage?
@@ -64,18 +63,11 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showAbout) { AppNavigationStack { AboutView() } }
-        .sheet(isPresented: $showUpdate) { if let info = model.updateInfo { AppNavigationStack { UpdateView(info: info) } } }
         .onOpenURL(perform: handleIncomingURL)
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in if let url = activity.webpageURL { handleIncomingURL(url) } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.validateAppleCredential() } } }
         .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in Task { await model.handleAppleCredentialRevocation() } }
-        .task { await model.restoreSession(); await model.checkUpdate() }
-        .onChange(of: model.updateInfo?.latestBuild) { _, _ in
-            if let info = model.updateInfo, info.available {
-                let ignored = UserDefaults.standard.integer(forKey: "ignoredUpdateBuild")
-                showUpdate = info.mandatory || ignored != info.latestBuild
-            }
-        }
+        .task { await model.restoreSession() }
     }
 
     private var shell: some View {

@@ -34,7 +34,6 @@ struct LoadingActivity: Identifiable {
     var bridgeConfirmation: BridgeConfirmation?
     var recoveryTicket: AccountRecoveryTicket?
     var recoveryTicketExpiresAt: Date?
-    var updateInfo: AppUpdateInfo?
     var settings: UserSettings { user?.settings ?? UserSettings() }
 
     @ObservationIgnored private let repository: any KsuserRepositoryProviding
@@ -416,20 +415,6 @@ struct LoadingActivity: Identifiable {
         }
         return returnURL
     }
-    func checkUpdate(showLoading: Bool = false) async {
-        await run(message: showLoading ? "正在检查更新…" : nil, reportError: false) {
-            var request = URLRequest(url: self.environment.updateManifestURL); request.setValue("application/json", forHTTPHeaderField: "Accept")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw APIError.server(503, "检查更新失败，请稍后重试") }
-            self.updateInfo = try JSONDecoder().decode(AppUpdateInfo.self, from: data)
-        }
-    }
-    func manualCheckUpdate() async {
-        await checkUpdate(showLoading: true)
-        if updateInfo == nil { errorMessage = "检查更新失败，请稍后重试" }
-        else if updateInfo?.available == false { noticeMessage = "当前已是最新版本" }
-    }
-
     private func authenticate(source: String = "password", preservePending: Bool = true, message: String = "正在登录…", operation: @MainActor (KsuserRepository) async throws -> AuthResult) async {
         guard !authenticationInProgress else { return }
         authenticationInProgress = true

@@ -144,14 +144,8 @@ struct AppleCredential: Codable, Sendable {
 }
 struct QQCredential: Codable, Sendable { let appId: String; let accessToken: String; let openid: String; let unionid: String; let expiresIn: String? }
 struct OAuthAccountStatus: Codable, Sendable { let appleBound: Bool?; let qqBound: Bool?; let hasPassword: Bool? }
-struct AppUpdateInfo: Codable, Sendable {
-    let latestBuild: Int; let minimumSupportedBuild: Int; let versionName: String; let releaseNotes: String?; let appStoreUrl: String?; let published: Bool
-    var available: Bool { latestBuild > (Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0) && published }
-    var mandatory: Bool { published && minimumSupportedBuild > (Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0") ?? 0) }
-}
 struct SensitiveRequest: Identifiable { let id = UUID(); let title: String; let status: SensitiveVerificationStatus }
 typealias TOTPSetup = TotpRegistrationOptions
-typealias IOSUpdateInfo = AppUpdateInfo
 
 @MainActor protocol NativeAuthenticationProviding {
     func authenticatePasskey(options: PasskeyAuthenticationOptions) async throws -> PasskeyAuthenticationPayload

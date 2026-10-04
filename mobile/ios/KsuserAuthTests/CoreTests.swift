@@ -74,7 +74,7 @@ final class CoreTests: XCTestCase {
     }
 
     private var environment: AppEnvironment {
-        AppEnvironment(apiBaseURL: URL(string: "https://api.ksuser.cn")!, passkeyRPID: "auth.ksuser.cn", updateManifestURL: URL(string: "https://auth.ksuser.cn/mobile/ios/update.json")!, qqAppID: "test-only", webURL: URL(string: "https://auth.ksuser.cn")!)
+        AppEnvironment(apiBaseURL: URL(string: "https://api.ksuser.cn")!, passkeyRPID: "auth.ksuser.cn", qqAppID: "test-only", webURL: URL(string: "https://auth.ksuser.cn")!)
     }
     private func snapshot(token: String = "expired") -> SessionSnapshot {
         let csrf = HTTPCookie(properties: [.name: "XSRF-TOKEN", .value: "csrf-fixture", .domain: "api.ksuser.cn", .path: "/", .secure: "TRUE"])!

@@ -7,7 +7,6 @@ import SwiftUI
         if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-preferences") {
             UserDefaults.standard.removeObject(forKey: "agreementAccepted")
             UserDefaults.standard.removeObject(forKey: "appearance")
-            UserDefaults.standard.removeObject(forKey: "ignoredUpdateBuild")
         }
         #endif
     }

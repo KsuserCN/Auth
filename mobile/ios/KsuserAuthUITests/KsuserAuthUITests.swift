@@ -111,7 +111,7 @@ import XCTest
         }
         attach(app, name: "Quick login light")
         app.buttons["aboutButton"].tap()
-        app.segmentedControls["themePicker"].buttons["深色"].tap()
+        app.buttons["theme-dark"].tap()
         app.buttons["完成"].firstMatch.tap()
         attach(app, name: "Quick login dark")
     }
@@ -222,10 +222,10 @@ import XCTest
     func testThemeChoicePersistsAndRendersDarkMode() {
         var app = launch(authenticated: true)
         app.buttons["aboutButton"].tap()
-        let picker = app.segmentedControls["themePicker"]
-        XCTAssertTrue(picker.waitForExistence(timeout: 5))
-        picker.buttons["深色"].tap()
-        XCTAssertTrue(picker.buttons["深色"].isSelected)
+        let darkTheme = app.buttons["theme-dark"]
+        XCTAssertTrue(darkTheme.waitForExistence(timeout: 5))
+        darkTheme.tap()
+        XCTAssertEqual(darkTheme.value as? String, "已选择")
         attach(app, name: "Settings dark")
         app.buttons["完成"].firstMatch.tap()
         navigate(app, to: "安全")
@@ -233,8 +233,8 @@ import XCTest
         app.terminate()
         app = launch(authenticated: true, resetPreferences: false)
         app.buttons["aboutButton"].tap()
-        XCTAssertTrue(app.segmentedControls["themePicker"].buttons["深色"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.segmentedControls["themePicker"].buttons["深色"].isSelected)
+        XCTAssertTrue(app.buttons["theme-dark"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["theme-dark"].value as? String, "已选择")
     }
 
     func testStatusMessagesFloatBelowNavigationWithoutMovingContent() {
@@ -311,11 +311,14 @@ import XCTest
         attach(app, name: "Complete dates at large text size")
     }
 
-    func testAboutShowsLogoAndOpensAgreementInApp() {
+    func testAboutShowsLogoAndOpensLinksInApp() {
         let app = launch()
         XCTAssertTrue(app.buttons["aboutButton"].waitForExistence(timeout: 10))
         app.buttons["aboutButton"].tap()
         XCTAssertTrue(app.images["appLogo"].waitForExistence(timeout: 5))
+        let filing = app.buttons["icpFilingNumber"]
+        XCTAssertTrue(filing.waitForExistence(timeout: 5))
+        XCTAssertEqual(filing.label, "沪ICP备2025144703号-3A")
         attach(app, name: "About with app logo")
         let agreement = app.buttons["服务协议"]
         for _ in 0..<5 {
@@ -340,6 +343,10 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [closed], timeout: 5), .completed)
         XCTAssertTrue(app.navigationBars["关于与设置"].waitForExistence(timeout: 5))
         attach(app, name: "Return from in-app browser")
+        filing.tap()
+        XCTAssertTrue(browser.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.state, .runningForeground)
+        attach(app, name: "Filing in Safari controller")
     }
 
     func testAvatarCropCanCancelOrConfirm() {

@@ -1,10 +1,8 @@
 // Secrets belong on the API server, never in this file.
 KSUSER_API_BASE_URL = https:/$()/api.ksuser.cn
 KSUSER_PASSKEY_RP_ID = auth.ksuser.cn
-KSUSER_IOS_UPDATE_URL = https:/$()/auth.ksuser.cn/mobile/ios/update.json
 KSUSER_QQ_APP_ID = 1903977704
 KSUSER_QQ_HEX_SCHEME = QQ717C64E8
 KSUSER_QQ_UNIVERSAL_LINK = https:/$()/auth.ksuser.cn/app/qq/
-KSUSER_APP_STORE_ID =
-KSUSER_ICP_NUMBER =
+KSUSER_ICP_NUMBER = 沪ICP备2025144703号-3A
 #include? "Local.xcconfig"
