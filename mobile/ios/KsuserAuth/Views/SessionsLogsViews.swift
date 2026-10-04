@@ -2,36 +2,36 @@ import SwiftUI
 
 struct SessionsView: View {
     @Environment(AppModel.self) private var model
-    @State private var revokeTarget: SessionItem?
     @State private var logoutAll = false
     var body: some View {
         PageScroll {
-            AppCard { CardHeader(title: "设备与登录", subtitle: "查看账号在哪里登录，并及时撤销不熟悉的设备。", icon: "laptopcomputer.and.iphone") }
+            AppCard {
+                CardHeader(title: "已连接设备", subtitle: "共 \(model.sessions.count) 台设备。轻点设备查看登录详情。", icon: "laptopcomputer.and.iphone")
+            }
             if model.sessions.isEmpty {
                 if model.isBusy { ProgressView("正在读取设备…").frame(maxWidth: .infinity).padding() }
                 else { ContentUnavailableView("暂无设备记录", systemImage: "laptopcomputer.and.iphone", description: Text("下拉可以重新加载设备列表。")) }
             }
             ForEach(model.sessions) { session in
-                AppCard {
-                    HStack(alignment: .top, spacing: 12) {
-                        Image(systemName: deviceIcon(session.deviceType)).font(.title2).foregroundStyle(Brand.gold).frame(width: 34).accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(session.browser ?? session.deviceType ?? "未知设备").font(.headline)
-                            Text(session.userAgent ?? session.deviceType ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                NavigationLink {
+                    SessionDetailView(session: session)
+                } label: {
+                    AppCard {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: deviceIcon(session.deviceType)).font(.title2).foregroundStyle(Brand.gold).frame(width: 34).accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(session.browser ?? session.deviceType ?? "未知设备").font(.headline).foregroundStyle(.primary)
+                                Text(session.ipLocation ?? "未知位置").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
                         }
-                        Spacer(minLength: 0)
-                        if !session.current { Button("撤销设备", systemImage: "trash", role: .destructive) { revokeTarget = session }.labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44).disabled(model.isBusy) }
+                        SessionStatusPills(session: session)
                     }
-                    ViewThatFits {
-                        HStack { if session.current { StatusPill(title: "当前设备") }; StatusPill(title: session.online ? "在线" : "离线", positive: session.online) }
-                        VStack(alignment: .leading) { if session.current { StatusPill(title: "当前设备") }; StatusPill(title: session.online ? "在线" : "离线", positive: session.online) }
-                    }
-                    InfoRow(title: "登录位置", value: session.ipLocation ?? "未知")
-                    InfoRow(title: "IP", value: session.ipAddress)
-                    DateInfoRow(title: "登录时间", value: session.createdAt)
-                    DateInfoRow(title: "最近活动", value: session.lastSeenAt)
-                    DateInfoRow(title: "会话到期", value: session.expiresAt)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("sessionRow-\(session.id)")
             }
             AppCard {
                 CardHeader(title: "退出所有设备", subtitle: "撤销所有会话，包括当前设备。操作完成后需要重新登录。", icon: "power")
@@ -39,22 +39,78 @@ struct SessionsView: View {
             }
         }.refreshable { await model.refreshSessions() }.task { await model.refreshSessions() }
             .sensitiveVerification()
-            .confirmationDialog("撤销这台设备的登录？", isPresented: Binding(get: { revokeTarget != nil }, set: { if !$0 { revokeTarget = nil } }), titleVisibility: .visible) {
-                Button("撤销登录", role: .destructive) {
-                    if let session = revokeTarget { Task { await model.revokeSession(id: session.id) } }
-                    revokeTarget = nil
-                }
-            }
             .confirmationDialog("退出所有设备？", isPresented: $logoutAll, titleVisibility: .visible) {
                 Button("退出所有设备", role: .destructive) { Task { await model.requireSensitive(title: "退出所有设备") { await model.logout(allDevices: true) } } }
             }
     }
-    private func deviceIcon(_ value: String?) -> String {
-        let value = (value ?? "").lowercased()
-        if value.contains("ipad") || value.contains("tablet") { return "ipad" }
-        if value.contains("iphone") || value.contains("android") || value.contains("mobile") { return "iphone" }
-        return "laptopcomputer"
+}
+
+private struct SessionDetailView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var showRevokeConfirmation = false
+    let session: SessionItem
+    private var currentSession: SessionItem { model.sessions.first(where: { $0.id == session.id }) ?? session }
+
+    var body: some View {
+        PageScroll {
+            AppCard {
+                CardHeader(title: currentSession.browser ?? currentSession.deviceType ?? "未知设备", subtitle: currentSession.deviceType, icon: deviceIcon(currentSession.deviceType))
+                SessionStatusPills(session: currentSession)
+            }
+            AppCard {
+                CardHeader(title: "登录详情", icon: "info.circle")
+                InfoRow(title: "登录位置", value: currentSession.ipLocation ?? "未知")
+                InfoRow(title: "IP", value: currentSession.ipAddress)
+                if let userAgent = currentSession.userAgent, !userAgent.isEmpty {
+                    InfoRow(title: "设备信息", value: userAgent)
+                }
+                DateInfoRow(title: "登录时间", value: currentSession.createdAt)
+                DateInfoRow(title: "最近活动", value: currentSession.lastSeenAt)
+                DateInfoRow(title: "会话到期", value: currentSession.expiresAt)
+            }
+            if !currentSession.current {
+                AppCard {
+                    CardHeader(title: "撤销设备登录", subtitle: "这台设备将退出当前账号。", icon: "rectangle.portrait.and.arrow.right")
+                    Button("撤销设备", role: .destructive) { showRevokeConfirmation = true }
+                        .frame(minHeight: 44).disabled(model.isBusy)
+                }
+            }
+        }
+        .navigationTitle("设备详情")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("撤销这台设备的登录？", isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
+            Button("撤销登录", role: .destructive) { Task { await model.revokeSession(id: session.id) } }
+        }
+        .onChange(of: model.sessions.contains(where: { $0.id == session.id })) { _, isPresent in
+            if !isPresent { dismiss() }
+        }
     }
+}
+
+private struct SessionStatusPills: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let session: SessionItem
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) { pills }
+        } else {
+            HStack(spacing: 8) { pills }
+        }
+    }
+
+    @ViewBuilder private var pills: some View {
+        if session.current { StatusPill(title: "当前设备") }
+        StatusPill(title: session.online ? "在线" : "离线", positive: session.online)
+    }
+}
+
+private func deviceIcon(_ value: String?) -> String {
+    let value = (value ?? "").lowercased()
+    if value.contains("ipad") || value.contains("tablet") { return "ipad" }
+    if value.contains("iphone") || value.contains("android") || value.contains("mobile") { return "iphone" }
+    return "laptopcomputer"
 }
 
 struct LogsView: View {
@@ -129,7 +185,7 @@ struct LogsView: View {
                     VStack(spacing: 0) {
                         ForEach(group.logs.indices, id: \.self) { index in
                             let log = group.logs[index]
-                            if index > 0 { Divider().padding(.leading, 54) }
+                            if index > 0 { Divider().padding(.leading, 64) }
                             Button { detail = log } label: { LogListRow(log: log) }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("\(operationTitle(log.operationType))，\(log.result.uppercased() == "SUCCESS" ? "成功" : "失败")，\(displayDate(log.createdAt))")
@@ -188,6 +244,15 @@ private struct LogDayGroup: Identifiable {
 private struct LogListRow: View {
     let log: SensitiveLogItem
     private var succeeded: Bool { log.result.uppercased() == "SUCCESS" }
+    private var iconColor: Color {
+        switch log.operationType.uppercased() {
+        case "LOGIN", "REGISTER": Brand.gold
+        case "SENSITIVE_VERIFY", "ENABLE_TOTP", "DISABLE_TOTP": .purple
+        case "ADAPTIVE_POLICY": .blue
+        case "DELETE_PASSKEY", "DELETE_ACCOUNT": Brand.danger
+        default: .orange
+        }
+    }
     private var context: String {
         [log.ipLocation, log.browser, log.deviceType]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -201,9 +266,12 @@ private struct LogListRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: succeeded ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                .font(.system(size: 19)).foregroundStyle(succeeded ? Brand.success : Brand.danger)
-                .frame(width: 26).padding(.top, 1).accessibilityHidden(true)
+            Image(systemName: logOperationIcon(log.operationType))
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(iconColor)
+                .frame(width: 36, height: 36)
+                .background(iconColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(operationTitle(log.operationType)).font(.subheadline.weight(.semibold))
@@ -250,13 +318,13 @@ private struct LogFilterView: View {
     var body: some View {
         Form {
             Section("操作结果") {
-                Picker("操作结果", selection: $selectedResult) {
-                    Text("全部").tag("")
-                    Text("成功").tag("SUCCESS")
-                    Text("失败").tag("FAILURE")
+                HStack(spacing: 10) {
+                    resultOption("全部", icon: "line.3.horizontal", value: "")
+                    resultOption("成功", icon: "checkmark.circle", value: "SUCCESS")
+                    resultOption("失败", icon: "xmark.circle", value: "FAILURE")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                .listRowBackground(Color.clear)
             }
             Section("操作类型") {
                 Picker("操作类型", selection: $selectedOperation) {
@@ -284,6 +352,29 @@ private struct LogFilterView: View {
             .background(Brand.background)
         }
     }
+
+    private func resultOption(_ title: String, icon: String, value: String) -> some View {
+        let isSelected = selectedResult == value
+        return Button {
+            selectedResult = value
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: icon).font(.system(size: 20, weight: .medium))
+                Text(title).font(.subheadline.weight(isSelected ? .semibold : .medium))
+            }
+            .foregroundStyle(isSelected ? Brand.gold : Color.primary)
+            .frame(maxWidth: .infinity, minHeight: 76)
+            .background(isSelected ? Brand.subtleGold : Brand.card, in: RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(isSelected ? Brand.gold.opacity(0.55) : Color.primary.opacity(0.06), lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(value.isEmpty ? "logResultFilter-all" : "logResultFilter-\(value)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
 }
 
 struct LogDetailView: View {
@@ -292,7 +383,7 @@ struct LogDetailView: View {
     var body: some View {
         PageScroll {
             AppCard {
-                CardHeader(title: operationTitle(log.operationType), icon: "doc.text")
+                CardHeader(title: operationTitle(log.operationType), icon: logOperationIcon(log.operationType))
                 InfoRow(title: "结果", value: log.result.uppercased() == "SUCCESS" ? "成功" : "失败")
                 DateInfoRow(title: "时间", value: log.createdAt)
                 InfoRow(title: "登录方式", value: (log.loginMethods ?? log.loginMethod.map { [$0] } ?? []).map(methodLabel).joined(separator: "、"))
@@ -329,5 +420,23 @@ func operationTitle(_ value: String) -> String {
     case "UPDATE_PROFILE": "更新资料"
     case "DELETE_ACCOUNT": "注销账号"
     default: value
+    }
+}
+
+private func logOperationIcon(_ value: String) -> String {
+    switch value.uppercased() {
+    case "LOGIN": "rectangle.portrait.and.arrow.right"
+    case "REGISTER": "person.crop.circle.badge.plus"
+    case "SENSITIVE_VERIFY": "lock.shield"
+    case "ADAPTIVE_POLICY": "shield.lefthalf.filled"
+    case "CHANGE_PASSWORD": "key.horizontal"
+    case "CHANGE_EMAIL": "envelope"
+    case "ADD_PASSKEY": "key.fill"
+    case "DELETE_PASSKEY": "minus.circle"
+    case "ENABLE_TOTP": "lock.fill"
+    case "DISABLE_TOTP": "lock.open"
+    case "UPDATE_PROFILE": "person.crop.circle"
+    case "DELETE_ACCOUNT": "trash"
+    default: "doc.text"
     }
 }

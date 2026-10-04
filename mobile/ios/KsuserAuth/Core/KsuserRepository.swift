@@ -21,9 +21,18 @@ extension KsuserRepositoryProviding {
     func login(email: String, password: String) async throws -> AuthResult { try await auth("/auth/login", body: ["email": .string(trimmedUserInput(email)), "password": .string(password)], source: "password") }
     func loginWithCode(email: String, code: String) async throws -> AuthResult { try await auth("/auth/login-with-code", body: ["email": .string(trimmedUserInput(email)), "code": .string(trimmedUserInput(code))], source: "email-code") }
     func loginWithQQ(_ credential: QQCredential) async throws -> AuthResult {
-        var body: [String: JSONValue] = ["appId": .string(credential.appId), "accessToken": .string(credential.accessToken), "openid": .string(credential.openid), "unionid": .string(credential.unionid)]
-        if let expiresIn = credential.expiresIn { body["expiresIn"] = .string(expiresIn) }
-        return try await auth("/oauth/qq/mobile-login", body: body, source: "qq")
+        try await auth("/oauth/qq/mobile-login", body: qqBody(credential), source: "qq")
+    }
+    func bindQQ(_ credential: QQCredential) async throws {
+        let _: EmptyPayload = try await client.request("/oauth/qq/mobile-bind", method: "POST", body: qqBody(credential))
+    }
+    func unbindQQ() async throws {
+        let _: EmptyPayload = try await client.request("/oauth/qq/unbind", method: "POST", body: [:])
+    }
+    func qqStatus() async throws -> Bool {
+        let statuses: [OAuthAccountStatusItem] = try await client.request("/oauth/accounts/status")
+        guard let qq = statuses.first(where: { $0.provider == "qq" }) else { throw APIError.invalidResponse }
+        return qq.bound
     }
     func register(username: String, email: String, password: String, code: String) async throws -> String {
         let payload: TokenPayload = try await client.request("/auth/register", method: "POST", body: ["username": .string(trimmedUserInput(username)), "email": .string(trimmedUserInput(email)), "password": .string(password), "code": .string(trimmedUserInput(code))], authenticated: false)
@@ -101,6 +110,14 @@ extension KsuserRepositoryProviding {
     func changePassword(_ password: String) async throws { let _: EmptyPayload = try await client.request("/auth/update/password", method: "POST", body: ["newPassword": .string(password)]) }
     func deleteAccount(confirmText: String) async throws { let _: EmptyPayload = try await client.request("/auth/delete", method: "POST", body: ["confirmText": .string(confirmText)]) }
     func sessions() async throws -> [SessionItem] { try await client.request("/auth/sessions") }
+    func ksuserAuthorizations() async throws -> [KsuserAuthorizedApp] { try await client.request("/sso/authorizations") }
+    func thirdPartyAuthorizations() async throws -> [ThirdPartyAuthorizedApp] { try await client.request("/oauth2/authorizations") }
+    func revokeKsuserAuthorization(_ clientId: String) async throws {
+        let _: EmptyPayload = try await client.request("/sso/authorizations/\(clientId)", method: "DELETE")
+    }
+    func revokeThirdPartyAuthorization(_ appId: String) async throws {
+        let _: EmptyPayload = try await client.request("/oauth2/authorizations/\(appId)", method: "DELETE")
+    }
     func revokeSession(_ id: Int64) async throws { let _: EmptyPayload = try await client.request("/auth/sessions/\(id)/revoke", method: "POST", body: [:]) }
     func logs(page: Int, operationType: String?, result: String?, startDate: String? = nil, endDate: String? = nil) async throws -> PaginatedSensitiveLogs {
         var query = ["page": String(page), "pageSize": "20"]
@@ -159,6 +176,11 @@ extension KsuserRepositoryProviding {
         var body: [String: JSONValue] = ["challengeId": .string(challenge.challengeId), "state": .string(challenge.state), "identityToken": .string(credential.identityToken), "authorizationCode": .string(credential.authorizationCode)]
         let name = [credential.givenName, credential.familyName].compactMap { $0 }.joined(separator: " ")
         if !name.isEmpty { body["fullName"] = .string(name) }
+        return body
+    }
+    private func qqBody(_ credential: QQCredential) -> [String: JSONValue] {
+        var body: [String: JSONValue] = ["appId": .string(credential.appId), "accessToken": .string(credential.accessToken), "openid": .string(credential.openid), "unionid": .string(credential.unionid)]
+        if let expiresIn = credential.expiresIn { body["expiresIn"] = .string(expiresIn) }
         return body
     }
     private func trimmedUserInput(_ value: String) -> String {

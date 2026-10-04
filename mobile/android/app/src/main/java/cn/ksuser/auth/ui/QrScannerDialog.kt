@@ -15,9 +15,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -48,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -176,7 +174,6 @@ internal fun QrScannerDialog(
 
             ScannerOverlay(
                 modifier = Modifier.fillMaxSize(),
-                frameSize = 280.dp,
             )
 
             Column(
@@ -192,7 +189,7 @@ internal fun QrScannerDialog(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "请将二维码置于取景框内",
+                    text = "请将二维码对准屏幕中央",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
@@ -285,7 +282,6 @@ private fun firstReadableQrValue(barcodes: List<Barcode>): String? = barcodes
 @Composable
 private fun ScannerOverlay(
     modifier: Modifier = Modifier,
-    frameSize: Dp,
 ) {
     val transition = rememberInfiniteTransition(label = "qr-scan-line")
     val progress = transition.animateFloat(
@@ -305,69 +301,51 @@ private fun ScannerOverlay(
                 .background(Color.Black.copy(alpha = 0.34f)),
         )
 
-        Card(
+        BoxWithConstraints(
             modifier = Modifier
                 .align(Alignment.Center)
                 .fillMaxWidth(0.72f)
-                .aspectRatio(1f),
-            shape = RoundedCornerShape(28.dp),
-            border = BorderStroke(
-                width = 1.5.dp,
-                brush = Brush.linearGradient(
-                    listOf(
-                        BrandButtonGradientStart.copy(alpha = 0.95f),
-                        BrandButtonGradientEnd.copy(alpha = 0.85f),
-                    ),
-                ),
-            ),
-            colors = androidx.compose.material3.CardDefaults.cardColors(
-                containerColor = Color.Transparent,
-            ),
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color.Black.copy(alpha = 0.18f)),
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Color.Black.copy(alpha = 0.18f)),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 18.dp)
-                        .align(Alignment.TopCenter)
-                        .padding(top = (frameSize - 36.dp) * progress.value)
-                        .height(3.dp)
-                        .background(
-                            brush = Brush.horizontalGradient(
-                                listOf(
-                                    Color.Transparent,
-                                    BrandButtonGradientStart.copy(alpha = 0.35f),
-                                    BrandButtonGradientEnd,
-                                    BrandButtonGradientStart.copy(alpha = 0.35f),
-                                    Color.Transparent,
-                                ),
-                            ),
-                            shape = RoundedCornerShape(999.dp),
-                        ),
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 22.dp)
-                        .align(Alignment.TopCenter)
-                        .padding(top = (frameSize - 52.dp) * progress.value)
-                        .height(20.dp)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    BrandButtonGradientEnd.copy(alpha = 0f),
-                                    BrandButtonGradientStart.copy(alpha = 0.14f),
-                                    BrandButtonGradientEnd.copy(alpha = 0f),
-                                ),
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(top = (maxHeight - 36.dp) * progress.value)
+                    .height(3.dp)
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            listOf(
+                                Color.Transparent,
+                                BrandButtonGradientStart.copy(alpha = 0.35f),
+                                BrandButtonGradientEnd,
+                                BrandButtonGradientStart.copy(alpha = 0.35f),
+                                Color.Transparent,
                             ),
                         ),
-                )
-            }
+                        shape = RoundedCornerShape(999.dp),
+                    ),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 22.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(top = (maxHeight - 52.dp) * progress.value)
+                    .height(20.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                BrandButtonGradientEnd.copy(alpha = 0f),
+                                BrandButtonGradientStart.copy(alpha = 0.14f),
+                                BrandButtonGradientEnd.copy(alpha = 0f),
+                            ),
+                        ),
+                    ),
+            )
         }
     }
 }

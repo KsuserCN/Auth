@@ -59,6 +59,42 @@ import XCTest
         XCTAssertTrue(row.isEnabled)
     }
 
+    func testAuthorizedAppsShowsKsuserAndThirdPartyDetails() {
+        let app = launch(authenticated: true)
+        let row = app.buttons["authorizedAppsRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Ksuser 校园"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["外部日历"].exists)
+
+        app.staticTexts["Ksuser 校园"].tap()
+        XCTAssertTrue(app.staticTexts["基础身份标识"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["campus.example.invalid"].exists)
+        app.navigationBars.buttons.firstMatch.tap()
+
+        app.staticTexts["外部日历"].tap()
+        XCTAssertTrue(app.staticTexts["示例开发者"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["邮箱地址"].exists)
+    }
+
+    func testAuthorizedAppsCanRevokeBothKindsAfterConfirmation() {
+        let app = launch(authenticated: true)
+        let row = app.buttons["authorizedAppsRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+
+        XCTAssertTrue(app.staticTexts["Ksuser 校园"].waitForExistence(timeout: 5))
+        app.staticTexts["Ksuser 校园"].tap()
+        app.buttons["revokeAuthorizationButton"].tap()
+        app.buttons.matching(identifier: "confirmRevokeAuthorization").firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["暂无已授权的 Ksuser 应用"].waitForExistence(timeout: 5))
+
+        app.staticTexts["外部日历"].tap()
+        app.buttons["revokeAuthorizationButton"].tap()
+        app.buttons.matching(identifier: "confirmRevokeAuthorization").firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["暂无已授权的第三方应用"].waitForExistence(timeout: 5))
+    }
+
     private func assertLoading(_ app: XCUIApplication, message: String, name: String, anchor: XCUIElement, originalFrame: CGRect) {
         let banner = app.descendants(matching: .any).matching(identifier: "loadingBanner").firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 2))
@@ -209,7 +245,14 @@ import XCTest
         XCTAssertTrue(app.staticTexts["当前会话安全状态"].waitForExistence(timeout: 5))
         attach(app, name: "Security light")
         navigate(app, to: "会话")
-        XCTAssertTrue(app.staticTexts["当前设备"].waitForExistence(timeout: 5))
+        let session = app.buttons["sessionRow-1"]
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["已连接设备"].exists)
+        XCTAssertFalse(app.staticTexts["192.0.2.1"].exists)
+        session.tap()
+        XCTAssertTrue(app.staticTexts["登录详情"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["192.0.2.1"].exists)
+        XCTAssertTrue(app.staticTexts["当前设备"].exists)
         XCTAssertFalse(app.buttons["撤销设备"].exists)
         navigate(app, to: "日志")
         let log = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "登录，成功")).firstMatch
@@ -233,11 +276,15 @@ import XCTest
         XCTAssertTrue(app.staticTexts["操作结果"].exists)
         XCTAssertTrue(app.buttons["查看记录"].exists)
         attach(app, name: "Logs filter")
+        let failedResult = app.buttons["logResultFilter-FAILURE"]
+        XCTAssertTrue(failedResult.exists)
+        failedResult.tap()
+        XCTAssertTrue(failedResult.isSelected)
+        app.buttons["logResultFilter-all"].tap()
         let typePicker = app.buttons["操作类型"]
         XCTAssertTrue(typePicker.exists)
         typePicker.tap()
-        print(app.debugDescription)
-        let policy = app.staticTexts["风控策略"]
+        let policy = app.buttons["风控策略"]
         XCTAssertTrue(policy.waitForExistence(timeout: 5))
         policy.tap()
         app.buttons["查看记录"].tap()
@@ -248,6 +295,12 @@ import XCTest
         app.buttons["查看记录"].tap()
         XCTAssertFalse(app.staticTexts["操作类型：风控策略"].exists)
         XCTAssertTrue(app.staticTexts["安全活动"].exists)
+        app.buttons["aboutButton"].tap()
+        app.buttons["theme-dark"].tap()
+        app.buttons["完成"].firstMatch.tap()
+        attach(app, name: "Logs dark")
+        app.buttons["logFilterButton"].tap()
+        attach(app, name: "Logs filter dark")
     }
 
     func testThemeChoicePersistsAndRendersDarkMode() {
@@ -330,6 +383,9 @@ import XCTest
         XCTAssertTrue(username.waitForExistence(timeout: 10))
         XCTAssertEqual(username.label, "ios_test_user")
         navigate(app, to: "会话")
+        let session = app.buttons["sessionRow-1"]
+        XCTAssertTrue(session.waitForExistence(timeout: 5))
+        session.tap()
         let date = app.descendants(matching: .any).matching(identifier: "dateScroll-登录时间").firstMatch
         for _ in 0..<8 {
             if date.isHittable { break }

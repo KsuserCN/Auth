@@ -2,6 +2,20 @@ import XCTest
 @testable import KsuserAuth
 
 final class CoreTests: XCTestCase {
+    func testPlaceholderRealNameFallsBackToUsernameInProfile() {
+        for placeholder in ["无", " 无 ", "未设置", "暂无", "NULL", "-"] {
+            let user = UserProfile(uuid: "fixture", username: "fixture_user", email: "fixture@example.invalid", realName: placeholder)
+            XCTAssertEqual(user.displayName, "fixture_user")
+            XCTAssertEqual(ProfileField.realName.displayValue(from: user), "未填写")
+            XCTAssertEqual(ProfileField.realName.value(from: user), "")
+            XCTAssertEqual(user.profileCompleteness, 20)
+        }
+        let user = UserProfile(uuid: "fixture", username: "fixture_user", email: "fixture@example.invalid", realName: " 张三 ")
+        XCTAssertEqual(user.displayName, "张三")
+        XCTAssertEqual(ProfileField.realName.displayValue(from: user), "张三")
+        XCTAssertEqual(user.profileCompleteness, 40)
+    }
+
     @MainActor func testLoginLoadingCoversNestedRequestsAndIgnoresDuplicateLogin() async {
         let transport = LoadingGateTransport(mode: .scanAfterLogin, paths: ["/auth/login", "/auth/totp/status"])
         let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: transport)
@@ -355,6 +369,107 @@ final class CoreTests: XCTestCase {
             XCTAssertNil(model.bridgeConfirmation)
         }
     }
+    @MainActor func testQQBindingKeepsCurrentAccountAndUsesAuthenticatedEndpoint() async throws {
+        var original = snapshot(token: "existing-access")
+        original.profile = UserProfile(uuid: "current-account", username: "current", email: "current@example.invalid")
+        let transport = FixtureTransport(mode: .qqBinding)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+        let native = FixtureNative()
+        native.qqCredential = QQCredential(appId: "test-only", accessToken: "qq-token", openid: "qq-openid", unionid: "qq-unionid", expiresIn: "3600")
+        let model = AppModel(native: native, repository: KsuserRepository(client: client), environment: environment)
+        model.user = original.profile
+
+        await model.bindQQ()
+
+        XCTAssertTrue(model.qqBound)
+        XCTAssertNil(model.errorMessage)
+        let capturedBind = await transport.qqBindRequest
+        let bind = try XCTUnwrap(capturedBind)
+        XCTAssertEqual(bind.httpMethod, "POST")
+        XCTAssertEqual(bind.url?.path, "/oauth/qq/mobile-bind")
+        XCTAssertEqual(bind.value(forHTTPHeaderField: "Authorization"), "Bearer existing-access")
+        let body = try JSONDecoder().decode([String: JSONValue].self, from: XCTUnwrap(bind.httpBody))
+        XCTAssertEqual(body["appId"], .string("test-only"))
+        XCTAssertEqual(body["accessToken"], .string("qq-token"))
+        XCTAssertEqual(body["openid"], .string("qq-openid"))
+        XCTAssertEqual(body["unionid"], .string("qq-unionid"))
+        XCTAssertEqual(body["expiresIn"], .string("3600"))
+        let stored = await client.snapshot()
+        XCTAssertEqual(stored.accessToken, "existing-access")
+        XCTAssertEqual(stored.profile?.uuid, "current-account")
+        XCTAssertEqual(model.user?.uuid, "current-account")
+    }
+    @MainActor func testQQBindingStatusAndBlockedUnbindDoNotShowSuccess() async throws {
+        var original = snapshot(token: "existing-access")
+        original.profile = UserProfile(uuid: "current-account", username: "current", email: "current@example.invalid")
+        let transport = FixtureTransport(mode: .qqUnbindBlocked)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+        let repository = KsuserRepository(client: client)
+        let qqStatus = try await repository.qqStatus()
+        XCTAssertTrue(qqStatus)
+        let model = AppModel(native: FixtureNative(), repository: repository, environment: environment)
+        model.user = original.profile
+        model.qqBound = true
+
+        await model.unbindQQ()
+
+        XCTAssertTrue(model.qqBound)
+        XCTAssertNil(model.noticeMessage)
+        XCTAssertNotNil(model.errorMessage)
+        let capturedUnbind = await transport.qqUnbindRequest
+        let unbind = try XCTUnwrap(capturedUnbind)
+        XCTAssertEqual(unbind.value(forHTTPHeaderField: "Authorization"), "Bearer existing-access")
+    }
+    @MainActor func testAuthorizedAppsLoadsBothKindsForCurrentAccount() async throws {
+        let transport = FixtureTransport(mode: .authorizationLists)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "current-access")), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+
+        let apps = try await model.authorizedApps()
+
+        XCTAssertEqual(apps.ksuserApps.map(\.clientName), ["Ksuser 校园"])
+        XCTAssertEqual(apps.ksuserApps.first?.scopes, ["openid", "profile"])
+        XCTAssertEqual(apps.thirdPartyApps.map(\.appName), ["外部日历"])
+        XCTAssertEqual(apps.thirdPartyApps.first?.creatorName, "示例开发者")
+        let requests = await transport.authorizationRequests
+        XCTAssertEqual(Set(requests.compactMap { $0.url?.path }), Set(["/sso/authorizations", "/oauth2/authorizations"]))
+        XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer current-access" })
+    }
+    @MainActor func testRevokingBothKindsOfAuthorizationUsesCurrentAccountAndUpdatesLists() async throws {
+        let transport = FixtureTransport(mode: .authorizationLists)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "current-access")), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        model.user = UserProfile(uuid: "current-account", username: "current", email: "current@example.invalid")
+
+        let revokedKsuser = await model.revokeKsuserAuthorization("campus")
+        let revokedThirdParty = await model.revokeThirdPartyAuthorization("calendar")
+
+        XCTAssertTrue(revokedKsuser)
+        XCTAssertTrue(revokedThirdParty)
+        XCTAssertEqual(model.noticeMessage, "应用授权已撤销")
+        let apps = try await model.authorizedApps()
+        XCTAssertTrue(apps.ksuserApps.isEmpty)
+        XCTAssertTrue(apps.thirdPartyApps.isEmpty)
+        let requests = await transport.authorizationRequests
+        let deletes = requests.filter { $0.httpMethod == "DELETE" }
+        XCTAssertEqual(Set(deletes.compactMap { $0.url?.path }), Set(["/sso/authorizations/campus", "/oauth2/authorizations/calendar"]))
+        XCTAssertTrue(deletes.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer current-access" })
+        XCTAssertTrue(deletes.allSatisfy { $0.value(forHTTPHeaderField: "X-XSRF-TOKEN") == "csrf-fixture" })
+    }
+    @MainActor func testFailedAuthorizationRevokeKeepsGrantVisible() async throws {
+        let transport = FixtureTransport(mode: .authorizationRevokeFails)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "current-access")), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        model.user = UserProfile(uuid: "current-account", username: "current", email: "current@example.invalid")
+
+        let revoked = await model.revokeKsuserAuthorization("campus")
+
+        XCTAssertFalse(revoked)
+        XCTAssertNil(model.noticeMessage)
+        XCTAssertEqual(model.errorMessage, "撤销失败，请稍后重试")
+        let apps = try await model.authorizedApps()
+        XCTAssertEqual(apps.ksuserApps.map(\.clientId), ["campus"])
+    }
 }
 
 private actor LoadingGateTransport: HTTPTransport {
@@ -379,12 +494,17 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, normalizedInput }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
     var lastMutation: URLRequest?
     var lastQRPreview: URLRequest?
+    var qqBindRequest: URLRequest?
+    var qqUnbindRequest: URLRequest?
+    var authorizationRequests: [URLRequest] = []
+    var revokedKsuserAuthorization = false
+    var revokedThirdPartyAuthorization = false
     var inputRequests: [URLRequest] = []
     private var refreshGate: CheckedContinuation<Void, Never>?
     init(mode: Mode) { self.mode = mode }
@@ -403,6 +523,37 @@ private actor FixtureTransport: HTTPTransport {
             return response(request, 200, #"{"code":200,"data":null}"#)
         }
         if mode == .bridgeCancel { return response(request, 200, #"{"code":200,"data":null}"#) }
+        if mode == .authorizationLists || mode == .authorizationRevokeFails {
+            authorizationRequests.append(request)
+            if request.httpMethod == "DELETE" {
+                if mode == .authorizationRevokeFails { return response(request, 500, #"{"code":500,"msg":"撤销失败，请稍后重试"}"#) }
+                if path == "/sso/authorizations/campus" { revokedKsuserAuthorization = true }
+                if path == "/oauth2/authorizations/calendar" { revokedThirdPartyAuthorization = true }
+                return response(request, 200, #"{"code":200,"data":null}"#)
+            }
+            if path == "/sso/authorizations" {
+                if revokedKsuserAuthorization { return response(request, 200, #"{"code":200,"data":[]}"#) }
+                return response(request, 200, #"{"code":200,"data":[{"clientId":"campus","clientName":"Ksuser 校园","redirectUri":"https://campus.example.invalid/callback","scopes":["openid","profile"],"authorizedAt":"2026-10-01T10:00:00","lastAuthorizedAt":"2026-10-04T10:00:00","grantMode":"PERSISTENT"}]}"#)
+            }
+            if path == "/oauth2/authorizations" {
+                if revokedThirdPartyAuthorization { return response(request, 200, #"{"code":200,"data":[]}"#) }
+                return response(request, 200, #"{"code":200,"data":[{"appId":"calendar","appName":"外部日历","creatorName":"示例开发者","contactInfo":"help@example.invalid","redirectUri":"https://calendar.example.invalid/callback","scopes":["profile","email"],"authorizedAt":"2026-10-01T10:00:00","lastAuthorizedAt":"2026-10-04T10:00:00","grantMode":"TIME_LIMITED","expiresAt":"2026-11-01T10:00:00"}]}"#)
+            }
+        }
+        if mode == .qqBinding || mode == .qqUnbindBlocked {
+            if path == "/auth/check-sensitive-verification" { return response(request, 200, #"{"code":200,"data":{"verified":true,"remainingSeconds":300}}"#) }
+            if path == "/oauth/accounts/status" { return response(request, 200, #"{"code":200,"data":[{"provider":"qq","bound":true,"lastLoginAt":null}]}"#) }
+            if path == "/oauth/qq/mobile-bind" {
+                qqBindRequest = request
+                return response(request, 200, #"{"code":200,"data":{"bound":true,"provider":"qq"}}"#)
+            }
+            if path == "/oauth/qq/unbind" {
+                qqUnbindRequest = request
+                return mode == .qqUnbindBlocked
+                    ? response(request, 202, #"{"code":202,"msg":"无法解绑最后登录方式","data":{"canUnbind":false}}"#)
+                    : response(request, 200, #"{"code":200,"data":null}"#)
+            }
+        }
         if path == "/auth/refresh" {
             refreshes += 1
             if mode == .offlineRefresh { throw URLError(.notConnectedToInternet) }
@@ -425,6 +576,7 @@ private actor FixtureTransport: HTTPTransport {
             if path == "/auth/passkey/list" { return response(request, 200, #"{"code":200,"data":{"passkeys":[]}}"#) }
             if path == "/auth/totp/status" { return response(request, 200, #"{"code":200,"data":{"enabled":false,"recoveryCodesCount":0}}"#) }
             if path == "/oauth/apple/status" { return response(request, 200, #"{"code":200,"data":{"bound":false}}"#) }
+            if path == "/oauth/accounts/status" { return response(request, 200, #"{"code":200,"data":[{"provider":"qq","bound":false,"lastLoginAt":null}]}"#) }
             if path == "/auth/adaptive-auth/status" { return response(request, 200, #"{"code":200,"data":{"riskScore":10,"riskLevel":"low","trusted":true,"requiresStepUp":false,"sessionFrozen":false,"sensitiveVerified":false,"sensitiveVerificationRemainingSeconds":0,"authAgeSeconds":0,"idleSeconds":0,"multiEndpointAlert":false,"alertRemainingSeconds":0,"recommendedAction":"safe","reasons":[]}}"#) }
             if path == "/auth/qr/preview" { lastQRPreview = request; return response(request, 200, #"{"code":200,"data":{"codeType":"approve_login","clientName":"fixture-browser","expiresInSeconds":300}}"#) }
         }
@@ -453,10 +605,14 @@ private actor FixtureTransport: HTTPTransport {
 @MainActor private final class FixtureNative: NativeAuthenticationProviding {
     var clearCalls = 0
     var acceptCalls = 0
+    var qqCredential: QQCredential?
     func authenticatePasskey(options: PasskeyAuthenticationOptions) async throws -> PasskeyAuthenticationPayload { throw APIError.cancelled }
     func registerPasskey(options: PasskeyRegistrationOptions) async throws -> PasskeyRegistrationPayload { throw APIError.cancelled }
     func signInWithApple(challenge: AppleChallenge) async throws -> AppleCredential { throw APIError.cancelled }
-    func signInWithQQ() async throws -> QQCredential { throw APIError.cancelled }
+    func signInWithQQ() async throws -> QQCredential {
+        guard let qqCredential else { throw APIError.cancelled }
+        return qqCredential
+    }
     func appleCredentialRevoked() async -> Bool { false }
     func acceptAppleCredential() throws { acceptCalls += 1 }
     func clearAppleCredential() throws { clearCalls += 1 }

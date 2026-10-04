@@ -71,9 +71,15 @@ struct UserProfile: Codable, Sendable, Identifiable {
     var avatarUrl: String?; var realName: String?; var gender: String?; var birthDate: String?; var region: String?; var bio: String?
     var verificationType: String?; var updatedAt: String?; var settings: UserSettings?; var hasPassword: Bool?; var appleBound: Bool?
     var id: String { uuid }
-    var displayName: String { realName.flatMap { $0.isEmpty ? nil : $0 } ?? username }
+    var meaningfulRealName: String? {
+        guard let name = realName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty,
+              !["无", "未设置", "暂无", "null", "-"].contains(name.lowercased()) else { return nil }
+        return name
+    }
+    var displayName: String { meaningfulRealName ?? username }
     var profileCompleteness: Int {
-        let fields: [String?] = [username, avatarUrl, realName, region, bio]
+        let fields: [String?] = [username, avatarUrl, meaningfulRealName, region, bio]
         return Int(Double(fields.filter { !($0 ?? "").isEmpty }.count) / Double(fields.count) * 100)
     }
 }
@@ -115,6 +121,23 @@ struct SessionItem: Codable, Sendable, Identifiable {
     let id: Int64; let ipAddress: String; let ipLocation: String?; let userAgent: String?; let browser: String?; let deviceType: String?
     let createdAt: String; let lastSeenAt: String; let expiresAt: String; let revokedAt: String?; let online: Bool; let current: Bool
 }
+struct KsuserAuthorizedApp: Decodable, Sendable, Identifiable {
+    let clientId: String; let clientName: String; let logoUrl: String?; let redirectUri: String?
+    let scopes: [String]; let authorizedAt: String?; let lastAuthorizedAt: String?
+    let grantMode: String; let expiresAt: String?
+    var id: String { clientId }
+}
+struct ThirdPartyAuthorizedApp: Decodable, Sendable, Identifiable {
+    let appId: String; let appName: String; let logoUrl: String?; let creatorName: String?
+    let creatorVerificationType: String?; let contactInfo: String?; let redirectUri: String?
+    let scopes: [String]; let authorizedAt: String?; let lastAuthorizedAt: String?
+    let grantMode: String; let expiresAt: String?
+    var id: String { appId }
+}
+struct AuthorizedAppsSnapshot: Sendable {
+    let ksuserApps: [KsuserAuthorizedApp]
+    let thirdPartyApps: [ThirdPartyAuthorizedApp]
+}
 struct SensitiveLogItem: Codable, Sendable, Identifiable {
     let id: Int64; let operationType: String; let loginMethod: String?; let loginMethods: [String]?; let ipAddress: String; let ipLocation: String?
     let browser: String?; let deviceType: String?; let result: String; let failureReason: String?; let riskScore: Int; let actionTaken: String?
@@ -143,6 +166,9 @@ struct AppleCredential: Codable, Sendable {
     let identityToken: String; let authorizationCode: String; var givenName: String?; var familyName: String?
 }
 struct QQCredential: Codable, Sendable { let appId: String; let accessToken: String; let openid: String; let unionid: String; let expiresIn: String? }
+struct OAuthAccountStatusItem: Codable, Sendable {
+    let provider: String; let bound: Bool; let lastLoginAt: String?
+}
 struct OAuthAccountStatus: Codable, Sendable { let appleBound: Bool?; let qqBound: Bool?; let hasPassword: Bool? }
 struct SensitiveRequest: Identifiable { let id = UUID(); let title: String; let status: SensitiveVerificationStatus }
 typealias TOTPSetup = TotpRegistrationOptions

@@ -37,6 +37,21 @@ struct OverviewView: View {
                     Divider()
                     ActionRow(title: "已登录设备", icon: "laptopcomputer.and.iphone") { onNavigate(.sessions) }
                     Divider()
+                    NavigationLink {
+                        AuthorizedAppsView()
+                    } label: {
+                        HStack(spacing: 13) {
+                            Image(systemName: "person.crop.circle.badge.checkmark").frame(width: 24).foregroundStyle(Brand.gold)
+                            Text("授权应用").foregroundStyle(.primary)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("authorizedAppsRow")
+                    Divider()
                     ActionRow(title: "安全日志", icon: "clock.arrow.circlepath") { onNavigate(.logs) }
                 }
 
@@ -101,6 +116,7 @@ struct ProfileView: View {
                 }
             }
         }.refreshable { await model.refreshProfile() }
+            .task { await model.refreshProfile() }
             .onAppear {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--ui-testing"),
@@ -142,7 +158,7 @@ enum ProfileField: String, CaseIterable, Identifiable {
     case username, realName, gender, birthDate, region, bio
     var id: String { rawValue }
     var title: String { switch self { case .username: "用户名"; case .realName: "姓名"; case .gender: "性别"; case .birthDate: "生日"; case .region: "地区"; case .bio: "个人简介" } }
-    func value(from user: UserProfile) -> String { switch self { case .username: user.username; case .realName: user.realName ?? ""; case .gender: user.gender ?? ""; case .birthDate: user.birthDate ?? ""; case .region: user.region ?? ""; case .bio: user.bio ?? "" } }
+    func value(from user: UserProfile) -> String { switch self { case .username: user.username; case .realName: user.meaningfulRealName ?? ""; case .gender: user.gender ?? ""; case .birthDate: user.birthDate ?? ""; case .region: user.region ?? ""; case .bio: user.bio ?? "" } }
     func displayValue(from user: UserProfile) -> String {
         let value = value(from: user)
         if value.isEmpty { return "未填写" }

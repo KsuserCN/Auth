@@ -13,11 +13,10 @@ struct ScannerSheet: View {
         AppNavigationStack {
             VStack(spacing: 18) {
                 QRScannerView(onDetected: deliver, onError: { error = $0 })
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 22).stroke(Brand.buttonGold, lineWidth: 3).frame(width: 230, height: 230).allowsHitTesting(false)
-                    }.clipShape(RoundedRectangle(cornerRadius: 24)).padding(.horizontal, 20)
+                    .overlay { ScanLineOverlay().allowsHitTesting(false) }
+                    .clipShape(RoundedRectangle(cornerRadius: 24)).padding(.horizontal, 20)
                     .accessibilityLabel("二维码取景器")
-                Text("将二维码放入取景框内").font(.headline)
+                Text("将二维码对准屏幕中央").font(.headline)
                 Text("确认授权前，你可以查看设备、位置和请求类型。").font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal)
                 if let error { Label(error, systemImage: "exclamationmark.circle").foregroundStyle(Brand.danger).font(.subheadline).padding(.horizontal).fixedSize(horizontal: false, vertical: true) }
                 PhotosPicker(selection: $photo, matching: .images) { Label(processing ? "识别中…" : "从相册选择二维码", systemImage: "photo").frame(maxWidth: .infinity, minHeight: 50) }
@@ -44,6 +43,36 @@ struct ScannerSheet: View {
     }
     private func deliver(_ value: String) { guard !delivered else { return }; delivered = true; onDetected(value) }
     private enum ScanError: LocalizedError { case noCode; var errorDescription: String? { "没有找到可识别的二维码，请选择另一张图片。" } }
+}
+
+private struct ScanLineOverlay: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var scanning = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let scanSize = max(0, min(230, min(geometry.size.width, geometry.size.height) - 32))
+            let travel = max(0, scanSize - 24)
+
+            Capsule()
+                .fill(LinearGradient(
+                    colors: [.clear, Brand.buttonGold.opacity(0.45), Brand.buttonGold, .white, Brand.buttonGold, Brand.buttonGold.opacity(0.45), .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ))
+                .frame(width: max(0, scanSize - 24), height: 3)
+                .shadow(color: Brand.buttonGold.opacity(0.9), radius: 8)
+                .shadow(color: Brand.buttonGold.opacity(0.45), radius: 16)
+                .position(
+                    x: geometry.size.width / 2,
+                    y: geometry.size.height / 2 + (reduceMotion ? 0 : (scanning ? travel / 2 : -travel / 2))
+                )
+                .animation(reduceMotion ? nil : .linear(duration: 2.2).repeatForever(autoreverses: true), value: scanning)
+        }
+        .onAppear { scanning = true }
+        .onDisappear { scanning = false }
+        .accessibilityHidden(true)
+    }
 }
 
 struct QRConfirmationView: View {

@@ -30,6 +30,7 @@ struct LoadingActivity: Identifiable {
     var logsTotal = 0
     var adaptiveStatus: AdaptiveAuthStatus?
     var appleBound = false
+    var qqBound = false
     var qrConfirmation: QRConfirmation?
     var bridgeConfirmation: BridgeConfirmation?
     var recoveryTicket: AccountRecoveryTicket?
@@ -50,6 +51,8 @@ struct LoadingActivity: Identifiable {
     @ObservationIgnored private var bindingAfterAuthentication = false
     @ObservationIgnored private var pendingRawQRCode: String?
     @ObservationIgnored private let isUITesting: Bool
+    @ObservationIgnored private var uiTestRevokedKsuserApps: Set<String> = []
+    @ObservationIgnored private var uiTestRevokedThirdPartyApps: Set<String> = []
 
     init(native: any NativeAuthenticationProviding, repository: (any KsuserRepositoryProviding)? = nil, environment: AppEnvironment = .current) {
         self.native = native; self.environment = environment
@@ -154,7 +157,7 @@ struct LoadingActivity: Identifiable {
         if pending.provider == "apple" { await bindApple(); return }
         await run {
             try await self.repository.bindOAuth(pending)
-            self.pendingOAuth = nil; self.bindingAfterAuthentication = false; self.noticeMessage = "QQ 账号已关联"
+            self.pendingOAuth = nil; self.bindingAfterAuthentication = false; self.qqBound = true; self.noticeMessage = "QQ 账号已关联"
         }
     }
     func bindApple() async {
@@ -171,6 +174,23 @@ struct LoadingActivity: Identifiable {
     func unbindApple() async {
         await requireSensitive(title: "解除 Apple 关联") {
             try await self.repository.unbindApple(); try self.native.clearAppleCredential(); self.appleBound = false; self.noticeMessage = "Apple 账号已解除关联"
+        }
+    }
+    func bindQQ() async {
+        guard isAuthenticated, !qqBound else { return }
+        await requireSensitive(title: "绑定 QQ") {
+            let credential = try await self.native.signInWithQQ()
+            try await self.repository.bindQQ(credential)
+            self.qqBound = true
+            self.noticeMessage = "QQ 账号已绑定"
+        }
+    }
+    func unbindQQ() async {
+        guard isAuthenticated, qqBound else { return }
+        await requireSensitive(title: "解除 QQ 绑定") {
+            try await self.repository.unbindQQ()
+            self.qqBound = false
+            self.noticeMessage = "QQ 账号已解除绑定"
         }
     }
     func validateAppleCredential() async {
@@ -210,12 +230,14 @@ struct LoadingActivity: Identifiable {
             async let totp = capture { try await self.repository.totpStatus() }
             async let adaptive = capture { try await self.repository.adaptiveStatus() }
             async let apple = capture { try await self.repository.appleStatus() }
-            let results = await (keys, totp, adaptive, apple)
+            async let qq = capture { try await self.repository.qqStatus() }
+            let results = await (keys, totp, adaptive, apple, qq)
             if case .success(let value) = results.0 { self.passkeys = value }
             if case .success(let value) = results.1 { self.totpStatus = value }
             if case .success(let value) = results.2 { self.adaptiveStatus = value }
             if case .success(let value) = results.3 { self.appleBound = value }
-            for result in [results.0.map { _ in () }, results.1.map { _ in () }, results.2.map { _ in () }] {
+            if case .success(let value) = results.4 { self.qqBound = value }
+            for result in [results.0.map { _ in () }, results.1.map { _ in () }, results.2.map { _ in () }, results.4.map { _ in () }] {
                 if case .failure(let error) = result { throw error }
             }
             // Existing deployments do not expose Apple status until the matching API release.
@@ -338,6 +360,46 @@ struct LoadingActivity: Identifiable {
         }
     }
     func refreshSessions() async { await run { self.sessions = try await self.repository.sessions() } }
+    func authorizedApps() async throws -> AuthorizedAppsSnapshot {
+        #if DEBUG
+        if isUITesting {
+            return AuthorizedAppsSnapshot(
+                ksuserApps: [KsuserAuthorizedApp(clientId: "campus", clientName: "Ksuser 校园", logoUrl: nil, redirectUri: "https://campus.example.invalid/callback", scopes: ["openid", "profile"], authorizedAt: "2026-10-01T10:00:00", lastAuthorizedAt: "2026-10-04T10:00:00", grantMode: "PERSISTENT", expiresAt: nil)].filter { !uiTestRevokedKsuserApps.contains($0.clientId) },
+                thirdPartyApps: [ThirdPartyAuthorizedApp(appId: "calendar", appName: "外部日历", logoUrl: nil, creatorName: "示例开发者", creatorVerificationType: "personal", contactInfo: "help@example.invalid", redirectUri: "https://calendar.example.invalid/callback", scopes: ["profile", "email"], authorizedAt: "2026-10-01T10:00:00", lastAuthorizedAt: "2026-10-04T10:00:00", grantMode: "TIME_LIMITED", expiresAt: "2026-11-01T10:00:00")].filter { !uiTestRevokedThirdPartyApps.contains($0.appId) }
+            )
+        }
+        #endif
+        async let ksuserApps = repository.ksuserAuthorizations()
+        async let thirdPartyApps = repository.thirdPartyAuthorizations()
+        return try await AuthorizedAppsSnapshot(ksuserApps: ksuserApps, thirdPartyApps: thirdPartyApps)
+    }
+    func revokeKsuserAuthorization(_ clientId: String) async -> Bool {
+        await revokeAuthorization(id: clientId, ksuser: true)
+    }
+    func revokeThirdPartyAuthorization(_ appId: String) async -> Bool {
+        await revokeAuthorization(id: appId, ksuser: false)
+    }
+    private func revokeAuthorization(id: String, ksuser: Bool) async -> Bool {
+        guard isAuthenticated else { return false }
+        let accountID = user?.uuid
+        #if DEBUG
+        if isUITesting {
+            if ksuser { uiTestRevokedKsuserApps.insert(id) }
+            else { uiTestRevokedThirdPartyApps.insert(id) }
+            noticeMessage = "应用授权已撤销"
+            return true
+        }
+        #endif
+        var revoked = false
+        await run(message: "正在撤销授权…") {
+            if ksuser { try await self.repository.revokeKsuserAuthorization(id) }
+            else { try await self.repository.revokeThirdPartyAuthorization(id) }
+            guard accountID == self.user?.uuid else { return }
+            self.noticeMessage = "应用授权已撤销"
+            revoked = true
+        }
+        return revoked
+    }
     func revokeSession(id: Int64) async {
         await requireSensitive(title: "撤销设备登录") { try await self.repository.revokeSession(id); self.sessions = try await self.repository.sessions(); self.noticeMessage = "设备会话已撤销" }
     }
@@ -445,10 +507,11 @@ struct LoadingActivity: Identifiable {
         if source != "apple", previousUUID != profile.uuid { try native.clearAppleCredential() }
         if source == "apple" { try native.acceptAppleCredential() }
         // Erase previous-account data only after the replacement profile and credentials are complete.
-        passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; recoveryCodes = []; totpSetup = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
+        passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = source == "apple"; qqBound = source == "qq"
+        recoveryCodes = []; totpSetup = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
         if let pending = pendingOAuth, bindingAfterAuthentication {
             bindingAfterAuthentication = false
-            if pending.provider == "qq" { try await repository.bindOAuth(pending); pendingOAuth = nil; noticeMessage = "登录成功，QQ 账号已关联" }
+            if pending.provider == "qq" { try await repository.bindOAuth(pending); pendingOAuth = nil; qqBound = true; noticeMessage = "登录成功，QQ 账号已关联" }
             else if pending.provider == "apple" {
                 // A login-origin Apple ticket cannot bind to an existing account; obtain a new bound-session challenge.
                 await bindApple()
@@ -472,7 +535,7 @@ struct LoadingActivity: Identifiable {
     private func clearUserState() {
         authGeneration += 1; user = nil; mfaChallenge = nil; authenticationRepository = nil; pendingOAuth = nil
         sensitiveRequest = nil; sensitiveContinuation = nil; bindingAfterAuthentication = false
-        passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; totpSetup = nil
+        passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; qqBound = false; totpSetup = nil
         totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0); recoveryCodes = []; qrConfirmation = nil; pendingRawQRCode = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
     }
     private func run(message: String? = nil, reportError: Bool = true, operation: @MainActor () async throws -> Void) async {
