@@ -581,14 +581,23 @@ struct LoadingActivity: Identifiable {
             if simulatesLoading { try await Task.sleep(for: .seconds(5)) }
             else { try await operation() }
         }
-        catch is CancellationError { }
-        catch APIError.cancelled { }
         catch {
+            // SwiftUI may cancel a refresh task when its view goes away. URLSession
+            // reports that as URLError/NSURLErrorCancelled, which should stay silent
+            // just like Swift task cancellation and our own APIError.cancelled.
+            guard !isCancellation(error), !Task.isCancelled else { return }
             if let apiError = error as? APIError, apiError.isUnauthorized, !(await repository.client.hasSession()) {
                 try? native.clearAppleCredential(); clearUserState()
             }
             if reportError { errorMessage = error.localizedDescription }
         }
+    }
+    private func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let apiError = error as? APIError, apiError == .cancelled { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        let nsError = error as NSError
+        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
     }
     #if DEBUG
     private func configureUITestFixture() {
