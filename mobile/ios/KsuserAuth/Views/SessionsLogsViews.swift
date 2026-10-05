@@ -18,7 +18,7 @@ struct SessionsView: View {
                 } label: {
                     AppCard {
                         HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: deviceIcon(session.deviceType)).font(.title2).foregroundStyle(Brand.gold).frame(width: 34).accessibilityHidden(true)
+                            Image(systemName: deviceIcon(for: session)).font(.title2).foregroundStyle(Brand.gold).frame(width: 34).accessibilityHidden(true)
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(session.browser ?? session.deviceType ?? "未知设备").font(.headline).foregroundStyle(.primary)
                                 Text(session.ipLocation ?? "未知位置").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -57,14 +57,19 @@ private struct SessionDetailView: View {
     var body: some View {
         PageScroll {
             AppCard {
-                CardHeader(title: currentSession.browser ?? currentSession.deviceType ?? "未知设备", subtitle: currentSession.deviceType, icon: deviceIcon(currentSession.deviceType))
+                CardHeader(title: currentSession.browser ?? currentSession.deviceType ?? "未知设备", subtitle: currentSession.deviceType, icon: deviceIcon(for: currentSession))
                 SessionStatusPills(session: currentSession)
             }
             AppCard {
                 CardHeader(title: "登录详情", icon: "info.circle")
                 InfoRow(title: "登录位置", value: currentSession.ipLocation ?? "未知")
                 InfoRow(title: "IP", value: currentSession.ipAddress)
-                if let userAgent = currentSession.userAgent, !userAgent.isEmpty {
+                if let platform = mobilePlatform(for: currentSession) {
+                    InfoRow(title: "设备类型", value: platform)
+                    if platform == "iOS" {
+                        InfoRow(title: "iOS 版本", value: iosVersion(for: currentSession) ?? "未知")
+                    }
+                } else if let userAgent = currentSession.userAgent, !userAgent.isEmpty {
                     InfoRow(title: "设备信息", value: userAgent)
                 }
                 DateInfoRow(title: "登录时间", value: currentSession.createdAt)
@@ -109,11 +114,28 @@ private struct SessionStatusPills: View {
     }
 }
 
-private func deviceIcon(_ value: String?) -> String {
-    let value = (value ?? "").lowercased()
+private func deviceIcon(for session: SessionItem) -> String {
+    let value = "\(session.deviceType ?? "") \(session.userAgent ?? "")".lowercased()
     if value.contains("ipad") || value.contains("tablet") { return "ipad" }
-    if value.contains("iphone") || value.contains("android") || value.contains("mobile") { return "iphone" }
+    if mobilePlatform(for: session) != nil || value.contains("mobile") { return "iphone" }
     return "laptopcomputer"
+}
+
+private func mobilePlatform(for session: SessionItem) -> String? {
+    let value = "\(session.deviceType ?? "") \(session.userAgent ?? "")".lowercased()
+    if value.contains("ios") || value.contains("iphone") || value.contains("ipad") { return "iOS" }
+    if value.contains("android") { return "Android" }
+    if value.contains("mobile") || value.contains("tablet") { return "移动设备" }
+    return nil
+}
+
+private func iosVersion(for session: SessionItem) -> String? {
+    guard let userAgent = session.userAgent else { return nil }
+    let pattern = #"(?i)(?:iOS|iPhone\s+OS|CPU\s+OS)\s+([0-9]+(?:[._][0-9]+)*)"#
+    guard let regex = try? NSRegularExpression(pattern: pattern),
+          let match = regex.firstMatch(in: userAgent, range: NSRange(userAgent.startIndex..., in: userAgent)),
+          let range = Range(match.range(at: 1), in: userAgent) else { return nil }
+    return userAgent[range].replacingOccurrences(of: "_", with: ".")
 }
 
 struct LogsView: View {
