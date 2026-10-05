@@ -6,6 +6,7 @@ struct AboutView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @AppStorage("appearance") private var appearance = AppTheme.system.rawValue
+    @State private var showLogoutConfirmation = false
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0" }
     private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1" }
     private var currentYear: Int { Calendar.current.component(.year, from: .now) }
@@ -89,7 +90,28 @@ struct AboutView: View {
                 .background(Brand.background)
             }
             .navigationTitle("关于与设置").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
+                if model.isAuthenticated {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("退出", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                            showLogoutConfirmation = true
+                        }
+                        .disabled(model.isBusy)
+                        .accessibilityIdentifier("settingsLogoutButton")
+                    }
+                }
+            }
+            .confirmationDialog("退出当前账号？", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                Button("退出登录", role: .destructive) {
+                    Task {
+                        await model.logout()
+                        dismiss()
+                    }
+                }
+            } message: {
+                Text("退出后需要重新登录才能继续使用。")
+            }
             .preferredColorScheme(AppTheme(rawValue: appearance)?.colorScheme)
     }
     private func themeButton(_ theme: AppTheme) -> some View {
