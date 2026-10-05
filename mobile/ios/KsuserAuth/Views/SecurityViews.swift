@@ -61,6 +61,7 @@ struct SecurityView: View {
                 sectionDivider
                 preference("首选敏感验证", icon: "lock.shield", field: "preferredSensitiveMethod", selected: model.user?.settings?.preferredSensitiveMethod ?? (model.user?.hasPassword == false ? "apple" : "password"), methods: availableSensitiveMethods)
             }
+            PushNotificationSettingsView()
             SecuritySection(title: "账号与会话", icon: "person.crop.circle") {
                 ActionRow(title: model.user?.email.isEmpty == true ? "绑定邮箱" : "修改邮箱", icon: "envelope", subtitle: model.user?.email) { protected(.email) }
                 sectionDivider

@@ -1,1 +1,2 @@
+KSUSER_APNS_ENVIRONMENT = production
 #include "Shared.xcconfig"

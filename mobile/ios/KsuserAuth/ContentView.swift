@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var presentedChallengeID: String?
     @State private var pendingBrowserPage: BrowserPage?
     @State private var browserPage: BrowserPage?
+    @State private var pendingPushLogID: Int64?
 
     private var challenge: Binding<ChallengeSheet?> {
         Binding(get: {
@@ -69,16 +70,38 @@ struct ContentView: View {
             let type = AppDelegate.takePendingShortcutType() ?? (notification.object as? String)
             if let type { performShortcut(type) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.pushTokenNotification)) { _ in
+            Task { await model.synchronizePushNotifications(requestPermission: false) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.pushFailedNotification)) { _ in
+            model.pushNotifications.registrationFailed()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppDelegate.pushOpenedNotification)) { _ in openPendingPush() }
+        .onChange(of: model.user?.uuid) { _, _ in openPendingPush() }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             if let type = AppDelegate.takePendingShortcutType() { performShortcut(type) }
-            Task { await model.validateAppleCredential() }
+            openPendingPush()
+            Task { await model.validateAppleCredential(); await model.synchronizePushNotifications(requestPermission: false) }
         }
         .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in Task { await model.handleAppleCredentialRevocation() } }
         .task {
             await model.restoreSession()
+            openPendingPush()
             if let type = AppDelegate.takePendingShortcutType() { performShortcut(type) }
         }
+    }
+
+    private func openPendingPush() {
+        guard model.isAuthenticated, let accountID = AppDelegate.pendingPushAccountID else { return }
+        AppDelegate.pendingPushAccountID = nil
+        guard accountID == model.user?.uuid else {
+            AppDelegate.pendingPushEventID = nil
+            return
+        }
+        pendingPushLogID = AppDelegate.pendingPushEventID
+        AppDelegate.pendingPushEventID = nil
+        showAbout = false; destination = .logs
     }
 
     private var shell: some View {
@@ -113,7 +136,7 @@ struct ContentView: View {
         case .profile: ProfileView()
         case .security: SecurityView()
         case .sessions: SessionsView()
-        case .logs: LogsView()
+        case .logs: LogsView(requestedLogID: $pendingPushLogID)
         }
     }
 

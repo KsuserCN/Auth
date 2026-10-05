@@ -6,6 +6,7 @@
 -- ===========================
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS user_push_devices;
 DROP TABLE IF EXISTS user_sessions;
 DROP TABLE IF EXISTS user_sso_authorizations;
 DROP TABLE IF EXISTS user_oauth2_authorizations;
@@ -279,6 +280,22 @@ CREATE INDEX idx_user_sessions_user_active
 -- ---------------------------
 CREATE UNIQUE INDEX uk_user_sessions_refresh_verifier
   ON user_sessions (refresh_token_verifier);
+
+-- APNs registrations belong to an authenticated iOS session.
+CREATE TABLE user_push_devices (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  session_id BIGINT UNSIGNED NOT NULL,
+  device_token VARCHAR(512) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  environment VARCHAR(16) NOT NULL,
+  mode VARCHAR(32) NOT NULL DEFAULT 'ALL',
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  version BIGINT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_push_device_token (device_token, environment),
+  UNIQUE KEY uk_push_device_session (session_id),
+  CONSTRAINT fk_push_device_session FOREIGN KEY (session_id)
+    REFERENCES user_sessions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- ---------------------------

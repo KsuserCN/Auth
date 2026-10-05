@@ -165,6 +165,7 @@ npm run dev:web
 - 最低 iOS 17，支持 iPhone/iPad 和系统、浅色、深色主题
 - 构建、测试、Archive：`dev:mobile:ios`、`build:mobile:ios`、`test:mobile:ios`、`archive:mobile:ios`
 - 原生认证配置和发布验收：[iOS 文档](./docs/ios/README.md)
+- iOS 安全推送、APNs 密钥和数据库迁移：[推送配置](./mobile/ios/PUSH_NOTIFICATIONS.md)
 
 ## 子项目文档
 

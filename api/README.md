@@ -105,6 +105,8 @@ SSO / OIDC:
 
 ## API Docs
 
+iOS 会话安全推送使用 APNs，默认关闭。启用与迁移步骤见 [iOS 推送配置](../mobile/ios/PUSH_NOTIFICATIONS.md)。
+
 - `docs/README.md` (documentation index)
 - `docs/postman/` (Postman collections)
 

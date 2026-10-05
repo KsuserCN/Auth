@@ -115,6 +115,7 @@ private func deviceIcon(_ value: String?) -> String {
 
 struct LogsView: View {
     @Environment(AppModel.self) private var model
+    @Binding var requestedLogID: Int64?
     @State private var operation = ""
     @State private var result = ""
     @State private var showingFilters = false
@@ -203,7 +204,13 @@ struct LogsView: View {
                     Button("下一页") { Task { await load(page: model.logsPage + 1) } }.disabled(model.logsPage >= model.totalPages || model.isBusy).frame(minHeight: 44)
                 }.padding(.horizontal)
             }
-        }.refreshable { await reload() }.task { await reload() }
+        }.refreshable { await reload() }.task(id: requestedLogID) {
+            if let requestedLogID {
+                await openLog(id: requestedLogID)
+            } else {
+                await reload()
+            }
+        }
             .sheet(item: $detail) { log in AppNavigationStack { LogDetailView(log: log) } }
             .sheet(isPresented: $showingFilters) {
                 AppNavigationStack {
@@ -234,6 +241,18 @@ struct LogsView: View {
     }
     private func reload() async { await load(page: 1) }
     private func load(page: Int) async { await model.loadLogs(page: page, operationType: operation.isEmpty ? nil : operation, result: result.isEmpty ? nil : result) }
+
+    private func openLog(id: Int64) async {
+        await load(page: 1)
+        guard !Task.isCancelled else { return }
+        if let matchingLog = model.logs.first(where: { $0.id == id }) {
+            detail = matchingLog
+        } else {
+            // The tapped alert may be stale or its log may have been removed; leave the user on the log list.
+            model.noticeMessage = "未找到这条安全操作记录，请刷新日志列表"
+        }
+        requestedLogID = nil
+    }
 }
 
 private struct LogDayGroup: Identifiable {

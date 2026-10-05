@@ -42,6 +42,7 @@ struct AboutView: View {
                 .padding(12)
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
             }
+            if model.isAuthenticated { PushNotificationSettingsView() }
             VStack(alignment: .leading, spacing: 10) {
                 Text("协议与隐私").font(.headline).padding(.horizontal, 4)
                 VStack(spacing: 0) {

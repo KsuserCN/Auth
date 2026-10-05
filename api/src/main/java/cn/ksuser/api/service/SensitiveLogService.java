@@ -41,6 +41,9 @@ public class SensitiveLogService {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private PushNotificationService pushNotificationService;
     
         @Autowired
         private EmailService emailService;
@@ -99,6 +102,7 @@ public class SensitiveLogService {
             }
 
             logRepository.save(log);
+            schedulePush(log);
             logger.debug("Sensitive operation log saved: userId={}, operation={}", 
                          log.getUserId(), log.getOperationType());
 
@@ -189,6 +193,7 @@ public class SensitiveLogService {
             }
 
             logRepository.save(log);
+            schedulePush(log);
 
             // 保留每个用户最近 N 条敏感操作日志（避免无限增长）
             if (log.getUserId() != null) {
@@ -229,6 +234,11 @@ public class SensitiveLogService {
             logger.error("Failed to save sensitive operation log", e);
             throw e;
         }
+    }
+
+    private void schedulePush(UserSensitiveLog log) {
+        try { pushNotificationService.notifySensitiveOperation(log); }
+        catch (Exception e) { logger.warn("Unable to schedule security push: errorType={}", e.getClass().getSimpleName()); }
     }
 
     /**

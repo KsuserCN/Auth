@@ -9,6 +9,7 @@ struct LoadingActivity: Identifiable {
 
 @MainActor @Observable final class AppModel {
     let environment: AppEnvironment
+    let pushNotifications: PushNotificationManager
     var user: UserProfile?
     var isBusy: Bool { !loadingActivities.isEmpty }
     var loadingActivity: LoadingActivity? { loadingActivities.first(where: { $0.message != nil }) ?? loadingActivities.first }
@@ -56,7 +57,9 @@ struct LoadingActivity: Identifiable {
 
     init(native: any NativeAuthenticationProviding, repository: (any KsuserRepositoryProviding)? = nil, environment: AppEnvironment = .current) {
         self.native = native; self.environment = environment
-        self.repository = repository ?? KsuserRepository(client: APIClient(environment: environment))
+        let resolvedRepository = repository ?? KsuserRepository(client: APIClient(environment: environment))
+        self.repository = resolvedRepository
+        self.pushNotifications = PushNotificationManager(client: resolvedRepository.client, nativeEnabled: repository == nil)
         #if DEBUG
         // The default app host is inert during XCTest; injected repositories still execute isolated unit-test fixtures.
         isUITesting = repository == nil && (ProcessInfo.processInfo.arguments.contains("--ui-testing") || ProcessInfo.processInfo.environment["KSUSER_UI_TESTING"] == "1")
@@ -82,6 +85,15 @@ struct LoadingActivity: Identifiable {
             try await self.repository.client.cacheUser(profile); self.user = profile
             await self.refreshSecurity()
         }
+        schedulePushSynchronization()
+    }
+    private func schedulePushSynchronization() {
+        Task { [weak self] in await self?.synchronizePushNotifications() }
+    }
+    func synchronizePushNotifications(requestPermission: Bool = true) async {
+        guard !isUITesting, let user, await repository.client.hasSession() else { pushNotifications.signOut(); return }
+        await pushNotifications.synchronize(accountID: user.uuid, requestPermission: requestPermission)
+        if !(await repository.client.hasSession()) { try? native.clearAppleCredential(); clearUserState() }
     }
     func loadPasswordRequirement() async { await run { self.passwordRequirement = try await self.repository.passwordRequirement() } }
     func checkUsername(_ username: String) async -> Bool {
@@ -213,6 +225,7 @@ struct LoadingActivity: Identifiable {
         guard isAuthenticated else { return }
         await refreshProfile()
         await refreshSecurity()
+        schedulePushSynchronization()
     }
     func refreshProfile() async {
         await run { try await self.setProfile(self.repository.currentUser()) }
@@ -518,6 +531,7 @@ struct LoadingActivity: Identifiable {
             }
         } else { pendingOAuth = nil }
         await refreshSecurity()
+        schedulePushSynchronization()
         if let raw = pendingRawQRCode {
             pendingRawQRCode = nil
             await previewQRCode(raw)
@@ -533,6 +547,7 @@ struct LoadingActivity: Identifiable {
         if let cleanupError { throw cleanupError }
     }
     private func clearUserState() {
+        pushNotifications.signOut()
         authGeneration += 1; user = nil; mfaChallenge = nil; authenticationRepository = nil; pendingOAuth = nil
         sensitiveRequest = nil; sensitiveContinuation = nil; bindingAfterAuthentication = false
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; qqBound = false; totpSetup = nil

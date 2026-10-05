@@ -13,6 +13,30 @@ import XCTest
         return app
     }
 
+    func testNotificationTargetAtColdLaunchOpensMatchingLogDetail() {
+        let app = launch(authenticated: true, arguments: ["--ui-test-push-log"])
+        XCTAssertTrue(app.navigationBars["日志详情"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["192.0.2.1"].exists)
+        app.buttons["完成"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["安全活动"].waitForExistence(timeout: 5))
+    }
+
+    func testTappingSystemNotificationInBackgroundOpensLogDetailWithoutCrash() {
+        let app = launch(authenticated: true, arguments: ["--ui-test-security-notification"])
+        XCTAssertTrue(app.staticTexts["welcomeUsername"].waitForExistence(timeout: 10))
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let allow = springboard.buttons.matching(NSPredicate(format: "label IN %@", ["Allow", "允许"])).firstMatch
+        if allow.waitForExistence(timeout: 2) { allow.tap() }
+        XCUIDevice.shared.press(.home)
+        let notification = springboard.staticTexts["Ksuser 推送回归测试"]
+        XCTAssertTrue(notification.waitForExistence(timeout: 15))
+        notification.tap()
+        XCTAssertTrue(app.navigationBars["日志详情"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["192.0.2.1"].exists)
+        app.buttons["完成"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["安全活动"].waitForExistence(timeout: 5))
+    }
+
     func testSlowLoginShowsLoadingAndRestoresControls() {
         let app = launch(arguments: ["--ui-test-loading"])
         let email = app.textFields["邮箱"]
@@ -301,6 +325,26 @@ import XCTest
         attach(app, name: "Logs dark")
         app.buttons["logFilterButton"].tap()
         attach(app, name: "Logs filter dark")
+    }
+
+    func testPushSettingsOfferAllModesInAboutAndSecurity() {
+        let app = launch(authenticated: true)
+        XCTAssertTrue(app.buttons["aboutButton"].waitForExistence(timeout: 10))
+        app.buttons["aboutButton"].tap()
+        let picker = app.descendants(matching: .any).matching(identifier: "securityPushModePicker").firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        for _ in 0..<4 { if picker.isHittable { break }; app.swipeUp() }
+        picker.tap()
+        XCTAssertTrue(app.buttons["全部敏感操作"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["仅登录或异常请求"].exists)
+        XCTAssertTrue(app.buttons["不推送"].exists)
+        attach(app, name: "Security push notification modes")
+        app.buttons["全部敏感操作"].tap()
+        app.buttons["完成"].firstMatch.tap()
+        navigate(app, to: "安全")
+        for _ in 0..<6 { if picker.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(picker.isHittable)
+        attach(app, name: "Security push settings")
     }
 
     func testThemeChoicePersistsAndRendersDarkMode() {
