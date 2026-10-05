@@ -10,6 +10,7 @@ struct LoadingActivity: Identifiable {
 @MainActor @Observable final class AppModel {
     let environment: AppEnvironment
     let pushNotifications: PushNotificationManager
+    let serviceAvailability: ServiceAvailabilityMonitor
     var user: UserProfile?
     var isBusy: Bool { !loadingActivities.isEmpty }
     var loadingActivity: LoadingActivity? { loadingActivities.first(where: { $0.message != nil }) ?? loadingActivities.first }
@@ -57,7 +58,9 @@ struct LoadingActivity: Identifiable {
 
     init(native: any NativeAuthenticationProviding, repository: (any KsuserRepositoryProviding)? = nil, environment: AppEnvironment = .current) {
         self.native = native; self.environment = environment
-        let resolvedRepository = repository ?? KsuserRepository(client: APIClient(environment: environment))
+        let availabilityMonitor = ServiceAvailabilityMonitor()
+        self.serviceAvailability = availabilityMonitor
+        let resolvedRepository = repository ?? KsuserRepository(client: APIClient(environment: environment, availabilityMonitor: availabilityMonitor))
         self.repository = resolvedRepository
         self.pushNotifications = PushNotificationManager(client: resolvedRepository.client, nativeEnabled: repository == nil)
         #if DEBUG
@@ -72,6 +75,15 @@ struct LoadingActivity: Identifiable {
         #else
         isUITesting = false
         #endif
+    }
+
+    func connectServiceAvailabilityMonitor() async {
+        await repository.client.attachAvailabilityMonitor(serviceAvailability)
+    }
+
+    func probeServiceAvailability() async {
+        guard serviceAvailability.isUnavailable else { return }
+        _ = try? await repository.passwordRequirement()
     }
 
     func restoreSession() async {

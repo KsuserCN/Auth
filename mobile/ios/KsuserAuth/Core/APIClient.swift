@@ -33,16 +33,18 @@ actor APIClient {
     let environment: AppEnvironment
     private let transport: any HTTPTransport
     private let storage: any SessionStoring
+    private var availabilityMonitor: ServiceAvailabilityMonitor?
     private var session: SessionSnapshot
     private var refreshTask: Task<String, Error>?
     private var refreshTaskID: UUID?
     private var csrfTask: Task<Void, Error>?
     private var csrfTaskID: UUID?
     private var generation = 0
-    init(environment: AppEnvironment = .current, storage: any SessionStoring = KeychainSessionStore(), transport: any HTTPTransport = URLSessionTransport()) {
-        self.environment = environment; self.storage = storage; self.transport = transport
+    init(environment: AppEnvironment = .current, storage: any SessionStoring = KeychainSessionStore(), transport: any HTTPTransport = URLSessionTransport(), availabilityMonitor: ServiceAvailabilityMonitor? = nil) {
+        self.environment = environment; self.storage = storage; self.transport = transport; self.availabilityMonitor = availabilityMonitor
         self.session = (try? storage.load()) ?? SessionSnapshot()
     }
+    func attachAvailabilityMonitor(_ monitor: ServiceAvailabilityMonitor) { availabilityMonitor = monitor }
     func snapshot() -> SessionSnapshot { session }
     func hasSession() -> Bool { session.accessToken != nil || session.cookies.contains { $0.name == "refreshToken" && ($0.expiresAt.map { $0 > Date() } ?? true) } }
     func setAccessToken(_ token: String, source: String? = nil) throws {
@@ -58,7 +60,7 @@ actor APIClient {
         generation += 1; refreshTask?.cancel(); refreshTask = nil; refreshTaskID = nil; csrfTask?.cancel(); csrfTask = nil; csrfTaskID = nil
         session = SessionSnapshot(); try storage.clear()
     }
-    func stagedClient() -> APIClient { APIClient(environment: environment, storage: MemorySessionStore(), transport: transport) }
+    func stagedClient() -> APIClient { APIClient(environment: environment, storage: MemorySessionStore(), transport: transport, availabilityMonitor: availabilityMonitor) }
 
     func request<T: Decodable & Sendable>(_ path: String, method: String = "GET", query: [String: String] = [:], body: [String: JSONValue]? = nil, authenticated: Bool = true, acceptedCodes: Set<Int> = [200]) async throws -> T {
         let envelope: APIEnvelope<T> = try await envelope(path, method: method, query: query, body: body, authenticated: authenticated)
@@ -134,11 +136,25 @@ actor APIClient {
         if !cookies.isEmpty { request.setValue(cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; "), forHTTPHeaderField: "Cookie") }
         if method != "GET" && method != "HEAD", let csrf = cookies.first(where: { $0.name == "XSRF-TOKEN" }) { request.setValue(csrf.value.removingPercentEncoding ?? csrf.value, forHTTPHeaderField: "X-XSRF-TOKEN") }
         let startedGeneration = generation
-        let (bytes, response) = try await transport.data(for: request)
+        let bytes: Data
+        let response: HTTPURLResponse
+        do {
+            (bytes, response) = try await transport.data(for: request)
+        } catch {
+            if shouldCountAsServiceFailure(error) { await availabilityMonitor?.recordServiceFailure() }
+            throw error
+        }
         guard startedGeneration == generation else { throw APIError.cancelled }
         try receiveCookies(response, url: url)
         let parsed = try? JSONDecoder().decode(APIEnvelope<T>.self, from: bytes)
         let status = parsed?.code ?? response.statusCode
+        if response.statusCode >= 500 || ((200..<300).contains(response.statusCode) && (parsed?.code ?? 0) >= 500) {
+            await availabilityMonitor?.recordServiceFailure()
+        } else if let parsed {
+            await availabilityMonitor?.recordServiceResponse()
+        } else if (200..<300).contains(response.statusCode) {
+            await availabilityMonitor?.recordServiceFailure()
+        }
         if (response.statusCode == 401 || status == 401), authenticated, canReplay, requestToken != nil {
             _ = try await refresh(failedToken: requestToken)
             return try await perform(path, method: method, query: query, data: data, contentType: contentType, authenticated: true, canReplay: false)
@@ -153,6 +169,12 @@ actor APIClient {
         }
         guard let parsed else { throw APIError.invalidResponse }
         return parsed
+    }
+    private func shouldCountAsServiceFailure(_ error: Error) -> Bool {
+        if error is CancellationError { return false }
+        if let error = error as? APIError, error == .cancelled { return false }
+        if let error = error as? URLError, error.code == .cancelled { return false }
+        return true
     }
     private func receiveCookies(_ response: HTTPURLResponse, url: URL) throws {
         var headers: [String: String] = [:]

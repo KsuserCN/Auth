@@ -194,7 +194,9 @@
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
 						SystemCapabilities = {
-							com.apple.Push = { enabled = 1; };
+							com.apple.Push = {
+								enabled = 1;
+							};
 						};
 					};
 					02CAB647F70B434A290A511B = {

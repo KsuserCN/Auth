@@ -173,6 +173,41 @@ struct StatusMessageBanner: View {
     }
 }
 
+struct ServiceUnavailableOverlay: View {
+    var body: some View {
+        ZStack {
+            Color(uiColor: .systemBackground).ignoresSafeArea()
+            VStack(spacing: 18) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 48, weight: .regular))
+                    .foregroundStyle(Brand.danger)
+                    .accessibilityHidden(true)
+                Text("当前服务不可用")
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                Text("这可能是您的网络或我们的服务出现问题")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在自动重试…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
+            }
+            .padding(32)
+            .frame(maxWidth: 440)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemBackground))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isModal)
+        .accessibilityIdentifier("serviceUnavailableOverlay")
+    }
+}
+
 struct AppCard<Content: View>: View {
     private let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
