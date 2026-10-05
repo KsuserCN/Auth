@@ -100,6 +100,11 @@ struct QRConfirmationView: View {
                             if confirmation.isTransfer && model.isAuthenticated { confirmTransfer = true }
                             else { await model.approveQRCode() }
                         }
+                        .confirmationDialog("切换到二维码所属账号？", isPresented: $confirmTransfer, titleVisibility: .visible) {
+                            Button("确认切换") { Task { await model.approveQRCode() } }
+                        } message: {
+                            Text("完成验证后，这台设备会显示新账号的资料。")
+                        }
                     }
                 }
                 Text("只批准你本人发起的请求。陌生二维码可能导致其他设备访问你的账号。").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 4)
@@ -107,9 +112,6 @@ struct QRConfirmationView: View {
         }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { model.dismissQR() } } }
             .sensitiveVerification()
-            .confirmationDialog("切换到二维码所属账号？", isPresented: $confirmTransfer, titleVisibility: .visible) {
-                Button("确认切换") { Task { await model.approveQRCode() } }
-            } message: { Text("完成验证后，这台设备会显示新账号的资料。") }
     }
     private var title: String { confirmation.isTransfer ? "确认账号切换" : "确认扫码授权" }
     private var typeLabel: String {

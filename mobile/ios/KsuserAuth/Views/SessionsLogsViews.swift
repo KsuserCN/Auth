@@ -35,13 +35,15 @@ struct SessionsView: View {
             }
             AppCard {
                 CardHeader(title: "退出所有设备", subtitle: "撤销所有会话，包括当前设备。操作完成后需要重新登录。", icon: "power")
-                Button("退出所有设备", role: .destructive) { logoutAll = true }.frame(minHeight: 44).disabled(model.isBusy)
+                Button("退出所有设备", role: .destructive) { logoutAll = true }
+                    .frame(minHeight: 44)
+                    .disabled(model.isBusy)
+                    .confirmationDialog("退出所有设备？", isPresented: $logoutAll, titleVisibility: .visible) {
+                        Button("退出所有设备", role: .destructive) { Task { await model.requireSensitive(title: "退出所有设备") { await model.logout(allDevices: true) } } }
+                    }
             }
         }.refreshable { await model.refreshSessions() }.task { await model.refreshSessions() }
             .sensitiveVerification()
-            .confirmationDialog("退出所有设备？", isPresented: $logoutAll, titleVisibility: .visible) {
-                Button("退出所有设备", role: .destructive) { Task { await model.requireSensitive(title: "退出所有设备") { await model.logout(allDevices: true) } } }
-            }
     }
 }
 
@@ -73,15 +75,16 @@ private struct SessionDetailView: View {
                 AppCard {
                     CardHeader(title: "撤销设备登录", subtitle: "这台设备将退出当前账号。", icon: "rectangle.portrait.and.arrow.right")
                     Button("撤销设备", role: .destructive) { showRevokeConfirmation = true }
-                        .frame(minHeight: 44).disabled(model.isBusy)
+                        .frame(minHeight: 44)
+                        .disabled(model.isBusy)
+                        .confirmationDialog("撤销这台设备的登录？", isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
+                            Button("撤销登录", role: .destructive) { Task { await model.revokeSession(id: session.id) } }
+                        }
                 }
             }
         }
         .navigationTitle("设备详情")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("撤销这台设备的登录？", isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
-            Button("撤销登录", role: .destructive) { Task { await model.revokeSession(id: session.id) } }
-        }
         .onChange(of: model.sessions.contains(where: { $0.id == session.id })) { _, isPresent in
             if !isPresent { dismiss() }
         }

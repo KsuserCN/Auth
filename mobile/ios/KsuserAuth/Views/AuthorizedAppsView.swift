@@ -244,23 +244,23 @@ private struct AuthorizedAppDetailView: View {
                     .frame(minHeight: 44)
                     .disabled(isRevoking)
                     .accessibilityIdentifier("revokeAuthorizationButton")
+                    .confirmationDialog("撤销「\(record.name)」的授权？", isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
+                        Button("撤销授权", role: .destructive) {
+                            Task {
+                                guard !isRevoking else { return }
+                                isRevoking = true
+                                defer { isRevoking = false }
+                                if await onRevoke() { dismiss() }
+                            }
+                        }
+                        .accessibilityIdentifier("confirmRevokeAuthorization")
+                    } message: {
+                        Text("撤销后，该应用需要重新请求授权才能访问你的账号信息。")
+                    }
             }
         }
         .navigationTitle("应用详情")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("撤销「\(record.name)」的授权？", isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
-            Button("撤销授权", role: .destructive) {
-                Task {
-                    guard !isRevoking else { return }
-                    isRevoking = true
-                    defer { isRevoking = false }
-                    if await onRevoke() { dismiss() }
-                }
-            }
-            .accessibilityIdentifier("confirmRevokeAuthorization")
-        } message: {
-            Text("撤销后，该应用需要重新请求授权才能访问你的账号信息。")
-        }
     }
 
     private func website(from redirectURI: String?) -> String {

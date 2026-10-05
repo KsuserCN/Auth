@@ -99,18 +99,18 @@ struct AboutView: View {
                         }
                         .disabled(model.isBusy)
                         .accessibilityIdentifier("settingsLogoutButton")
+                        .confirmationDialog("退出当前账号？", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                            Button("退出登录", role: .destructive) {
+                                Task {
+                                    await model.logout()
+                                    dismiss()
+                                }
+                            }
+                        } message: {
+                            Text("退出后需要重新登录才能继续使用。")
+                        }
                     }
                 }
-            }
-            .confirmationDialog("退出当前账号？", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                Button("退出登录", role: .destructive) {
-                    Task {
-                        await model.logout()
-                        dismiss()
-                    }
-                }
-            } message: {
-                Text("退出后需要重新登录才能继续使用。")
             }
             .preferredColorScheme(AppTheme(rawValue: appearance)?.colorScheme)
     }

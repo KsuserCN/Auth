@@ -29,7 +29,16 @@ struct PasskeysView: View {
                             Button("详情", systemImage: "info.circle") { detailTarget = key }
                             Button("重命名", systemImage: "pencil") { renameName = key.name; renameTarget = key }
                             Button("删除", systemImage: "trash", role: .destructive) { deleteTarget = key }
-                        } label: { Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44) }.accessibilityLabel("管理 \(key.name)")
+                        } label: { Image(systemName: "ellipsis.circle").frame(minWidth: 44, minHeight: 44) }
+                            .accessibilityLabel("管理 \(key.name)")
+                            .confirmationDialog("删除这个 Passkey？", isPresented: Binding(get: { deleteTarget?.id == key.id }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
+                                Button("删除", role: .destructive) {
+                                    Task { await model.requireSensitive(title: "删除 Passkey") { await model.deletePasskey(id: key.id) } }
+                                    deleteTarget = nil
+                                }
+                            } message: {
+                                Text("删除后将无法再使用这个 Passkey 登录。")
+                            }
                     }
                     DateInfoRow(title: "创建时间", value: key.createdAt)
                     DateInfoRow(title: "最近使用", value: key.lastUsedAt)
@@ -50,12 +59,6 @@ struct PasskeysView: View {
                 }.disabled(renameName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Button("取消", role: .cancel) { renameTarget = nil }
             }
-            .confirmationDialog("删除这个 Passkey？", isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } }), titleVisibility: .visible) {
-                Button("删除", role: .destructive) {
-                    if let key = deleteTarget { Task { await model.requireSensitive(title: "删除 Passkey") { await model.deletePasskey(id: key.id) } } }
-                    deleteTarget = nil
-                }
-            } message: { Text("删除后将无法再使用这个 Passkey 登录。") }
             .sheet(item: $detailTarget) { key in
                 AppNavigationStack {
                     PageScroll {
@@ -103,7 +106,13 @@ struct TOTPView: View {
                     if model.totpStatus.enabled {
                         StatusPill(title: "已启用")
                         InfoRow(title: "可用恢复码", value: "\(model.totpStatus.recoveryCodesCount) 个")
-                        Button("停用验证器", role: .destructive) { disableConfirmation = true }.frame(minHeight: 44)
+                        Button("停用验证器", role: .destructive) { disableConfirmation = true }
+                            .frame(minHeight: 44)
+                            .confirmationDialog("停用验证器？", isPresented: $disableConfirmation, titleVisibility: .visible) {
+                                Button("停用", role: .destructive) { Task { await model.requireSensitive(title: "停用验证器") { await model.disableTOTP() } } }
+                            } message: {
+                                Text("停用后，验证器及其恢复码将无法再用于双重验证。")
+                            }
                     } else {
                         AsyncActionButton(title: "开始设置", isBusy: model.isBusy) { await model.requireSensitive(title: "启用验证器") { await model.startTOTP() } }
                     }
@@ -112,9 +121,6 @@ struct TOTPView: View {
         }.navigationTitle("验证器").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { model.totpSetup = nil; dismiss() } } }
             .sensitiveVerification()
-            .confirmationDialog("停用验证器？", isPresented: $disableConfirmation, titleVisibility: .visible) {
-                Button("停用", role: .destructive) { Task { await model.requireSensitive(title: "停用验证器") { await model.disableTOTP() } } }
-            } message: { Text("停用后，验证器及其恢复码将无法再用于双重验证。") }
             .onDisappear { model.totpSetup = nil; model.recoveryCodes = [] }
     }
 }
@@ -130,14 +136,17 @@ struct RecoveryCodesView: View {
                 if model.recoveryCodes.isEmpty { Text("暂无可用恢复码").foregroundStyle(.secondary) }
                 else { codesList(model.recoveryCodes) }
                 Button("复制全部", systemImage: "doc.on.doc") { UIPasteboard.general.string = model.recoveryCodes.joined(separator: "\n") }.frame(minHeight: 44).disabled(model.recoveryCodes.isEmpty)
-                Button("重新生成恢复码", role: .destructive) { regenerate = true }.frame(minHeight: 44)
+                Button("重新生成恢复码", role: .destructive) { regenerate = true }
+                    .frame(minHeight: 44)
+                    .confirmationDialog("重新生成恢复码？", isPresented: $regenerate, titleVisibility: .visible) {
+                        Button("重新生成", role: .destructive) { Task { await model.requireSensitive(title: "重新生成恢复码") { await model.regenerateRecoveryCodes() } } }
+                    } message: {
+                        Text("原有恢复码会立即失效，请保存新生成的恢复码。")
+                    }
             }
         }.navigationTitle("恢复码").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("完成") { model.recoveryCodes = []; dismiss() } }
             .sensitiveVerification()
-            .confirmationDialog("重新生成恢复码？", isPresented: $regenerate, titleVisibility: .visible) {
-                Button("重新生成", role: .destructive) { Task { await model.requireSensitive(title: "重新生成恢复码") { await model.regenerateRecoveryCodes() } } }
-            } message: { Text("原有恢复码会立即失效，请保存新生成的恢复码。") }
             .onDisappear { model.recoveryCodes = [] }
     }
 }
@@ -209,12 +218,18 @@ struct DeleteAccountView: View {
                 Label("所有设备登录和登录凭据将失效", systemImage: "lock.slash")
                 Label("绑定的 Apple 授权将被撤销", systemImage: "apple.logo")
                 Toggle("我已了解后果，确认注销", isOn: $understood).frame(minHeight: 44)
-                Button("继续注销", role: .destructive) { finalConfirmation = true }.buttonStyle(.borderedProminent).tint(Brand.danger).frame(minHeight: 50).disabled(!understood || model.isBusy)
+                Button("继续注销", role: .destructive) { finalConfirmation = true }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Brand.danger)
+                    .frame(minHeight: 50)
+                    .disabled(!understood || model.isBusy)
+                    .confirmationDialog("永久注销这个账号？", isPresented: $finalConfirmation, titleVisibility: .visible) {
+                        Button("永久注销账号", role: .destructive) { Task { await model.requireSensitive(title: "注销账号") { await model.deleteAccount(); if !model.isAuthenticated { dismiss() } } } }
+                    } message: {
+                        Text("此操作无法撤销。")
+                    }
             }
         }.navigationTitle("注销账号").navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("取消") { dismiss() } }.sensitiveVerification()
-            .confirmationDialog("永久注销这个账号？", isPresented: $finalConfirmation, titleVisibility: .visible) {
-                Button("永久注销账号", role: .destructive) { Task { await model.requireSensitive(title: "注销账号") { await model.deleteAccount(); if !model.isAuthenticated { dismiss() } } } }
-            } message: { Text("此操作无法撤销。") }
     }
 }
