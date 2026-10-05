@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PasskeysView: View {
     @Environment(AppModel.self) private var model
@@ -80,12 +81,25 @@ struct TOTPView: View {
     @State private var code = ""
     @State private var disableConfirmation = false
     @State private var savedCodes = false
+    @State private var showOtpauthUnavailable = false
     var body: some View {
         PageScroll {
             if let setup = model.totpSetup {
                 AppCard {
                     CardHeader(title: "添加到你的验证器", subtitle: "使用验证器扫描二维码，或手动输入密钥。", icon: "number.square")
                     LocalQRView(value: setup.qrCodeUrl).frame(maxWidth: .infinity)
+                    Button("通过 otpauth:// 快捷添加", systemImage: "arrow.up.forward.app") {
+                        openAuthenticator(using: setup.qrCodeUrl)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    Button("复制 otpauth:// 添加链接", systemImage: "doc.on.doc") {
+                        UIPasteboard.general.string = setup.qrCodeUrl
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    Text("添加链接包含密钥，请只在信任的验证器中打开或分享。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Text(setup.secret).font(.system(.body, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity)
                     Button("复制密钥", systemImage: "doc.on.doc") { UIPasteboard.general.string = setup.secret }.frame(minHeight: 44)
                 }
@@ -121,7 +135,32 @@ struct TOTPView: View {
         }.navigationTitle("验证器").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("完成") { model.totpSetup = nil; dismiss() } } }
             .sensitiveVerification()
+            .confirmationDialog("没有可打开此链接的验证器", isPresented: $showOtpauthUnavailable, titleVisibility: .visible) {
+                if let setup = model.totpSetup {
+                    Button("复制 otpauth:// 添加链接") { UIPasteboard.general.string = setup.qrCodeUrl }
+                }
+                Button("取消", role: .cancel) { }
+            } message: {
+                Text("可以复制链接并在兼容的验证器中导入，也可以扫描上方二维码或手动输入密钥。")
+            }
             .onDisappear { model.totpSetup = nil; model.recoveryCodes = [] }
+    }
+
+    private func openAuthenticator(using value: String) {
+        guard let components = URLComponents(string: value),
+              components.scheme?.lowercased() == "otpauth",
+              components.host?.lowercased() == "totp",
+              components.queryItems?.contains(where: { $0.name == "secret" && !($0.value ?? "").isEmpty }) == true,
+              let url = components.url else {
+            showOtpauthUnavailable = true
+            return
+        }
+
+        Task { @MainActor in
+            if !(await UIApplication.shared.open(url)) {
+                showOtpauthUnavailable = true
+            }
+        }
     }
 }
 
