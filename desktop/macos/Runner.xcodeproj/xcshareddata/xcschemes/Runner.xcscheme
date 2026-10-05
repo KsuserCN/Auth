@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "33CC10EC2044A3C60003C045"
-               BuildableName = "Ksuser&#x8ba4;&#x8bc1;&#x4e2d;&#x5fc3;.app"
+               BuildableName = "Ksuser&#x5b89;&#x5168;.app"
                BlueprintName = "Runner"
                ReferencedContainer = "container:Runner.xcodeproj">
             </BuildableReference>
@@ -31,7 +31,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "33CC10EC2044A3C60003C045"
-            BuildableName = "Ksuser&#x8ba4;&#x8bc1;&#x4e2d;&#x5fc3;.app"
+            BuildableName = "Ksuser&#x5b89;&#x5168;.app"
             BlueprintName = "Runner"
             ReferencedContainer = "container:Runner.xcodeproj">
          </BuildableReference>
@@ -66,11 +66,14 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "33CC10EC2044A3C60003C045"
-            BuildableName = "Ksuser&#x8ba4;&#x8bc1;&#x4e2d;&#x5fc3;.app"
+            BuildableName = "Ksuser&#x5b89;&#x5168;.app"
             BlueprintName = "Runner"
             ReferencedContainer = "container:Runner.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <MetalAPIValidationSettings
+         isEnabled = "No">
+      </MetalAPIValidationSettings>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Profile"
@@ -83,7 +86,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "33CC10EC2044A3C60003C045"
-            BuildableName = "Ksuser&#x8ba4;&#x8bc1;&#x4e2d;&#x5fc3;.app"
+            BuildableName = "Ksuser&#x5b89;&#x5168;.app"
             BlueprintName = "Runner"
             ReferencedContainer = "container:Runner.xcodeproj">
          </BuildableReference>
