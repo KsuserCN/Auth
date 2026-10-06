@@ -1075,8 +1075,7 @@ onMounted(() => {
   margin-top: 4px;
 }
 
-.data-card,
-.danger-zone-section :deep(.danger-zone-card) {
+.data-card {
   box-shadow: 0 4px 14px color-mix(in srgb, var(--el-text-color-primary) 4%, transparent);
 }
 
