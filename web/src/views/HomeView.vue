@@ -105,7 +105,7 @@
                 </el-icon>
                 <span>使用偏好</span>
               </button>
-              <button class="shortcut-item" @click="goTo('/home/open-platform')">
+              <button v-if="canCreateApps" class="shortcut-item" @click="goTo('/home/open-platform')">
                 <el-icon>
                   <Connection />
                 </el-icon>
@@ -184,6 +184,9 @@ import { storeToRefs } from 'pinia'
 const router = useRouter()
 const userStore = useUserStore()
 const { user } = storeToRefs(userStore)
+const canCreateApps = computed(() =>
+  ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
+)
 
 const initialLoading = ref(true)
 const refreshing = ref(false)

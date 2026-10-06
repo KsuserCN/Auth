@@ -65,7 +65,7 @@
           <div class="side-title">账号中心</div>
           <el-menu class="side-menu" :default-active="$route.path" router>
             <el-menu-item
-              v-for="item in menuItems"
+              v-for="item in visibleMenuItems"
               :key="item.path"
               :index="item.path"
               :to="item.path"
@@ -109,7 +109,7 @@
         :default-active="currentPath"
         @select="handleMobileMenuSelect"
       >
-        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+        <el-menu-item v-for="item in visibleMenuItems" :key="item.path" :index="item.path">
           <el-icon>
             <component :is="item.icon" />
           </el-icon>
@@ -181,6 +181,12 @@ const menuItems = [
 ]
 
 const currentPath = computed(() => route.path)
+const canCreateApps = computed(() =>
+  ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
+)
+const visibleMenuItems = computed(() =>
+  menuItems.filter((item) => item.path !== '/home/open-platform' || canCreateApps.value),
+)
 
 // 使用 VueUse 的 useDark 和 useStorage 实现持久化主题
 const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')

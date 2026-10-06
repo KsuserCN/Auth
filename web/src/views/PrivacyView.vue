@@ -7,6 +7,12 @@
       </div>
     </div>
 
+    <el-alert v-if="!canCreateApps" type="info" :closable="false" show-icon class="app-access-banner">
+      想为您自己的应用接入授权？请
+      <a href="https://www.ksuser.cn/#/contact" target="_blank" rel="noopener noreferrer">联系我们</a>
+      进行个人/企业认证
+    </el-alert>
+
     <div v-if="loading" class="overview-grid">
       <el-card v-for="index in 2" :key="index" class="overview-card" shadow="never">
         <div class="privacy-overview-skeleton">
@@ -394,11 +400,17 @@ import {
   type SSOScope,
 } from '@/api/sso'
 import { checkSensitiveVerification } from '@/api/auth'
+import { useUserStore } from '@/stores/user'
+import { storeToRefs } from 'pinia'
 import { downloadPrivacyExportFile, fetchPrivacyExportData } from '@/api/privacyExport'
 	import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 	import DangerZoneCard from '@/components/DangerZoneCard.vue'
 
 const loading = ref(false)
+const { user } = storeToRefs(useUserStore())
+const canCreateApps = computed(() =>
+  ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
+)
 const revokingId = ref('')
 const oauthApps = ref<OAuth2AuthorizedApp[]>([])
 const ssoApps = ref<SSOAuthorizedClient[]>([])
@@ -661,6 +673,17 @@ onMounted(() => {
   margin: 6px 0 0;
   font-size: 14px;
   color: var(--el-text-color-secondary);
+}
+
+.app-access-banner a {
+  color: var(--el-color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.app-access-banner a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .overview-grid {
