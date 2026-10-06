@@ -160,7 +160,13 @@ struct AccountRecoveryTicket: Codable, Sendable {
 }
 struct MobileBridgeStatusPayload: Codable, Sendable { let status: String; let transferCode: String?; let returnUrl: String?; let returnOrigin: String?; let expiresInSeconds: Int }
 struct MobileBridgeApproveResponse: Codable, Sendable { let challengeId: String; let returnUrl: String; let returnOrigin: String?; let expiresInSeconds: Int }
-struct BridgeConfirmation: Identifiable, Sendable { let challengeId: String; let status: MobileBridgeStatusPayload; let expiresAt: Date; var id: String { challengeId } }
+struct BridgeConfirmation: Identifiable, Sendable {
+    let challengeId: String
+    let status: MobileBridgeStatusPayload
+    let expiresAt: Date
+    var returnBrowser = MobileAuthorizationReturnBrowser.system
+    var id: String { challengeId }
+}
 struct AppleChallenge: Codable, Sendable { let challengeId: String; let nonce: String; let state: String; let expiresInSeconds: Int }
 struct AppleCredential: Codable, Sendable {
     let identityToken: String; let authorizationCode: String; var givenName: String?; var familyName: String?

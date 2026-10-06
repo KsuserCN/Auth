@@ -22,8 +22,6 @@ struct ContentView: View {
     @State private var showScanner = false
     @State private var showAbout = false
     @State private var presentedChallengeID: String?
-    @State private var pendingBrowserPage: BrowserPage?
-    @State private var browserPage: BrowserPage?
     @State private var pendingPushLogID: Int64?
 
     private var challenge: Binding<ChallengeSheet?> {
@@ -46,9 +44,7 @@ struct ContentView: View {
         }
         .tint(Brand.gold)
         .preferredColorScheme(AppTheme(rawValue: appearance)?.colorScheme)
-        .sheet(item: challenge, onDismiss: {
-            browserPage = pendingBrowserPage; pendingBrowserPage = nil
-        }) { sheet in
+        .sheet(item: challenge) { sheet in
             AppNavigationStack {
                 switch sheet {
                 case .application(let x): ApplicationConsentView(context: x)
@@ -56,11 +52,10 @@ struct ContentView: View {
                 case .oauth(let x): PendingOAuthView(pending: x)
                 case .sensitive(let x): SensitiveVerificationView(request: x)
                 case .qr(let x): QRConfirmationView(confirmation: x)
-                case .bridge(let x): BridgeConfirmationView(confirmation: x, onReturn: { pendingBrowserPage = BrowserPage(url: $0) })
+                case .bridge(let x): BridgeConfirmationView(confirmation: x)
                 }
             }.presentationDragIndicator(.visible).interactiveDismissDisabled(model.mobileAuthorization != nil).onAppear { presentedChallengeID = sheet.id }
         }
-        .background { SafariPresenter(page: $browserPage).frame(width: 0, height: 0) }
         .sheet(isPresented: $showScanner) {
             ScannerSheet { value in
                 showScanner = false
@@ -87,8 +82,6 @@ struct ContentView: View {
             guard unavailable else { return }
             showScanner = false
             showAbout = false
-            browserPage = nil
-            pendingBrowserPage = nil
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }

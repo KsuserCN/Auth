@@ -4,6 +4,7 @@ import {
   type MobileBridgeCreateResponse,
   type MobileBridgeStatusResponse,
 } from '@/api/auth'
+import { isIOSAuthorizationSupported } from '@/utils/mobileAuthorization'
 
 const MOBILE_BRIDGE_CHALLENGE_QUERY_KEY = 'mobileBridgeChallengeId'
 const MOBILE_BRIDGE_FALLBACK_QUERY_KEY = 'mobileBridgeFallback'
@@ -14,6 +15,19 @@ export const isAndroidMobileBridgeSupported = (): boolean => {
     return false
   }
   return /Android/i.test(navigator.userAgent || '')
+}
+
+export const isIOSMobileBridgeSupported = (): boolean => {
+  return typeof navigator !== 'undefined' && isIOSAuthorizationSupported()
+}
+
+export const buildIOSMobileBridgeAppUrl = (challengeId: string): string => {
+  const url = new URL('ksuserauth://bridge-login')
+  url.searchParams.set('challengeId', challengeId)
+  if (/CriOS\//i.test(navigator.userAgent)) {
+    url.searchParams.set('returnBrowser', 'chrome')
+  }
+  return url.toString()
 }
 
 export const isWeChatInAppBrowser = (): boolean => {
@@ -55,6 +69,15 @@ export const replaceMobileBridgeChallengeInReturnUrl = (
 }
 
 export const launchMobileBridgeApp = (appLink: string): void => {
+  if (isIOSMobileBridgeSupported()) {
+    const challengeId = new URL(appLink).searchParams.get('challengeId')
+    if (!challengeId || !/^[A-Za-z0-9_-]{32}$/.test(challengeId)) {
+      throw new Error('App 登录请求无效，请重新发起')
+    }
+    window.location.assign(buildIOSMobileBridgeAppUrl(challengeId))
+    return
+  }
+
   if (!isAndroidMobileBridgeSupported()) {
     window.location.assign(appLink)
     return

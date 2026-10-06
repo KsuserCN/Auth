@@ -113,7 +113,7 @@
                   </el-button>
                 </div>
 
-                <div v-if="mobileBridgeAvailable" class="mobile-bridge-card">
+                <div v-if="mobileBridgeAvailable && !iosMobileBridgeAvailable" class="mobile-bridge-card">
                   <div class="mobile-bridge-copy">
                     <div class="mobile-bridge-title">
                       {{
@@ -468,6 +468,28 @@
                   {{ isPasskeySupported ? 'Passkey 登录' : 'Passkey 不可用' }}
                 </el-button>
               </div>
+              <div v-if="iosMobileBridgeAvailable" class="ios-app-login">
+                <el-button
+                  class="extra-btn ios-app-login-btn"
+                  :loading="mobileBridgeLoading"
+                  @click="mobileBridgeInWeChat ? copyCurrentLinkForExternalBrowser() : handleMobileBridgeLogin()"
+                >
+                  {{ mobileBridgeAwaitingApproval ? '重新打开 Ksuser 安全 App' : '通过 Ksuser 安全 App 登录' }}
+                </el-button>
+                <p v-if="mobileBridgeInWeChat" class="ios-app-login-hint">
+                  请在 Safari 或系统浏览器中打开。点击上方按钮可复制当前链接。
+                </p>
+                <p v-else-if="mobileBridgeAwaitingApproval" class="ios-app-login-hint" role="status">
+                  请在 App 中登录并确认，再返回浏览器完成网页登录。
+                  若未打开，请确认已安装新版 Ksuser 安全 App，或点击上方按钮重试。
+                </p>
+                <el-button
+                  v-if="mobileBridgeAwaitingApproval"
+                  class="mobile-bridge-cancel"
+                  link
+                  @click="clearMobileBridgeChallenge"
+                >取消等待</el-button>
+              </div>
             </div>
           </template>
         </el-skeleton>
@@ -530,6 +552,7 @@ import {
   fetchMobileBridgeStatus,
   getMobileBridgeChallengeIdFromUrl,
   isAndroidMobileBridgeSupported,
+  isIOSMobileBridgeSupported,
   isWeChatInAppBrowser,
   launchMobileBridgeApp,
   readMobileBridgeFallbackFlag,
@@ -728,13 +751,18 @@ const loginBootstrapping = ref(true)
 const mobileBridgeLoading = ref(false)
 const mobileBridgeAwaitingApproval = ref(false)
 const mobileBridgeChallengeId = ref('')
+const mobileBridgeAppLink = ref('')
 let mobileBridgePollingTimer: number | null = null
+let mobileBridgePolling = false
 
 const desktopBridgeReady = computed(() => {
   return !!desktopBridgeUser.value && step.value === 'email'
 })
 const desktopBridgeHint = computed(() => route.query.desktopBridge === '1')
-const mobileBridgeSupported = computed(() => step.value === 'email' && isAndroidMobileBridgeSupported())
+const iosMobileBridgeAvailable = computed(() => step.value === 'email' && isIOSMobileBridgeSupported())
+const mobileBridgeSupported = computed(() =>
+  step.value === 'email' && (isAndroidMobileBridgeSupported() || isIOSMobileBridgeSupported()),
+)
 const mobileBridgeAvailable = computed(() => mobileBridgeSupported.value)
 const mobileBridgeInWeChat = computed(() => mobileBridgeSupported.value && isWeChatInAppBrowser())
 const mobileBridgeFallbackHint = computed(() => {
@@ -755,7 +783,7 @@ const loginBootstrapDescription = computed(() =>
   desktopBridgeHint.value
     ? '如果当前浏览器已登录，页面会直接跳转，并同步桌面端状态。'
     : hasPendingMobileBridgeChallenge.value
-      ? '请在已登录的安卓 App 中确认本次网页登录；确认后当前网页会自动完成登录。'
+      ? '请在 Ksuser 安全 App 中登录并确认本次网页登录；确认后当前网页会自动完成登录。'
       : '请稍候，系统正在检查当前浏览器是否已有可复用的登录会话。',
 )
 
@@ -832,6 +860,7 @@ const resetMobileBridgeState = async (clearRoute = false) => {
   cleanupMobileBridgePolling()
   mobileBridgeAwaitingApproval.value = false
   mobileBridgeChallengeId.value = ''
+  mobileBridgeAppLink.value = ''
   if (clearRoute) {
     await replaceRouteWithoutMobileBridgeQuery()
   }
@@ -844,7 +873,7 @@ const exchangeApprovedMobileBridge = async (transferCode: string) => {
     user: response.user,
     syncDesktop: false,
   })
-  ElMessage.success('已使用安卓 App 登录')
+  ElMessage.success('已使用 Ksuser 安全 App 登录')
   await navigateAfterLogin()
 }
 
@@ -854,8 +883,14 @@ const pollMobileBridgeStatus = async () => {
     return
   }
 
+  if (mobileBridgePolling || document.hidden) return
+  const challengeId = mobileBridgeChallengeId.value
+  mobileBridgePolling = true
+  let exchanging = false
+
   try {
-    const status = await fetchMobileBridgeStatus(mobileBridgeChallengeId.value)
+    const status = await fetchMobileBridgeStatus(challengeId)
+    if (challengeId !== mobileBridgeChallengeId.value || document.hidden) return
     if (status.status === 'pending') {
       mobileBridgeAwaitingApproval.value = true
       return
@@ -864,6 +899,11 @@ const pollMobileBridgeStatus = async () => {
     cleanupMobileBridgePolling()
 
     if (status.status === 'approved' && status.transferCode) {
+      exchanging = true
+      mobileBridgeChallengeId.value = ''
+      mobileBridgeAppLink.value = ''
+      mobileBridgeAwaitingApproval.value = false
+      mobileBridgeLoading.value = true
       await exchangeApprovedMobileBridge(status.transferCode)
       return
     }
@@ -875,10 +915,14 @@ const pollMobileBridgeStatus = async () => {
     }
     await resetMobileBridgeState(true)
   } catch (error: unknown) {
+    if (!exchanging && challengeId !== mobileBridgeChallengeId.value) return
     cleanupMobileBridgePolling()
     const message = error instanceof Error ? error.message : '检查 App 登录状态失败'
     ElMessage.error(message)
     await resetMobileBridgeState(false)
+  } finally {
+    mobileBridgePolling = false
+    if (exchanging) mobileBridgeLoading.value = false
   }
 }
 
@@ -901,6 +945,10 @@ const resumePendingMobileBridge = async (): Promise<boolean> => {
   }
 
   mobileBridgeChallengeId.value = challengeId
+  const appLink = new URL('/app/bridge-login', window.location.origin)
+  appLink.searchParams.set('challengeId', challengeId)
+  appLink.searchParams.set('returnUrl', buildMobileBridgeReturnUrl(challengeId))
+  mobileBridgeAppLink.value = appLink.toString()
   if (mobileBridgeFallbackHint.value) {
     ElMessage.warning('未自动打开 Ksuser App，请确认已安装后重试，或继续使用普通登录')
   }
@@ -1914,9 +1962,14 @@ const handleMobileBridgeLogin = async () => {
   }
 
   try {
+    if (mobileBridgeAwaitingApproval.value && mobileBridgeAppLink.value) {
+      launchMobileBridgeApp(mobileBridgeAppLink.value)
+      return
+    }
     mobileBridgeLoading.value = true
     const challenge = await createMobileBridgeLogin()
     mobileBridgeChallengeId.value = challenge.challengeId
+    mobileBridgeAppLink.value = challenge.appLink
 
     const nextReturnUrl = buildMobileBridgeReturnUrl(challenge.challengeId)
     const nextUrl = new URL(nextReturnUrl)
@@ -1929,7 +1982,7 @@ const handleMobileBridgeLogin = async () => {
     startMobileBridgePolling()
     launchMobileBridgeApp(challenge.appLink)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '拉起安卓 App 失败'
+    const message = error instanceof Error ? error.message : '打开 Ksuser 安全 App 失败'
     ElMessage.error(message)
     await resetMobileBridgeState(false)
   } finally {
@@ -1958,16 +2011,27 @@ const handleKeyPress = (e: KeyboardEvent) => {
   }
 }
 
+const resumeMobileBridgePolling = () => {
+  if (!document.hidden && mobileBridgeChallengeId.value) {
+    void pollMobileBridgeStatus()
+  }
+}
+
 onMounted(() => {
   isPasskeySupported.value = Boolean(window.PublicKeyCredential)
   window.addEventListener('keypress', handleKeyPress)
+  document.addEventListener('visibilitychange', resumeMobileBridgePolling)
+  window.addEventListener('pageshow', resumeMobileBridgePolling)
 })
 
 onBeforeUnmount(() => {
   cleanupCodeCountdown()
   cleanupQrPolling()
   cleanupMobileBridgePolling()
+  mobileBridgeChallengeId.value = ''
   window.removeEventListener('keypress', handleKeyPress)
+  document.removeEventListener('visibilitychange', resumeMobileBridgePolling)
+  window.removeEventListener('pageshow', resumeMobileBridgePolling)
 })
 </script>
 
@@ -2954,6 +3018,22 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.ios-app-login {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.ios-app-login-btn {
+  width: 100%;
+}
+
+.ios-app-login-hint {
+  margin: 10px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 /* 响应式设计 */

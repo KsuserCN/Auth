@@ -1,3 +1,11 @@
+# iOS 网页登录
+
+iPhone、iPad 的网页登录页在 Passkey 下方显示“通过 Ksuser 安全 App 登录”。点击后创建两分钟临时网页登录请求，并通过已注册的 `ksuserauth://bridge-login?challengeId=…` 唤起 App。未登录的 App 会先要求用户登录，随后显示目标站点、当前账号与请求有效期，用户确认后返回浏览器完成网页登录。iOS Chrome 发起的请求附带 `returnBrowser=chrome`，优先回到 Chrome；其他浏览器使用系统默认浏览器。
+
+网页登录复用 `/auth/mobile-bridge/create`、`status`、`approve`、`cancel` 与一次性 `/auth/session-transfer/exchange`，无需新增后端接口。App 从服务端读取目标站点及返回地址，忽略传入链接中的 `returnUrl`。现有 `/app/bridge-login` Universal Link 继续有效；URL scheme 用于同域网页的主动唤起。等待中可重新打开同一请求或取消，未安装新版 App 时网页保留其他登录方式。微信内打开时提示复制链接到系统浏览器。
+
+上线时需同时更新网页和 iOS App；旧版 App 只识别网页登录 Universal Link，不能处理新增的 `bridge-login` URL scheme 路由。
+
 # iOS 第三方应用授权（OAuth / OIDC）
 
 网页 `/oauth/authorize` 和 `/sso/authorize` 在 iPhone、iPad 上校验授权请求后，会尝试通过 `ksuserauth://authorize?ticket=…` 打开原生 App。未安装 App、浏览器限制跳转或用户希望在网页操作时，可以选择“继续网页授权”。网页继续前会取消临时 App 请求，避免同时提交两份授权。

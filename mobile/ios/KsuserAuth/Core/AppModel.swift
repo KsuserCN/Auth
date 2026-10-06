@@ -510,12 +510,15 @@ struct LoadingActivity: Identifiable {
             else { noticeMessage = "请先登录，登录后将继续应用授权" }
             return
         }
-        guard url.scheme == "https", url.host?.lowercased() == environment.webURL.host?.lowercased(), url.path == "/app/bridge-login" else { return }
-        guard let challenge = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "challengeId" })?.value, !challenge.isEmpty else { errorMessage = "网页登录请求参数缺失"; return }
+        guard let challenge = MobileBridgeLink.challengeID(from: url, environment: environment) else { return }
+        if let pending = bridgeConfirmation, pending.challengeId != challenge, pending.expiresAt > Date() {
+            errorMessage = "请先完成当前网页登录请求"
+            return
+        }
         await run {
             let status = try await self.repository.bridgeStatus(challenge)
             guard status.status.lowercased() == "pending", status.expiresInSeconds > 0 else { throw APIError.server(410, "网页登录请求已完成或过期，请返回浏览器重新发起") }
-            self.bridgeConfirmation = BridgeConfirmation(challengeId: challenge, status: status, expiresAt: Date().addingTimeInterval(Double(status.expiresInSeconds)))
+            self.bridgeConfirmation = BridgeConfirmation(challengeId: challenge, status: status, expiresAt: Date().addingTimeInterval(Double(status.expiresInSeconds)), returnBrowser: MobileBridgeLink.returnBrowser(from: url))
             if !self.isAuthenticated { self.noticeMessage = "请登录后确认浏览器授权" }
         }
     }

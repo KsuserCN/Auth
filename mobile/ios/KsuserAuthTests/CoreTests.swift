@@ -359,6 +359,69 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(native.acceptCalls, useApple ? 1 : 0)
         }
     }
+    func testMobileBridgeLinksValidateSchemeHostAndChallenge() {
+        let challenge = String(repeating: "a", count: 32)
+        XCTAssertEqual(MobileBridgeLink.challengeID(from: URL(string: "ksuserauth://bridge-login?challengeId=" + challenge)!, environment: environment), challenge)
+        XCTAssertEqual(MobileBridgeLink.challengeID(from: URL(string: "https://auth.ksuser.cn/app/bridge-login?challengeId=" + challenge)!, environment: environment), challenge)
+        for link in [
+            "https://evil.example/app/bridge-login?challengeId=" + challenge,
+            "ksuserauth://bridge-login/extra?challengeId=" + challenge,
+            "ksuserauth://bridge-login?challengeId=invalid",
+            "ksuserauth://bridge-login?challengeId=\(challenge)&challengeId=\(challenge)",
+            "https://auth.ksuser.cn:444/app/bridge-login?challengeId=" + challenge,
+            "https://user@auth.ksuser.cn/app/bridge-login?challengeId=" + challenge,
+        ] { XCTAssertNil(MobileBridgeLink.challengeID(from: URL(string: link)!, environment: environment)) }
+        let browser = MobileBridgeLink.returnBrowser(from: URL(string: "ksuserauth://bridge-login?challengeId=\(challenge)&returnBrowser=chrome")!)
+        let destination = URL(string: "https://auth.ksuser.cn/login?mobileBridgeChallengeId=" + challenge)!
+        XCTAssertEqual(MobileAuthorizationLink.preferredReturnURL(destination, browser: browser).scheme, "googlechromes")
+        XCTAssertEqual(MobileAuthorizationLink.preferredReturnURL(destination, browser: .system), destination)
+    }
+
+    @MainActor func testMobileBridgeWaitsForLoginAndApprovesWithCurrentAccount() async throws {
+        let challenge = String(repeating: "a", count: 32)
+        let transport = FixtureTransport(mode: .bridgeLogin)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        await model.handleURL(URL(string: "ksuserauth://bridge-login?challengeId=\(challenge)&returnBrowser=chrome&returnUrl=https://evil.example")!)
+        XCTAssertFalse(model.isAuthenticated)
+        XCTAssertEqual(model.bridgeConfirmation?.challengeId, challenge)
+        XCTAssertEqual(model.bridgeConfirmation?.status.returnOrigin, "https://auth.ksuser.cn")
+        let premature = await model.approveBridge()
+        XCTAssertNil(premature)
+
+        await model.login(email: "fixture@example.invalid", password: "fixture")
+
+        XCTAssertTrue(model.isAuthenticated)
+        XCTAssertEqual(model.bridgeConfirmation?.challengeId, challenge)
+        let browserURL = await model.approveBridge()
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(browserURL?.host, "auth.ksuser.cn")
+        XCTAssertEqual(browserURL?.path, "/login")
+        XCTAssertNil(model.bridgeConfirmation)
+        let captured = await transport.lastMutation
+        let request = try XCTUnwrap(captured)
+        XCTAssertEqual(request.url?.path, "/auth/mobile-bridge/approve")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer fresh")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-XSRF-TOKEN"), "csrf-fixture")
+        let body = try JSONDecoder().decode([String: JSONValue].self, from: XCTUnwrap(request.httpBody))
+        XCTAssertEqual(body["challengeId"], .string(challenge))
+        XCTAssertNil(body["returnUrl"])
+    }
+
+    @MainActor func testMobileBridgeRejectsExpiredRequestsAndKeepsPendingConfirmation() async {
+        let challenge = String(repeating: "a", count: 32)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: FixtureTransport(mode: .bridgeExpired))
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        await model.handleURL(URL(string: "ksuserauth://bridge-login?challengeId=" + challenge)!)
+        XCTAssertNil(model.bridgeConfirmation)
+        XCTAssertNotNil(model.errorMessage)
+
+        model.bridgeConfirmation = BridgeConfirmation(challengeId: challenge, status: MobileBridgeStatusPayload(status: "pending", transferCode: nil, returnUrl: nil, returnOrigin: "https://auth.ksuser.cn", expiresInSeconds: 120), expiresAt: Date().addingTimeInterval(120))
+        await model.handleURL(URL(string: "ksuserauth://bridge-login?challengeId=" + String(repeating: "b", count: 32))!)
+        XCTAssertEqual(model.bridgeConfirmation?.challengeId, challenge)
+        XCTAssertEqual(model.errorMessage, "请先完成当前网页登录请求")
+    }
+
     @MainActor func testBridgeCancellationReturnsOnlyServerBrowserURL() async throws {
         for destination in ["https://fixture.example.invalid/login", "javascript:alert(1)"] {
             let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: FixtureTransport(mode: .bridgeCancel))
@@ -529,7 +592,7 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
@@ -549,6 +612,16 @@ private actor FixtureTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let path = request.url!.path
         if path == "/auth/csrf-token" { return response(request, 200, #"{"code":200,"data":{"csrfToken":"csrf-fixture"}}"#, cookie: "XSRF-TOKEN=csrf-fixture; Path=/; Secure; SameSite=Lax") }
+        if mode == .bridgeLogin || mode == .bridgeExpired {
+            let challenge = String(repeating: "a", count: 32)
+            if path == "/auth/mobile-bridge/status" {
+                return response(request, 200, "{\"code\":200,\"data\":{\"status\":\"\(mode == .bridgeExpired ? "expired" : "pending")\",\"returnUrl\":\"https://auth.ksuser.cn/login?mobileBridgeChallengeId=\(challenge)\",\"returnOrigin\":\"https://auth.ksuser.cn\",\"expiresInSeconds\":\(mode == .bridgeExpired ? 0 : 120)}}")
+            }
+            if path == "/auth/mobile-bridge/approve" {
+                lastMutation = request
+                return response(request, 200, "{\"code\":200,\"data\":{\"challengeId\":\"\(challenge)\",\"returnUrl\":\"https://auth.ksuser.cn/login?mobileBridgeChallengeId=\(challenge)\",\"returnOrigin\":\"https://auth.ksuser.cn\",\"expiresInSeconds\":120}}")
+            }
+        }
         if mode == .mobileAuthorization {
             let ticket = String(repeating: "a", count: 32)
             if path == "/auth/mobile-authorization/context" {
@@ -609,7 +682,7 @@ private actor FixtureTransport: HTTPTransport {
         if mode == .csrf { lastMutation = request; return response(request, 200, #"{"code":200,"data":"验证码已发送"}"#) }
         if mode == .mfaLogin { return response(request, 200, #"{"code":201,"data":{"challengeId":"mfa-fixture","method":"totp","methods":["totp","passkey"]}}"#) }
         if mode == .pendingApple { return response(request, 200, #"{"code":202,"data":{"needBind":true,"provider":"apple","oauthBindToken":"fixture-only","canRegister":false,"emailConflict":true}}"#) }
-        if mode == .scanAfterLogin || mode == .scanAfterMFALogin {
+        if mode == .scanAfterLogin || mode == .scanAfterMFALogin || mode == .bridgeLogin {
             if path == "/auth/login" || path == "/oauth/apple/register-pending" {
                 if mode == .scanAfterMFALogin { return response(request, 200, #"{"code":201,"data":{"challengeId":"mfa-fixture","method":"totp","methods":["totp"]}}"#) }
                 return response(request, 200, #"{"code":200,"data":{"accessToken":"fresh"}}"#)

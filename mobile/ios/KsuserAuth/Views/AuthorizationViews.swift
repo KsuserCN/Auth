@@ -129,7 +129,6 @@ struct QRConfirmationView: View {
 struct BridgeConfirmationView: View {
     @Environment(AppModel.self) private var model
     let confirmation: BridgeConfirmation
-    let onReturn: (URL) -> Void
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(0, Int(confirmation.expiresAt.timeIntervalSince(context.date)))
@@ -140,12 +139,22 @@ struct BridgeConfirmationView: View {
                     InfoRow(title: "当前账号", value: model.user?.displayName ?? "尚未登录")
                     InfoRow(title: "有效期", value: remaining > 0 ? "\(remaining) 秒" : "已过期")
                     AsyncActionButton(title: "确认并打开网页", isBusy: model.isBusy, disabled: remaining <= 0 || !model.isAuthenticated) {
-                        if let url = await model.approveBridge() { onReturn(url) }
+                        if let url = await model.approveBridge() { returnToBrowser(url) }
                     }
                 }
             }
         }.navigationTitle("网页登录授权").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { Task { if let url = await model.cancelBridge() { onReturn(url) } } } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { Task { if let url = await model.cancelBridge() { returnToBrowser(url) } } } } }
+    }
+
+    private func returnToBrowser(_ url: URL) {
+        let preferredURL = MobileAuthorizationLink.preferredReturnURL(url, browser: confirmation.returnBrowser)
+        // Reopen the browser session that requested login, outside the app's embedded Safari.
+        UIApplication.shared.open(preferredURL, options: [:]) { accepted in
+            if !accepted && preferredURL != url {
+                UIApplication.shared.open(url, options: [:])
+            }
+        }
     }
 }
 
