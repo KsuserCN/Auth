@@ -1658,6 +1658,10 @@ const handleAppleLogin = async () => {
     persistCurrentPostLoginRedirect()
     const response = await signInWithApple('login')
     if (response.needBind) {
+      if (desktopBridgeHint.value) {
+        ElMessage.error('需前往网页端或移动端绑定账号之后才可以使用该第三方登录')
+        return
+      }
       savePendingAppleAccount(response)
       await router.push('/oauth/apple/continue')
     } else if (response.challengeId) {

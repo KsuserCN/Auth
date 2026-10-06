@@ -695,8 +695,6 @@ class _GlobalLoadingOverlay extends StatelessWidget {
 
 enum DesktopSection { overview, profile, security, devices, activity }
 
-enum AuthTab { login, register }
-
 enum LoginFactor { password, emailCode }
 
 enum MfaMode { code, recoveryCode, passkey }
@@ -704,6 +702,7 @@ enum MfaMode { code, recoveryCode, passkey }
 enum SensitiveVerificationMethod { password, emailCode, totp, passkey, qr }
 
 const MethodChannel _passkeyChannel = MethodChannel('ksuser/passkey');
+const MethodChannel _appleLoginChannel = MethodChannel('ksuser/apple_login');
 const MethodChannel _localAuthChannel = MethodChannel('ksuser/local_auth');
 const MethodChannel _appMenuChannel = MethodChannel('ksuser/app_menu');
 const MethodChannel _menuBarChannel = MethodChannel('ksuser/menu_bar');
@@ -1740,6 +1739,62 @@ class PasskeyPlatform {
   }
 }
 
+class AppleLoginPlatform {
+  static bool get isAvailable => Platform.isMacOS;
+
+  static Future<String> clientId() async {
+    if (!isAvailable) {
+      throw ApiException('Apple 登录仅在 macOS 上提供');
+    }
+    try {
+      final String? value = await _appleLoginChannel.invokeMethod<String>(
+        'clientId',
+      );
+      if (value == null || value.trim().isEmpty) {
+        throw ApiException('未获取到 macOS Apple 登录配置');
+      }
+      return value;
+    } on PlatformException catch (error) {
+      throw ApiException(error.message ?? '无法读取 Apple 登录配置');
+    }
+  }
+
+  static Future<Map<String, dynamic>> signIn({
+    required String nonce,
+    required String state,
+  }) async {
+    if (!isAvailable) {
+      throw ApiException('Apple 登录仅在 macOS 上提供');
+    }
+    try {
+      final Map<dynamic, dynamic>? response = await _appleLoginChannel
+          .invokeMethod<Map<dynamic, dynamic>>('signIn', <String, dynamic>{
+            'nonce': nonce,
+            'state': state,
+          });
+      if (response == null ||
+          asString(response['identityToken'])?.isNotEmpty != true ||
+          asString(response['authorizationCode'])?.isNotEmpty != true) {
+        throw ApiException('Apple 未返回完整的登录凭据');
+      }
+      return <String, dynamic>{
+        'identityToken': asString(response['identityToken']),
+        'authorizationCode': asString(response['authorizationCode']),
+        'state': asString(response['state']),
+        if (asString(response['givenName']) != null)
+          'givenName': asString(response['givenName']),
+        if (asString(response['familyName']) != null)
+          'familyName': asString(response['familyName']),
+      };
+    } on PlatformException catch (error) {
+      if (error.code == 'cancelled') {
+        throw ApiException('已取消 Apple 登录');
+      }
+      throw ApiException(error.message ?? 'Apple 登录失败，请重试');
+    }
+  }
+}
+
 class LocalAuthPlatform {
   static bool get supportsProtectedActions =>
       Platform.isMacOS || Platform.isWindows;
@@ -2000,6 +2055,52 @@ class AppController extends ChangeNotifier {
           body: <String, dynamic>{'email': email.trim(), 'code': code.trim()},
         );
         await _consumeLoginPayload(data);
+      } finally {
+        authBusy = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  Future<void> loginWithApple() async {
+    if (!AppleLoginPlatform.isAvailable) {
+      throw ApiException('Apple 登录仅在 macOS 上提供');
+    }
+    await runBusyAction('正在使用 Apple 登录...', () async {
+      authBusy = true;
+      pendingMfaChallenge = null;
+      notifyListeners();
+      try {
+        final String clientId = await AppleLoginPlatform.clientId();
+        final Map<String, dynamic> challenge = asMap(
+          await _apiClient.post(
+            '/oauth/apple/challenge',
+            body: <String, dynamic>{'purpose': 'login', 'clientId': clientId},
+          ),
+        );
+        final String challengeId = asString(challenge['challengeId']) ?? '';
+        final String nonce = asString(challenge['nonce']) ?? '';
+        final String state = asString(challenge['state']) ?? '';
+        if (challengeId.isEmpty || nonce.isEmpty || state.isEmpty) {
+          throw ApiException('Apple 登录挑战信息不完整，请重试');
+        }
+        final Map<String, dynamic> credential = await AppleLoginPlatform.signIn(
+          nonce: nonce,
+          state: state,
+        );
+        final Map<String, dynamic> payload = <String, dynamic>{
+          'challengeId': challengeId,
+          ...credential,
+        };
+        final dynamic response = await _apiClient.post(
+          '/oauth/apple/mobile-login',
+          body: payload,
+        );
+        final Map<String, dynamic> result = asMap(response);
+        if (asBool(result['needBind'])) {
+          throw ApiException('需前往网页端或移动端绑定账号之后才可以使用该第三方登录');
+        }
+        await _consumeLoginPayload(response);
       } finally {
         authBusy = false;
         notifyListeners();
@@ -3356,33 +3457,15 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _mfaCodeController = TextEditingController();
   final TextEditingController _mfaRecoveryController = TextEditingController();
-  final TextEditingController _registerUsernameController =
-      TextEditingController();
-  final TextEditingController _registerEmailController =
-      TextEditingController();
-  final TextEditingController _registerPasswordController =
-      TextEditingController();
-  final TextEditingController _registerConfirmController =
-      TextEditingController();
-  final TextEditingController _registerCodeController = TextEditingController();
-
-  AuthTab _tab = AuthTab.login;
   LoginFactor _loginFactor = LoginFactor.password;
   MfaMode _mfaMode = MfaMode.code;
-  bool _checkingUsername = false;
-  bool? _usernameAvailable;
-  String? _usernameHint;
   bool _passkeyAvailable = false;
   bool _nativePasskeyAvailable = false;
-  bool _bridgeBusy = false;
 
   @override
   void initState() {
     super.initState();
     _apiController.text = widget.controller.apiBaseUrl;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_loadPasswordRequirement());
-    });
     _detectPasskeyAvailability();
   }
 
@@ -3394,21 +3477,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     _codeController.dispose();
     _mfaCodeController.dispose();
     _mfaRecoveryController.dispose();
-    _registerUsernameController.dispose();
-    _registerEmailController.dispose();
-    _registerPasswordController.dispose();
-    _registerConfirmController.dispose();
-    _registerCodeController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadPasswordRequirement() async {
-    try {
-      widget.controller.updateApiBaseUrl(_apiController.text);
-      await widget.controller.fetchPasswordRequirement();
-    } catch (_) {
-      // Show validation hints only when the user actually submits.
-    }
   }
 
   Future<void> _detectPasskeyAvailability() async {
@@ -3557,125 +3626,22 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     }
   }
 
-  Future<void> _checkUsername() async {
-    final String username = _registerUsernameController.text.trim();
-    if (username.isEmpty) {
-      _showError('请先输入用户名');
-      return;
-    }
-    setState(() {
-      _checkingUsername = true;
-      _usernameHint = null;
-    });
-    widget.controller.updateApiBaseUrl(_apiController.text);
-    final bool available = await widget.controller.checkUsername(username);
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _checkingUsername = false;
-      _usernameAvailable = available;
-      _usernameHint = available ? '用户名可用' : '用户名已被占用';
-    });
-  }
-
-  Future<void> _sendRegisterCode() async {
-    final String email = _registerEmailController.text.trim();
-    if (email.isEmpty) {
-      _showError('请先输入注册邮箱');
+  Future<void> _loginWithApple() async {
+    if (!AppleLoginPlatform.isAvailable) {
+      _showError('Apple 登录仅在 macOS 上提供');
       return;
     }
     widget.controller.updateApiBaseUrl(_apiController.text);
     try {
-      await widget.controller.sendRegisterCode(email);
-      _showSuccess('注册验证码已发送');
-    } catch (error) {
-      _showError(error.toString());
-    }
-  }
-
-  Future<void> _register() async {
-    final String username = _registerUsernameController.text.trim();
-    final String email = _registerEmailController.text.trim();
-    final String password = _registerPasswordController.text;
-    final String confirm = _registerConfirmController.text;
-    final String code = _registerCodeController.text.trim();
-
-    if (username.isEmpty || email.isEmpty || password.isEmpty || code.isEmpty) {
-      _showError('请完整填写注册信息');
-      return;
-    }
-    if (password != confirm) {
-      _showError('两次输入的密码不一致');
-      return;
-    }
-    final PasswordRequirement? requirement =
-        widget.controller.passwordRequirement;
-    if (requirement != null) {
-      final String? error = requirement.validate(password);
-      if (error != null) {
-        _showError(error);
-        return;
-      }
-    }
-
-    widget.controller.updateApiBaseUrl(_apiController.text);
-    try {
-      await widget.controller.register(
-        username: username,
-        email: email,
-        password: password,
-        code: code,
-      );
-      _showSuccess('账号创建完成');
-    } catch (error) {
-      _showError(error.toString());
-    }
-  }
-
-  Uri _buildWebLoginUri({
-    String? transferCode,
-    bool desktopBridgeHint = false,
-  }) {
-    final String origin = widget.controller.passkeyOrigin.trim();
-    final Uri baseUri = Uri.parse(origin.endsWith('/') ? origin : '$origin/');
-    return baseUri
-        .resolve('login')
-        .replace(
-          queryParameters: <String, String>{
-            if (desktopBridgeHint) 'desktopBridge': '1',
-            if (transferCode != null && transferCode.isNotEmpty)
-              'transferCode': transferCode,
-            if (widget.controller.apiBaseUrl.trim().isNotEmpty)
-              'apiBaseUrl': widget.controller.apiBaseUrl.trim(),
-          },
-        );
-  }
-
-  Future<void> _openBrowserLoginForDesktopSync() async {
-    if (_bridgeBusy) {
-      return;
-    }
-    setState(() {
-      _bridgeBusy = true;
-    });
-    try {
-      await widget.controller.runBusyAction('正在打开浏览器登录页...', () {
-        return openExternalUrl(
-          _buildWebLoginUri(desktopBridgeHint: true).toString(),
-        );
-      });
-      if (mounted) {
-        _showSuccess('已打开浏览器，请在网页端登录，桌面端会自动接收登录状态');
+      await widget.controller.loginWithApple();
+      if (mounted && widget.controller.pendingMfaChallenge == null) {
+        _showSuccess('Apple 登录成功');
+      } else if (mounted) {
+        _syncMfaModeWithChallenge();
+        _showSuccess('Apple 验证成功，请继续完成二次验证');
       }
     } catch (error) {
       _showError(error.toString());
-    } finally {
-      if (mounted) {
-        setState(() {
-          _bridgeBusy = false;
-        });
-      }
     }
   }
 
@@ -3706,467 +3672,304 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     showAppMessage(context, message);
   }
 
+  Uri _buildWebRegisterUri() {
+    final String origin = widget.controller.passkeyOrigin.trim();
+    final Uri baseUri = Uri.parse(origin.endsWith('/') ? origin : '$origin/');
+    return baseUri
+        .resolve('register')
+        .replace(
+          queryParameters: <String, String>{
+            if (widget.controller.apiBaseUrl.trim().isNotEmpty)
+              'apiBaseUrl': widget.controller.apiBaseUrl.trim(),
+          },
+        );
+  }
+
+  Future<void> _openWebRegister() async {
+    try {
+      widget.controller.updateApiBaseUrl(_apiController.text);
+      await openExternalUrl(_buildWebRegisterUri().toString());
+    } catch (error) {
+      _showError(error.toString());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final PasswordRequirement? requirement =
-        widget.controller.passwordRequirement;
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: LayoutBuilder(
-            builder: (BuildContext context, BoxConstraints constraints) {
-              final bool compact = constraints.maxWidth < 980;
-              final Widget rightPane = AnimatedBuilder(
-                animation: widget.controller,
-                builder: (context, _) {
-                  final Widget formContent = SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        if (_tab == AuthTab.login) ...<Widget>[
-                          Text(
-                            '账户登录',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final bool compactHeight = constraints.maxHeight < 700;
+            final double outerPadding = compactHeight ? 16 : 28;
+            final double cardPadding = compactHeight ? 20 : 28;
+            final double sectionGap = compactHeight ? 10 : 14;
+            final ThemeData theme = Theme.of(context);
+            final Color outline = theme.brightness == Brightness.dark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.black.withValues(alpha: 0.06);
+
+            final Widget authCard = AnimatedBuilder(
+              animation: widget.controller,
+              builder: (BuildContext context, _) {
+                return Container(
+                  width: 480,
+                  padding: EdgeInsets.all(cardPadding),
+                  decoration: BoxDecoration(
+                    color: theme.cardTheme.color,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: outline),
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: theme.brightness == Brightness.dark
+                              ? 0.12
+                              : 0.05,
+                        ),
+                        blurRadius: 32,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      Text(
+                        '登录',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        '登录 Ksuser 安全中心，继续管理你的账户与设备。',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.62,
                           ),
-                          const SizedBox(height: 8),
-                          const Text('桌面端采用工作台布局，保留网页端相同的认证信息与流程。'),
-                          const SizedBox(height: 20),
-                          SegmentedButton<LoginFactor>(
-                            segments: const <ButtonSegment<LoginFactor>>[
-                              ButtonSegment<LoginFactor>(
-                                value: LoginFactor.password,
-                                icon: Icon(Icons.password_rounded),
-                                label: Text('密码'),
-                              ),
-                              ButtonSegment<LoginFactor>(
-                                value: LoginFactor.emailCode,
-                                icon: Icon(Icons.mark_email_read_rounded),
-                                label: Text('邮箱验证码'),
-                              ),
-                            ],
-                            selected: <LoginFactor>{_loginFactor},
-                            onSelectionChanged: (Set<LoginFactor> selection) {
-                              setState(() {
-                                _loginFactor = selection.first;
-                              });
-                            },
+                        ),
+                      ),
+                      SizedBox(height: sectionGap + 2),
+                      SegmentedButton<LoginFactor>(
+                        showSelectedIcon: false,
+                        segments: const <ButtonSegment<LoginFactor>>[
+                          ButtonSegment<LoginFactor>(
+                            value: LoginFactor.password,
+                            icon: Icon(Icons.password_rounded, size: 18),
+                            label: Text('密码'),
                           ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _loginEmailController,
-                            decoration: const InputDecoration(
-                              labelText: '邮箱地址',
-                              prefixIcon: Icon(Icons.alternate_email_rounded),
-                            ),
+                          ButtonSegment<LoginFactor>(
+                            value: LoginFactor.emailCode,
+                            icon: Icon(Icons.mark_email_read_rounded, size: 18),
+                            label: Text('邮箱验证码'),
                           ),
-                          const SizedBox(height: 16),
-                          if (_loginFactor == LoginFactor.password)
-                            TextField(
-                              controller: _passwordController,
-                              obscureText: true,
-                              decoration: const InputDecoration(
-                                labelText: '密码',
-                                prefixIcon: Icon(Icons.lock_outline_rounded),
-                              ),
-                            )
-                          else
-                            Column(
-                              children: <Widget>[
-                                TextField(
-                                  controller: _codeController,
-                                  decoration: const InputDecoration(
-                                    labelText: '6 位验证码',
-                                    prefixIcon: Icon(Icons.pin_outlined),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: OutlinedButton.icon(
-                                    onPressed: widget.controller.authBusy
-                                        ? null
-                                        : _sendLoginCode,
-                                    icon: const Icon(
-                                      Icons.send_to_mobile_rounded,
-                                    ),
-                                    label: const Text('发送验证码'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
+                        ],
+                        selected: <LoginFactor>{_loginFactor},
+                        onSelectionChanged: (Set<LoginFactor> selection) {
+                          setState(() => _loginFactor = selection.first);
+                        },
+                      ),
+                      SizedBox(height: sectionGap),
+                      TextField(
+                        controller: _loginEmailController,
+                        textInputAction: _loginFactor == LoginFactor.password
+                            ? TextInputAction.next
+                            : TextInputAction.done,
+                        decoration: const InputDecoration(
+                          labelText: '邮箱地址',
+                          prefixIcon: Icon(Icons.alternate_email_rounded),
+                        ),
+                      ),
+                      SizedBox(height: sectionGap),
+                      if (_loginFactor == LoginFactor.password)
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: true,
+                          onSubmitted: (_) => _login(),
+                          decoration: const InputDecoration(
+                            labelText: '密码',
+                            prefixIcon: Icon(Icons.lock_outline_rounded),
+                          ),
+                        )
+                      else
+                        TextField(
+                          controller: _codeController,
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _login(),
+                          decoration: InputDecoration(
+                            labelText: '6 位邮箱验证码',
+                            prefixIcon: const Icon(Icons.pin_outlined),
+                            suffixIcon: TextButton(
                               onPressed: widget.controller.authBusy
                                   ? null
-                                  : _login,
-                              icon: widget.controller.authBusy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.login_rounded),
-                              label: const Text('登录'),
+                                  : _sendLoginCode,
+                              child: const Text('发送验证码'),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
+                        ),
+                      SizedBox(height: sectionGap + 2),
+                      SizedBox(
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: widget.controller.authBusy ? null : _login,
+                          icon: widget.controller.authBusy
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.login_rounded),
+                          label: const Text('登录'),
+                        ),
+                      ),
+                      if (AppleLoginPlatform.isAvailable) ...<Widget>[
+                        SizedBox(height: sectionGap),
+                        Row(
+                          children: <Widget>[
+                            Expanded(child: Divider(color: theme.dividerColor)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: Text(
+                                '其他登录方式',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ),
+                            Expanded(child: Divider(color: theme.dividerColor)),
+                          ],
+                        ),
+                        SizedBox(height: sectionGap),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: widget.controller.authBusy
+                                ? null
+                                : _loginWithApple,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(44),
+                              foregroundColor: theme.colorScheme.onSurface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.apple, size: 20),
+                            label: const Text('使用 Apple 登录'),
+                          ),
+                        ),
+                      ],
+                      if (AppleLoginPlatform.isAvailable)
+                        const SizedBox(height: 16),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
                             child: OutlinedButton.icon(
                               onPressed: widget.controller.authBusy
                                   ? null
                                   : _openLoginQrDialog,
-                              icon: const Icon(Icons.qr_code_rounded),
-                              label: const Text('二维码登录'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(42),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(13),
+                                ),
+                              ),
+                              icon: const Icon(Icons.qr_code_rounded, size: 18),
+                              label: const Text('扫码登录'),
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF323232)
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Colors.white.withValues(alpha: 0.08)
-                                    : Colors.black.withValues(alpha: 0.06),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Row(
-                                  children: <Widget>[
-                                    const Icon(
-                                      Icons.language_rounded,
-                                      color: kPrimaryColor,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: const <Widget>[
-                                          Text(
-                                            '从网页登录到桌面端',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          SizedBox(height: 4),
-                                          Text(
-                                            '打开浏览器登录页；登录成功后，网页会把登录态自动同步回当前桌面应用。',
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                FilledButton.tonalIcon(
-                                  onPressed: _bridgeBusy
-                                      ? null
-                                      : _openBrowserLoginForDesktopSync,
-                                  icon: _bridgeBusy
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Icon(
-                                          Icons.open_in_browser_rounded,
-                                        ),
-                                  label: const Text('打开网页登录页'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? const Color(0xFF2A2A2A)
-                                  : const Color(0xFFFBFAF5),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color:
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark
-                                    ? Colors.white.withValues(alpha: 0.08)
-                                    : Colors.black.withValues(alpha: 0.06),
-                              ),
-                            ),
-                            child: Row(
-                              children: <Widget>[
-                                const Icon(
-                                  Icons.fingerprint_rounded,
-                                  color: kPrimaryColor,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      const Text(
-                                        'Passkey 登录',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        widget.controller.usesNativePasskey
-                                            ? _nativePasskeyAvailable
-                                                  ? nativePasskeyAvailableDescription()
-                                                  : nativePasskeyUnavailableDescription()
-                                            : _passkeyAvailable
-                                            ? 'Passkey 已可用，将按当前平台能力完成验证。'
-                                            : '当前环境未配置可用的 Passkey 浏览器桥接地址。',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                FilledButton.tonalIcon(
-                                  onPressed:
-                                      !_passkeyAvailable ||
-                                          widget.controller.authBusy
-                                      ? null
-                                      : _loginWithPasskey,
-                                  icon: const Icon(Icons.fingerprint_rounded),
-                                  label: const Text('Passkey 登录'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (widget.controller.pendingMfaChallenge !=
-                              null) ...<Widget>[
-                            const SizedBox(height: 18),
-                            _MfaPanel(
-                              challenge: widget.controller.pendingMfaChallenge!,
-                              mode: _mfaMode,
-                              codeController: _mfaCodeController,
-                              recoveryController: _mfaRecoveryController,
-                              busy: widget.controller.authBusy,
-                              passkeyAvailable: _passkeyAvailable,
-                              onModeChanged: (MfaMode mode) {
-                                setState(() {
-                                  _mfaMode = mode;
-                                });
-                              },
-                              onSubmit: _completeMfa,
-                            ),
-                          ],
-                        ] else ...<Widget>[
-                          Text(
-                            '创建新账户',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text('桌面端注册改为并排信息表单，不沿用网页端的分步卡片。'),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: TextField(
-                                  controller: _registerUsernameController,
-                                  decoration: InputDecoration(
-                                    labelText: '用户名',
-                                    prefixIcon: const Icon(
-                                      Icons.person_outline_rounded,
-                                    ),
-                                    suffixIcon: IconButton(
-                                      onPressed: _checkingUsername
-                                          ? null
-                                          : _checkUsername,
-                                      icon: _checkingUsername
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.verified_user_outlined,
-                                            ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: _registerEmailController,
-                                  decoration: const InputDecoration(
-                                    labelText: '邮箱',
-                                    prefixIcon: Icon(
-                                      Icons.mail_outline_rounded,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (_usernameHint != null) ...<Widget>[
-                            const SizedBox(height: 10),
-                            Text(
-                              _usernameHint!,
-                              style: TextStyle(
-                                color: _usernameAvailable == true
-                                    ? Colors.green.shade700
-                                    : Colors.red.shade700,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: TextField(
-                                  controller: _registerPasswordController,
-                                  obscureText: true,
-                                  decoration: const InputDecoration(
-                                    labelText: '密码',
-                                    prefixIcon: Icon(Icons.key_rounded),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextField(
-                                  controller: _registerConfirmController,
-                                  obscureText: true,
-                                  decoration: const InputDecoration(
-                                    labelText: '确认密码',
-                                    prefixIcon: Icon(Icons.task_alt_rounded),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: TextField(
-                                  controller: _registerCodeController,
-                                  decoration: const InputDecoration(
-                                    labelText: '邮箱验证码',
-                                    prefixIcon: Icon(
-                                      Icons.confirmation_number_outlined,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              OutlinedButton.icon(
-                                onPressed: widget.controller.authBusy
-                                    ? null
-                                    : _sendRegisterCode,
-                                icon: const Icon(Icons.send_rounded),
-                                label: const Text('发送验证码'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          _PasswordRequirementCard(requirement: requirement),
-                          const SizedBox(height: 18),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: widget.controller.authBusy
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed:
+                                  !_passkeyAvailable ||
+                                      widget.controller.authBusy
                                   ? null
-                                  : _register,
-                              icon: widget.controller.authBusy
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.rocket_launch_rounded),
-                              label: const Text('完成注册'),
+                                  : _loginWithPasskey,
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(42),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(13),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.fingerprint_rounded,
+                                size: 19,
+                              ),
+                              label: const Text('Passkey'),
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                  );
-
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(28),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            kDesktopAppName,
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text('桌面端默认使用当前环境配置，不再暴露环境和 API 地址选择。'),
-                          const SizedBox(height: 24),
-                          SegmentedButton<AuthTab>(
-                            segments: const <ButtonSegment<AuthTab>>[
-                              ButtonSegment<AuthTab>(
-                                value: AuthTab.login,
-                                label: Text('登录'),
-                                icon: Icon(Icons.login_rounded),
-                              ),
-                              ButtonSegment<AuthTab>(
-                                value: AuthTab.register,
-                                label: Text('注册'),
-                                icon: Icon(Icons.person_add_alt_1_rounded),
-                              ),
-                            ],
-                            selected: <AuthTab>{_tab},
-                            onSelectionChanged: (Set<AuthTab> selection) {
-                              setState(() {
-                                _tab = selection.first;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          Expanded(child: formContent),
                         ],
                       ),
-                    ),
-                  );
-                },
-              );
+                      if (widget.controller.pendingMfaChallenge !=
+                          null) ...<Widget>[
+                        SizedBox(height: sectionGap + 2),
+                        _MfaPanel(
+                          challenge: widget.controller.pendingMfaChallenge!,
+                          mode: _mfaMode,
+                          codeController: _mfaCodeController,
+                          recoveryController: _mfaRecoveryController,
+                          busy: widget.controller.authBusy,
+                          passkeyAvailable: _passkeyAvailable,
+                          onModeChanged: (MfaMode mode) {
+                            setState(() => _mfaMode = mode);
+                          },
+                          onSubmit: _completeMfa,
+                        ),
+                      ],
+                      SizedBox(height: sectionGap),
+                      TextButton(
+                        onPressed: _openWebRegister,
+                        child: const Text('还没有账号？前往网页端注册'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
 
-              return Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: compact ? 760 : 920),
-                  child: rightPane,
+            final Widget pageContent = Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Image.asset(
+                      kSidebarLogoAsset,
+                      width: 42,
+                      height: 42,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 11),
+                    Text(
+                      kDesktopAppName,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
+                SizedBox(height: compactHeight ? 12 : 18),
+                authCard,
+              ],
+            );
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.all(outerPadding),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - outerPadding * 2,
+                ),
+                child: Center(child: pageContent),
+              ),
+            );
+          },
         ),
       ),
     );

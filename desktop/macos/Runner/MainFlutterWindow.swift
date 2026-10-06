@@ -9,6 +9,7 @@ class MainFlutterWindow: NSWindow {
     (Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String) ??
     "Ksuser安全"
   private var passkeyBridge: PasskeyBridge?
+  private var appleLoginBridge: AppleLoginBridge?
   private var appMenuBridge: AppMenuBridge?
   private var localAuthBridge: LocalAuthBridge?
   private var windowControlBridge: WindowControlBridge?
@@ -26,6 +27,10 @@ class MainFlutterWindow: NSWindow {
     }
 
     RegisterGeneratedPlugins(registry: flutterViewController)
+    appleLoginBridge = AppleLoginBridge(
+      messenger: flutterViewController.engine.binaryMessenger,
+      windowProvider: { [weak self] in self }
+    )
     passkeyBridge = PasskeyBridge(
       messenger: flutterViewController.engine.binaryMessenger,
       windowProvider: { [weak self] in self }
@@ -43,6 +48,134 @@ class MainFlutterWindow: NSWindow {
 
   func dispatchMenuCommand(_ command: String) {
     appMenuBridge?.send(command: command)
+  }
+}
+
+private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegate,
+  ASAuthorizationControllerPresentationContextProviding
+{
+  private let channel: FlutterMethodChannel
+  private let windowProvider: () -> NSWindow?
+  private var authorizationController: ASAuthorizationController?
+  private var pendingResult: FlutterResult?
+  private var expectedState: String?
+  private var presentationWindow: NSWindow?
+
+  init(messenger: FlutterBinaryMessenger, windowProvider: @escaping () -> NSWindow?) {
+    self.channel = FlutterMethodChannel(name: "ksuser/apple_login", binaryMessenger: messenger)
+    self.windowProvider = windowProvider
+    super.init()
+    channel.setMethodCallHandler { [weak self] call, result in
+      self?.handle(call, result: result)
+    }
+  }
+
+  private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "clientId":
+      guard let clientId = Bundle.main.bundleIdentifier, !clientId.isEmpty else {
+        result(FlutterError(code: "client_id_unavailable", message: "未配置 macOS Apple 登录 Client ID", details: nil))
+        return
+      }
+      result(clientId)
+    case "signIn":
+      startSignIn(call.arguments, result: result)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func startSignIn(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard pendingResult == nil else {
+      result(FlutterError(code: "busy", message: "已有进行中的 Apple 登录请求", details: nil))
+      return
+    }
+    guard
+      let arguments = arguments as? [String: Any],
+      let nonce = arguments["nonce"] as? String, !nonce.isEmpty,
+      let state = arguments["state"] as? String, !state.isEmpty
+    else {
+      result(FlutterError(code: "bad_args", message: "Apple 登录 challenge 参数缺失", details: nil))
+      return
+    }
+    guard let window = windowProvider() else {
+      result(FlutterError(code: "window_unavailable", message: "请返回应用后重新发起 Apple 登录", details: nil))
+      return
+    }
+
+    let request = ASAuthorizationAppleIDProvider().createRequest()
+    request.requestedScopes = [.fullName, .email]
+    request.nonce = nonce
+    request.state = state
+
+    let controller = ASAuthorizationController(authorizationRequests: [request])
+    self.authorizationController = controller
+    self.pendingResult = result
+    self.expectedState = state
+    self.presentationWindow = window
+    controller.delegate = self
+    controller.presentationContextProvider = self
+    controller.performRequests()
+  }
+
+  func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+    presentationWindow!
+  }
+
+  func authorizationController(
+    controller: ASAuthorizationController,
+    didCompleteWithAuthorization authorization: ASAuthorization
+  ) {
+    guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+      complete(error: FlutterError(code: "invalid_credential", message: "Apple 返回的登录凭据无效", details: nil))
+      return
+    }
+    guard
+      let expectedState,
+      credential.state == expectedState,
+      let identityToken = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }),
+      let authorizationCode = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }),
+      !identityToken.isEmpty,
+      !authorizationCode.isEmpty
+    else {
+      complete(error: FlutterError(code: "invalid_credential", message: "Apple 返回的登录信息不完整或 state 校验失败", details: nil))
+      return
+    }
+
+    var response: [String: Any] = [
+      "identityToken": identityToken,
+      "authorizationCode": authorizationCode,
+      "state": expectedState,
+    ]
+    if let givenName = credential.fullName?.givenName {
+      response["givenName"] = givenName
+    }
+    if let familyName = credential.fullName?.familyName {
+      response["familyName"] = familyName
+    }
+    complete(value: response)
+  }
+
+  func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+    let code = (error as NSError).code
+    if code == ASAuthorizationError.canceled.rawValue {
+      complete(error: FlutterError(code: "cancelled", message: "已取消 Apple 登录", details: nil))
+      return
+    }
+    complete(error: FlutterError(code: "failed", message: error.localizedDescription, details: nil))
+  }
+
+  private func complete(value: Any? = nil, error: FlutterError? = nil) {
+    let result = pendingResult
+    pendingResult = nil
+    authorizationController = nil
+    expectedState = nil
+    presentationWindow = nil
+    if let error {
+      result?(error)
+    } else {
+      result?(value)
+    }
   }
 }
 
