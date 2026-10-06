@@ -9,13 +9,14 @@
 
     <el-row :gutter="16" class="profile-grid">
       <el-col :xs="24" :lg="24">
-        <el-card class="card" shadow="never">
+        <el-card class="card profile-card" shadow="never">
           <div class="card-title">
             <el-icon>
               <User />
             </el-icon>
             <span>个人信息</span>
           </div>
+          <p class="card-description">维护您的基础资料，让账号信息保持准确、完整。</p>
 
           <!-- 只读信息列表 -->
           <el-skeleton v-if="detailsLoading" animated>
@@ -28,27 +29,28 @@
           </el-skeleton>
 
           <div v-else class="info-list">
-            <!-- 头像 -->
-            <div class="info-row avatar-row">
-              <div class="row-left">
-                <el-icon class="row-icon">
-                  <Camera />
-                </el-icon>
-                <span class="row-label">头像</span>
-              </div>
-              <div class="row-right">
-                <div class="avatar-preview" @click="triggerAvatarSelect">
-                  <el-avatar :size="72" :src="form.avatarUrl" class="profile-avatar">
-                    {{ form.username?.slice(0, 1) || 'K' }}
-                  </el-avatar>
-                  <div class="upload-overlay">
-                    <el-icon class="upload-icon">
-                      <Camera />
-                    </el-icon>
-                  </div>
-                  <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
+            <div class="profile-identity">
+              <button class="avatar-preview" type="button" aria-label="点击修改头像" @click="triggerAvatarSelect">
+                <el-avatar :size="72" :src="form.avatarUrl" class="profile-avatar">
+                  {{ form.username?.slice(0, 1) || 'K' }}
+                </el-avatar>
+                <span class="upload-overlay">
+                  <el-icon class="upload-icon">
+                    <Camera />
+                  </el-icon>
+                </span>
+                <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
+              </button>
+              <div class="identity-copy">
+                <button class="identity-name" type="button" @click="openEditDialog('username')">
+                  {{ form.username || '设置用户名' }}
+                  <el-icon><Edit /></el-icon>
+                </button>
+                <div class="identity-email">
+                  <el-icon><Message /></el-icon>
+                  <span>{{ form.email || '暂未绑定邮箱' }}</span>
                 </div>
-                <span class="upload-tip">点击上传头像（最大 3MB）</span>
+                <span class="upload-tip">点击头像即可更换（最大 3MB）</span>
               </div>
             </div>
 
@@ -88,38 +90,6 @@
               </div>
               <div class="row-right">
                 <el-tag :type="verificationTagType" effect="light">{{ verificationLabel }}</el-tag>
-              </div>
-            </div>
-
-            <!-- 用户名 -->
-            <div class="info-row" @click="openEditDialog('username')">
-              <div class="row-left">
-                <el-icon class="row-icon">
-                  <User />
-                </el-icon>
-                <span class="row-label">用户名</span>
-              </div>
-              <div class="row-right">
-                <span class="row-value">{{ form.username || '—' }}</span>
-                <el-icon class="row-arrow">
-                  <ArrowRight />
-                </el-icon>
-              </div>
-            </div>
-
-            <!-- 邮箱（只读） -->
-            <div class="info-row disabled">
-              <div class="row-left">
-                <el-icon class="row-icon">
-                  <Message />
-                </el-icon>
-                <span class="row-label">邮箱</span>
-              </div>
-              <div class="row-right">
-                <span class="row-value">{{ form.email || '—' }}</span>
-                <el-icon class="row-arrow" style="opacity: 0.3;">
-                  <Lock />
-                </el-icon>
               </div>
             </div>
 
@@ -255,8 +225,16 @@
     </el-dialog>
 
     <!-- 编辑对话框 -->
-    <el-dialog v-model="editDialogVisible" :title="editDialogTitle" width="500px" @close="resetEditDialog">
-      <el-form ref="editFormRef" :model="editForm" :rules="getFieldRules()" label-width="80px" @submit.prevent>
+    <el-dialog
+      v-model="editDialogVisible"
+      class="profile-edit-dialog"
+      :title="editDialogTitle"
+      width="480px"
+      align-center
+      @close="resetEditDialog"
+    >
+      <p class="edit-dialog-hint">更新后的内容会显示在您的账号资料中。</p>
+      <el-form ref="editFormRef" :model="editForm" :rules="getFieldRules()" label-position="top" @submit.prevent>
         <!-- 用户名编辑 -->
         <el-form-item v-if="editingField === 'username'" label="用户名" prop="value">
           <el-input v-model="editForm.value" placeholder="请输入用户名" maxlength="20" clearable>
@@ -297,8 +275,14 @@
 
         <!-- 个人简介编辑 -->
         <el-form-item v-if="editingField === 'bio'" label="个人简介" prop="value">
-          <el-input v-model="editForm.value" type="textarea" placeholder="请输入个人简介" maxlength="200" show-word-limit
-            rows="4" />
+          <el-input
+            v-model="editForm.value"
+            type="textarea"
+            placeholder="简单介绍一下自己"
+            maxlength="200"
+            show-word-limit
+            :autosize="{ minRows: 4, maxRows: 7 }"
+          />
         </el-form-item>
       </el-form>
 
@@ -315,7 +299,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Camera, Message, ArrowRight, Lock, Iphone, Calendar, Location, Document } from '@element-plus/icons-vue'
+import { User, Camera, Message, ArrowRight, Lock, Iphone, Calendar, Location, Document, Edit } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { updateUserProfile, uploadAvatar, type UserDetails } from '@/api/auth'
 import { storeToRefs } from 'pinia'
@@ -814,6 +798,17 @@ onBeforeUnmount(() => {
   border-radius: 16px;
   border: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--el-text-color-primary) 4%, transparent);
+}
+
+.profile-card :deep(.el-card__body) {
+  padding: 22px;
+}
+
+.card-description {
+  margin: -10px 0 18px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .profile-grid {
@@ -850,15 +845,20 @@ onBeforeUnmount(() => {
   cursor: pointer;
   width: 72px;
   height: 72px;
+  flex: 0 0 72px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
 }
 
 .profile-avatar {
   width: 72px;
   height: 72px;
-  border-radius: 20px;
+  border-radius: 6px;
   transition: all 0.25s ease;
   border: 2px solid var(--el-border-color-lighter);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
 
 .avatar-preview:hover .profile-avatar {
@@ -871,7 +871,7 @@ onBeforeUnmount(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 20px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -894,14 +894,68 @@ onBeforeUnmount(() => {
 }
 
 .upload-tip {
-  margin-left: 8px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  text-align: left;
+  line-height: 1.4;
 }
 
-.avatar-row .row-right {
-  gap: 10px;
+.profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  margin-bottom: 4px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 14px;
+  background: linear-gradient(110deg, var(--el-fill-color-extra-light), var(--el-bg-color) 72%);
+}
+
+.identity-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  gap: 5px;
+}
+
+.identity-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--el-text-color-primary);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.identity-name .el-icon {
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.identity-name:hover .el-icon {
+  opacity: 1;
+}
+
+.identity-email {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.identity-email span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .avatar-info {
@@ -965,24 +1019,25 @@ onBeforeUnmount(() => {
 .info-list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin: 0 -16px;
-  padding: 0;
+  gap: 8px;
 }
 
 .info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 12px 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border-bottom: 1px solid var(--el-border-color-light);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
   user-select: none;
 }
 
 .info-row:hover:not(.disabled) {
-  background-color: var(--el-fill-color-light);
+  background-color: var(--el-fill-color-extra-light);
+  border-color: var(--el-color-primary-light-7);
+  transform: translateY(-1px);
 }
 
 .info-row.disabled {
@@ -1001,6 +1056,12 @@ onBeforeUnmount(() => {
   font-size: 18px;
   color: var(--el-color-primary);
   flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--el-color-primary-light-9);
 }
 
 .row-label {
@@ -1045,30 +1106,108 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-dialog) {
-  border-radius: 12px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
 }
 
 :deep(.el-dialog__header) {
-  border-bottom: 1px solid var(--el-border-color-light);
+  margin-right: 0;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+:deep(.el-dialog__title) {
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--el-text-color-primary);
+}
+
+:deep(.el-dialog__headerbtn) {
+  top: 18px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+:deep(.el-dialog__headerbtn:hover) {
+  background: var(--el-fill-color-light);
 }
 
 :deep(.el-dialog__body) {
-  padding: 20px;
+  padding: 20px 24px 8px;
 }
 
 :deep(.el-form-item) {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 :deep(.el-form-item__label) {
-  color: var(--el-text-color-primary);
+  color: var(--el-text-color-regular);
   font-weight: 500;
+  padding-bottom: 7px;
+}
+
+:deep(.el-input),
+:deep(.el-select),
+:deep(.el-date-editor.el-input),
+:deep(.el-date-editor.el-input__wrapper) {
+  width: 100%;
+}
+
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  min-height: 42px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+  transition: box-shadow 0.2s ease;
+}
+
+:deep(.el-input__wrapper:hover),
+:deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-5) inset;
+}
+
+:deep(.el-input__wrapper.is-focus),
+:deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+}
+
+:deep(.el-textarea__inner) {
+  border-radius: 10px;
+  padding: 11px 12px;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+}
+
+:deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+}
+
+.edit-dialog-hint {
+  margin: 0 0 18px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  width: 100%;
+}
+
+:deep(.el-dialog__footer) {
+  padding: 12px 24px 22px;
+}
+
+.dialog-footer :deep(.el-button) {
+  min-width: 88px;
+  height: 38px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 
 .char-count {
@@ -1177,12 +1316,13 @@ onBeforeUnmount(() => {
   .avatar-preview {
     width: 64px;
     height: 64px;
+    flex-basis: 64px;
   }
 
   .profile-avatar {
     width: 64px;
     height: 64px;
-    border-radius: 16px;
+    border-radius: 6px;
   }
 
   .avatar-info {
@@ -1214,23 +1354,61 @@ onBeforeUnmount(() => {
   }
 
   .info-row {
-    flex-direction: column;
     align-items: flex-start;
-    padding: 12px 16px;
+    padding: 11px 12px;
+  }
+
+  .profile-identity {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .avatar-preview,
+  .profile-avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .avatar-preview {
+    flex-basis: 60px;
+  }
+
+  .avatar-preview:focus-visible,
+  .identity-name:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 3px;
+  }
+
+  .identity-name {
+    font-size: 16px;
   }
 
   .row-right {
-    width: 100%;
-    margin-top: 6px;
-    justify-content: flex-start;
+    min-width: 0;
   }
 
   .row-value {
-    text-align: left;
+    text-align: right;
   }
 
   .row-value.bio-preview {
     max-width: 100%;
+  }
+
+  .profile-card :deep(.el-card__body) {
+    padding: 16px;
+  }
+
+  :deep(.el-dialog__header) {
+    padding: 18px 18px 14px;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 16px 18px 4px;
+  }
+
+  :deep(.el-dialog__footer) {
+    padding: 10px 18px 18px;
   }
 }
 </style>
