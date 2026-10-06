@@ -145,7 +145,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="oauthDetailDialogVisible" title="OAuth2.0 应用详情" width="760px" @closed="resetOAuthDetailDialog">
+    <el-dialog v-model="oauthDetailDialogVisible" class="app-dialog detail-dialog" title="OAuth2.0 应用详情" width="760px" @closed="resetOAuthDetailDialog">
       <div v-if="oauthDetailApp" class="detail-shell">
         <div class="detail-head">
           <div class="detail-title">
@@ -192,7 +192,7 @@
       <el-empty v-else description="应用不存在或已被删除" />
     </el-dialog>
 
-    <el-dialog v-model="ssoDetailDialogVisible" title="SSO 应用详情" width="760px" @closed="resetSSODetailDialog">
+    <el-dialog v-model="ssoDetailDialogVisible" class="app-dialog detail-dialog" title="SSO 应用详情" width="760px" @closed="resetSSODetailDialog">
       <div v-if="ssoDetailClient" class="detail-shell">
         <div class="detail-head">
           <div class="detail-title">
@@ -291,19 +291,24 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="oauthEditDialogVisible" title="编辑 OAuth2.0 应用" width="620px">
-      <el-form ref="oauthEditFormRef" :model="oauthEditForm" :rules="oauthEditRules" label-position="top">
-        <el-form-item label="应用名称" prop="appName">
-          <el-input v-model="oauthEditForm.appName" maxlength="100" placeholder="例如：Ksuser Demo" />
-        </el-form-item>
+    <el-dialog v-model="oauthEditDialogVisible" class="app-dialog" title="编辑 OAuth2.0 应用" width="620px">
+      <el-form ref="oauthEditFormRef" class="app-dialog-form" :model="oauthEditForm" :rules="oauthEditRules" label-position="top">
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="应用名称" prop="appName">
+              <el-input v-model="oauthEditForm.appName" maxlength="100" placeholder="例如：Ksuser Demo" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="联系方式" prop="contactInfo">
+              <el-input v-model="oauthEditForm.contactInfo" maxlength="120" placeholder="邮箱、工单地址或开发者说明" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="回调地址" prop="redirectUri">
           <el-input v-model="oauthEditForm.redirectUri" type="textarea" :rows="3"
             placeholder="多个地址用 ; 隔开，例如 https://example.com/oauth/callback;http://localhost:3000/callback" />
-        </el-form-item>
-
-        <el-form-item label="联系方式" prop="contactInfo">
-          <el-input v-model="oauthEditForm.contactInfo" maxlength="120" placeholder="邮箱、工单地址或开发者说明" />
         </el-form-item>
       </el-form>
 
@@ -363,25 +368,40 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="ssoEditDialogVisible" title="编辑 SSO 内部服务应用" width="680px">
-      <el-form ref="ssoEditFormRef" :model="ssoEditForm" :rules="ssoRules" label-position="top">
-        <el-form-item label="客户端名称" prop="clientName">
-          <el-input v-model="ssoEditForm.clientName" maxlength="120" placeholder="例如：Ksuser Admin Console" />
-        </el-form-item>
+    <el-dialog v-model="ssoEditDialogVisible" class="app-dialog" title="编辑 SSO 内部服务应用" width="720px">
+      <el-form ref="ssoEditFormRef" class="app-dialog-form" :model="ssoEditForm" :rules="ssoRules" label-position="top">
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="16">
+            <el-form-item label="客户端名称" prop="clientName">
+              <el-input v-model="ssoEditForm.clientName" maxlength="120" placeholder="例如：Ksuser Admin Console" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="8">
+            <el-form-item label="PKCE">
+              <el-switch v-model="ssoEditForm.requirePkce" inline-prompt active-text="开启" inactive-text="关闭" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="回调地址" prop="redirectUrisText">
           <el-input v-model="ssoEditForm.redirectUrisText" type="textarea" :rows="4"
             placeholder="多个地址用 ; 隔开，仅支持 https:// 或 http://localhost" />
         </el-form-item>
 
-        <el-form-item label="登出回调地址" prop="postLogoutRedirectUrisText">
-          <el-input v-model="ssoEditForm.postLogoutRedirectUrisText" type="textarea" :rows="3" placeholder="可选，多个地址用 ; 隔开" />
-        </el-form-item>
-
-        <el-form-item label="Audience" prop="audiencesText">
-          <el-input v-model="ssoEditForm.audiencesText" type="textarea" :rows="2"
-            placeholder="每行一个 audience，例如 ksuser-auth" />
-        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :xs="24" :md="12">
+            <el-form-item label="Audience" prop="audiencesText">
+              <el-input v-model="ssoEditForm.audiencesText" type="textarea" :rows="2"
+                placeholder="每行一个 audience，例如 ksuser-auth" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item label="登出回调地址" prop="postLogoutRedirectUrisText">
+              <el-input v-model="ssoEditForm.postLogoutRedirectUrisText" type="textarea" :rows="2"
+                placeholder="可选，多个地址用 ; 隔开" />
+            </el-form-item>
+          </el-col>
+        </el-row>
 
         <el-form-item label="可授权范围" prop="scopes">
           <el-checkbox-group v-model="ssoEditForm.scopes">
@@ -391,9 +411,6 @@
           </el-checkbox-group>
         </el-form-item>
 
-        <el-form-item label="PKCE">
-          <el-switch v-model="ssoEditForm.requirePkce" inline-prompt active-text="开启" inactive-text="关闭" />
-        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -404,7 +421,7 @@
 
     <input ref="logoFileInput" class="file-input" type="file" accept="image/*" @change="handleLogoChange" />
 
-    <el-dialog v-model="logoCropDialogVisible" title="裁剪应用 Logo" width="520px" destroy-on-close
+    <el-dialog v-model="logoCropDialogVisible" class="app-dialog" title="裁剪应用 Logo" width="520px" destroy-on-close
       @close="resetLogoCropDialog">
       <div class="avatar-crop-wrapper">
         <div class="crop-stage" @mousedown="startDragImage" @touchstart="startDragImage">
@@ -428,7 +445,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="secretDialogVisible" :title="secretDialogTitle" width="560px">
+    <el-dialog v-model="secretDialogVisible" class="app-dialog" :title="secretDialogTitle" width="560px">
       <div v-if="oauthCreatedApp" class="secret-panel">
         <el-alert type="success" :closable="false" show-icon title="AppSecret 只会展示这一次，请立即保存。" />
         <div class="secret-item">
@@ -1218,6 +1235,55 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+:deep(.el-dialog.app-dialog) {
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+}
+
+:deep(.app-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+:deep(.app-dialog .el-dialog__title) {
+  color: var(--el-text-color-primary);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+:deep(.app-dialog .el-dialog__headerbtn) {
+  top: 17px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+:deep(.app-dialog .el-dialog__headerbtn:hover) {
+  background: var(--el-fill-color-light);
+}
+
+:deep(.app-dialog .el-dialog__body) {
+  padding: 22px 24px 8px;
+}
+
+:deep(.app-dialog .el-dialog__footer) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 24px 22px;
+}
+
+:deep(.app-dialog .el-dialog__footer .el-button) {
+  min-width: 88px;
+  height: 38px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
 .content-header {
   display: flex;
   align-items: center;
@@ -1253,6 +1319,13 @@ onBeforeUnmount(() => {
 .summary-card {
   min-height: 142px;
   background: var(--el-bg-color-overlay);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.summary-card:hover {
+  border-color: var(--el-color-primary-light-7);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+  transform: translateY(-1px);
 }
 
 .summary-card :deep(.el-card__body) {
@@ -1410,14 +1483,18 @@ onBeforeUnmount(() => {
 .detail-shell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .detail-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 14px;
+  background: var(--el-fill-color-extra-light);
 }
 
 .detail-title {
@@ -1462,6 +1539,21 @@ onBeforeUnmount(() => {
   width: 120px;
 }
 
+.detail-desc :deep(.el-descriptions__table) {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.detail-desc :deep(.el-descriptions__label.el-descriptions__cell) {
+  color: var(--el-text-color-secondary);
+  font-weight: 500;
+}
+
+.detail-desc :deep(.el-descriptions__content.el-descriptions__cell) {
+  color: var(--el-text-color-primary);
+  line-height: 1.65;
+}
+
 .detail-code-row {
   display: flex;
   align-items: center;
@@ -1483,21 +1575,57 @@ onBeforeUnmount(() => {
 }
 
 .app-dialog :deep(.el-dialog__body) {
-  padding: 18px 20px 4px;
+  padding: 22px 24px 8px;
 }
 
 .app-dialog :deep(.el-dialog__footer) {
-  padding: 12px 20px 18px;
+  padding: 12px 24px 22px;
 }
 
 .app-dialog-form :deep(.el-form-item) {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .app-dialog-form :deep(.el-form-item__label) {
-  padding-bottom: 6px;
+  padding-bottom: 7px;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--el-text-color-regular);
+  font-weight: 500;
+}
+
+.app-dialog-form :deep(.el-input__wrapper) {
+  min-height: 42px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+  transition: box-shadow 0.2s ease;
+}
+
+.app-dialog-form :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-5) inset;
+}
+
+.app-dialog-form :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+}
+
+.app-dialog-form :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  padding: 11px 12px;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+}
+
+.app-dialog-form :deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+}
+
+.app-dialog-form :deep(.el-checkbox-group) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.app-dialog-form :deep(.el-switch) {
+  margin-top: 4px;
 }
 
 .app-meta-grid {
@@ -1686,6 +1814,26 @@ onBeforeUnmount(() => {
   .app-item-actions,
   .detail-actions {
     justify-content: flex-start;
+  }
+
+  :deep(.app-dialog .el-dialog__header) {
+    padding: 18px 18px 14px;
+  }
+
+  :deep(.app-dialog .el-dialog__body) {
+    padding: 18px 18px 6px;
+  }
+
+  :deep(.app-dialog .el-dialog__footer) {
+    padding: 10px 18px 18px;
+  }
+
+  .detail-head {
+    align-items: stretch;
+  }
+
+  .detail-actions {
+    display: flex;
   }
 }
 </style>

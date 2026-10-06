@@ -1,19 +1,37 @@
 <template>
-  <el-dialog :model-value="modelValue" title="敏感操作验证" width="560px" :close-on-click-modal="true" @close="handleClose">
+  <el-dialog
+    :model-value="modelValue"
+    class="sensitive-verification-dialog"
+    title="敏感操作验证"
+    width="560px"
+    align-center
+    :close-on-click-modal="true"
+    @close="handleClose"
+  >
     <div v-if="initializing" class="loading-panel">
       <el-skeleton :rows="4" animated />
     </div>
 
     <div v-else-if="step === 'method'" class="panel">
-      <p class="subtitle">请选择一种方式验证身份</p>
-      <el-button v-if="appleBound" :loading="appleLoading" @click="handleAppleVerify">
+      <div class="verification-intro">
+        <span class="intro-icon"><el-icon><Lock /></el-icon></span>
+        <div>
+          <div class="intro-title">确认您的身份</div>
+          <p class="subtitle">请选择一种方式继续敏感操作</p>
+        </div>
+      </div>
+      <el-button v-if="appleBound" class="apple-verify-button" :loading="appleLoading" @click="handleAppleVerify">
         <i class="fa-brands fa-apple" aria-hidden="true"></i>&nbsp; 使用 Apple 验证
       </el-button>
       <div class="method-list">
         <button v-for="method in allMethods" :key="method" type="button" class="method-item"
           :disabled="methodSelecting || !isMethodSelectable(method)" @click="selectMethod(method)">
-          <div class="method-title">{{ methodLabelMap[method] }}</div>
-              <div class="method-desc">{{ methodDescMap[method] }}</div>
+          <span class="method-icon"><el-icon><component :is="methodIconMap[method]" /></el-icon></span>
+          <span class="method-copy">
+            <span class="method-title">{{ methodLabelMap[method] }}</span>
+            <span class="method-desc">{{ methodDescMap[method] }}</span>
+          </span>
+          <el-icon class="method-arrow"><ArrowRight /></el-icon>
         </button>
       </div>
     </div>
@@ -105,6 +123,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import QRCode from 'qrcode'
+import { ArrowRight, Connection, Iphone, Key, Lock, Message } from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
   getAppleStatus,
@@ -154,6 +173,14 @@ const methodDescMap: Record<'password' | 'email-code' | 'passkey' | 'totp' | 'qr
   passkey: '使用生物识别或安全密钥',
   totp: '输入动态码或恢复码',
   qr: '使用已登录手机端扫码',
+}
+
+const methodIconMap = {
+  password: Lock,
+  'email-code': Message,
+  passkey: Key,
+  totp: Connection,
+  qr: Iphone,
 }
 
 const step = ref<'method' | 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>('method')
@@ -595,8 +622,43 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+:deep(.sensitive-verification-dialog.el-dialog) {
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+}
+
+:deep(.sensitive-verification-dialog .el-dialog__header) {
+  margin-right: 0;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+:deep(.sensitive-verification-dialog .el-dialog__title) {
+  color: var(--el-text-color-primary);
+  font-size: 18px;
+  font-weight: 650;
+}
+
+:deep(.sensitive-verification-dialog .el-dialog__headerbtn) {
+  top: 17px;
+  right: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+:deep(.sensitive-verification-dialog .el-dialog__headerbtn:hover) {
+  background: var(--el-fill-color-light);
+}
+
+:deep(.sensitive-verification-dialog .el-dialog__body) {
+  padding: 22px 24px 24px;
+}
+
 .loading-panel {
-  min-height: 180px;
+  min-height: 200px;
   display: flex;
   align-items: center;
 }
@@ -604,12 +666,47 @@ onBeforeUnmount(() => {
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .subtitle {
   margin: 0;
   color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.verification-intro {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-fill-color-extra-light);
+}
+
+.intro-icon,
+.method-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.intro-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  font-size: 20px;
+}
+
+.intro-title {
+  margin-bottom: 3px;
+  color: var(--el-text-color-primary);
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .method-list {
@@ -619,35 +716,107 @@ onBeforeUnmount(() => {
 }
 
 .method-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
   text-align: left;
-  border: 1px solid var(--el-border-color);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
-  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  padding: 13px 12px;
   cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.method-item:hover:not(:disabled) {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-fill-color-extra-light);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+  transform: translateY(-1px);
+}
+
+.method-item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .method-item:disabled {
-  opacity: 0.55;
+  opacity: 0.48;
   cursor: not-allowed;
+}
+
+.method-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 17px;
+}
+
+.method-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .method-title {
   font-weight: 600;
   color: var(--el-text-color-primary);
+  font-size: 13px;
 }
 
 .method-desc {
-  margin-top: 6px;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--el-text-color-secondary);
+  line-height: 1.35;
+}
+
+.method-arrow {
+  flex: 0 0 auto;
+  color: var(--el-text-color-placeholder);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.method-item:hover:not(:disabled) .method-arrow {
+  color: var(--el-color-primary);
+  transform: translateX(2px);
+}
+
+.apple-verify-button {
+  width: 100%;
+  height: 42px;
+  border-radius: 10px;
+  font-weight: 600;
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 4px;
+  margin-top: 2px;
+}
+
+.actions :deep(.el-button),
+.code-actions :deep(.el-button) {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.panel :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
+.panel :deep(.el-input__wrapper) {
+  min-height: 42px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px var(--el-border-color) inset;
+}
+
+.panel :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
 }
 
 .code-actions {
@@ -666,16 +835,17 @@ onBeforeUnmount(() => {
 .qr-image {
   width: 200px;
   height: 200px;
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 8px;
   background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   box-sizing: border-box;
 }
 
 .qr-placeholder {
   width: 200px;
   height: 200px;
-  border-radius: 8px;
+  border-radius: 14px;
   border: 1px dashed var(--el-border-color);
   display: flex;
   align-items: center;
@@ -692,24 +862,47 @@ onBeforeUnmount(() => {
 .totp-mode-switch {
   display: flex;
   gap: 8px;
+  padding: 4px;
+  border-radius: 11px;
+  background: var(--el-fill-color-light);
+  width: fit-content;
 }
 
 .chip {
-  border: 1px solid var(--el-border-color);
-  border-radius: 999px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
-  padding: 6px 12px;
+  padding: 7px 12px;
+  color: var(--el-text-color-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .chip.active {
-  border-color: var(--el-color-primary);
+  border-color: var(--el-border-color-lighter);
+  background: var(--el-bg-color);
   color: var(--el-color-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 @media (max-width: 640px) {
+  :deep(.sensitive-verification-dialog .el-dialog__header) {
+    padding: 18px 18px 14px;
+  }
+
+  :deep(.sensitive-verification-dialog .el-dialog__body) {
+    padding: 18px;
+  }
+
   .method-list {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .method-item {
+    padding: 11px 12px;
   }
 }
 </style>

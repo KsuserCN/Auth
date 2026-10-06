@@ -18,13 +18,13 @@
     </div>
     <div v-else class="overview-grid">
       <el-card class="overview-card" shadow="never">
-        <div class="overview-label">Ksuser 应用</div>
+        <div class="overview-card-head"><span class="overview-icon internal"><el-icon><Monitor /></el-icon></span><span class="overview-label">Ksuser 应用</span></div>
         <div class="overview-value">{{ ssoApps.length }}</div>
         <div class="overview-desc">Ksuser内部应用，用于证明您的身份</div>
       </el-card>
 
       <el-card class="overview-card" shadow="never">
-        <div class="overview-label">第三方应用</div>
+        <div class="overview-card-head"><span class="overview-icon external"><el-icon><Share /></el-icon></span><span class="overview-label">第三方应用</span></div>
         <div class="overview-value">{{ oauthApps.length }}</div>
         <div class="overview-desc">第三方外部应用，用于第三方网站登录</div>
       </el-card>
@@ -64,11 +64,17 @@
           <div class="card-title">
             <el-icon><Monitor /></el-icon>
             <span>Ksuser 应用</span>
+            <el-tag class="app-count" size="small" effect="plain">{{ ssoApps.length }}</el-tag>
           </div>
           <p class="card-desc">已授权后再次发起同范围授权时会自动回调</p>
 
-          <div v-if="ssoApps.length" class="app-list">
-            <div v-for="app in ssoApps" :key="app.clientId" class="app-item">
+          <div class="list-toolbar">
+            <el-input v-if="ssoApps.length > PAGE_SIZE" v-model="ssoSearch" class="app-search"
+              placeholder="搜索应用名称或 Client ID" clearable :prefix-icon="Search" @input="ssoPage = 1" />
+            <span v-if="ssoApps.length" class="list-count">{{ filteredSsoApps.length }} 个应用</span>
+          </div>
+          <div v-if="pagedSsoApps.length" class="app-list">
+            <div v-for="app in pagedSsoApps" :key="app.clientId" class="app-item">
               <div class="app-left">
                 <el-avatar
                   :size="48"
@@ -109,7 +115,10 @@
             </div>
           </div>
 
-          <el-empty v-else description="暂无已授权的 Ksuser 应用" />
+          <el-empty v-else :description="ssoApps.length ? '没有找到匹配的应用' : '暂无已授权的 Ksuser 应用'" />
+          <el-pagination v-if="filteredSsoApps.length > PAGE_SIZE" v-model:current-page="ssoPage"
+            class="app-pagination" :page-size="PAGE_SIZE" :total="filteredSsoApps.length"
+            layout="prev, pager, next" small background />
         </el-card>
       </el-col>
 
@@ -118,11 +127,17 @@
           <div class="card-title">
             <el-icon><Share /></el-icon>
             <span>第三方应用</span>
+            <el-tag class="app-count" size="small" effect="plain">{{ oauthApps.length }}</el-tag>
           </div>
           <p class="card-desc">这些应用通过 Ksuser OAuth2.0 访问您的公开资料，撤销后将无法继续使用现有授权</p>
 
-          <div v-if="oauthApps.length" class="app-list">
-            <div v-for="app in oauthApps" :key="app.appId" class="app-item">
+          <div class="list-toolbar">
+            <el-input v-if="oauthApps.length > PAGE_SIZE" v-model="oauthSearch" class="app-search"
+              placeholder="搜索应用名称或开发者" clearable :prefix-icon="Search" @input="oauthPage = 1" />
+            <span v-if="oauthApps.length" class="list-count">{{ filteredOauthApps.length }} 个应用</span>
+          </div>
+          <div v-if="pagedOauthApps.length" class="app-list">
+            <div v-for="app in pagedOauthApps" :key="app.appId" class="app-item">
               <div class="app-left">
                 <el-avatar
                   :size="48"
@@ -171,7 +186,10 @@
             </div>
           </div>
 
-          <el-empty v-else description="暂无已授权的第三方应用" />
+          <el-empty v-else :description="oauthApps.length ? '没有找到匹配的应用' : '暂无已授权的第三方应用'" />
+          <el-pagination v-if="filteredOauthApps.length > PAGE_SIZE" v-model:current-page="oauthPage"
+            class="app-pagination" :page-size="PAGE_SIZE" :total="filteredOauthApps.length"
+            layout="prev, pager, next" small background />
         </el-card>
       </el-col>
     </el-row>
@@ -360,7 +378,7 @@
 <script setup lang="ts">
 	import { computed, onMounted, ref } from 'vue'
 	import { ElMessage } from 'element-plus'
-	import { Download, Monitor, Share, WarningFilled } from '@element-plus/icons-vue'
+	import { Download, Monitor, Search, Share, WarningFilled } from '@element-plus/icons-vue'
 import type { VerificationType } from '@/api/auth'
 import {
   getOAuth2Authorizations,
@@ -384,6 +402,27 @@ const loading = ref(false)
 const revokingId = ref('')
 const oauthApps = ref<OAuth2AuthorizedApp[]>([])
 const ssoApps = ref<SSOAuthorizedClient[]>([])
+const PAGE_SIZE = 5
+const oauthSearch = ref('')
+const ssoSearch = ref('')
+const oauthPage = ref(1)
+const ssoPage = ref(1)
+const filteredOauthApps = computed(() => {
+  const query = oauthSearch.value.trim().toLocaleLowerCase()
+  if (!query) return oauthApps.value
+  return oauthApps.value.filter((app) =>
+    `${app.appName} ${app.creatorName ?? ''} ${app.contactInfo ?? ''}`.toLocaleLowerCase().includes(query),
+  )
+})
+const filteredSsoApps = computed(() => {
+  const query = ssoSearch.value.trim().toLocaleLowerCase()
+  if (!query) return ssoApps.value
+  return ssoApps.value.filter((app) =>
+    `${app.clientName} ${app.clientId}`.toLocaleLowerCase().includes(query),
+  )
+})
+const pagedOauthApps = computed(() => filteredOauthApps.value.slice((oauthPage.value - 1) * PAGE_SIZE, oauthPage.value * PAGE_SIZE))
+const pagedSsoApps = computed(() => filteredSsoApps.value.slice((ssoPage.value - 1) * PAGE_SIZE, ssoPage.value * PAGE_SIZE))
 const downloading = ref(false)
 const sensitiveDialogVisible = ref(false)
 const ssoDetailDialogVisible = ref(false)
@@ -489,6 +528,8 @@ const loadAuthorizations = async () => {
     const [oauth, sso] = await Promise.all([getOAuth2Authorizations(), getSSOAuthorizations()])
     oauthApps.value = oauth
     ssoApps.value = sso
+    ssoPage.value = Math.min(ssoPage.value, Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)))
+    oauthPage.value = Math.min(oauthPage.value, Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)))
     if (ssoDetailDialogVisible.value && ssoDetailClientId.value && !ssoDetailApp.value) {
       resetSsoDetailDialog()
       ssoDetailDialogVisible.value = false
@@ -509,6 +550,7 @@ const handleRevokeOauth = async (appId: string) => {
   try {
     await revokeOAuth2Authorization(appId)
     oauthApps.value = oauthApps.value.filter((item) => item.appId !== appId)
+    oauthPage.value = Math.min(oauthPage.value, Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)))
     ElMessage.success('第三方应用授权已撤销')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '撤销第三方应用失败')
@@ -522,6 +564,7 @@ const handleRevokeSso = async (clientId: string) => {
   try {
     await revokeSSOAuthorization(clientId)
     ssoApps.value = ssoApps.value.filter((item) => item.clientId !== clientId)
+    ssoPage.value = Math.min(ssoPage.value, Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)))
     ElMessage.success('Ksuser 应用授权已撤销')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '撤销 Ksuser 应用失败')
@@ -636,6 +679,43 @@ onMounted(() => {
 .overview-card :deep(.el-card__body),
 .card :deep(.el-card__body) {
   background: transparent;
+}
+
+.overview-card {
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.overview-card:hover {
+  border-color: var(--el-color-primary-light-7);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transform: translateY(-2px);
+}
+
+.overview-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.overview-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+}
+
+.overview-icon.internal {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.overview-icon.external {
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9);
 }
 
 .overview-label {
@@ -776,6 +856,13 @@ onMounted(() => {
   color: var(--el-text-color-primary);
 }
 
+.app-count {
+  margin-left: auto;
+  min-width: 26px;
+  justify-content: center;
+  border-radius: 999px;
+}
+
 .card-desc {
   margin: 0 0 16px;
   font-size: 14px;
@@ -792,7 +879,42 @@ onMounted(() => {
 .app-list {
   display: flex;
   flex-direction: column;
+  gap: 10px;
+  max-height: 560px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 2px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--el-border-color) transparent;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  min-height: 34px;
+  margin: 0 0 10px;
+}
+
+.app-search {
+  max-width: 280px;
+}
+
+.app-search :deep(.el-input__wrapper) {
+  min-height: 36px;
+  border-radius: 10px;
+}
+
+.list-count {
+  flex: 0 0 auto;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.app-pagination {
+  justify-content: center;
+  margin-top: 14px;
 }
 
 .app-item {
@@ -800,7 +922,7 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--el-border-color-light);
   border-radius: 14px;
   background: var(--privacy-item-bg);
@@ -930,6 +1052,11 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.data-card,
+.danger-zone-section :deep(.danger-zone-card) {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--el-text-color-primary) 4%, transparent);
+}
+
 .danger-zone-section {
   margin-top: 16px;
 }
@@ -994,6 +1121,15 @@ onMounted(() => {
 
   .app-actions {
     justify-content: flex-start;
+  }
+
+  .app-list {
+    max-height: 460px;
+  }
+
+  .app-search {
+    max-width: none;
+    flex: 1;
   }
 }
 </style>
