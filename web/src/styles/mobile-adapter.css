@@ -62,3 +62,11 @@
     overflow-x: auto;
   }
 }
+
+@media (max-width: 900px) {
+  button.el-button.el-button--primary,
+  button.el-button.next-btn {
+    flex-basis: auto;
+    flex-shrink: 0;
+  }
+}
