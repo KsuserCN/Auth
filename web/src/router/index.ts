@@ -71,8 +71,9 @@ const router = createRouter({
       component: () => import('../views/RegisterView.vue'),
     },
     {
-      path: '/register/apple',
-      name: 'apple-register',
+      path: '/oauth/apple/continue',
+      alias: '/register/apple',
+      name: 'apple-account',
       component: () => import('../views/AppleRegisterView.vue'),
     },
     {

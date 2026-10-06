@@ -14,11 +14,13 @@ const mocks = vi.hoisted(() => ({
   exchange: vi.fn(),
   finalize: vi.fn(),
   replace: vi.fn(),
+  push: vi.fn(),
+  apple: vi.fn(),
   route: { path: '/login', query: {} as Record<string, string> },
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
 }))
 vi.mock('@vueuse/core', () => ({ useDark: () => ref(false) }))
 vi.mock('@/api/auth', () => ({
@@ -32,7 +34,10 @@ vi.mock('@/utils/desktopBridge', () => ({
   storeWebSession: vi.fn(),
   syncCurrentWebSessionToDesktop: vi.fn(),
 }))
-vi.mock('@/utils/appleSignIn', () => ({ prepareAppleSignIn: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/utils/appleSignIn', () => ({
+  prepareAppleSignIn: vi.fn().mockResolvedValue(undefined),
+  signInWithApple: mocks.apple,
+}))
 vi.mock('@/utils/authSession', () => ({ getStoredAccessToken: () => null }))
 vi.mock('@/utils/mobileBridge', () => ({
   isIOSMobileBridgeSupported: mocks.ios,
@@ -236,5 +241,48 @@ describe('iOS app login entry', () => {
     await flushPromises()
     expect(mocks.create).not.toHaveBeenCalled()
     expect(mocks.launch).toHaveBeenCalledWith(expect.stringContaining(`challengeId=${challengeId}`))
+  })
+})
+
+describe('Apple login account routing', () => {
+  const loginWithApple = async () => {
+    const wrapper = render()
+    await flushPromises()
+    const button = wrapper.findAll('button').find((item) => item.find('.fa-apple').exists())!
+    await button.trigger('click')
+    await flushPromises()
+    return wrapper
+  }
+
+  it('logs in an already linked identity and returns to the requested destination', async () => {
+    mocks.apple.mockResolvedValue({ accessToken: 'apple-session', user: { uuid: 'linked-user' } })
+    await loginWithApple()
+    expect(mocks.finalize).toHaveBeenCalledWith({ accessToken: 'apple-session', user: { uuid: 'linked-user' } })
+    expect(mocks.replace).toHaveBeenCalledWith('/home/security')
+    expect(mocks.push).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('offers account choices for unlinked Apple identities (email conflict: %s)', async (conflict) => {
+    mocks.apple.mockResolvedValue({ needBind: true, oauthBindToken: 'apple-ticket', canRegister: !conflict, emailConflict: conflict })
+    await loginWithApple()
+    expect(mocks.push).toHaveBeenCalledWith('/oauth/apple/continue')
+    expect(mocks.finalize).not.toHaveBeenCalled()
+  })
+
+  it('retains binding intent when Apple login requires MFA', async () => {
+    mocks.route.query = { oauthBindProvider: 'apple' }
+    mocks.apple.mockResolvedValue({ challengeId: 'apple-mfa', method: 'totp', methods: ['totp'] })
+    await loginWithApple()
+    expect(mocks.push).toHaveBeenCalledWith(expect.objectContaining({ query: expect.objectContaining({ oauthBindProvider: 'apple', challengeId: 'apple-mfa', mfaFrom: 'apple' }) }))
+    expect(mocks.finalize).not.toHaveBeenCalled()
+  })
+
+  it('continues binding after authenticating the existing account', async () => {
+    mocks.route.query = { oauthBindProvider: 'apple' }
+    sessionStorage.setItem('ksuser:post-login-redirect', '/home/security')
+    mocks.apple.mockResolvedValue({ accessToken: 'existing-account', user: { uuid: 'user' } })
+    await loginWithApple()
+    expect(mocks.replace).toHaveBeenCalledWith('/oauth/apple/continue?mode=bind')
+    expect(sessionStorage.getItem('ksuser:post-login-redirect')).toBe('/home/security')
   })
 })

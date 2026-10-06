@@ -59,8 +59,10 @@
             >
               <!-- 第一步：邮箱输入 -->
               <div v-if="step === 'email'" class="step-container" key="email">
-                <h2 class="step-title">开始登录</h2>
-                <p class="step-subtitle">输入您的邮箱地址</p>
+                <h2 class="step-title">{{ route.query.oauthBindProvider ? '登录并绑定已有账号' : '开始登录' }}</h2>
+                <p class="step-subtitle">
+                  {{ route.query.oauthBindProvider ? '登录您的 Ksuser 账号，继续完成第三方账号绑定' : '输入您的邮箱地址' }}
+                </p>
 
                 <el-form ref="emailFormRef" :model="emailInput" :rules="emailRules" label-position="top">
                   <el-form-item prop="email">
@@ -81,7 +83,7 @@
                   </el-button>
                 </div>
 
-                <div class="create-account">
+                <div v-if="!route.query.oauthBindProvider" class="create-account">
                   还没有账号？<router-link to="/register" class="link">创建账号</router-link>
                 </div>
 
@@ -546,6 +548,7 @@ import {
   type DesktopBridgeUser,
 } from '@/utils/desktopBridge'
 import { prepareAppleSignIn, signInWithApple } from '@/utils/appleSignIn'
+import { isAppleAccountBindingRequested, savePendingAppleAccount } from '@/utils/appleAccountFlow'
 import {
   buildMobileBridgeReturnUrl,
   createMobileBridgeLogin,
@@ -823,6 +826,10 @@ const bindPendingOAuthAfterLogin = async () => {
 }
 
 const navigateAfterLogin = async () => {
+  if (route.query.oauthBindProvider === 'apple' || isAppleAccountBindingRequested()) {
+    await router.replace('/oauth/apple/continue?mode=bind')
+    return
+  }
   await bindPendingOAuthAfterLogin()
 
   const directTarget = getDirectPostLoginTarget()
@@ -837,6 +844,7 @@ const navigateAfterLogin = async () => {
 }
 
 const persistCurrentPostLoginRedirect = () => {
+  if (route.query.oauthBindProvider || isAppleAccountBindingRequested()) return
   persistPostLoginRedirect(typeof route.query.redirect === 'string' ? route.query.redirect : null)
 }
 
@@ -1650,15 +1658,11 @@ const handleAppleLogin = async () => {
     persistCurrentPostLoginRedirect()
     const response = await signInWithApple('login')
     if (response.needBind) {
-      if (!response.oauthBindToken) throw new Error('Apple 注册票据缺失，请重新授权')
-      if (response.emailConflict || !response.canRegister) {
-        ElMessage.warning(response.message || '请登录已有账号后，在账号设置中绑定 Apple')
-        return
-      }
-      sessionStorage.setItem('apple_register_ticket', response.oauthBindToken)
-      await router.push('/register/apple')
+      savePendingAppleAccount(response)
+      await router.push('/oauth/apple/continue')
     } else if (response.challengeId) {
       await router.push({ path: '/login', query: {
+        ...route.query,
         challengeId: response.challengeId,
         method: response.method || 'totp',
         methods: response.methods?.join(','),

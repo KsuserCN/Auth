@@ -38,17 +38,17 @@
         </div>
 
         <div v-else-if="state === 'needBind'" class="state-block need-bind">
-          <p class="state-title">完善 Ksuser 账号</p>
+          <p class="state-title">完成账号关联</p>
           <p class="state-description">
             该 {{ providerLabel }} 账号尚未关联 Ksuser。请选择绑定已有账号，或注册新账号后自动绑定。
           </p>
 
           <div class="bind-choice-actions">
             <el-button type="primary" class="wide-action" @click="goToBindLogin">
-              绑定已有账号
+              绑定已有 Ksuser 账号
             </el-button>
             <el-button class="wide-action" @click="goToRegisterBind">
-              注册新账号
+              注册并绑定 {{ providerLabel }} 账号
             </el-button>
           </div>
         </div>
@@ -110,6 +110,7 @@ import type {
 } from '@/api/auth'
 import { finalizeWebLogin } from '@/utils/desktopBridge'
 import { consumePostLoginRedirect } from '@/utils/postLoginRedirect'
+import { isAppleAccountBindingRequested } from '@/utils/appleAccountFlow'
 
 const router = useRouter()
 const route = useRoute()
@@ -343,7 +344,9 @@ const handleCallback = async () => {
           accessToken: loginResponse.accessToken,
           user: loginResponse.user,
         })
-        const postLoginTarget = consumePostLoginRedirect()
+        const postLoginTarget = isAppleAccountBindingRequested()
+          ? '/oauth/apple/continue?mode=bind'
+          : consumePostLoginRedirect()
         state.value = 'success'
         ElMessage.success(
           desktopSynced

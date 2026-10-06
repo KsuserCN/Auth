@@ -5,8 +5,8 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Ksuser" class="logo-icon" />
         </div>
-        <h1 class="login-title">创建账户</h1>
-        <p class="login-description">使用 Apple 身份开始您的安全之旅</p>
+        <h1 class="login-title">关联账号</h1>
+        <p class="login-description">将 Apple 身份与您的 Ksuser 账号关联</p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20"><Lock /></el-icon>
@@ -18,7 +18,7 @@
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20"><Key /></el-icon>
-            <span>无需设置密码</span>
+            <span>便捷登录</span>
           </div>
         </div>
       </aside>
@@ -27,73 +27,196 @@
         <div class="step-container">
           <div class="provider-label">
             <i class="fa-brands fa-apple" aria-hidden="true"></i>
-            <span>{{ ticket ? 'Apple 身份已验证' : '使用 Apple 注册' }}</span>
+            <span>Apple 账号关联</span>
           </div>
-          <h2 class="step-title">选择用户名</h2>
-          <p class="step-subtitle">留空则自动生成，也可以输入您喜欢的用户名。</p>
-
-          <el-alert
-            v-if="!ticket"
-            title="Apple 验证已过期，请返回注册页重新授权"
-            type="warning"
-            :closable="false"
-            class="expired-alert"
-          />
-
-          <el-form label-position="top" @submit.prevent="submit">
-            <el-form-item label="用户名（可选）">
-              <el-input
-                v-model="username"
-                maxlength="20"
-                placeholder="3-20 个字符，留空则自动生成"
-                autocomplete="username"
-                :disabled="!ticket"
-              />
-            </el-form-item>
-            <p class="field-hint">支持中文、字母、数字、下划线和连字符</p>
-
-            <el-checkbox v-model="acceptTerms" class="terms-checkbox" :disabled="!ticket">
-              我已阅读并同意服务协议与隐私政策
-            </el-checkbox>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="router.push('/register')">返回</el-button>
-              <el-button
-                class="next-btn"
-                native-type="submit"
-                :loading="loading"
-                :disabled="!ticket || !acceptTerms"
+          <template v-if="mode === 'choice'">
+            <h2 class="step-title">完成账号关联</h2>
+            <p class="step-subtitle">该 Apple 账号尚未绑定 Ksuser，请选择如何继续。</p>
+            <el-alert
+              v-if="!pending"
+              title="Apple 授权已过期，请返回登录页重新授权"
+              type="warning"
+              :closable="false"
+            />
+            <div v-else class="account-choices">
+              <el-button type="primary" @click="bindExisting">绑定已有 Ksuser 账号</el-button>
+              <p class="field-hint">保留您已有的资料与安全设置，登录后完成绑定。</p>
+              <el-button :disabled="!pending.canRegister" @click="mode = 'register'"
+                >注册并绑定 Apple 账号</el-button
               >
-                创建账户
-              </el-button>
+              <p v-if="pending.emailConflict" class="field-hint">
+                此 Apple 邮箱已有 Ksuser 账号，请登录并绑定已有账号。
+              </p>
+              <p v-else-if="!pending.canRegister" class="field-hint">
+                当前 Apple 身份只能绑定已有账号。
+              </p>
+              <p v-else class="field-hint">创建新账号，无需设置密码。</p>
             </div>
-          </el-form>
+            <el-button class="back-btn" @click="cancel">返回登录</el-button>
+          </template>
+
+          <template v-else-if="mode === 'bind'">
+            <h2 class="step-title">绑定 Apple 账号</h2>
+            <p class="step-subtitle">
+              已登录 Ksuser。请验证当前账号，并再次授权需要绑定的 Apple 身份。
+            </p>
+            <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
+            <div class="step-actions">
+              <el-button class="back-btn" @click="cancel">取消</el-button>
+              <el-button class="next-btn" :loading="loading" @click="beginBinding"
+                >验证并绑定 Apple</el-button
+              >
+            </div>
+          </template>
+
+          <template v-else>
+            <h2 class="step-title">选择用户名</h2>
+            <p class="step-subtitle">注册后自动绑定此 Apple 账号。用户名留空则自动生成。</p>
+            <el-alert
+              v-if="!ticket"
+              title="Apple 授权已过期，请返回登录页重新授权"
+              type="warning"
+              :closable="false"
+              class="expired-alert"
+            />
+
+            <el-form label-position="top" @submit.prevent="submit">
+              <el-form-item label="用户名（可选）">
+                <el-input
+                  v-model="username"
+                  maxlength="20"
+                  placeholder="3-20 个字符，留空则自动生成"
+                  autocomplete="username"
+                  :disabled="!ticket"
+                />
+              </el-form-item>
+              <p class="field-hint">支持中文、字母、数字、下划线和连字符</p>
+
+              <el-checkbox v-model="acceptTerms" class="terms-checkbox" :disabled="!ticket">
+                我已阅读并同意服务协议与隐私政策
+              </el-checkbox>
+
+              <div class="step-actions">
+                <el-button class="back-btn" :disabled="loading" @click="mode = 'choice'"
+                  >返回选择</el-button
+                >
+                <el-button
+                  class="next-btn"
+                  native-type="submit"
+                  :loading="loading"
+                  :disabled="!ticket || !acceptTerms"
+                >
+                  注册并绑定
+                </el-button>
+              </div>
+            </el-form>
+          </template>
         </div>
       </main>
     </div>
+    <SensitiveVerificationDialog v-model="verificationVisible" @success="completeBinding" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Key, Lightning, Lock } from '@element-plus/icons-vue'
-import { checkUsername, registerPendingApple } from '@/api/auth'
+import {
+  bindPendingApple,
+  checkSensitiveVerification,
+  checkUsername,
+  registerPendingApple,
+} from '@/api/auth'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+import { prepareAppleSignIn, signInWithApple } from '@/utils/appleSignIn'
+import { clearPendingAppleAccount, readPendingAppleAccount, requestAppleAccountBinding } from '@/utils/appleAccountFlow'
+import { getStoredAccessToken } from '@/utils/authSession'
 import { finalizeWebLogin } from '@/utils/desktopBridge'
 import { consumePostLoginRedirect } from '@/utils/postLoginRedirect'
 
 const router = useRouter()
+const route = useRoute()
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
   valueLight: 'light',
 })
-const ticket = ref(sessionStorage.getItem('apple_register_ticket') || '')
+const pending = ref(readPendingAppleAccount())
+const ticket = computed(() => (pending.value?.canRegister ? pending.value.token : ''))
+const mode = ref<'choice' | 'register' | 'bind'>(route.query.mode === 'bind' ? 'bind' : 'choice')
+const verificationVisible = ref(false)
+const errorMessage = ref('')
 const username = ref('')
 const acceptTerms = ref(false)
 const loading = ref(false)
+
+onMounted(() => {
+  void prepareAppleSignIn().catch(() => {})
+  if (mode.value === 'bind' && !getStoredAccessToken()) {
+    requestAppleAccountBinding()
+    void router.replace({ path: '/login', query: { oauthBindProvider: 'apple' } })
+  }
+})
+
+const bindExisting = async () => {
+  if (!pending.value) return
+  requestAppleAccountBinding()
+  await router.push({ path: '/login', query: { oauthBindProvider: 'apple' } })
+}
+
+const cancel = async () => {
+  clearPendingAppleAccount()
+  pending.value = null
+  await router.replace(
+    mode.value === 'bind' ? consumePostLoginRedirect() || '/home/overview' : '/login',
+  )
+}
+
+const beginBinding = async () => {
+  if (loading.value || verificationVisible.value) return
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const status = await checkSensitiveVerification()
+    if (status.verified) {
+      // Authorize from the button click after verification; the provider opens a popup.
+      loading.value = false
+      await completeBinding()
+    } else {
+      verificationVisible.value = true
+    }
+  } catch (error: unknown) {
+    errorMessage.value = error instanceof Error ? error.message : '安全验证暂时不可用，请重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+const completeBinding = async () => {
+  if (loading.value) return
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    // A login-purpose Apple ticket cannot be used for binding. Obtain a fresh,
+    // authenticated bind-purpose credential, as in the iOS flow.
+    const response = await signInWithApple('bind')
+    if (!response.needBind || !response.oauthBindToken)
+      throw new Error('Apple 绑定信息缺失，请重新授权')
+    await bindPendingApple(response.oauthBindToken)
+    clearPendingAppleAccount()
+    pending.value = null
+    ElMessage.success('Apple 账号绑定成功')
+    await router.replace(consumePostLoginRedirect() || '/home/overview')
+  } catch (error: unknown) {
+    errorMessage.value = error instanceof Error ? error.message : 'Apple 绑定失败，请重试'
+    ElMessage.error(errorMessage.value)
+  } finally {
+    loading.value = false
+  }
+}
 
 const submit = async () => {
   if (!ticket.value || !acceptTerms.value || loading.value) return
@@ -101,31 +224,38 @@ const submit = async () => {
   let ticketSubmitted = false
   try {
     const requestedUsername = username.value.trim()
-    if (requestedUsername && (!/^[a-zA-Z0-9_\-\u4e00-\u9fa5]{3,20}$/.test(requestedUsername) || !await checkUsername(requestedUsername))) {
+    if (
+      requestedUsername &&
+      (!/^[a-zA-Z0-9_\-\u4e00-\u9fa5]{3,20}$/.test(requestedUsername) ||
+        !(await checkUsername(requestedUsername)))
+    ) {
       throw new Error('用户名格式无效或已被使用，请修改后重试')
     }
     ticketSubmitted = true
     const result = await registerPendingApple(ticket.value, acceptTerms.value, requestedUsername)
-    sessionStorage.removeItem('apple_register_ticket')
-    ticket.value = ''
+    clearPendingAppleAccount()
+    pending.value = null
     if ('challengeId' in result) {
-      await router.replace({ path: '/login', query: {
-        challengeId: result.challengeId,
-        method: result.method,
-        methods: result.methods?.join(','),
-        mfaFrom: 'apple',
-      } })
+      await router.replace({
+        path: '/login',
+        query: {
+          challengeId: result.challengeId,
+          method: result.method,
+          methods: result.methods?.join(','),
+          mfaFrom: 'apple',
+        },
+      })
       return
     }
     await finalizeWebLogin({ accessToken: result.accessToken, user: result.user })
-    ElMessage.success('Apple 账号创建成功')
+    ElMessage.success('注册成功，Apple 账号已绑定')
     await router.replace(consumePostLoginRedirect() || '/home/overview')
   } catch (error: unknown) {
     if (ticketSubmitted) {
       // The Apple ticket is single use. A failed attempt requires fresh authorization.
-      sessionStorage.removeItem('apple_register_ticket')
-      ticket.value = ''
-      ElMessage.error('注册失败，请返回注册页重新进行 Apple 授权')
+      clearPendingAppleAccount()
+      pending.value = null
+      ElMessage.error('注册失败，请返回登录页重新进行 Apple 授权')
     } else {
       ElMessage.error(error instanceof Error ? error.message : '请检查用户名后重试')
     }
@@ -238,6 +368,22 @@ const submit = async () => {
 
 .step-container {
   width: 100%;
+}
+
+.account-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.account-choices :deep(.el-button) {
+  margin-left: 0;
+  min-height: 44px;
+}
+
+.account-choices .field-hint {
+  margin-bottom: 8px;
 }
 
 .provider-label {
