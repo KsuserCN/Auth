@@ -9,8 +9,8 @@ enum MainDestination: String, CaseIterable, Identifiable {
 }
 
 private enum ChallengeSheet: Identifiable {
-    case mfa(MFAChallenge), oauth(PendingOAuth), sensitive(SensitiveRequest), qr(QRConfirmation), bridge(BridgeConfirmation)
-    var id: String { switch self { case .mfa(let x): "mfa-" + x.id; case .oauth(let x): "oauth-" + x.id; case .sensitive(let x): "sensitive-" + x.id.uuidString; case .qr(let x): "qr-" + x.id; case .bridge(let x): "bridge-" + x.id } }
+    case mfa(MFAChallenge), oauth(PendingOAuth), sensitive(SensitiveRequest), qr(QRConfirmation), bridge(BridgeConfirmation), application(MobileAuthorizationContext)
+    var id: String { switch self { case .mfa(let x): "mfa-" + x.id; case .oauth(let x): "oauth-" + x.id; case .sensitive(let x): "sensitive-" + x.id.uuidString; case .qr(let x): "qr-" + x.id; case .bridge(let x): "bridge-" + x.id; case .application(let x): "application-" + x.id } }
 }
 
 struct ContentView: View {
@@ -32,6 +32,7 @@ struct ContentView: View {
             if let x = model.mfaChallenge { return .mfa(x) }
             if let x = model.qrConfirmation { return .qr(x) }
             if let x = model.bridgeConfirmation, model.isAuthenticated { return .bridge(x) }
+            if let x = model.mobileAuthorization, model.isAuthenticated { return .application(x) }
             if let x = model.pendingOAuth { return .oauth(x) }
             return nil
         }, set: { if $0 == nil { cancelChallenge(id: presentedChallengeID) } })
@@ -50,13 +51,14 @@ struct ContentView: View {
         }) { sheet in
             AppNavigationStack {
                 switch sheet {
+                case .application(let x): ApplicationConsentView(context: x)
                 case .mfa(let x): MFAVerificationView(challenge: x)
                 case .oauth(let x): PendingOAuthView(pending: x)
                 case .sensitive(let x): SensitiveVerificationView(request: x)
                 case .qr(let x): QRConfirmationView(confirmation: x)
                 case .bridge(let x): BridgeConfirmationView(confirmation: x, onReturn: { pendingBrowserPage = BrowserPage(url: $0) })
                 }
-            }.presentationDragIndicator(.visible).onAppear { presentedChallengeID = sheet.id }
+            }.presentationDragIndicator(.visible).interactiveDismissDisabled(model.mobileAuthorization != nil).onAppear { presentedChallengeID = sheet.id }
         }
         .background { SafariPresenter(page: $browserPage).frame(width: 0, height: 0) }
         .sheet(isPresented: $showScanner) {
@@ -80,6 +82,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: AppDelegate.pushOpenedNotification)) { _ in openPendingPush() }
         .onChange(of: model.user?.uuid) { _, _ in openPendingPush() }
+        .task(id: model.user?.uuid) { await model.loadMobileAuthorization() }
         .onChange(of: model.serviceAvailability.isUnavailable) { _, unavailable in
             guard unavailable else { return }
             showScanner = false
@@ -172,6 +175,7 @@ struct ContentView: View {
         if let item = model.mfaChallenge, id == "mfa-" + item.id { model.cancelMFA() }
         else if let item = model.qrConfirmation, id == "qr-" + item.id { model.dismissQR() }
         else if let item = model.bridgeConfirmation, id == "bridge-" + item.id { Task { await model.cancelBridge() } }
+        else if let item = model.mobileAuthorization, id == "application-" + item.id { model.dismissMobileAuthorization() }
         else if let item = model.pendingOAuth, id == "oauth-" + item.id { model.cancelPendingOAuth() }
     }
 

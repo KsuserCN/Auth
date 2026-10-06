@@ -121,6 +121,11 @@ const router = createRouter({
       component: () => import('../views/MobileBridgeLaunchView.vue'),
     },
     {
+      path: '/app/authorize-return',
+      name: 'mobile-authorization-return',
+      component: () => import('../views/MobileAuthorizationReturnView.vue'),
+    },
+    {
       path: '/oauth/authorize',
       name: 'oauth-authorize',
       component: () => import('../views/OAuthAuthorizeView.vue'),

@@ -13,6 +13,27 @@ import XCTest
         return app
     }
 
+    func testApplicationConsentShowsMetadataScopesAndDuration() {
+        let app = launch(authenticated: true, arguments: ["--ui-test-application-consent"])
+        XCTAssertTrue(app.navigationBars["应用授权"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["校园日历"].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["support@calendar.example.invalid"].exists)
+        XCTAssertTrue(app.buttons["applicationConsentApprove"].exists)
+        XCTAssertTrue(app.buttons["applicationConsentDeny"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Application consent light"; screenshot.lifetime = .keepAlways; add(screenshot)
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["读取你的邮箱地址"].exists)
+        XCTAssertTrue(app.staticTexts["ios_test_user"].exists)
+        app.swipeUp()
+        app.buttons["限时"].tap()
+        let duration = app.descendants(matching: .any)["applicationConsentDuration"].firstMatch
+        XCTAssertTrue(duration.waitForExistence(timeout: 5))
+        XCTAssertTrue(duration.label.contains("1") || (duration.value as? String)?.contains("1") == true)
+        let detail = XCTAttachment(screenshot: app.screenshot())
+        detail.name = "Application consent duration"; detail.lifetime = .keepAlways; add(detail)
+    }
+
     func testNotificationTargetAtColdLaunchOpensMatchingLogDetail() {
         let app = launch(authenticated: true, arguments: ["--ui-test-push-log"])
         XCTAssertTrue(app.navigationBars["日志详情"].waitForExistence(timeout: 10))

@@ -470,6 +470,41 @@ final class CoreTests: XCTestCase {
         let apps = try await model.authorizedApps()
         XCTAssertEqual(apps.ksuserApps.map(\.clientId), ["campus"])
     }
+    func testMobileAuthorizationLinksRejectUntrustedHostsAndMalformedTickets() {
+        let ticket = String(repeating: "a", count: 32)
+        XCTAssertEqual(MobileAuthorizationLink.ticket(from: URL(string: "ksuserauth://authorize?ticket=" + ticket)!, environment: environment), ticket)
+        XCTAssertNil(MobileAuthorizationLink.ticket(from: URL(string: "https://evil.example/app/authorize?ticket=" + ticket)!, environment: environment))
+        XCTAssertNil(MobileAuthorizationLink.ticket(from: URL(string: "ksuserauth://authorize?ticket=invalid")!, environment: environment))
+        XCTAssertNil(MobileAuthorizationLink.ticket(from: URL(string: "ksuserauth://authorize?ticket=\(ticket)&ticket=\(ticket)")!, environment: environment))
+        let validReturn = environment.webURL.absoluteString + "/app/authorize-return#ticket=\(ticket)&secret=\(ticket)"
+        XCTAssertNotNil(MobileAuthorizationLink.browserReturn(validReturn, environment: environment))
+        XCTAssertNil(MobileAuthorizationLink.browserReturn("https://evil.example/app/authorize-return#ticket=\(ticket)&secret=\(ticket)", environment: environment))
+        XCTAssertNil(MobileAuthorizationLink.browserReturn(environment.webURL.absoluteString + "/login", environment: environment))
+    }
+    @MainActor func testMobileAuthorizationWaitsForLoginThenUsesCurrentAccount() async throws {
+        let transport = FixtureTransport(mode: .mobileAuthorization)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "current-access")), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        let ticket = String(repeating: "a", count: 32)
+        await model.handleURL(URL(string: "ksuserauth://authorize?ticket=" + ticket)!)
+        XCTAssertEqual(model.pendingMobileAuthorizationTicket, ticket)
+        XCTAssertNil(model.mobileAuthorization)
+        model.user = UserProfile(uuid: "current", username: "current", email: "current@example.invalid")
+        await model.loadMobileAuthorization()
+        XCTAssertEqual(model.mobileAuthorization?.appName, "校园日历")
+        XCTAssertEqual(model.mobileAuthorization?.requestedScopes, ["openid", "profile", "email"])
+        let result = await model.decideMobileAuthorization(approve: true, mode: "TIME_LIMITED", ttl: 3600)
+        XCTAssertNotNil(result)
+        let captured = await transport.lastMutation
+        let request = try XCTUnwrap(captured)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer current-access")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "X-XSRF-TOKEN"), "csrf-fixture")
+        let body = try JSONDecoder().decode([String: JSONValue].self, from: XCTUnwrap(request.httpBody))
+        XCTAssertEqual(body["ticket"], .string(ticket))
+        XCTAssertEqual(body["grantMode"], .string("TIME_LIMITED"))
+        XCTAssertEqual(body["grantTtlSeconds"], .number(3600))
+        XCTAssertNil(body["redirectUri"])
+    }
 }
 
 private actor LoadingGateTransport: HTTPTransport {
@@ -494,7 +529,7 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
@@ -514,6 +549,14 @@ private actor FixtureTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let path = request.url!.path
         if path == "/auth/csrf-token" { return response(request, 200, #"{"code":200,"data":{"csrfToken":"csrf-fixture"}}"#, cookie: "XSRF-TOKEN=csrf-fixture; Path=/; Secure; SameSite=Lax") }
+        if mode == .mobileAuthorization {
+            let ticket = String(repeating: "a", count: 32)
+            if path == "/auth/mobile-authorization/context" {
+                return response(request, 200, "{\"code\":200,\"data\":{\"ticket\":\"\(ticket)\",\"appName\":\"校园日历\",\"contactInfo\":\"help@example.invalid\",\"redirectUri\":\"https://calendar.example.invalid/callback\",\"requestedScopes\":[\"openid\",\"profile\",\"email\"],\"alreadyAuthorized\":false,\"existingGrantMode\":\"PERSISTENT\",\"expiresInSeconds\":300}}")
+            }
+            lastMutation = request
+            return response(request, 200, "{\"code\":200,\"data\":{\"returnUrl\":\"https://auth.ksuser.cn/app/authorize-return#ticket=\(ticket)&secret=\(ticket)\"}}")
+        }
         if mode == .normalizedInput {
             inputRequests.append(request)
             if path == "/auth/check-username" { return response(request, 200, #"{"code":200,"data":{"exists":false}}"#) }

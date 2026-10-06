@@ -18,6 +18,12 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
+			<string>cn.ksuser.auth.authorization</string>
+			<key>CFBundleURLSchemes</key>
+			<array><string>ksuserauth</string></array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
 			<string>cn.ksuser.auth.qq</string>
 			<key>CFBundleURLSchemes</key>
 			<array>

@@ -35,6 +35,11 @@ struct LoadingActivity: Identifiable {
     var qqBound = false
     var qrConfirmation: QRConfirmation?
     var bridgeConfirmation: BridgeConfirmation?
+    var mobileAuthorization: MobileAuthorizationContext?
+    var pendingMobileAuthorizationTicket: String?
+    var pendingMobileAuthorizationReturnBrowser = MobileAuthorizationReturnBrowser.system
+    private var mobileAuthorizationLoading = false
+    private var mobileAuthorizationExpiresAt: Date?
     var recoveryTicket: AccountRecoveryTicket?
     var recoveryTicketExpiresAt: Date?
     var settings: UserSettings { user?.settings ?? UserSettings() }
@@ -470,7 +475,41 @@ struct LoadingActivity: Identifiable {
         }
     }
     func dismissQR() { qrConfirmation = nil; pendingRawQRCode = nil }
+    func loadMobileAuthorization() async {
+        guard isAuthenticated, let ticket = pendingMobileAuthorizationTicket, !mobileAuthorizationLoading else { return }
+        mobileAuthorizationLoading = true
+        defer { mobileAuthorizationLoading = false }
+        await run {
+            let context = try await self.repository.mobileAuthorization(ticket)
+            guard self.pendingMobileAuthorizationTicket == ticket else { return }
+            guard context.expiresInSeconds > 0 else { throw APIError.server(410, "授权请求已过期") }
+            self.mobileAuthorization = context
+            self.mobileAuthorizationExpiresAt = Date().addingTimeInterval(Double(context.expiresInSeconds))
+        }
+    }
+    func decideMobileAuthorization(approve: Bool, mode: String, ttl: Int) async -> URL? {
+        guard let context = mobileAuthorization, isAuthenticated else { return nil }
+        var browserURL: URL?
+        await run {
+            guard let expires = self.mobileAuthorizationExpiresAt, expires > Date() else { throw APIError.server(410, "授权请求已过期，请返回网页重新发起") }
+            let result = try await self.repository.decideMobileAuthorization(context.ticket, approve: approve, mode: mode, ttl: ttl)
+            guard let url = MobileAuthorizationLink.browserReturn(result.returnUrl, environment: self.environment) else { throw APIError.invalidResponse }
+            browserURL = url
+        }
+        return browserURL
+    }
+    func dismissMobileAuthorization() {
+        mobileAuthorization = nil; pendingMobileAuthorizationTicket = nil; pendingMobileAuthorizationReturnBrowser = .system; mobileAuthorizationExpiresAt = nil
+    }
     func handleURL(_ url: URL) async {
+        if let ticket = MobileAuthorizationLink.ticket(from: url, environment: environment) {
+            guard pendingMobileAuthorizationTicket == nil || pendingMobileAuthorizationTicket == ticket else { errorMessage = "请先完成当前授权请求"; return }
+            pendingMobileAuthorizationTicket = ticket
+            pendingMobileAuthorizationReturnBrowser = MobileAuthorizationLink.returnBrowser(from: url)
+            if isAuthenticated { await loadMobileAuthorization() }
+            else { noticeMessage = "请先登录，登录后将继续应用授权" }
+            return
+        }
         guard url.scheme == "https", url.host?.lowercased() == environment.webURL.host?.lowercased(), url.path == "/app/bridge-login" else { return }
         guard let challenge = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "challengeId" })?.value, !challenge.isEmpty else { errorMessage = "网页登录请求参数缺失"; return }
         await run {
@@ -560,6 +599,7 @@ struct LoadingActivity: Identifiable {
     }
     private func clearUserState() {
         pushNotifications.signOut()
+        mobileAuthorization = nil; mobileAuthorizationExpiresAt = nil
         authGeneration += 1; user = nil; mfaChallenge = nil; authenticationRepository = nil; pendingOAuth = nil
         sensitiveRequest = nil; sensitiveContinuation = nil; bindingAfterAuthentication = false
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; qqBound = false; totpSetup = nil
@@ -602,6 +642,10 @@ struct LoadingActivity: Identifiable {
     #if DEBUG
     private func configureUITestFixture() {
         user = UserProfile(uuid: "ui-fixture-only", username: "ios_test_user", email: "ios.fixture@example.invalid", realName: "体验账号", region: "上海", bio: "这个账号只用于本地界面测试", settings: UserSettings(mfaEnabled: true), hasPassword: true, appleBound: true)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-application-consent") {
+            mobileAuthorization = MobileAuthorizationContext(ticket: String(repeating: "a", count: 32), appName: "校园日历", logoUrl: nil, contactInfo: "support@calendar.example.invalid", redirectUri: "https://calendar.example.invalid/callback", requestedScopes: ["openid", "profile", "email"], alreadyAuthorized: false, existingGrantMode: "PERSISTENT", expiresInSeconds: 300)
+            mobileAuthorizationExpiresAt = Date().addingTimeInterval(300)
+        }
         appleBound = true
         passkeys = [PasskeyListItem(id: 1, name: "iPhone", transports: "internal", lastUsedAt: "2026-10-04T10:00:00", createdAt: "2026-10-01T10:00:00")]
         totpStatus = TotpStatus(enabled: true, recoveryCodesCount: 8)

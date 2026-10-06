@@ -9,7 +9,7 @@
   .consent-container,
   .oauth-callback-page,
   .bridge-launch {
-    min-height: 100dvh !important;
+    min-height: calc(100dvh - var(--global-banner-height, 0px)) !important;
     padding: 0 !important;
     align-items: stretch !important;
     justify-content: flex-start !important;

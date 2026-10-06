@@ -35,6 +35,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    // This API still uses Jackson 2 (com.fasterxml.*); Boot 4 keeps its auto-configuration in this module.
+    implementation 'org.springframework.boot:spring-boot-jackson2'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
     implementation 'io.github.cdimascio:dotenv-java:3.0.0'

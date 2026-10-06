@@ -1,6 +1,31 @@
 <template>
   <div class="consent-container" :class="{ dark: isDark }">
-    <div v-if="loading || autoRedirecting" class="consent-box consent-box--loading">
+    <div v-if="mobileWaiting" class="consent-box consent-box--loading consent-box--mobile-handoff">
+      <div class="loading-stage loading-stage--mobile-handoff">
+        <div class="brand-line">
+          <img src="/favicon.ico" alt="Ksuser" class="brand-logo" /><span class="brand-text"
+            >Ksuser 安全授权</span
+          >
+        </div>
+        <div class="loading-card loading-card--mobile-handoff">
+          <h1 class="loading-title">在 Ksuser安全 App 中继续授权</h1>
+          <p class="loading-description">
+            请在 App 中查看应用信息与授权范围，完成后会自动返回网页。
+          </p>
+          <p v-if="mobileError" class="loading-description" role="alert">{{ mobileError }}</p>
+          <div class="consent-actions mobile-consent-actions">
+            <el-button type="primary" @click="openMobileApp">打开 Ksuser App</el-button>
+            <el-button @click="completeMobileAuthorization">已在 App 完成，继续</el-button>
+            <el-button :loading="mobileFallingBack" @click="continueInBrowser"
+              >继续网页授权</el-button
+            >
+          </div>
+          <p class="loading-description">如返回浏览器错误，请使用默认浏览器授权</p>
+          <p class="loading-description">未安装App或未能打开时，可以继续使用网页</p>
+        </div>
+      </div>
+    </div>
+    <div v-else-if="loading || autoRedirecting" class="consent-box consent-box--loading">
       <div class="loading-stage">
         <div class="brand-line">
           <img src="/favicon.ico" alt="Ksuser" class="brand-logo" />
@@ -9,7 +34,12 @@
 
         <div class="loading-card">
           <div v-if="context" class="loading-app">
-            <img v-if="context.logoUrl" :src="context.logoUrl" :alt="context.appName" class="loading-app-logo" />
+            <img
+              v-if="context.logoUrl"
+              :src="context.logoUrl"
+              :alt="context.appName"
+              class="loading-app-logo"
+            />
             <div v-else class="loading-app-logo loading-app-logo-fallback">
               {{ context.appName.slice(0, 1).toUpperCase() }}
             </div>
@@ -19,9 +49,13 @@
           <el-icon class="loading-spinner" :size="34">
             <Loading />
           </el-icon>
-          <div class="loading-title">{{ autoRedirecting ? '已完成授权，正在继续…' : '正在准备授权信息…' }}</div>
+          <div class="loading-title">
+            {{ autoRedirecting ? '已完成授权，正在继续…' : '正在准备授权信息…' }}
+          </div>
           <div class="loading-description">
-            {{ autoRedirecting ? '请稍候，页面会自动回到应用。' : '正在校验应用信息与当前登录状态。' }}
+            {{
+              autoRedirecting ? '请稍候，页面会自动回到应用。' : '正在校验应用信息与当前登录状态。'
+            }}
           </div>
         </div>
       </div>
@@ -38,7 +72,12 @@
         <div class="left-body">
           <div v-if="context" class="app-header">
             <div class="app-logo-box">
-              <img v-if="context.logoUrl" :src="context.logoUrl" :alt="context.appName" class="app-logo" />
+              <img
+                v-if="context.logoUrl"
+                :src="context.logoUrl"
+                :alt="context.appName"
+                class="app-logo"
+              />
               <div v-else class="app-logo app-logo-fallback">
                 {{ context.appName.slice(0, 1).toUpperCase() }}
               </div>
@@ -46,7 +85,9 @@
             <div class="app-meta">
               <h1 class="app-name">{{ context.appName }}</h1>
               <p class="app-subtitle">{{ leftSubtitle }}</p>
-              <p v-if="context.contactInfo" class="app-support">联系方式：{{ context.contactInfo }}</p>
+              <p v-if="context.contactInfo" class="app-support">
+                联系方式：{{ context.contactInfo }}
+              </p>
             </div>
           </div>
 
@@ -60,7 +101,10 @@
             </div>
           </div>
 
-          <div v-if="context && user && !loading && !autoRedirecting && !errorMessage" class="permission-box">
+          <div
+            v-if="context && user && !loading && !autoRedirecting && !errorMessage"
+            class="permission-box"
+          >
             <div class="permission-title">将允许该应用：</div>
             <ul class="permission-list">
               <li v-for="item in permissionItems" :key="item">{{ item }}</li>
@@ -100,7 +144,9 @@
           <div class="grant-policy-card">
             <div class="grant-policy-header">
               <div class="grant-policy-title">授权方式</div>
-              <div class="grant-policy-subtitle">默认保持长期授权，也可切换为一次性或限时授权。</div>
+              <div class="grant-policy-subtitle">
+                默认保持长期授权，也可切换为一次性或限时授权。
+              </div>
             </div>
 
             <div v-if="context.alreadyAuthorized && hasConsentPrompt" class="grant-policy-banner">
@@ -138,13 +184,19 @@
 
           <div class="consent-actions">
             <el-button class="consent-secondary-btn" @click="handleDeny">拒绝</el-button>
-            <el-button class="consent-primary-btn" type="primary" :loading="approving" @click="handleApprove">
+            <el-button
+              class="consent-primary-btn"
+              type="primary"
+              :loading="approving"
+              @click="handleApprove"
+            >
               同意
             </el-button>
           </div>
 
           <div class="right-note">
-            点击“同意”即表示允许 <span class="right-note-app">{{ context.appName }}</span> 使用您的 Ksuser 账号继续。
+            点击“同意”即表示允许 <span class="right-note-app">{{ context.appName }}</span> 使用您的
+            Ksuser 账号继续。
           </div>
         </div>
 
@@ -152,8 +204,15 @@
           <div class="state-panel">
             <template v-if="desktopBridgeUser">
               <p class="unauth-title">检测到桌面端已登录</p>
-              <button class="account-row account-row--active account-row--desktop-bridge" type="button">
-                <el-avatar :size="44" :src="desktopBridgeUser.avatarUrl || undefined" class="account-avatar">
+              <button
+                class="account-row account-row--active account-row--desktop-bridge"
+                type="button"
+              >
+                <el-avatar
+                  :size="44"
+                  :src="desktopBridgeUser.avatarUrl || undefined"
+                  class="account-avatar"
+                >
                   {{ desktopBridgeUser.username?.slice(0, 1)?.toUpperCase() }}
                 </el-avatar>
                 <div class="account-meta">
@@ -177,13 +236,17 @@
                 >
                   使用该账号继续
                 </el-button>
-                <el-button class="consent-secondary-btn" @click="switchAccount">使用其他账号登录</el-button>
+                <el-button class="consent-secondary-btn" @click="switchAccount"
+                  >使用其他账号登录</el-button
+                >
               </div>
             </template>
 
             <template v-else>
               <p class="unauth-title">当前浏览器尚未登录</p>
-              <p class="unauth-description">请先登录后再完成授权，或打开桌面端后刷新页面自动检测登录状态。</p>
+              <p class="unauth-description">
+                请先登录后再完成授权，或打开桌面端后刷新页面自动检测登录状态。
+              </p>
               <div class="consent-actions">
                 <el-button class="consent-primary-btn" type="primary" @click="switchAccount">
                   登录账号
@@ -198,21 +261,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CircleCloseFilled, Loading } from '@element-plus/icons-vue'
+import {
+  isIOSAuthorizationSupported,
+  launchMobileAuthorization,
+  createMobileAuthorization,
+  consumeMobileAuthorization,
+  cancelMobileAuthorization,
+  continueMobileAuthorization,
+  type MobileAuthorizationTicket,
+} from '@/utils/mobileAuthorization'
 import { logout } from '@/api/auth'
 import {
   approveOAuth2Authorize,
   getOAuth2AuthorizeContext,
   type AuthorizationGrantMode,
 } from '@/api/oauth2'
-import {
-  approveSSOAuthorize,
-  getSSOAuthorizeContext,
-} from '@/api/sso'
+import { approveSSOAuthorize, getSSOAuthorizeContext } from '@/api/sso'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { clearAuthSession, getStoredAccessToken } from '@/utils/authSession'
@@ -246,6 +315,49 @@ const router = useRouter()
 const userStore = useUserStore()
 const { user } = storeToRefs(userStore)
 
+const mobileWaiting = ref(false)
+const mobileFallingBack = ref(false)
+const mobileError = ref('')
+let mobileTicket: MobileAuthorizationTicket | null = null
+let mobileDisposed = false
+let mobileExpiresAt = 0
+const openMobileApp = () => {
+  if (mobileTicket) launchMobileAuthorization(mobileTicket)
+}
+const completeMobileAuthorization = async () => {
+  if (!mobileTicket || mobileDisposed || !mobileWaiting.value) return
+  try {
+    if (!continueMobileAuthorization(await consumeMobileAuthorization(mobileTicket)))
+      mobileError.value = '请先在 Ksuser App 中完成授权。'
+  } catch (e) {
+    mobileError.value = e instanceof Error ? e.message : '无法获取授权结果，请返回原应用重试。'
+    return
+  }
+}
+const continueInBrowser = async () => {
+  if (!mobileTicket || mobileFallingBack.value) return
+  mobileFallingBack.value = true
+  try {
+    // Cancel the app request before enabling browser consent to avoid two concurrent grants.
+    if (Date.now() < mobileExpiresAt) {
+      if (continueMobileAuthorization(await consumeMobileAuthorization(mobileTicket))) return
+      await cancelMobileAuthorization(mobileTicket)
+    }
+    mobileWaiting.value = false
+    await router.replace({
+      path: route.path,
+      query: { ...route.query, iosAuthorizationFallback: '1' },
+    })
+    await loadContext()
+  } catch (e) {
+    mobileError.value = e instanceof Error ? e.message : '授权已提交，请等待结果。'
+  } finally {
+    mobileFallingBack.value = false
+  }
+}
+onUnmounted(() => {
+  mobileDisposed = true
+})
 const loading = ref(true)
 const approving = ref(false)
 const desktopSigningIn = ref(false)
@@ -494,6 +606,28 @@ const loadContext = async () => {
   try {
     await loadAuthorizeContext()
 
+    if (
+      isIOSAuthorizationSupported() &&
+      !mobileTicket &&
+      route.query.iosAuthorizationFallback !== '1'
+    ) {
+      try {
+        const authorization = { ...requestParams.value }
+        delete authorization.prompt
+        mobileTicket = await createMobileAuthorization(mode.value, {
+          ...authorization,
+          responseType: 'code',
+        })
+        if (mobileDisposed) return
+        mobileExpiresAt = Date.now() + mobileTicket.expiresInSeconds * 1000
+        mobileWaiting.value = true
+        openMobileApp()
+        return
+      } catch {
+        /* Keep browser consent available when app handoff cannot be created. */
+      }
+    }
+
     const authenticated = await ensureAuthenticated()
     if (!authenticated) {
       await refreshDesktopBridgeStatus()
@@ -687,6 +821,18 @@ onMounted(() => {
   backdrop-filter: blur(10px);
   border: 1px solid var(--el-border-color-light);
   overflow: hidden;
+}
+
+.mobile-consent-actions {
+  flex-direction: column;
+  max-width: 320px;
+}
+
+.mobile-consent-actions :deep(.el-button) {
+  margin-left: 0;
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
 }
 
 .consent-box--loading {
@@ -1241,6 +1387,10 @@ onMounted(() => {
     flex-direction: column-reverse;
   }
 
+  .mobile-consent-actions {
+    flex-direction: column;
+  }
+
   .consent-primary-btn,
   .consent-secondary-btn {
     width: 100%;
@@ -1252,6 +1402,37 @@ onMounted(() => {
 
   .loading-card {
     min-height: 420px;
+  }
+
+  .loading-stage--mobile-handoff {
+    box-sizing: border-box;
+    padding: max(24px, env(safe-area-inset-top)) 20px max(32px, env(safe-area-inset-bottom));
+  }
+
+  .loading-stage--mobile-handoff .brand-line {
+    justify-content: center;
+  }
+
+  .loading-card--mobile-handoff {
+    flex: 0 1 auto;
+    width: min(460px, 100%);
+    min-height: 0;
+    margin: 36px auto 0;
+    gap: 16px;
+  }
+
+  .loading-card--mobile-handoff .loading-title {
+    margin: 0;
+    font-size: clamp(20px, 5vw, 24px);
+    line-height: 1.4;
+  }
+
+  .loading-card--mobile-handoff .loading-description {
+    margin: 0;
+  }
+
+  .loading-card--mobile-handoff .mobile-consent-actions {
+    margin-top: 8px;
   }
 }
 
