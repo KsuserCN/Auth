@@ -44,6 +44,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.6'
           channel: stable
           cache: true
 
@@ -59,9 +60,24 @@ jobs:
       - name: Test
         run: flutter test
 
-      - name: Build macOS
+      - name: Configure macOS Release build
         if: matrix.platform == 'macos'
-        run: flutter build macos --release
+        run: flutter build macos --release --config-only
+
+      - name: Build macOS unsigned Release
+        if: matrix.platform == 'macos'
+        run: |
+          xcodebuild \
+            -project macos/Runner.xcodeproj \
+            -scheme Runner \
+            -configuration Release \
+            -derivedDataPath build/macos \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build
 
       - name: Archive macOS app
         if: matrix.platform == 'macos'
