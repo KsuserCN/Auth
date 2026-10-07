@@ -180,11 +180,8 @@ npm run dev:web
 
 仓库当前按模块拆分了 GitHub Actions：
 
-- `.github/workflows/build-api.yml`
-- `.github/workflows/build-web.yml`
 - `.github/workflows/build-desktop.yml`
 - `.github/workflows/build-mobile-android.yml`
-- `.github/workflows/build-mobile-ios.yml`
 
 这些工作流会在对应目录变更时触发，也支持手动触发。
 
