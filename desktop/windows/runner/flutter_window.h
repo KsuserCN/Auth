@@ -2,7 +2,9 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/encodable_value.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -25,6 +27,12 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  bool MoveToTray();
+  bool AddTrayIcon();
+  void RemoveTrayIcon();
+  void ShowFromTray();
+  void ShowTrayMenu();
+
   // The project to run.
   flutter::DartProject project_;
 
@@ -36,6 +44,14 @@ class FlutterWindow : public Win32Window {
 
   // Windows system local-auth bridge exposed to Flutter.
   std::unique_ptr<runner::LocalAuthBridge> local_auth_bridge_;
+
+  // Native system tray controls used to keep the authenticated session alive.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      window_control_channel_;
+  UINT taskbar_created_message_ = 0;
+  HWND tray_icon_window_ = nullptr;
+  bool tray_icon_added_ = false;
+  bool is_in_tray_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

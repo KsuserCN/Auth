@@ -293,6 +293,10 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
       useMaterial3: true,
       colorScheme: scheme,
       brightness: brightness,
+      fontFamily: Platform.isWindows ? 'Microsoft YaHei UI' : null,
+      fontFamilyFallback: Platform.isWindows
+          ? const <String>['Microsoft YaHei', 'Segoe UI']
+          : null,
       visualDensity: _controller.compactMode
           ? const VisualDensity(horizontal: -2, vertical: -2)
           : VisualDensity.standard,
@@ -757,23 +761,29 @@ const MethodChannel _windowControlChannel = MethodChannel(
 );
 
 class DesktopWindowPlatform {
-  static bool get supportsMoveToMenuBar => Platform.isMacOS;
+  static bool get supportsMoveToSystemTray =>
+      Platform.isMacOS || Platform.isWindows;
 
-  static Future<void> moveToMenuBar() async {
-    if (!supportsMoveToMenuBar) {
+  static String get moveToSystemTrayLabel =>
+      Platform.isWindows ? '收起到托盘' : '收起到菜单栏';
+
+  static Future<void> moveToSystemTray() async {
+    if (!supportsMoveToSystemTray) {
       return;
     }
     try {
       final bool ok =
-          await _windowControlChannel.invokeMethod<bool>('moveToMenuBar') ??
+          await _windowControlChannel.invokeMethod<bool>(
+            Platform.isWindows ? 'moveToTray' : 'moveToMenuBar',
+          ) ??
           false;
       if (!ok) {
-        throw ApiException('窗口收起到菜单栏失败');
+        throw ApiException('窗口收起失败');
       }
     } on PlatformException catch (error) {
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
-          : '窗口收起到菜单栏失败';
+          : '窗口收起失败';
       throw ApiException(message);
     }
   }
@@ -4206,6 +4216,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           label: const Text('登录'),
                         ),
                       ),
+                      if (!AppleLoginPlatform.isAvailable)
+                        SizedBox(height: sectionGap),
                       if (AppleLoginPlatform.isAvailable) ...<Widget>[
                         SizedBox(height: sectionGap),
                         Row(
@@ -4498,8 +4510,8 @@ class DesktopWorkspace extends StatelessWidget {
         : const Color(0xFF756A55);
     final bool supportsProtectedMobileBridge =
         LocalAuthPlatform.supportsProtectedActions;
-    final bool supportsMoveToMenuBar =
-        DesktopWindowPlatform.supportsMoveToMenuBar;
+    final bool supportsMoveToSystemTray =
+        DesktopWindowPlatform.supportsMoveToSystemTray;
 
     return Scaffold(
       body: SafeArea(
@@ -5209,13 +5221,15 @@ class DesktopWorkspace extends StatelessWidget {
                               },
                               icon: const Icon(Icons.settings_rounded),
                             ),
-                            if (supportsMoveToMenuBar) ...<Widget>[
+                            if (supportsMoveToSystemTray) ...<Widget>[
                               const SizedBox(width: 8),
                               IconButton(
-                                tooltip: '收起到菜单栏',
+                                tooltip: DesktopWindowPlatform
+                                    .moveToSystemTrayLabel,
                                 onPressed: () async {
                                   try {
-                                    await DesktopWindowPlatform.moveToMenuBar();
+                                    await DesktopWindowPlatform
+                                        .moveToSystemTray();
                                   } catch (error) {
                                     if (context.mounted) {
                                       showAppMessage(

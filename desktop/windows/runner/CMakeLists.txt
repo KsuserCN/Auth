@@ -37,6 +37,7 @@ target_compile_options(${BINARY_NAME} PRIVATE /utf-8)
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
+target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "onecoreuap.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "runtimeobject.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "windowsapp.lib")
