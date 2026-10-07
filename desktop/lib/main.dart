@@ -1601,7 +1601,7 @@ class _DesktopAboutCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  '$kDesktopAppName',
+                  kDesktopAppName,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
@@ -3504,7 +3504,7 @@ class KsuserApiClient {
         )) {
           try {
             await _refreshAccessToken();
-            return _request(
+            return await _request(
               method,
               path,
               query: query,
@@ -3525,7 +3525,7 @@ class KsuserApiClient {
           response.statusCode == 403 &&
           responseMessage == '无权限') {
         await _refreshCsrfToken(force: true);
-        return _request(
+        return await _request(
           method,
           path,
           query: query,
@@ -3551,7 +3551,7 @@ class KsuserApiClient {
             )) {
           try {
             await _refreshAccessToken();
-            return _request(
+            return await _request(
               method,
               path,
               query: query,
@@ -3841,7 +3841,6 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   LoginFactor _loginFactor = LoginFactor.password;
   MfaMode _mfaMode = MfaMode.code;
   bool _passkeyAvailable = false;
-  bool _nativePasskeyAvailable = false;
 
   @override
   void initState() {
@@ -3862,13 +3861,11 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   }
 
   Future<void> _detectPasskeyAvailability() async {
-    final bool nativeAvailable = await PasskeyPlatform.isAvailable();
     final bool available = await widget.controller.isPasskeyAvailable();
     if (!mounted) {
       return;
     }
     setState(() {
-      _nativePasskeyAvailable = nativeAvailable;
       _passkeyAvailable = available;
     });
   }
@@ -4493,9 +4490,6 @@ class DesktopWorkspace extends StatelessWidget {
     final Color sidebarSubtitleColor = isDark
         ? Colors.white70
         : const Color(0xFF6B614E);
-    final Color railSelectedIconColor = isDark
-        ? const Color(0xFFFFD35E)
-        : const Color(0xFF705000);
     final Color railSelectedLabelColor = isDark
         ? const Color(0xFFFFE8AD)
         : const Color(0xFF4B390B);
@@ -7110,69 +7104,6 @@ class _ActivityPageState extends State<ActivityPage> {
                   ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PasswordRequirementCard extends StatelessWidget {
-  const _PasswordRequirementCard({required this.requirement});
-
-  final PasswordRequirement? requirement;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color panelColor = isDark
-        ? const Color(0xFF2A2A2A)
-        : const Color(0xFFFBFAF5);
-    if (requirement == null) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: panelColor,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: const Text('当前无法获取密码规则，提交时将直接依赖后端校验。'),
-      );
-    }
-    final PasswordRequirement activeRequirement = requirement!;
-
-    final List<String> rules = <String>[
-      '长度 ${activeRequirement.minLength}-${activeRequirement.maxLength} 位',
-      if (activeRequirement.requireUppercase) '至少 1 个大写字母',
-      if (activeRequirement.requireLowercase) '至少 1 个小写字母',
-      if (activeRequirement.requireDigits) '至少 1 个数字',
-      if (activeRequirement.requireSpecialChars) '至少 1 个特殊字符',
-      if (activeRequirement.rejectCommonWeakPasswords) '禁止常见弱密码',
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: panelColor,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text('密码要求', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(activeRequirement.requirementMessage),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: rules
-                .map(
-                  (String item) => Chip(
-                    avatar: const Icon(Icons.done_rounded, size: 16),
-                    label: Text(item),
-                  ),
-                )
-                .toList(),
           ),
         ],
       ),
