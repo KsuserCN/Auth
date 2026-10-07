@@ -4,7 +4,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -308,6 +310,42 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
                 : Colors.black.withValues(alpha: 0.05),
           ),
         ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(44, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(42, 42),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          side: outline,
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ),
+      dividerTheme: DividerThemeData(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.07),
+        thickness: 1,
+        space: 1,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -693,7 +731,14 @@ class _GlobalLoadingOverlay extends StatelessWidget {
   }
 }
 
-enum DesktopSection { overview, profile, security, devices, activity }
+enum DesktopSection {
+  overview,
+  profile,
+  security,
+  devices,
+  activity,
+  authorizations,
+}
 
 enum LoginFactor { password, emailCode }
 
@@ -1872,6 +1917,10 @@ class AppController extends ChangeNotifier {
   UserDetails? user;
   List<SessionItem> sessions = <SessionItem>[];
   List<SensitiveLogItem> sensitiveLogs = <SensitiveLogItem>[];
+  List<OAuth2AuthorizedApp> authorizedApps = <OAuth2AuthorizedApp>[];
+  bool authorizationsLoading = false;
+  String? authorizationsError;
+  String? revokingAuthorizationId;
   List<PasskeyListItem> passkeys = <PasskeyListItem>[];
   TotpStatusResponse? totpStatus;
   AdaptiveAuthStatus? adaptiveAuthStatus;
@@ -1940,6 +1989,8 @@ class AppController extends ChangeNotifier {
     user = null;
     sessions = <SessionItem>[];
     sensitiveLogs = <SensitiveLogItem>[];
+    authorizedApps = <OAuth2AuthorizedApp>[];
+    authorizationsError = null;
     passkeys = <PasskeyListItem>[];
     totpStatus = null;
     adaptiveAuthStatus = null;
@@ -1970,6 +2021,51 @@ class AppController extends ChangeNotifier {
     }
     selectedSection = section;
     notifyListeners();
+    if (section == DesktopSection.authorizations) {
+      unawaited(refreshAuthorizations());
+    }
+  }
+
+  Future<void> refreshAuthorizations() async {
+    if (!isAuthenticated || authorizationsLoading) return;
+    authorizationsLoading = true;
+    authorizationsError = null;
+    notifyListeners();
+    try {
+      final dynamic data = await _apiClient.get(
+        '/oauth2/authorizations',
+        authorized: true,
+      );
+      authorizedApps = asList(data)
+          .map((dynamic item) => OAuth2AuthorizedApp.fromJson(asMap(item)))
+          .toList();
+    } catch (error) {
+      authorizationsError = error is ApiException
+          ? error.message
+          : '加载已授权应用失败，请稍后重试';
+    } finally {
+      authorizationsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> revokeAuthorization(String appId) async {
+    if (revokingAuthorizationId != null) return;
+    revokingAuthorizationId = appId;
+    notifyListeners();
+    try {
+      await _apiClient.delete(
+        '/oauth2/authorizations/${Uri.encodeComponent(appId)}',
+        authorized: true,
+      );
+      authorizedApps = authorizedApps
+          .where((OAuth2AuthorizedApp app) => app.appId != appId)
+          .toList();
+      authorizationsError = null;
+    } finally {
+      revokingAuthorizationId = null;
+      notifyListeners();
+    }
   }
 
   void setThemeMode(ThemeMode value) {
@@ -2369,6 +2465,25 @@ class AppController extends ChangeNotifier {
         '/auth/update/profile',
         authorized: true,
         body: <String, dynamic>{'key': key, 'value': value.trim()},
+      );
+      user = UserDetails.fromJson(asMap(data));
+      notifyListeners();
+    });
+  }
+
+  Future<void> uploadAvatar({
+    required Uint8List bytes,
+    required String fileName,
+    required String contentType,
+  }) async {
+    await runBusyAction('正在上传头像...', () async {
+      final dynamic data = await _apiClient.postMultipartFile(
+        '/auth/upload/avatar',
+        fieldName: 'file',
+        fileName: fileName,
+        contentType: contentType,
+        bytes: bytes,
+        authorized: true,
       );
       user = UserDetails.fromJson(asMap(data));
       notifyListeners();
@@ -3023,6 +3138,124 @@ class KsuserApiClient {
       body: body,
       authorized: authorized,
     );
+  }
+
+  Future<dynamic> postMultipartFile(
+    String path, {
+    required String fieldName,
+    required String fileName,
+    required String contentType,
+    required Uint8List bytes,
+    bool authorized = false,
+    bool csrfRetried = false,
+    bool tokenRetried = false,
+  }) async {
+    await _refreshCsrfToken();
+    final String boundary = 'Ksuser-${DateTime.now().microsecondsSinceEpoch}';
+    final String safeName = fileName.replaceAll(RegExp(r'["\\\r\n]'), '_');
+    final BytesBuilder payload = BytesBuilder(copy: false)
+      ..add(
+        utf8.encode(
+          '--$boundary\r\n'
+          'Content-Disposition: form-data; name="$fieldName"; filename="$safeName"\r\n'
+          'Content-Type: $contentType\r\n\r\n',
+        ),
+      )
+      ..add(bytes)
+      ..add(utf8.encode('\r\n--$boundary--\r\n'));
+
+    final Uri baseUri = Uri.parse(
+      baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
+    );
+    final Uri uri = baseUri.resolve(
+      path.startsWith('/') ? path.substring(1) : path,
+    );
+    try {
+      final HttpClientRequest request = await _httpClient.postUrl(uri);
+      request.headers.set(HttpHeaders.userAgentHeader, _desktopUserAgent);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.contentType = ContentType(
+        'multipart',
+        'form-data',
+        parameters: <String, String>{'boundary': boundary},
+      );
+      if (authorized && accessToken != null) {
+        request.headers.set(
+          HttpHeaders.authorizationHeader,
+          'Bearer $accessToken',
+        );
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(
+          HttpHeaders.cookieHeader,
+          _cookies.values
+              .map((Cookie cookie) => '${cookie.name}=${cookie.value}')
+              .join('; '),
+        );
+      }
+      final Cookie? xsrf = _cookies['XSRF-TOKEN'];
+      if (xsrf != null) request.headers.set('X-XSRF-TOKEN', xsrf.value);
+      request.add(payload.takeBytes());
+
+      final HttpClientResponse response = await request.close();
+      _captureCookies(response);
+      final String content = await response.transform(utf8.decoder).join();
+      final dynamic decoded = content.isEmpty ? null : jsonDecode(content);
+      final String? responseMessage = _extractMessage(decoded);
+      if (response.statusCode == 401 &&
+          _canAttemptTokenRefresh(
+            path,
+            authorized: authorized,
+            tokenRetried: tokenRetried,
+          )) {
+        await _refreshAccessToken();
+        return await postMultipartFile(
+          path,
+          fieldName: fieldName,
+          fileName: fileName,
+          contentType: contentType,
+          bytes: bytes,
+          authorized: authorized,
+          csrfRetried: csrfRetried,
+          tokenRetried: true,
+        );
+      }
+      if (!csrfRetried &&
+          response.statusCode == 403 &&
+          responseMessage == '无权限') {
+        await _refreshCsrfToken(force: true);
+        return await postMultipartFile(
+          path,
+          fieldName: fieldName,
+          fileName: fileName,
+          contentType: contentType,
+          bytes: bytes,
+          authorized: authorized,
+          csrfRetried: true,
+          tokenRetried: tokenRetried,
+        );
+      }
+      if (response.statusCode >= 400) {
+        throw ApiException(
+          responseMessage ?? '请求失败',
+          statusCode: response.statusCode,
+        );
+      }
+      if (decoded is Map<String, dynamic>) {
+        final int? code = asInt(decoded['code']);
+        if (code != null && code >= 400) {
+          throw ApiException(responseMessage ?? '请求失败', statusCode: code);
+        }
+        return decoded.containsKey('data') ? decoded['data'] : decoded;
+      }
+      return decoded;
+    } on ApiException {
+      rethrow;
+    } on SocketException catch (error) {
+      throw ApiException('网络连接失败：${error.message}');
+    } catch (error) {
+      throw ApiException('头像上传失败：$error');
+    }
   }
 
   Future<dynamic> put(
@@ -3976,6 +4209,120 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   }
 }
 
+class _DesktopSidebarItem extends StatelessWidget {
+  const _DesktopSidebarItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.extended,
+    required this.isDark,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool extended;
+  final bool isDark;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color activeSurface = kPrimaryColor.withValues(
+      alpha: isDark ? 0.18 : 0.15,
+    );
+    final Color iconSurface = kPrimaryColor.withValues(
+      alpha: isDark ? 0.20 : 0.18,
+    );
+    final Color activeIcon = isDark
+        ? const Color(0xFFFFD35E)
+        : const Color(0xFF795600);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: extended ? 5 : 7),
+      child: Tooltip(
+        message: extended ? '' : label,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            hoverColor: kPrimaryColor.withValues(alpha: 0.08),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              height: extended ? 54 : 54,
+              padding: EdgeInsets.symmetric(horizontal: extended ? 10 : 0),
+              decoration: BoxDecoration(
+                color: selected ? activeSurface : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected
+                      ? kPrimaryColor.withValues(alpha: isDark ? 0.24 : 0.28)
+                      : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: extended
+                    ? MainAxisAlignment.start
+                    : MainAxisAlignment.center,
+                children: <Widget>[
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? iconSurface
+                          : (isDark
+                                ? Colors.white.withValues(alpha: 0.045)
+                                : Colors.white.withValues(alpha: 0.78)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      icon,
+                      size: 19,
+                      color: selected ? activeIcon : unselectedColor,
+                    ),
+                  ),
+                  if (extended) ...<Widget>[
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: selected ? selectedColor : unselectedColor,
+                          fontSize: 14,
+                          fontWeight: selected
+                              ? FontWeight.w700
+                              : FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: activeIcon.withValues(alpha: 0.8),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class DesktopWorkspace extends StatelessWidget {
   const DesktopWorkspace({super.key, required this.controller});
 
@@ -3987,11 +4334,11 @@ class DesktopWorkspace extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
     final bool isDark = theme.brightness == Brightness.dark;
     final Color sidebarBackground = isDark
-        ? const Color(0xFF222222)
-        : const Color(0xFFF1ECE0);
+        ? const Color(0xFF202124)
+        : const Color(0xFFF8F6F0);
     final Color sidebarBorder = isDark
-        ? Colors.white.withValues(alpha: 0.06)
-        : const Color(0xFFE1D8C4);
+        ? Colors.white.withValues(alpha: 0.07)
+        : const Color(0xFFE9E4D8);
     final Color sidebarTitleColor = isDark
         ? Colors.white
         : const Color(0xFF2F281C);
@@ -3999,11 +4346,11 @@ class DesktopWorkspace extends StatelessWidget {
         ? Colors.white70
         : const Color(0xFF6B614E);
     final Color railSelectedIconColor = isDark
-        ? const Color(0xFF2A2204)
-        : const Color(0xFF3A2C00);
+        ? const Color(0xFFFFD35E)
+        : const Color(0xFF705000);
     final Color railSelectedLabelColor = isDark
-        ? const Color(0xFFF4F4F4)
-        : const Color(0xFF3A2C00);
+        ? const Color(0xFFFFE8AD)
+        : const Color(0xFF4B390B);
     final Color railUnselectedColor = isDark
         ? Colors.white70
         : const Color(0xFF756A55);
@@ -4042,177 +4389,356 @@ class DesktopWorkspace extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: NavigationRail(
-                        backgroundColor: Colors.transparent,
-                        selectedIndex: DesktopSection.values.indexOf(
-                          controller.selectedSection,
-                        ),
-                        extended: extended,
-                        trailingAtBottom: true,
-                        groupAlignment: -1,
-                        minWidth: 88,
-                        minExtendedWidth: railExtendedWidth,
-                        onDestinationSelected: (int index) {
-                          controller.setSection(DesktopSection.values[index]);
-                        },
-                        leading: Padding(
-                          padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-                          child: SizedBox(
-                            width: extended ? railContentWidth : 48,
-                            child: extended
-                                ? Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Row(
-                                        children: <Widget>[
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            child: Image.asset(
-                                              kSidebarLogoAsset,
-                                              width: 48,
-                                              height: 48,
-                                              fit: BoxFit.cover,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: <Widget>[
-                                                Text(
-                                                  kDesktopAppName,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: TextStyle(
-                                                    color: sidebarTitleColor,
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 20,
+                      child: Column(
+                        children: <Widget>[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+                            child: SizedBox(
+                              width: extended ? railContentWidth : 48,
+                              child: extended
+                                  ? Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Row(
+                                          children: <Widget>[
+                                            Container(
+                                              padding: const EdgeInsets.all(3),
+                                              decoration: BoxDecoration(
+                                                color: isDark
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.08,
+                                                      )
+                                                    : Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(17),
+                                                boxShadow: <BoxShadow>[
+                                                  BoxShadow(
+                                                    color: Colors.black
+                                                        .withValues(
+                                                          alpha: isDark
+                                                              ? 0.12
+                                                              : 0.06,
+                                                        ),
+                                                    blurRadius: 10,
+                                                    offset: const Offset(0, 3),
                                                   ),
+                                                ],
+                                              ),
+                                              child: ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                child: Image.asset(
+                                                  kSidebarLogoAsset,
+                                                  width: 42,
+                                                  height: 42,
+                                                  fit: BoxFit.cover,
                                                 ),
-                                              ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: <Widget>[
+                                                  Text(
+                                                    kDesktopAppName,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: sidebarTitleColor,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      fontSize: 20,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    '账户安全控制台',
+                                                    style: TextStyle(
+                                                      color:
+                                                          sidebarSubtitleColor,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      letterSpacing: 0.15,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 18),
+                                        Container(
+                                          height: 1,
+                                          width: double.infinity,
+                                          color: sidebarBorder,
+                                        ),
+                                        const SizedBox(height: 13),
+                                        Row(
+                                          children: <Widget>[
+                                            Icon(
+                                              Icons.grid_view_rounded,
+                                              size: 15,
+                                              color: sidebarSubtitleColor,
+                                            ),
+                                            const SizedBox(width: 7),
+                                            Text(
+                                              '工作台',
+                                              style: TextStyle(
+                                                color: sidebarSubtitleColor,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.3,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    )
+                                  : ClipRRect(
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Image.asset(
+                                        kSidebarLogoAsset,
+                                        width: 48,
+                                        height: 48,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          Expanded(
+                            child: ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                extended ? 12 : 17,
+                                8,
+                                extended ? 12 : 17,
+                                10,
+                              ),
+                              children: <Widget>[
+                                _DesktopSidebarItem(
+                                  icon: Icons.dashboard_rounded,
+                                  label: '账号总览',
+                                  selected:
+                                      controller.selectedSection ==
+                                      DesktopSection.overview,
+                                  extended: extended,
+                                  isDark: isDark,
+                                  selectedColor: railSelectedLabelColor,
+                                  unselectedColor: railUnselectedColor,
+                                  onTap: () => controller.setSection(
+                                    DesktopSection.overview,
+                                  ),
+                                ),
+                                _DesktopSidebarItem(
+                                  icon: Icons.badge_outlined,
+                                  label: '账号资料',
+                                  selected:
+                                      controller.selectedSection ==
+                                      DesktopSection.profile,
+                                  extended: extended,
+                                  isDark: isDark,
+                                  selectedColor: railSelectedLabelColor,
+                                  unselectedColor: railUnselectedColor,
+                                  onTap: () => controller.setSection(
+                                    DesktopSection.profile,
+                                  ),
+                                ),
+                                _DesktopSidebarItem(
+                                  icon: Icons.lock_outline_rounded,
+                                  label: '安全设置',
+                                  selected:
+                                      controller.selectedSection ==
+                                      DesktopSection.security,
+                                  extended: extended,
+                                  isDark: isDark,
+                                  selectedColor: railSelectedLabelColor,
+                                  unselectedColor: railUnselectedColor,
+                                  onTap: () => controller.setSection(
+                                    DesktopSection.security,
+                                  ),
+                                ),
+                                _DesktopSidebarItem(
+                                  icon: Icons.devices_other_outlined,
+                                  label: '设备管理',
+                                  selected:
+                                      controller.selectedSection ==
+                                      DesktopSection.devices,
+                                  extended: extended,
+                                  isDark: isDark,
+                                  selectedColor: railSelectedLabelColor,
+                                  unselectedColor: railUnselectedColor,
+                                  onTap: () => controller.setSection(
+                                    DesktopSection.devices,
+                                  ),
+                                ),
+                                _DesktopSidebarItem(
+                                  icon: Icons.history_rounded,
+                                  label: '操作日志',
+                                  selected:
+                                      controller.selectedSection ==
+                                      DesktopSection.activity,
+                                  extended: extended,
+                                  isDark: isDark,
+                                  selectedColor: railSelectedLabelColor,
+                                  unselectedColor: railUnselectedColor,
+                                  onTap: () => controller.setSection(
+                                    DesktopSection.activity,
+                                  ),
+                                ),
+                                _DesktopSidebarItem(
+                                  icon: Icons.admin_panel_settings_outlined,
+                                  label: '访问授权',
+                                  selected:
+                                      controller.selectedSection ==
+                                      DesktopSection.authorizations,
+                                  extended: extended,
+                                  isDark: isDark,
+                                  selectedColor: railSelectedLabelColor,
+                                  unselectedColor: railUnselectedColor,
+                                  onTap: () => controller.setSection(
+                                    DesktopSection.authorizations,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+                            child: SizedBox(
+                              width: extended ? railContentWidth : 48,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: <Widget>[
+                                  if (extended)
+                                    Row(
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.devices_rounded,
+                                          size: 15,
+                                          color: sidebarSubtitleColor,
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Text(
+                                          '跨端联通',
+                                          style: TextStyle(
+                                            color: sidebarSubtitleColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  if (extended) const SizedBox(height: 10),
+                                  if (extended && supportsProtectedMobileBridge)
+                                    FilledButton.icon(
+                                      onPressed: () async {
+                                        try {
+                                          await showMobileBridgeQrDialog(
+                                            context,
+                                            controller,
+                                          );
+                                        } catch (error) {
+                                          if (context.mounted) {
+                                            showAppMessage(
+                                              context,
+                                              error.toString(),
+                                              error: true,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(Icons.qr_code_rounded),
+                                      label: const Text('手机扫码登录'),
+                                    ),
+                                  if (!extended)
+                                    Column(
+                                      children: <Widget>[
+                                        if (supportsProtectedMobileBridge) ...<
+                                          Widget
+                                        >[
+                                          Tooltip(
+                                            message: '手机扫码登录',
+                                            child: IconButton.filled(
+                                              onPressed: () async {
+                                                try {
+                                                  await showMobileBridgeQrDialog(
+                                                    context,
+                                                    controller,
+                                                  );
+                                                } catch (error) {
+                                                  if (context.mounted) {
+                                                    showAppMessage(
+                                                      context,
+                                                      error.toString(),
+                                                      error: true,
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              icon: const Icon(
+                                                Icons.qr_code_rounded,
+                                              ),
                                             ),
                                           ),
+                                          const SizedBox(height: 8),
                                         ],
-                                      ),
-                                    ],
-                                  )
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image.asset(
-                                      kSidebarLogoAsset,
-                                      width: 48,
-                                      height: 48,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        unselectedIconTheme: IconThemeData(
-                          color: railUnselectedColor,
-                        ),
-                        unselectedLabelTextStyle: TextStyle(
-                          color: railUnselectedColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        selectedIconTheme: IconThemeData(
-                          color: railSelectedIconColor,
-                        ),
-                        selectedLabelTextStyle: TextStyle(
-                          color: railSelectedLabelColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        indicatorColor: kPrimaryColor,
-                        destinations: const <NavigationRailDestination>[
-                          NavigationRailDestination(
-                            icon: Icon(Icons.dashboard_outlined),
-                            selectedIcon: Icon(
-                              Icons.dashboard_customize_rounded,
-                            ),
-                            label: Text('账号总览'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.badge_outlined),
-                            selectedIcon: Icon(Icons.badge_rounded),
-                            label: Text('账号资料'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.lock_outline_rounded),
-                            selectedIcon: Icon(Icons.verified_user_rounded),
-                            label: Text('安全设置'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.devices_other_outlined),
-                            selectedIcon: Icon(Icons.devices_rounded),
-                            label: Text('设备管理'),
-                          ),
-                          NavigationRailDestination(
-                            icon: Icon(Icons.history_outlined),
-                            selectedIcon: Icon(Icons.history_rounded),
-                            label: Text('操作日志'),
-                          ),
-                        ],
-                        trailing: Padding(
-                          padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
-                          child: SizedBox(
-                            width: extended ? railContentWidth : 48,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.max,
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: <Widget>[
-                                if (extended)
-                                  Text(
-                                    '跨端联通',
-                                    style: TextStyle(
-                                      color: sidebarSubtitleColor,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                if (extended) const SizedBox(height: 10),
-                                if (extended && supportsProtectedMobileBridge)
-                                  FilledButton.icon(
-                                    onPressed: () async {
-                                      try {
-                                        await showMobileBridgeQrDialog(
-                                          context,
-                                          controller,
-                                        );
-                                      } catch (error) {
-                                        if (context.mounted) {
-                                          showAppMessage(
-                                            context,
-                                            error.toString(),
-                                            error: true,
-                                          );
-                                        }
-                                      }
-                                    },
-                                    icon: const Icon(Icons.qr_code_rounded),
-                                    label: const Text('手机扫码登录'),
-                                  ),
-                                if (!extended)
-                                  Column(
-                                    children: <Widget>[
-                                      if (supportsProtectedMobileBridge) ...<
-                                        Widget
-                                      >[
                                         Tooltip(
-                                          message: '手机扫码登录',
-                                          child: IconButton.filled(
+                                          message: '打开网页端并自动登录',
+                                          child: IconButton.filledTonal(
                                             onPressed: () async {
                                               try {
-                                                await showMobileBridgeQrDialog(
-                                                  context,
-                                                  controller,
+                                                await controller.runBusyAction(
+                                                  '正在打开网页端...',
+                                                  () async {
+                                                    final SessionTransferTicket
+                                                    ticket = await controller
+                                                        .createSessionTransferTicket(
+                                                          target: 'web',
+                                                        );
+                                                    final Uri
+                                                    baseUri = Uri.parse(
+                                                      controller.passkeyOrigin
+                                                              .endsWith('/')
+                                                          ? controller
+                                                                .passkeyOrigin
+                                                          : '${controller.passkeyOrigin}/',
+                                                    );
+                                                    final Uri
+                                                    launchUri = baseUri
+                                                        .resolve('login')
+                                                        .replace(
+                                                          queryParameters:
+                                                              <String, String>{
+                                                                'transferCode':
+                                                                    ticket
+                                                                        .transferCode,
+                                                                'from':
+                                                                    'desktop',
+                                                                'apiBaseUrl':
+                                                                    controller
+                                                                        .apiBaseUrl,
+                                                              },
+                                                        );
+                                                    await openExternalUrl(
+                                                      launchUri.toString(),
+                                                    );
+                                                  },
                                                 );
+                                                if (context.mounted) {
+                                                  showAppMessage(
+                                                    context,
+                                                    '已在浏览器打开网页端并自动登录',
+                                                  );
+                                                }
                                               } catch (error) {
                                                 if (context.mounted) {
                                                   showAppMessage(
@@ -4224,289 +4750,251 @@ class DesktopWorkspace extends StatelessWidget {
                                               }
                                             },
                                             icon: const Icon(
-                                              Icons.qr_code_rounded,
+                                              Icons.open_in_browser_rounded,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(height: 8),
+                                        Tooltip(
+                                          message: '通过网页登录同步回桌面端',
+                                          child: IconButton.filledTonal(
+                                            onPressed: () async {
+                                              try {
+                                                await controller.runBusyAction(
+                                                  '正在打开网页登录页...',
+                                                  () async {
+                                                    final Uri
+                                                    baseUri = Uri.parse(
+                                                      controller.passkeyOrigin
+                                                              .endsWith('/')
+                                                          ? controller
+                                                                .passkeyOrigin
+                                                          : '${controller.passkeyOrigin}/',
+                                                    );
+                                                    final Uri
+                                                    launchUri = baseUri
+                                                        .resolve('login')
+                                                        .replace(
+                                                          queryParameters:
+                                                              <String, String>{
+                                                                'desktopBridge':
+                                                                    '1',
+                                                                'from':
+                                                                    'desktop',
+                                                                'apiBaseUrl':
+                                                                    controller
+                                                                        .apiBaseUrl,
+                                                              },
+                                                        );
+                                                    await openExternalUrl(
+                                                      launchUri.toString(),
+                                                    );
+                                                  },
+                                                );
+                                                if (context.mounted) {
+                                                  showAppMessage(
+                                                    context,
+                                                    '已打开网页登录页；网页登录成功后会自动同步回桌面端',
+                                                  );
+                                                }
+                                              } catch (error) {
+                                                if (context.mounted) {
+                                                  showAppMessage(
+                                                    context,
+                                                    error.toString(),
+                                                    error: true,
+                                                  );
+                                                }
+                                              }
+                                            },
+                                            icon: const Icon(
+                                              Icons.sync_alt_rounded,
+                                            ),
+                                          ),
+                                        ),
                                       ],
-                                      Tooltip(
-                                        message: '打开网页端并自动登录',
-                                        child: IconButton.filledTonal(
-                                          onPressed: () async {
-                                            try {
-                                              await controller.runBusyAction(
-                                                '正在打开网页端...',
-                                                () async {
-                                                  final SessionTransferTicket
-                                                  ticket = await controller
-                                                      .createSessionTransferTicket(
-                                                        target: 'web',
-                                                      );
-                                                  final Uri baseUri = Uri.parse(
-                                                    controller.passkeyOrigin
-                                                            .endsWith('/')
-                                                        ? controller
-                                                              .passkeyOrigin
-                                                        : '${controller.passkeyOrigin}/',
+                                    ),
+                                  if (extended) const SizedBox(height: 8),
+                                  if (extended)
+                                    FilledButton.tonalIcon(
+                                      onPressed: () async {
+                                        try {
+                                          await controller.runBusyAction(
+                                            '正在打开网页端...',
+                                            () async {
+                                              final SessionTransferTicket
+                                              ticket = await controller
+                                                  .createSessionTransferTicket(
+                                                    target: 'web',
                                                   );
-                                                  final Uri launchUri = baseUri
-                                                      .resolve('login')
-                                                      .replace(
-                                                        queryParameters:
-                                                            <String, String>{
-                                                              'transferCode': ticket
-                                                                  .transferCode,
-                                                              'from': 'desktop',
-                                                              'apiBaseUrl':
-                                                                  controller
-                                                                      .apiBaseUrl,
-                                                            },
-                                                      );
-                                                  await openExternalUrl(
-                                                    launchUri.toString(),
-                                                  );
-                                                },
+                                              final Uri baseUri = Uri.parse(
+                                                controller.passkeyOrigin
+                                                        .endsWith('/')
+                                                    ? controller.passkeyOrigin
+                                                    : '${controller.passkeyOrigin}/',
                                               );
-                                              if (context.mounted) {
-                                                showAppMessage(
-                                                  context,
-                                                  '已在浏览器打开网页端并自动登录',
-                                                );
-                                              }
-                                            } catch (error) {
-                                              if (context.mounted) {
-                                                showAppMessage(
-                                                  context,
-                                                  error.toString(),
-                                                  error: true,
-                                                );
-                                              }
-                                            }
-                                          },
-                                          icon: const Icon(
-                                            Icons.open_in_browser_rounded,
+                                              final Uri launchUri = baseUri
+                                                  .resolve('login')
+                                                  .replace(
+                                                    queryParameters:
+                                                        <String, String>{
+                                                          'transferCode': ticket
+                                                              .transferCode,
+                                                          'from': 'desktop',
+                                                          'apiBaseUrl':
+                                                              controller
+                                                                  .apiBaseUrl,
+                                                        },
+                                                  );
+                                              await openExternalUrl(
+                                                launchUri.toString(),
+                                              );
+                                            },
+                                          );
+                                          if (context.mounted) {
+                                            showAppMessage(
+                                              context,
+                                              '已在浏览器打开网页端并自动登录',
+                                            );
+                                          }
+                                        } catch (error) {
+                                          if (context.mounted) {
+                                            showAppMessage(
+                                              context,
+                                              error.toString(),
+                                              error: true,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(
+                                        Icons.open_in_browser_rounded,
+                                      ),
+                                      label: const Text('打开网页端'),
+                                    ),
+                                  if (extended) const SizedBox(height: 8),
+                                  if (extended)
+                                    FilledButton.tonalIcon(
+                                      onPressed: () async {
+                                        try {
+                                          await controller.runBusyAction(
+                                            '正在打开网页登录页...',
+                                            () async {
+                                              final Uri baseUri = Uri.parse(
+                                                controller.passkeyOrigin
+                                                        .endsWith('/')
+                                                    ? controller.passkeyOrigin
+                                                    : '${controller.passkeyOrigin}/',
+                                              );
+                                              final Uri launchUri = baseUri
+                                                  .resolve('login')
+                                                  .replace(
+                                                    queryParameters:
+                                                        <String, String>{
+                                                          'desktopBridge': '1',
+                                                          'from': 'desktop',
+                                                          'apiBaseUrl':
+                                                              controller
+                                                                  .apiBaseUrl,
+                                                        },
+                                                  );
+                                              await openExternalUrl(
+                                                launchUri.toString(),
+                                              );
+                                            },
+                                          );
+                                          if (context.mounted) {
+                                            showAppMessage(
+                                              context,
+                                              '已打开网页登录页；网页登录成功后会自动同步回桌面端',
+                                            );
+                                          }
+                                        } catch (error) {
+                                          if (context.mounted) {
+                                            showAppMessage(
+                                              context,
+                                              error.toString(),
+                                              error: true,
+                                            );
+                                          }
+                                        }
+                                      },
+                                      icon: const Icon(Icons.sync_alt_rounded),
+                                      label: const Text('网页登录同步'),
+                                    ),
+                                  const SizedBox(height: 12),
+                                  if (extended)
+                                    Container(
+                                      height: 1,
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      color: sidebarBorder,
+                                    ),
+                                  if (extended)
+                                    Row(
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.manage_accounts_rounded,
+                                          size: 15,
+                                          color: sidebarSubtitleColor,
+                                        ),
+                                        const SizedBox(width: 7),
+                                        Text(
+                                          '账户操作',
+                                          style: TextStyle(
+                                            color: sidebarSubtitleColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  if (extended) const SizedBox(height: 10),
+                                  if (extended)
+                                    FilledButton.tonalIcon(
+                                      onPressed: () async {
+                                        await controller.logout();
+                                      },
+                                      icon: const Icon(Icons.logout_rounded),
+                                      label: const Text('退出登录'),
+                                      style: FilledButton.styleFrom(
+                                        foregroundColor:
+                                            theme.colorScheme.error,
+                                        backgroundColor: theme.colorScheme.error
+                                            .withValues(
+                                              alpha: isDark ? 0.16 : 0.09,
+                                            ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 14,
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            16,
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      Tooltip(
-                                        message: '通过网页登录同步回桌面端',
-                                        child: IconButton.filledTonal(
-                                          onPressed: () async {
-                                            try {
-                                              await controller.runBusyAction(
-                                                '正在打开网页登录页...',
-                                                () async {
-                                                  final Uri baseUri = Uri.parse(
-                                                    controller.passkeyOrigin
-                                                            .endsWith('/')
-                                                        ? controller
-                                                              .passkeyOrigin
-                                                        : '${controller.passkeyOrigin}/',
-                                                  );
-                                                  final Uri launchUri = baseUri
-                                                      .resolve('login')
-                                                      .replace(
-                                                        queryParameters:
-                                                            <String, String>{
-                                                              'desktopBridge':
-                                                                  '1',
-                                                              'from': 'desktop',
-                                                              'apiBaseUrl':
-                                                                  controller
-                                                                      .apiBaseUrl,
-                                                            },
-                                                      );
-                                                  await openExternalUrl(
-                                                    launchUri.toString(),
-                                                  );
-                                                },
-                                              );
-                                              if (context.mounted) {
-                                                showAppMessage(
-                                                  context,
-                                                  '已打开网页登录页；网页登录成功后会自动同步回桌面端',
-                                                );
-                                              }
-                                            } catch (error) {
-                                              if (context.mounted) {
-                                                showAppMessage(
-                                                  context,
-                                                  error.toString(),
-                                                  error: true,
-                                                );
-                                              }
-                                            }
-                                          },
-                                          icon: const Icon(
-                                            Icons.sync_alt_rounded,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                if (extended) const SizedBox(height: 8),
-                                if (extended)
-                                  FilledButton.tonalIcon(
-                                    onPressed: () async {
-                                      try {
-                                        await controller.runBusyAction(
-                                          '正在打开网页端...',
-                                          () async {
-                                            final SessionTransferTicket
-                                            ticket = await controller
-                                                .createSessionTransferTicket(
-                                                  target: 'web',
-                                                );
-                                            final Uri baseUri = Uri.parse(
-                                              controller.passkeyOrigin.endsWith(
-                                                    '/',
-                                                  )
-                                                  ? controller.passkeyOrigin
-                                                  : '${controller.passkeyOrigin}/',
-                                            );
-                                            final Uri launchUri = baseUri
-                                                .resolve('login')
-                                                .replace(
-                                                  queryParameters:
-                                                      <String, String>{
-                                                        'transferCode':
-                                                            ticket.transferCode,
-                                                        'from': 'desktop',
-                                                        'apiBaseUrl': controller
-                                                            .apiBaseUrl,
-                                                      },
-                                                );
-                                            await openExternalUrl(
-                                              launchUri.toString(),
-                                            );
-                                          },
-                                        );
-                                        if (context.mounted) {
-                                          showAppMessage(
-                                            context,
-                                            '已在浏览器打开网页端并自动登录',
-                                          );
-                                        }
-                                      } catch (error) {
-                                        if (context.mounted) {
-                                          showAppMessage(
-                                            context,
-                                            error.toString(),
-                                            error: true,
-                                          );
-                                        }
-                                      }
-                                    },
-                                    icon: const Icon(
-                                      Icons.open_in_browser_rounded,
-                                    ),
-                                    label: const Text('打开网页端'),
-                                  ),
-                                if (extended) const SizedBox(height: 8),
-                                if (extended)
-                                  FilledButton.tonalIcon(
-                                    onPressed: () async {
-                                      try {
-                                        await controller.runBusyAction(
-                                          '正在打开网页登录页...',
-                                          () async {
-                                            final Uri baseUri = Uri.parse(
-                                              controller.passkeyOrigin.endsWith(
-                                                    '/',
-                                                  )
-                                                  ? controller.passkeyOrigin
-                                                  : '${controller.passkeyOrigin}/',
-                                            );
-                                            final Uri launchUri = baseUri
-                                                .resolve('login')
-                                                .replace(
-                                                  queryParameters:
-                                                      <String, String>{
-                                                        'desktopBridge': '1',
-                                                        'from': 'desktop',
-                                                        'apiBaseUrl': controller
-                                                            .apiBaseUrl,
-                                                      },
-                                                );
-                                            await openExternalUrl(
-                                              launchUri.toString(),
-                                            );
-                                          },
-                                        );
-                                        if (context.mounted) {
-                                          showAppMessage(
-                                            context,
-                                            '已打开网页登录页；网页登录成功后会自动同步回桌面端',
-                                          );
-                                        }
-                                      } catch (error) {
-                                        if (context.mounted) {
-                                          showAppMessage(
-                                            context,
-                                            error.toString(),
-                                            error: true,
-                                          );
-                                        }
-                                      }
-                                    },
-                                    icon: const Icon(Icons.sync_alt_rounded),
-                                    label: const Text('网页登录同步'),
-                                  ),
-                                const SizedBox(height: 12),
-                                if (extended)
-                                  Text(
-                                    '账户操作',
-                                    style: TextStyle(
-                                      color: sidebarSubtitleColor,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                if (extended) const SizedBox(height: 10),
-                                if (extended)
-                                  FilledButton.tonalIcon(
-                                    onPressed: () async {
-                                      await controller.logout();
-                                    },
-                                    icon: const Icon(Icons.logout_rounded),
-                                    label: const Text('退出登录'),
-                                    style: FilledButton.styleFrom(
-                                      foregroundColor: sidebarTitleColor,
-                                      backgroundColor: isDark
-                                          ? Colors.white.withValues(alpha: 0.06)
-                                          : Colors.white.withValues(
-                                              alpha: 0.78,
+                                    )
+                                  else
+                                    IconButton.filledTonal(
+                                      onPressed: () async {
+                                        await controller.logout();
+                                      },
+                                      style: IconButton.styleFrom(
+                                        foregroundColor:
+                                            theme.colorScheme.error,
+                                        backgroundColor: theme.colorScheme.error
+                                            .withValues(
+                                              alpha: isDark ? 0.16 : 0.09,
                                             ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 12,
                                       ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(16),
-                                      ),
+                                      icon: const Icon(Icons.logout_rounded),
                                     ),
-                                  )
-                                else
-                                  IconButton.filledTonal(
-                                    onPressed: () async {
-                                      await controller.logout();
-                                    },
-                                    style: IconButton.styleFrom(
-                                      foregroundColor: sidebarTitleColor,
-                                      backgroundColor: isDark
-                                          ? Colors.white.withValues(alpha: 0.06)
-                                          : Colors.white.withValues(
-                                              alpha: 0.78,
-                                            ),
-                                    ),
-                                    icon: const Icon(Icons.logout_rounded),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -4529,10 +5017,41 @@ class DesktopWorkspace extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: <Widget>[
-                                  Text(
-                                    sectionTitle(controller.selectedSection),
-                                    style: theme.textTheme.headlineSmall
-                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  Row(
+                                    children: <Widget>[
+                                      Container(
+                                        width: 38,
+                                        height: 38,
+                                        decoration: BoxDecoration(
+                                          color: kPrimaryColor.withValues(
+                                            alpha: isDark ? 0.18 : 0.16,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          sectionIcon(
+                                            controller.selectedSection,
+                                          ),
+                                          color: isDark
+                                              ? kPrimaryColor
+                                              : const Color(0xFF755400),
+                                          size: 21,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        sectionTitle(
+                                          controller.selectedSection,
+                                        ),
+                                        style: theme.textTheme.headlineSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: -0.35,
+                                            ),
+                                      ),
+                                    ],
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
@@ -4636,7 +5155,19 @@ class DesktopWorkspace extends StatelessWidget {
                               controller.workspaceLoading &&
                                   controller.user == null
                               ? const Center(child: CircularProgressIndicator())
-                              : _buildSection(context),
+                              : AnimatedSwitcher(
+                                  duration: controller.reduceMotion
+                                      ? Duration.zero
+                                      : const Duration(milliseconds: 180),
+                                  switchInCurve: Curves.easeOutCubic,
+                                  switchOutCurve: Curves.easeInCubic,
+                                  child: KeyedSubtree(
+                                    key: ValueKey<DesktopSection>(
+                                      controller.selectedSection,
+                                    ),
+                                    child: _buildSection(context),
+                                  ),
+                                ),
                         ),
                       ],
                     ),
@@ -4662,6 +5193,8 @@ class DesktopWorkspace extends StatelessWidget {
         return DevicesPage(controller: controller);
       case DesktopSection.activity:
         return ActivityPage(controller: controller);
+      case DesktopSection.authorizations:
+        return AuthorizationsPage(controller: controller);
     }
   }
 }
@@ -4685,129 +5218,543 @@ class OverviewPage extends StatelessWidget {
       if (controller.totpStatus?.enabled == true) 'TOTP',
     ];
 
+    final Widget profileAndMethods = _OverviewSplit(
+      left: _SectionCard(
+        title: '资料摘要',
+        subtitle: '账户资料一览',
+        child: Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            _InfoChip(label: 'UUID', value: user.uuid),
+            _InfoChip(label: '真实姓名', value: user.realName ?? '未填写'),
+            _InfoChip(label: '地区', value: user.region ?? '未填写'),
+            _InfoChip(label: '性别', value: displayGender(user.gender)),
+            _InfoChip(label: '资料更新时间', value: formatDateTime(user.updatedAt)),
+          ],
+        ),
+      ),
+      right: _SectionCard(
+        title: '登录方式',
+        subtitle: '当前可用的认证方式',
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: methods
+              .map(
+                (String item) => Chip(
+                  avatar: const Icon(Icons.check_circle_rounded, size: 17),
+                  label: Text(item),
+                  visualDensity: VisualDensity.compact,
+                  side: BorderSide.none,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest,
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+    final Widget activity = _OverviewSplit(
+      left: _SectionCard(
+        title: '近期设备活动',
+        subtitle: '最近登录的设备与会话',
+        child: controller.sessions.isEmpty
+            ? const _OverviewEmptyState(
+                icon: Icons.devices_other_rounded,
+                message: '暂无设备活动',
+              )
+            : Column(
+                children: controller.sessions
+                    .take(4)
+                    .map(
+                      (SessionItem item) =>
+                          _SessionRow(item: item, compact: true),
+                    )
+                    .toList(),
+              ),
+      ),
+      right: _SectionCard(
+        title: '近期敏感操作',
+        subtitle: '账户安全相关的最近记录',
+        child: controller.sensitiveLogs.isEmpty
+            ? const _OverviewEmptyState(
+                icon: Icons.fact_check_outlined,
+                message: '暂无敏感操作记录',
+              )
+            : Column(
+                children: controller.sensitiveLogs
+                    .take(4)
+                    .map(
+                      (SensitiveLogItem item) =>
+                          _LogTile(log: item, compact: true),
+                    )
+                    .toList(),
+              ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double width = constraints.maxWidth;
+        final int metricColumns = (width / 250).floor().clamp(1, 4);
+        final double metricWidth =
+            (width - (metricColumns - 1) * 14) / metricColumns;
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: <Widget>[
+                  _MetricCard(
+                    width: metricWidth,
+                    title: '账户身份',
+                    value: user.username,
+                    caption: user.email,
+                    icon: Icons.person_outline_rounded,
+                  ),
+                  _MetricCard(
+                    width: metricWidth,
+                    title: '安全评分',
+                    value: '$securityScore%',
+                    caption: controller.totpStatus?.enabled == true
+                        ? '已启用 TOTP 防护'
+                        : '建议开启 TOTP 防护',
+                    icon: Icons.shield_moon_outlined,
+                    progress: securityScore / 100,
+                  ),
+                  _MetricCard(
+                    width: metricWidth,
+                    title: '在线设备',
+                    value: '${controller.sessions.length}',
+                    caption:
+                        '${controller.sessions.where((SessionItem item) => item.online).length} 台当前在线',
+                    icon: Icons.devices_other_rounded,
+                  ),
+                  _MetricCard(
+                    width: metricWidth,
+                    title: '敏感日志',
+                    value: '${controller.sensitiveLogs.length}',
+                    caption: '近期账户安全操作',
+                    icon: Icons.rule_folder_outlined,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              profileAndMethods,
+              const SizedBox(height: 18),
+              activity,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class AuthorizationsPage extends StatelessWidget {
+  const AuthorizationsPage({super.key, required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: <Widget>[
-              _MetricCard(
-                title: '账户身份',
-                value: user.username,
-                caption: user.email,
-                icon: Icons.person_outline_rounded,
-              ),
-              _MetricCard(
-                title: '安全评分',
-                value: '$securityScore%',
-                caption: controller.totpStatus?.enabled == true
-                    ? '已启用 TOTP 防护'
-                    : '建议开启 TOTP',
-                icon: Icons.shield_moon_outlined,
-              ),
-              _MetricCard(
-                title: '在线设备',
-                value: '${controller.sessions.length}',
-                caption:
-                    '${controller.sessions.where((SessionItem item) => item.online).length} 台在线',
-                icon: Icons.devices_other_rounded,
-              ),
-              _MetricCard(
-                title: '敏感日志',
-                value: '${controller.sensitiveLogs.length}',
-                caption: '桌面端同步最近操作',
-                icon: Icons.rule_folder_outlined,
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                flex: 3,
-                child: _SectionCard(
-                  title: '资料摘要',
-                  subtitle: '与网页端相同的信息字段，改为桌面式信息栅格。',
-                  child: Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: <Widget>[
-                      _InfoChip(label: 'UUID', value: user.uuid),
-                      _InfoChip(label: '真实姓名', value: user.realName ?? '未填写'),
-                      _InfoChip(label: '地区', value: user.region ?? '未填写'),
-                      _InfoChip(label: '性别', value: displayGender(user.gender)),
-                      _InfoChip(
-                        label: '资料更新时间',
-                        value: formatDateTime(user.updatedAt),
+          _SectionCard(
+            title: '已授权应用',
+            subtitle: '查看可访问您账号信息的第三方应用及授权范围。',
+            child: Column(
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        '${controller.authorizedApps.length} 个应用',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: controller.authorizationsLoading
+                          ? null
+                          : () => controller.refreshAuthorizations(),
+                      icon: controller.authorizationsLoading
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('刷新'),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: _SectionCard(
-                  title: '登录方式',
-                  subtitle: '展示与网页端一致的认证能力状态。',
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: methods
+                const SizedBox(height: 14),
+                if (controller.authorizationsError != null)
+                  _InlineStateCard(
+                    icon: Icons.error_outline_rounded,
+                    title: '暂时无法获取授权信息',
+                    message: controller.authorizationsError!,
+                    action: TextButton.icon(
+                      onPressed: () => controller.refreshAuthorizations(),
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('重试'),
+                    ),
+                  )
+                else if (controller.authorizationsLoading &&
+                    controller.authorizedApps.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(36),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (controller.authorizedApps.isEmpty)
+                  const _InlineStateCard(
+                    icon: Icons.verified_user_outlined,
+                    title: '还没有授权应用',
+                    message: '您确认授权的第三方应用会显示在这里。',
+                  )
+                else
+                  Column(
+                    children: controller.authorizedApps
                         .map(
-                          (String item) => Chip(
-                            label: Text(item),
-                            avatar: const Icon(
-                              Icons.check_circle_outline_rounded,
-                              size: 18,
-                            ),
+                          (OAuth2AuthorizedApp app) => _AuthorizedAppTile(
+                            app: app,
+                            controller: controller,
                           ),
                         )
                         .toList(),
                   ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: '授权说明',
+            subtitle: '您可以随时在网页端访问授权页面管理第三方应用。',
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(Icons.info_outline_rounded, size: 20),
+                SizedBox(width: 10),
+                Expanded(child: Text('撤销授权后，该应用将无法继续使用现有授权访问您的账户信息。')),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuthorizedAppTile extends StatelessWidget {
+  const _AuthorizedAppTile({required this.app, required this.controller});
+
+  final OAuth2AuthorizedApp app;
+  final AppController controller;
+
+  Future<void> _confirmRevoke(BuildContext context) async {
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            final Color errorColor = Theme.of(dialogContext).colorScheme.error;
+            return AlertDialog(
+              icon: Icon(Icons.link_off_rounded, color: errorColor),
+              title: Text('取消「${app.appName}」的授权？'),
+              content: Text('取消后，该应用将无法继续访问您已授权的账号信息。若再次使用，需要重新确认授权。'),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('保留授权'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: errorColor,
+                    foregroundColor: Theme.of(
+                      dialogContext,
+                    ).colorScheme.onError,
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  icon: const Icon(Icons.link_off_rounded, size: 18),
+                  label: const Text('确认取消'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+    if (!confirmed || !context.mounted) {
+      return;
+    }
+    try {
+      await controller.revokeAuthorization(app.appId);
+      if (context.mounted) {
+        showAppMessage(context, '已取消「${app.appName}」的授权');
+      }
+    } catch (error) {
+      if (context.mounted) {
+        showAppMessage(context, error.toString(), error: true);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color border = theme.colorScheme.outlineVariant.withValues(
+      alpha: 0.55,
+    );
+    final String expiry = app.expiresAt == null
+        ? (app.grantMode == 'ONE_TIME' ? '单次授权' : '长期有效')
+        : '有效期至 ${formatDateTime(app.expiresAt)}';
+    final String developer = app.creatorName?.isNotEmpty == true
+        ? '开发者：${app.creatorName}'
+        : app.contactInfo.isNotEmpty
+        ? '联系信息：${app.contactInfo}'
+        : app.redirectUri;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: app.logoUrl == null || app.logoUrl!.isEmpty
+                    ? Container(
+                        width: 48,
+                        height: 48,
+                        color: kPrimaryColor.withValues(alpha: 0.18),
+                        child: const Icon(
+                          Icons.apps_rounded,
+                          color: Color(0xFF755400),
+                        ),
+                      )
+                    : Image.network(
+                        app.logoUrl!,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          width: 48,
+                          height: 48,
+                          color: kPrimaryColor.withValues(alpha: 0.18),
+                          child: const Icon(
+                            Icons.apps_rounded,
+                            color: Color(0xFF755400),
+                          ),
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
-                flex: 3,
-                child: _SectionCard(
-                  title: '近期设备活动',
-                  subtitle: '最近会话按桌面列表展示。',
-                  child: Column(
-                    children: controller.sessions.take(4).map((
-                      SessionItem item,
-                    ) {
-                      return _SessionRow(item: item, compact: true);
-                    }).toList(),
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      app.appName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      developer,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                flex: 2,
-                child: _SectionCard(
-                  title: '近期敏感操作',
-                  subtitle: '与后端 `sensitive-logs` 数据同步。',
-                  child: Column(
-                    children: controller.sensitiveLogs.take(4).map((
-                      SensitiveLogItem item,
-                    ) {
-                      return _LogTile(log: item, compact: true);
-                    }).toList(),
+              _StatusPill(
+                label: grantModeLabel(app.grantMode),
+                icon: Icons.verified_rounded,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: app.scopes
+                .map((String scope) => _ScopePill(label: scopeLabel(scope)))
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          Divider(height: 1, color: border),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 18,
+            runSpacing: 6,
+            children: <Widget>[
+              _MetadataLine(
+                icon: Icons.schedule_rounded,
+                label: '最近使用 ${formatDateTime(app.lastAuthorizedAt)}',
+              ),
+              _MetadataLine(icon: Icons.timer_outlined, label: expiry),
+              OutlinedButton.icon(
+                onPressed: controller.revokingAuthorizationId == null
+                    ? () => _confirmRevoke(context)
+                    : null,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                  side: BorderSide(
+                    color: theme.colorScheme.error.withValues(alpha: 0.45),
+                  ),
+                  minimumSize: const Size(0, 38),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
                   ),
                 ),
+                icon: controller.revokingAuthorizationId == app.appId
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.error,
+                        ),
+                      )
+                    : const Icon(Icons.link_off_rounded, size: 17),
+                label: const Text('取消授权'),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.icon});
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = Theme.of(context).colorScheme.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScopePill extends StatelessWidget {
+  const _ScopePill({required this.label});
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
+    );
+  }
+}
+
+class _MetadataLine extends StatelessWidget {
+  const _MetadataLine({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: <Widget>[
+      Icon(
+        icon,
+        size: 15,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      const SizedBox(width: 6),
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+    ],
+  );
+}
+
+String grantModeLabel(String value) => value == 'TIME_LIMITED'
+    ? '限时授权'
+    : value == 'ONE_TIME'
+    ? '单次授权'
+    : '永久授权';
+
+String scopeLabel(String scope) {
+  switch (scope) {
+    case 'openid':
+      return '账号标识';
+    case 'profile':
+      return '基本资料';
+    case 'email':
+      return '邮箱';
+    case 'phone':
+      return '手机号';
+    default:
+      return scope;
+  }
+}
+
+class _ProfileAvatarFallback extends StatelessWidget {
+  const _ProfileAvatarFallback({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final String initial = name.trim().isEmpty
+        ? 'K'
+        : name.trim().characters.first.toUpperCase();
+    return Container(
+      color: colors.primary.withValues(alpha: 0.14),
+      alignment: Alignment.center,
+      child: Text(
+        initial,
+        style: TextStyle(
+          color: colors.primary,
+          fontSize: 34,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -4824,15 +5771,180 @@ class ProfilePage extends StatelessWidget {
     if (user == null) {
       return const SizedBox.shrink();
     }
+    Future<void> changeAvatar() async {
+      try {
+        const XTypeGroup imageTypes = XTypeGroup(
+          label: '图片',
+          extensions: <String>['jpg', 'jpeg', 'png', 'webp', 'gif'],
+          uniformTypeIdentifiers: <String>['public.image'],
+        );
+        final XFile? image = await openFile(
+          acceptedTypeGroups: <XTypeGroup>[imageTypes],
+          confirmButtonText: '选择头像',
+        );
+        if (image == null) return;
+        final int size = await image.length();
+        if (size > 3 * 1024 * 1024) {
+          if (context.mounted) {
+            showAppMessage(context, '图片大小不能超过 3MB', error: true);
+          }
+          return;
+        }
+        final String extension = image.name.split('.').last.toLowerCase();
+        const Map<String, String> mimeTypes = <String, String>{
+          'jpg': 'image/jpeg',
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'webp': 'image/webp',
+          'gif': 'image/gif',
+        };
+        final String? contentType = mimeTypes[extension];
+        if (contentType == null) {
+          if (context.mounted) {
+            showAppMessage(context, '仅支持 JPG、PNG、WebP 或 GIF 图片', error: true);
+          }
+          return;
+        }
+        await controller.uploadAvatar(
+          bytes: await image.readAsBytes(),
+          fileName: image.name,
+          contentType: contentType,
+        );
+        if (context.mounted) showAppMessage(context, '头像已更新');
+      } catch (error) {
+        if (context.mounted) {
+          showAppMessage(context, error.toString(), error: true);
+        }
+      }
+    }
 
     return SingleChildScrollView(
       child: Column(
         children: <Widget>[
           _SectionCard(
-            title: '基础信息',
-            subtitle: '在这里查看你的基础信息',
+            title: '个人信息',
+            subtitle: '维护您的基础资料，让账号信息保持准确、完整。',
             child: Column(
               children: <Widget>[
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.48),
+                    ),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Tooltip(
+                        message: '点击更换头像',
+                        child: InkWell(
+                          onTap: changeAvatar,
+                          customBorder: const CircleBorder(),
+                          child: SizedBox(
+                            width: 88,
+                            height: 88,
+                            child: Stack(
+                              children: <Widget>[
+                                Positioned.fill(
+                                  child: ClipOval(
+                                    child: user.avatarUrl?.isNotEmpty == true
+                                        ? Image.network(
+                                            user.avatarUrl!,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    _ProfileAvatarFallback(
+                                                      name: user.username,
+                                                    ),
+                                          )
+                                        : _ProfileAvatarFallback(
+                                            name: user.username,
+                                          ),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.surface,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.camera_alt_rounded,
+                                      size: 14,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              user.username,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.3,
+                                  ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              user.email,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '点击头像更换 · JPG、PNG、WebP 或 GIF · 最大 3MB',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: changeAvatar,
+                        icon: const Icon(Icons.photo_camera_outlined, size: 18),
+                        label: const Text('更换头像'),
+                      ),
+                    ],
+                  ),
+                ),
                 _EditableRow(
                   label: '用户名',
                   value: user.username,
@@ -4842,19 +5954,6 @@ class ProfilePage extends StatelessWidget {
                     initialValue: user.username,
                     onSubmit: (String value) => controller.updateProfileField(
                       key: 'username',
-                      value: value,
-                    ),
-                  ),
-                ),
-                _EditableRow(
-                  label: '头像 URL',
-                  value: user.avatarUrl ?? '未设置',
-                  onEdit: () => _showEditDialog(
-                    context,
-                    title: '修改头像地址',
-                    initialValue: user.avatarUrl ?? '',
-                    onSubmit: (String value) => controller.updateProfileField(
-                      key: 'avatarUrl',
                       value: value,
                     ),
                   ),
@@ -5322,8 +6421,8 @@ class DevicesPage extends StatelessWidget {
                   runSpacing: 10,
                   children: <Widget>[
                     _SessionSummaryChip(
-                      icon: Icons.link_rounded,
-                      label: '会话总数',
+                      icon: Icons.devices_other_rounded,
+                      label: '全部会话',
                       value: '${controller.sessions.length}',
                     ),
                     _SessionSummaryChip(
@@ -5333,10 +6432,10 @@ class DevicesPage extends StatelessWidget {
                       tone: Colors.green,
                     ),
                     _SessionSummaryChip(
-                      icon: Icons.verified_user_outlined,
+                      icon: Icons.laptop_mac_rounded,
                       label: '当前设备',
                       value: '$currentCount',
-                      tone: kPrimaryColor,
+                      tone: const Color(0xFF147D74),
                     ),
                   ],
                 ),
@@ -5357,21 +6456,10 @@ class DevicesPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 if (controller.sessions.isEmpty)
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF323232)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white.withValues(alpha: 0.08)
-                            : Colors.black.withValues(alpha: 0.06),
-                      ),
-                    ),
-                    child: const Text('暂无在线设备。'),
+                  const _InlineStateCard(
+                    icon: Icons.devices_other_rounded,
+                    title: '没有在线会话',
+                    message: '登录其他设备后，会话信息会显示在这里。',
                   )
                 else
                   Column(
@@ -5694,6 +6782,14 @@ class _ActivityPageState extends State<ActivityPage> {
     }
   }
 
+  Future<void> _resetFilters() async {
+    setState(() {
+      _operationType = null;
+      _result = null;
+    });
+    await _loadLogs();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -5703,85 +6799,158 @@ class _ActivityPageState extends State<ActivityPage> {
             title: '操作日志',
             subtitle: '在这里查看账号敏感操作和验证记录',
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.30),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.filter_list_rounded,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '筛选记录',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: _loading ? null : _resetFilters,
+                            icon: const Icon(
+                              Icons.restart_alt_rounded,
+                              size: 17,
+                            ),
+                            label: const Text('重置'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: <Widget>[
+                          SizedBox(
+                            width: 245,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _operationType,
+                              decoration: const InputDecoration(
+                                labelText: '操作类型',
+                                prefixIcon: Icon(Icons.manage_search_rounded),
+                              ),
+                              items: const <DropdownMenuItem<String>>[
+                                DropdownMenuItem<String>(
+                                  value: 'LOGIN',
+                                  child: Text('登录'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'REGISTER',
+                                  child: Text('注册'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'CHANGE_PASSWORD',
+                                  child: Text('修改密码'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'CHANGE_EMAIL',
+                                  child: Text('修改邮箱'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'ENABLE_TOTP',
+                                  child: Text('启用 TOTP'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'DISABLE_TOTP',
+                                  child: Text('禁用 TOTP'),
+                                ),
+                              ],
+                              onChanged: (String? value) =>
+                                  setState(() => _operationType = value),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 210,
+                            child: DropdownButtonFormField<String>(
+                              initialValue: _result,
+                              decoration: const InputDecoration(
+                                labelText: '执行结果',
+                                prefixIcon: Icon(Icons.fact_check_outlined),
+                              ),
+                              items: const <DropdownMenuItem<String>>[
+                                DropdownMenuItem<String>(
+                                  value: 'SUCCESS',
+                                  child: Text('成功'),
+                                ),
+                                DropdownMenuItem<String>(
+                                  value: 'FAILURE',
+                                  child: Text('失败'),
+                                ),
+                              ],
+                              onChanged: (String? value) =>
+                                  setState(() => _result = value),
+                            ),
+                          ),
+                          FilledButton.icon(
+                            onPressed: _loading ? null : _loadLogs,
+                            icon: _loading
+                                ? const SizedBox(
+                                    width: 17,
+                                    height: 17,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.search_rounded, size: 19),
+                            label: Text(_loading ? '查询中' : '查询记录'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _operationType,
-                        decoration: const InputDecoration(labelText: '操作类型'),
-                        items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem<String>(
-                            value: 'LOGIN',
-                            child: Text('登录'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'REGISTER',
-                            child: Text('注册'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'CHANGE_PASSWORD',
-                            child: Text('修改密码'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'CHANGE_EMAIL',
-                            child: Text('修改邮箱'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'ENABLE_TOTP',
-                            child: Text('启用 TOTP'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'DISABLE_TOTP',
-                            child: Text('禁用 TOTP'),
-                          ),
-                        ],
-                        onChanged: (String? value) {
-                          setState(() {
-                            _operationType = value;
-                          });
-                        },
+                      child: Text(
+                        '查询结果',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _result,
-                        decoration: const InputDecoration(labelText: '执行结果'),
-                        items: const <DropdownMenuItem<String>>[
-                          DropdownMenuItem<String>(
-                            value: 'SUCCESS',
-                            child: Text('成功'),
-                          ),
-                          DropdownMenuItem<String>(
-                            value: 'FAILURE',
-                            child: Text('失败'),
-                          ),
-                        ],
-                        onChanged: (String? value) {
-                          setState(() {
-                            _result = value;
-                          });
-                        },
+                    Text(
+                      '${widget.controller.sensitiveLogs.length} 条记录',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      onPressed: _loading ? null : _loadLogs,
-                      icon: _loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.filter_alt_rounded),
-                      label: const Text('应用过滤'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 10),
                 if (widget.controller.sensitiveLogs.isEmpty)
-                  const Text('暂无可展示的敏感日志。')
+                  const _InlineStateCard(
+                    icon: Icons.manage_search_rounded,
+                    title: '没有匹配的记录',
+                    message: '调整操作类型或执行结果后重新查询。',
+                  )
                 else
                   Column(
                     children: widget.controller.sensitiveLogs
@@ -6142,48 +7311,162 @@ class _UserAvatar extends StatelessWidget {
 
 class _MetricCard extends StatelessWidget {
   const _MetricCard({
+    required this.width,
     required this.title,
     required this.value,
     required this.caption,
     required this.icon,
+    this.progress,
   });
 
+  final double width;
   final String title;
   final String value;
   final String caption;
   final IconData icon;
+  final double? progress;
 
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final ColorScheme colors = Theme.of(context).colorScheme;
     return SizedBox(
-      width: 260,
+      width: width,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFBFAF5),
-          borderRadius: BorderRadius.circular(20),
+          color: isDark ? const Color(0xFF262626) : Colors.white,
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
             color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.05),
+                ? Colors.white.withValues(alpha: 0.07)
+                : Colors.black.withValues(alpha: 0.055),
           ),
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.10 : 0.035),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(icon, color: kPrimaryColor),
-            const SizedBox(height: 16),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withValues(
+                      alpha: isDark ? 0.16 : 0.13,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: isDark ? kPrimaryColor : const Color(0xFF755400),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
             Text(
               value,
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.7,
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(caption),
+            if (progress != null) ...<Widget>[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(99),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 5,
+                  backgroundColor: kPrimaryColor.withValues(alpha: 0.14),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isDark ? kPrimaryColor : const Color(0xFFE5A500),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 7),
+            Text(
+              caption,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _OverviewSplit extends StatelessWidget {
+  const _OverviewSplit({required this.left, required this.right});
+
+  final Widget left;
+  final Widget right;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        if (constraints.maxWidth < 900) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[left, const SizedBox(height: 14), right],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Expanded(flex: 3, child: left),
+            const SizedBox(width: 14),
+            Expanded(flex: 2, child: right),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _OverviewEmptyState extends StatelessWidget {
+  const _OverviewEmptyState({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color tint = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 18, color: tint),
+          const SizedBox(width: 9),
+          Text(message, style: TextStyle(color: tint)),
+        ],
       ),
     );
   }
@@ -6203,28 +7486,91 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final ColorScheme colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFFBFAF5),
-        borderRadius: BorderRadius.circular(24),
+        color: isDark ? const Color(0xFF262626) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.black.withValues(alpha: 0.05),
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.black.withValues(alpha: 0.055),
         ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.025),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
             title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.15,
+            ),
           ),
           const SizedBox(height: 6),
-          Text(subtitle),
+          Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colors.onSurfaceVariant,
+              height: 1.45,
+            ),
+          ),
           const SizedBox(height: 18),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineStateCard extends StatelessWidget {
+  const _InlineStateCard({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        children: <Widget>[
+          Icon(icon, size: 28, color: colors.onSurfaceVariant),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (action != null) ...<Widget>[const SizedBox(height: 8), action!],
         ],
       ),
     );
@@ -6742,24 +8088,47 @@ class _SessionSummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
+        color: theme.brightness == Brightness.dark
+            ? tone.withValues(alpha: 0.12)
+            : tone.withValues(alpha: 0.075),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tone.withValues(alpha: 0.16)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(icon, size: 16, color: tone),
-          const SizedBox(width: 6),
-          Text(
-            '$label $value',
-            style: TextStyle(
-              color: tone.withValues(alpha: 0.92),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
             ),
+            child: Icon(icon, size: 16, color: tone),
+          ),
+          const SizedBox(width: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                value,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -6819,6 +8188,18 @@ class _LogTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.075)
+              : Colors.black.withValues(alpha: 0.055),
+        ),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -6850,23 +8231,85 @@ class _LogTile extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
-                    Chip(label: Text(loginMethodLabel(log.loginMethod))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        log.result == 'SUCCESS' ? '成功' : '失败',
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${log.result == 'SUCCESS' ? '成功' : '失败'} · ${formatDateTime(log.createdAt)}',
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 14,
+                  runSpacing: 6,
+                  children: <Widget>[
+                    _SessionMetaPill(
+                      icon: Icons.login_rounded,
+                      text: loginMethodLabel(log.loginMethod),
+                    ),
+                    _SessionMetaPill(
+                      icon: Icons.schedule_rounded,
+                      text: formatDateTime(log.createdAt),
+                    ),
+                  ],
                 ),
                 if (!compact) ...<Widget>[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${log.ipLocation ?? '未知位置'} · ${log.ipAddress} · 风险 ${log.riskScore}',
+                  const SizedBox(height: 9),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 6,
+                    children: <Widget>[
+                      _SessionMetaPill(
+                        icon: Icons.location_on_outlined,
+                        text: log.ipLocation ?? '未知位置',
+                      ),
+                      _SessionMetaPill(
+                        icon: Icons.language_rounded,
+                        text: log.ipAddress,
+                      ),
+                      _SessionMetaPill(
+                        icon: Icons.shield_outlined,
+                        text: '风险 ${log.riskScore}',
+                      ),
+                    ],
                   ),
                   if (log.failureReason != null &&
                       log.failureReason!.isNotEmpty)
-                    Text(
-                      log.failureReason!,
-                      style: const TextStyle(color: Colors.red),
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(top: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(
+                          alpha: isDark ? 0.12 : 0.06,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        log.failureReason!,
+                        style: TextStyle(
+                          color: isDark
+                              ? Colors.red.shade200
+                              : Colors.red.shade700,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                 ],
               ],
@@ -8140,6 +9583,8 @@ String sectionTitle(DesktopSection section) {
       return '设备管理';
     case DesktopSection.activity:
       return '操作日志';
+    case DesktopSection.authorizations:
+      return '访问授权';
   }
 }
 
@@ -8155,6 +9600,25 @@ String sectionSubtitle(DesktopSection section) {
       return '查看在线设备、登录会话和当前状态。';
     case DesktopSection.activity:
       return '筛选查看敏感操作与验证记录。';
+    case DesktopSection.authorizations:
+      return '查看已授权访问您账号信息的第三方应用。';
+  }
+}
+
+IconData sectionIcon(DesktopSection section) {
+  switch (section) {
+    case DesktopSection.overview:
+      return Icons.dashboard_customize_rounded;
+    case DesktopSection.profile:
+      return Icons.badge_rounded;
+    case DesktopSection.security:
+      return Icons.verified_user_rounded;
+    case DesktopSection.devices:
+      return Icons.devices_rounded;
+    case DesktopSection.activity:
+      return Icons.history_rounded;
+    case DesktopSection.authorizations:
+      return Icons.verified_user_outlined;
   }
 }
 
@@ -8454,6 +9918,52 @@ class UserSettings {
   final bool subscribeNewsEmail;
   final String? preferredMfaMethod;
   final String? preferredSensitiveMethod;
+}
+
+class OAuth2AuthorizedApp {
+  const OAuth2AuthorizedApp({
+    required this.appId,
+    required this.appName,
+    required this.contactInfo,
+    required this.redirectUri,
+    required this.scopes,
+    required this.authorizedAt,
+    required this.lastAuthorizedAt,
+    required this.grantMode,
+    this.logoUrl,
+    this.creatorName,
+    this.expiresAt,
+  });
+
+  factory OAuth2AuthorizedApp.fromJson(Map<String, dynamic> json) {
+    return OAuth2AuthorizedApp(
+      appId: asString(json['appId']) ?? '',
+      appName: asString(json['appName']) ?? '未命名应用',
+      logoUrl: asString(json['logoUrl']),
+      creatorName: asString(json['creatorName']),
+      contactInfo: asString(json['contactInfo']) ?? '',
+      redirectUri: asString(json['redirectUri']) ?? '',
+      scopes: asList(
+        json['scopes'],
+      ).map((dynamic scope) => scope.toString()).toList(),
+      authorizedAt: asString(json['authorizedAt']) ?? '',
+      lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
+      grantMode: asString(json['grantMode']) ?? 'PERMANENT',
+      expiresAt: asString(json['expiresAt']),
+    );
+  }
+
+  final String appId;
+  final String appName;
+  final String? logoUrl;
+  final String? creatorName;
+  final String contactInfo;
+  final String redirectUri;
+  final List<String> scopes;
+  final String authorizedAt;
+  final String lastAuthorizedAt;
+  final String grantMode;
+  final String? expiresAt;
 }
 
 class UserDetails {
