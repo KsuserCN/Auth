@@ -40,7 +40,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(kDesktopAppName), findsOneWidget);
-    expect(find.text('二维码登录'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, '扫码登录'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('desktop workspace renders with sidebar content', (
@@ -92,9 +95,11 @@ void main() {
       recoveryCodesCount: 0,
     );
 
-    await tester.binding.setSurfaceSize(const Size(1440, 920));
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1440, 920);
     addTearDown(() async {
-      await tester.binding.setSurfaceSize(null);
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
 
     await tester.pumpWidget(
@@ -102,7 +107,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.widgetWithText(InkWell, '账号总览'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, '账号资料'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, '安全设置'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, '设备管理'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, '操作日志'), findsOneWidget);
+    expect(find.widgetWithText(InkWell, '访问授权'), findsOneWidget);
     expect(find.byIcon(Icons.logout_rounded), findsWidgets);
     expect(tester.takeException(), isNull);
   });
