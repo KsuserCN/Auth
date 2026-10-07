@@ -17,6 +17,7 @@ const Color kSurfaceTint = Color(0xFFFFF2CC);
 const String kDefaultApiBaseUrl = 'https://api.ksuser.cn';
 const String kDesktopAppName = 'Ksuser安全';
 const String kDesktopAppVersion = '1.0.0';
+const String kDesktopBuildNumber = '1';
 const int kDesktopSessionBridgePort = 43921;
 const String kSidebarLogoAsset = 'assets/logo/sidebar_logo.png';
 const String kUserAgreementUrl = 'https://docs.ksuser.cn/agreement/user.html';
@@ -1551,6 +1552,132 @@ Future<void> showDesktopLoginQrDialog(
   await stopPolling();
 }
 
+class _DesktopAboutCard extends StatelessWidget {
+  const _DesktopAboutCard({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.52),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: colors.outlineVariant.withValues(alpha: 0.55),
+        ),
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(17),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(
+                kSidebarLogoAsset,
+                width: 54,
+                height: 54,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '$kDesktopAppName',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '版本 $kDesktopAppVersion ($kDesktopBuildNumber)',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsDocumentTile extends StatelessWidget {
+  const _SettingsDocumentTile({
+    required this.icon,
+    required this.title,
+    required this.url,
+  });
+
+  final IconData icon;
+  final String title;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: () async {
+            try {
+              await openExternalUrl(url);
+            } catch (error) {
+              if (context.mounted) {
+                showAppMessage(context, error.toString(), error: true);
+              }
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 19, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Icon(
+                  Icons.open_in_new_rounded,
+                  size: 17,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Future<void> showDesktopSettingsDialog(
   BuildContext context,
   AppController controller,
@@ -1615,6 +1742,28 @@ Future<void> showDesktopSettingsDialog(
                       title: const Text('减少动画'),
                       subtitle: const Text('切换主题和弹窗时尽量减少动画效果'),
                     ),
+                    const SizedBox(height: 14),
+                    const Divider(height: 1),
+                    const SizedBox(height: 18),
+                    Text('关于', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 12),
+                    _DesktopAboutCard(controller: controller),
+                    const SizedBox(height: 12),
+                    _SettingsDocumentTile(
+                      icon: Icons.description_outlined,
+                      title: '服务条款',
+                      url: kUserAgreementUrl,
+                    ),
+                    _SettingsDocumentTile(
+                      icon: Icons.privacy_tip_outlined,
+                      title: '隐私协议',
+                      url: kPrivacyPolicyUrl,
+                    ),
+                    _SettingsDocumentTile(
+                      icon: Icons.share_outlined,
+                      title: '第三方信息共享清单',
+                      url: kThirdPartySharingUrl,
+                    ),
                   ],
                 ),
               ),
@@ -1659,7 +1808,6 @@ Future<void> showDesktopAboutDialog(
           const SizedBox(height: 8),
           const Text('桌面统一认证客户端'),
           const SizedBox(height: 8),
-          Text('运行环境：${controller.environmentName}'),
           Text('主题模式：${themeModeLabel(controller.themeMode)}'),
           Text(
             '本地调试：${controller.compactMode ? '紧凑布局，' : ''}${controller.reduceMotion ? '减少动画' : '标准动画'}',
