@@ -81,12 +81,13 @@ struct SecurityView: View {
                             .accessibilityIdentifier("confirmLogoutAll")
                     } message: { Text("所有登录会话都会被撤销，包括这台设备。") }
             }
-            SecuritySection(title: "恢复与注销", icon: "lifepreserver") {
+            SecuritySection(title: "恢复与账号管理", icon: "lifepreserver") {
                 ActionRow(title: "生成恢复授权", icon: "qrcode", subtitle: "供其他设备找回账号") {
                     Task { await model.requireSensitive(title: "生成账号恢复授权") { await model.generateRecoveryTicket(); if model.errorMessage == nil { present(.recovery) } } }
                 }
                 sectionDivider
-                ActionRow(title: "注销我的账号", icon: "trash", subtitle: "永久删除，无法恢复", destructive: true) { protected(.deleteAccount) }
+                ActionRow(title: "删除账号", icon: "person.crop.circle.badge.xmark", subtitle: "永久删除账号及相关数据", destructive: true) { sheet = .deleteAccount }
+                    .accessibilityIdentifier("deleteAccountRow")
             }
         }.refreshable { await model.refreshSecurity() }.task { await model.refreshSecurity() }
             .sheet(item: $sheet) { page in

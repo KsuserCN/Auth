@@ -114,6 +114,26 @@ struct ProfileView: View {
                     InfoRow(title: "UUID", value: user.uuid)
                     DateInfoRow(title: "最近更新", value: user.updatedAt)
                 }
+                AppCard {
+                    CardHeader(title: "账号管理", icon: "person.crop.circle")
+                    NavigationLink {
+                        DeleteAccountView()
+                    } label: {
+                        HStack(spacing: 13) {
+                            Image(systemName: "person.crop.circle.badge.xmark").frame(width: 24).foregroundStyle(Brand.danger)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("删除账号").foregroundStyle(Brand.danger)
+                                Text("永久删除账号及相关数据").font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .frame(minHeight: 48)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("deleteAccountRow")
+                }
             }
         }.refreshable { await model.refreshProfile() }
             .task { await model.refreshProfile() }
