@@ -186,7 +186,7 @@ struct AccountRecoveryTicketView: View {
                         InfoRow(title: L10n.text("背书位置"), value: ticket.sponsorIpLocation ?? L10n.text("未知"))
                         InfoRow(title: L10n.text("有效期"), value: remaining > 0 ? L10n.format("{0} 秒", [String(describing: remaining)]) : L10n.text("已过期"))
                         if let code = ticket.recoveryCode { Button(L10n.text("打开网页恢复"), systemImage: "safari") { openURL(accountRecoveryURL(code: code, environment: model.environment)) }.frame(minHeight: 44).disabled(remaining <= 0) }
-                        AsyncActionButton(title: remaining > 0 ? "重新生成" : "生成新的授权", isBusy: model.isBusy) { await model.requireSensitive(title: "生成恢复授权") { await model.generateRecoveryTicket() } }
+                        AsyncActionButton(title: remaining > 0 ? L10n.text("重新生成") : L10n.text("生成新的授权"), isBusy: model.isBusy) { await model.requireSensitive(title: "生成恢复授权") { await model.generateRecoveryTicket() } }
                     }
                 } else { ContentUnavailableView(L10n.text("暂无恢复授权"), systemImage: "qrcode") }
             }

@@ -35,7 +35,7 @@ struct SecurityView: View {
                             Button("解除绑定", role: .destructive) { Task { await model.requireSensitive(title: "解除 Apple 绑定") { await model.unbindApple() } } }
                         } message: { Text(L10n.text("解绑前请确保已经设置密码或其他可用的登录方式。")) }
                 } else {
-                    ActionRow(title: "Apple 登录", icon: "apple.logo", subtitle: "未绑定") { Task { await model.requireSensitive(title: "绑定 Apple") { await model.bindApple() } } }
+                    ActionRow(title: L10n.text("Apple 登录"), icon: "apple.logo", subtitle: L10n.text("未绑定")) { Task { await model.requireSensitive(title: "绑定 Apple") { await model.bindApple() } } }
                 }
                 sectionDivider
                 if model.qqBound {
@@ -231,7 +231,7 @@ struct RiskStatusCard: View {
             .font(.subheadline)
             .tint(Brand.gold)
             if status.requiresStepUp && !status.sessionFrozen {
-                AsyncActionButton(title: "立即验证", isBusy: model.isBusy) { await model.requireSensitive(title: "提升会话安全等级") { await model.refreshSecurity() } }
+                AsyncActionButton(title: L10n.text("立即验证"), isBusy: model.isBusy) { await model.requireSensitive(title: "提升会话安全等级") { await model.refreshSecurity() } }
             }
             if status.sessionFrozen { AsyncActionButton(title: L10n.text("重新登录"), isBusy: model.isBusy) { await model.logout() } }
         }
