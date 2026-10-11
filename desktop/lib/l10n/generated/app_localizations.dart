@@ -102,7 +102,7 @@ abstract class AppLocalizations {
   /// No description provided for @ksuserSecurity.
   ///
   /// In en, this message translates to:
-  /// **'Ksuser Security'**
+  /// **'Ksuser Authentication Center'**
   String get ksuserSecurity;
 
   /// No description provided for @dataRefreshed.
@@ -1086,7 +1086,7 @@ abstract class AppLocalizations {
   /// No description provided for @signInToKsuserSecurityToManage.
   ///
   /// In en, this message translates to:
-  /// **'Sign in to Ksuser Security to manage your account and devices.'**
+  /// **'Sign in to Ksuser Authentication Center to manage your account and devices.'**
   String get signInToKsuserSecurityToManage;
 
   /// No description provided for @password.

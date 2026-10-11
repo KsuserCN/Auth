@@ -1,6 +1,6 @@
 {
   "@@locale": "en",
-  "ksuserSecurity": "Ksuser Security",
+  "ksuserSecurity": "Ksuser Authentication Center",
   "dataRefreshed": "Data refreshed",
   "signInPageRefreshed": "Sign-in page refreshed",
   "checkingTheTerms": "Checking the terms...",
@@ -260,7 +260,7 @@
   "signedInWithQrCode": "Signed in with QR code",
   "qrCodeVerifiedContinueWithAdditionalVerification": "QR code verified. Continue with additional verification",
   "signIn": "Sign in",
-  "signInToKsuserSecurityToManage": "Sign in to Ksuser Security to manage your account and devices.",
+  "signInToKsuserSecurityToManage": "Sign in to Ksuser Authentication Center to manage your account and devices.",
   "password": "Password",
   "emailCode": "Email code",
   "emailAddress": "Email address",

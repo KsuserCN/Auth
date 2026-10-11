@@ -3,7 +3,7 @@ import FlutterMacOS
 
 @main
 class AppDelegate: FlutterAppDelegate {
-  private var appDisplayName: String { desktopNativeText("Ksuser安全") }
+  private var appDisplayName: String { desktopNativeText("Ksuser 统一认证中心") }
   private var menuTemplate: NSMenu?
   private var statusItem: NSStatusItem?
   private var isMenuBarVisible = false
@@ -448,7 +448,7 @@ class AppDelegate: FlutterAppDelegate {
 enum DesktopNativeLocalization {
   static var languageTag = Locale.preferredLanguages.first?.lowercased().hasPrefix("zh") == true ? "zh-Hans" : "en"
   static let english: [String: String] = [
-    "Ksuser安全": "Ksuser Security",
+    "Ksuser 统一认证中心": "Ksuser Authentication Center",
     "- 登录页默认读取当前环境配置，不再暴露 API 或环境切换。\n    - Passkey 使用系统原生服务完成验证。\n    - 常用菜单：\n      • Command-, 打开设置\n      • Command-R 刷新数据\n      • Command-1~5 快速切换工作台模块\n      • Shift-Command-L 退出登录": "- The sign-in page uses the current environment configuration.\n- Passkey verification uses the system service.\n- Keyboard shortcuts:\n  • Command-, Open settings\n  • Command-R Refresh data\n  • Command-1–5 Switch workspace sections\n  • Shift-Command-L Sign out",
     "知道了": "OK",
     "编辑": "Edit",

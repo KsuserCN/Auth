@@ -1,6 +1,6 @@
 {
   "@@locale": "zh_Hans",
-  "ksuserSecurity": "Ksuser安全",
+  "ksuserSecurity": "Ksuser 统一认证中心",
   "dataRefreshed": "数据刷新完成",
   "signInPageRefreshed": "登录页数据已刷新",
   "checkingTheTerms": "正在检查使用协议...",
@@ -260,7 +260,7 @@
   "signedInWithQrCode": "扫码登录成功",
   "qrCodeVerifiedContinueWithAdditionalVerification": "扫码验证成功，请继续完成二次验证",
   "signIn": "登录",
-  "signInToKsuserSecurityToManage": "登录 Ksuser 安全中心，继续管理你的账户与设备。",
+  "signInToKsuserSecurityToManage": "登录 Ksuser 统一认证中心，继续管理你的账户与设备。",
   "password": "密码",
   "emailCode": "邮箱验证码",
   "emailAddress": "邮箱地址",

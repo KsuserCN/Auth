@@ -4,7 +4,7 @@ import FlutterMacOS
 import LocalAuthentication
 
 class MainFlutterWindow: NSWindow {
-  private var appDisplayName: String { desktopNativeText("Ksuser安全") }
+  private var appDisplayName: String { desktopNativeText("Ksuser 统一认证中心") }
   private var passkeyBridge: PasskeyBridge?
   private var appleLoginBridge: AppleLoginBridge?
   private var appMenuBridge: AppMenuBridge?

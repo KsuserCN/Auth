@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get ksuserSecurity => 'Ksuser Security';
+  String get ksuserSecurity => 'Ksuser Authentication Center';
 
   @override
   String get dataRefreshed => 'Data refreshed';
@@ -581,7 +581,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get signInToKsuserSecurityToManage =>
-      'Sign in to Ksuser Security to manage your account and devices.';
+      'Sign in to Ksuser Authentication Center to manage your account and devices.';
 
   @override
   String get password => 'Password';

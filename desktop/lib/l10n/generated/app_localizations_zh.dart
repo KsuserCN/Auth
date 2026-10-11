@@ -9,7 +9,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get ksuserSecurity => 'Ksuser安全';
+  String get ksuserSecurity => 'Ksuser 统一认证中心';
 
   @override
   String get dataRefreshed => '数据刷新完成';
@@ -536,7 +536,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signIn => '登录';
 
   @override
-  String get signInToKsuserSecurityToManage => '登录 Ksuser 安全中心，继续管理你的账户与设备。';
+  String get signInToKsuserSecurityToManage => '登录 Ksuser 统一认证中心，继续管理你的账户与设备。';
 
   @override
   String get password => '密码';
@@ -1585,7 +1585,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   AppLocalizationsZhHans() : super('zh_Hans');
 
   @override
-  String get ksuserSecurity => 'Ksuser安全';
+  String get ksuserSecurity => 'Ksuser 统一认证中心';
 
   @override
   String get dataRefreshed => '数据刷新完成';
@@ -2112,7 +2112,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get signIn => '登录';
 
   @override
-  String get signInToKsuserSecurityToManage => '登录 Ksuser 安全中心，继续管理你的账户与设备。';
+  String get signInToKsuserSecurityToManage => '登录 Ksuser 统一认证中心，继续管理你的账户与设备。';
 
   @override
   String get password => '密码';

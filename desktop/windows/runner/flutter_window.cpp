@@ -53,7 +53,9 @@ bool FlutterWindow::OnCreate() {
         if (call.method_name() == "setLocale") {
           const auto* locale = std::get_if<std::string>(call.arguments());
           SetDesktopLocale(locale ? *locale : "en");
-          SetWindowTextW(GetHandle(), DesktopText(L"Ksuser安全", L"Ksuser Security"));
+          SetWindowTextW(
+              GetHandle(),
+              DesktopText(L"Ksuser 统一认证中心", L"Ksuser Authentication Center"));
           if (tray_icon_added_) {
             RemoveTrayIcon();
             AddTrayIcon();
@@ -179,7 +181,7 @@ bool FlutterWindow::AddTrayIcon() {
   tray_icon.hIcon = static_cast<HICON>(LoadImageW(
       GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, 0,
       0, LR_DEFAULTSIZE | LR_SHARED));
-  wcscpy_s(tray_icon.szTip, DesktopText(L"Ksuser安全", L"Ksuser Security"));
+  wcscpy_s(tray_icon.szTip, DesktopText(L"Ksuser 统一认证中心", L"Ksuser Authentication Center"));
 
   if (tray_icon.hIcon == nullptr ||
       !Shell_NotifyIconW(NIM_ADD, &tray_icon)) {
