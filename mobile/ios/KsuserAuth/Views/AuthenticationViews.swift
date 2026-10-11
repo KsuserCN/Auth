@@ -69,8 +69,9 @@ struct AuthenticationView: View {
                 }.accessibilityHidden(true)
                 AsyncLoginProviderButton(title: L10n.text("使用 Passkey 登录"), icon: "person.badge.key.fill", disabled: !agreementAccepted || model.isBusy) {
                     focusedField = nil
-                    await model.loginWithPasskey(); if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
-                }.accessibilityIdentifier("passkeyLoginButton")
+                    await authenticateWithPasskey()
+                }
+                .accessibilityIdentifier("passkeyLoginButton")
                 let layout = dynamicTypeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(spacing: 12)) : AnyLayout(HStackLayout(spacing: 12))
                 layout {
@@ -134,6 +135,11 @@ struct AuthenticationView: View {
         let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
         if useCode { await model.loginWithCode(email: address, code: code) }
         else { await model.login(email: address, password: password) }
+        if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
+    }
+
+    private func authenticateWithPasskey() async {
+        await model.loginWithPasskey()
         if isLinking, model.isAuthenticated { await model.bindPendingOAuth() }
     }
 }

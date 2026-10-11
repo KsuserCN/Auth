@@ -114,7 +114,14 @@ public class PasskeyService {
         if (authenticatorAttachment != null) {
             authSelNode.put("authenticatorAttachment", authenticatorAttachment);
         }
-        authSelNode.put("residentKey", appProperties.getPasskey().getResidentKey());
+        // Login starts without an account identifier, so auto and cross-platform credentials must be discoverable.
+        boolean requiresDiscoverableCredential = authenticatorType != null
+                && ("auto".equalsIgnoreCase(authenticatorType.trim())
+                || "cross-platform".equalsIgnoreCase(authenticatorType.trim()));
+        String residentKey = requiresDiscoverableCredential
+                ? "required"
+                : appProperties.getPasskey().getResidentKey();
+        authSelNode.put("residentKey", residentKey);
         authSelNode.put("userVerification", appProperties.getPasskey().getUserVerification());
 
         // 构建响应

@@ -298,7 +298,7 @@ struct SensitiveVerificationView: View {
                 case "totp":
                     AdaptivePicker(L10n.text("验证器或恢复码"), selection: $recovery) { Text(L10n.text("验证器")).tag(false); Text(L10n.text("恢复码")).tag(true) }
                     FormField(title: recovery ? L10n.text("恢复码") : L10n.text("6 位验证码"), text: $code, keyboard: recovery ? .default : .numberPad, contentType: .oneTimeCode)
-                case "passkey": verificationHint("person.badge.key.fill", L10n.text("使用 Face ID、Touch ID 或设备密码验证 Passkey"))
+                case "passkey": verificationHint("person.badge.key.fill", L10n.text("使用设备 Passkey 或外接安全密钥完成验证"))
                 case "apple": verificationHint("apple.logo", L10n.text("重新验证已绑定的 Apple 身份"))
                 default: Text(L10n.text("正在读取可用验证方式…")).font(.subheadline).foregroundStyle(.secondary)
                 }

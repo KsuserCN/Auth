@@ -138,7 +138,12 @@ extension KsuserRepositoryProviding {
     func recoveryCodes(regenerate: Bool = false) async throws -> [String] { try await client.request(regenerate ? "/auth/totp/recovery-codes/regenerate" : "/auth/totp/recovery-codes", method: regenerate ? "POST" : "GET", body: regenerate ? [:] : nil) }
     func disableTOTP() async throws { let _: EmptyPayload = try await client.request("/auth/totp/disable", method: "POST", body: [:]) }
     func passkeys() async throws -> [PasskeyListItem] { let list: PasskeyListResponse = try await client.request("/auth/passkey/list"); return list.passkeys }
-    func passkeyRegistrationOptions(name: String) async throws -> PasskeyRegistrationOptions { try await client.request("/auth/passkey/registration-options", method: "POST", body: ["passkeyName": .string(trimmedUserInput(name)), "authenticatorType": .string("auto")]) }
+    func passkeyRegistrationOptions(name: String) async throws -> PasskeyRegistrationOptions {
+        try await client.request("/auth/passkey/registration-options", method: "POST", body: [
+            "passkeyName": .string(trimmedUserInput(name)),
+            "authenticatorType": .string("auto")
+        ])
+    }
     func createPasskey(name: String, payload: PasskeyRegistrationPayload) async throws {
         let _: JSONValue = try await client.request("/auth/passkey/registration-verify", method: "POST", body: ["passkeyName": .string(trimmedUserInput(name)), "credentialRawId": .string(payload.credentialRawId), "clientDataJSON": .string(payload.clientDataJSON), "attestationObject": .string(payload.attestationObject), "transports": .string(payload.transports)])
     }

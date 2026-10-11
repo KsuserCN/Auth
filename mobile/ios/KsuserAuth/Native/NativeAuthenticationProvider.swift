@@ -4,7 +4,7 @@ import UIKit
 import Security
 
 enum NativeAuthenticationError: LocalizedError, Equatable {
-    case cancelled, busy, invalidOptions, invalidCredential, unavailableWindow, qqUnavailable, timedOut, appleAuthorizationFailed
+    case cancelled, busy, invalidOptions, invalidCredential, unavailableWindow, qqUnavailable, timedOut, appleAuthorizationFailed, authorizationFailed
     var errorDescription: String? {
         switch self {
         case .cancelled: return L10n.text("已取消验证")
@@ -15,6 +15,7 @@ enum NativeAuthenticationError: LocalizedError, Equatable {
         case .qqUnavailable: return L10n.text("无法发起 QQ 授权，请检查网络与 QQ 应用配置")
         case .timedOut: return L10n.text("QQ 授权已超时，请重试")
         case .appleAuthorizationFailed: return L10n.text("Apple 身份验证未能完成，请重试")
+        case .authorizationFailed: return L10n.text("验证未能完成，请重试")
         }
     }
 }
@@ -50,8 +51,9 @@ extension Data {
             .filter { $0.activationState == .foregroundActive }.flatMap(\.windows).first { $0.isKeyWindow }
         guard anchor != nil else { throw NativeAuthenticationError.unavailableWindow }
     }
-    private func present(_ request: ASAuthorizationRequest) {
-        let controller = ASAuthorizationController(authorizationRequests: [request])
+    private func present(_ request: ASAuthorizationRequest) { present([request]) }
+    private func present(_ requests: [ASAuthorizationRequest]) {
+        let controller = ASAuthorizationController(authorizationRequests: requests)
         self.controller = controller
         controller.delegate = self
         controller.presentationContextProvider = self
@@ -60,13 +62,28 @@ extension Data {
     func authenticatePasskey(options: PasskeyAuthenticationOptions) async throws -> PasskeyAuthenticationPayload {
         try prepare()
         guard options.rpId == environment.passkeyRPID, let challenge = Data(base64URL: options.challenge), !challenge.isEmpty else { throw NativeAuthenticationError.invalidOptions }
-        let request = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rpId).createCredentialAssertionRequest(challenge: challenge)
-        request.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference(rawValue: options.userVerification ?? "preferred")
-        request.allowedCredentials = (options.allowCredentials?.arrayValue ?? []).compactMap {
+        let platformRequest = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rpId).createCredentialAssertionRequest(challenge: challenge)
+        platformRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference(rawValue: options.userVerification ?? "preferred")
+        platformRequest.allowedCredentials = (options.allowCredentials?.arrayValue ?? []).compactMap {
             guard let id = $0.objectValue?["id"]?.stringValue, let data = Data(base64URL: id) else { return nil }
             return ASAuthorizationPlatformPublicKeyCredentialDescriptor(credentialID: data)
         }
-        return try await withCheckedThrowingContinuation { pending = .assertion($0); present(request) }
+
+        let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: options.rpId)
+        let securityKeyRequest = securityKeyProvider.createCredentialAssertionRequest(challenge: challenge)
+        securityKeyRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference(rawValue: options.userVerification ?? "preferred")
+        securityKeyRequest.allowedCredentials = (options.allowCredentials?.arrayValue ?? []).compactMap { credential in
+            guard let object = credential.objectValue,
+                  let id = object["id"]?.stringValue,
+                  let data = Data(base64URL: id) else { return nil }
+            let transports = object["transports"]?.arrayValue?.compactMap { $0.stringValue }.map(securityKeyTransport)
+                ?? ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.Transport.allSupported
+            return ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor(credentialID: data, transports: transports)
+        }
+        return try await withCheckedThrowingContinuation {
+            pending = .assertion($0)
+            present([platformRequest, securityKeyRequest])
+        }
     }
     func registerPasskey(options: PasskeyRegistrationOptions) async throws -> PasskeyRegistrationPayload {
         try prepare()
@@ -75,10 +92,30 @@ extension Data {
               let name = user["name"]?.stringValue, let id = user["id"]?.stringValue,
               let userID = Data(base64URL: id), !userID.isEmpty,
               let challenge = Data(base64URL: options.challenge), !challenge.isEmpty else { throw NativeAuthenticationError.invalidOptions }
-        let request = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpID).createCredentialRegistrationRequest(challenge: challenge, name: name, userID: userID)
-        request.displayName = user["displayName"]?.stringValue ?? name
-        request.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference(rawValue: options.authenticatorSelection?.objectValue?["userVerification"]?.stringValue ?? "required")
-        return try await withCheckedThrowingContinuation { pending = .registration($0); present(request) }
+        let selection = options.authenticatorSelection?.objectValue ?? [:]
+        let platformProvider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rpID)
+        let platformRequest = platformProvider.createCredentialRegistrationRequest(challenge: challenge, name: name, userID: userID)
+        platformRequest.displayName = user["displayName"]?.stringValue ?? name
+        platformRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference(rawValue: selection["userVerification"]?.stringValue ?? "required")
+
+        let securityKeyProvider = ASAuthorizationSecurityKeyPublicKeyCredentialProvider(relyingPartyIdentifier: rpID)
+        let securityKeyRequest = securityKeyProvider.createCredentialRegistrationRequest(
+            challenge: challenge,
+            displayName: user["displayName"]?.stringValue ?? name,
+            name: name,
+            userID: userID
+        )
+        securityKeyRequest.credentialParameters = (options.pubKeyCredParams.arrayValue ?? []).compactMap { parameter in
+            guard let algorithm = parameter.objectValue?["alg"]?.intValue else { return nil }
+            return ASAuthorizationPublicKeyCredentialParameters(algorithm: ASCOSEAlgorithmIdentifier(algorithm))
+        }
+        securityKeyRequest.userVerificationPreference = ASAuthorizationPublicKeyCredentialUserVerificationPreference(rawValue: selection["userVerification"]?.stringValue ?? "required")
+        securityKeyRequest.residentKeyPreference = ASAuthorizationPublicKeyCredentialResidentKeyPreference(rawValue: selection["residentKey"]?.stringValue ?? "required")
+
+        return try await withCheckedThrowingContinuation {
+            pending = .registration($0)
+            present([platformRequest, securityKeyRequest])
+        }
     }
     func signInWithApple(challenge: AppleChallenge) async throws -> AppleCredential {
         try prepare()
@@ -92,11 +129,21 @@ extension Data {
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         let active = pending; pending = nil; self.controller = nil
         switch (active, authorization.credential) {
-        case (.assertion(let continuation), let credential as ASAuthorizationPlatformPublicKeyCredentialAssertion):
+        case (.assertion(let continuation), let credential as ASAuthorizationPublicKeyCredentialAssertion):
             continuation.resume(returning: PasskeyAuthenticationPayload(credentialRawId: credential.credentialID.base64URL, clientDataJSON: credential.rawClientDataJSON.base64URL, authenticatorData: credential.rawAuthenticatorData.base64URL, signature: credential.signature.base64URL))
-        case (.registration(let continuation), let credential as ASAuthorizationPlatformPublicKeyCredentialRegistration):
+        case (.registration(let continuation), let credential as ASAuthorizationPublicKeyCredentialRegistration):
             guard let attestation = credential.rawAttestationObject else { continuation.resume(throwing: NativeAuthenticationError.invalidCredential); return }
-            continuation.resume(returning: PasskeyRegistrationPayload(credentialRawId: credential.credentialID.base64URL, clientDataJSON: credential.rawClientDataJSON.base64URL, attestationObject: attestation.base64URL, transports: "internal"))
+            let transports: String
+            if let securityKey = credential as? ASAuthorizationSecurityKeyPublicKeyCredentialRegistration {
+                if #available(iOS 17.5, *) {
+                    transports = securityKey.transports.map { $0.rawValue == "bluetooth" ? "ble" : $0.rawValue }.joined(separator: ",")
+                } else {
+                    transports = "usb,nfc"
+                }
+            } else {
+                transports = "internal"
+            }
+            continuation.resume(returning: PasskeyRegistrationPayload(credentialRawId: credential.credentialID.base64URL, clientDataJSON: credential.rawClientDataJSON.base64URL, attestationObject: attestation.base64URL, transports: transports))
         case (.apple(let continuation), let credential as ASAuthorizationAppleIDCredential):
             guard let token = credential.identityToken.flatMap({ String(data: $0, encoding: .utf8) }), let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }), !token.isEmpty, !code.isEmpty else { continuation.resume(throwing: NativeAuthenticationError.invalidCredential); return }
             stagedAppleIdentifier = credential.user
@@ -106,12 +153,22 @@ extension Data {
             if let active { fail(active, NativeAuthenticationError.invalidCredential) }
         }
     }
+    private func securityKeyTransport(_ value: String) -> ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.Transport {
+        ASAuthorizationSecurityKeyPublicKeyCredentialDescriptor.Transport(rawValue: value == "ble" ? "bluetooth" : value)
+    }
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         if let active = pending {
             pending = nil; self.controller = nil
             let nsError = error as NSError
             guard nsError.domain == ASAuthorizationError.errorDomain else { fail(active, error); return }
-            let mappedError: NativeAuthenticationError = nsError.code == ASAuthorizationError.canceled.rawValue ? .cancelled : .appleAuthorizationFailed
+            let mappedError: NativeAuthenticationError
+            if nsError.code == ASAuthorizationError.canceled.rawValue {
+                mappedError = .cancelled
+            } else if case .apple = active {
+                mappedError = .appleAuthorizationFailed
+            } else {
+                mappedError = .authorizationFailed
+            }
             fail(active, mappedError)
         }
     }

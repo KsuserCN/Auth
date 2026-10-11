@@ -13,10 +13,11 @@ struct PasskeysView: View {
     var body: some View {
         PageScroll {
             AppCard {
-                CardHeader(title: L10n.text("用你的设备安全登录"), subtitle: L10n.text("Passkey 使用 Face ID、Touch ID 或设备密码，无需记住密码。"), icon: "person.badge.key.fill")
+                CardHeader(title: L10n.text("用你的设备安全登录"), subtitle: L10n.text("Passkey 可用 Face ID、Touch ID 或外接安全密钥登录。"), icon: "person.badge.key.fill")
                 FormField(title: L10n.text("新 Passkey 名称"), text: $newName)
                 AsyncActionButton(title: L10n.text("添加 Passkey"), isBusy: model.isBusy, disabled: newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
-                    await model.requireSensitive(title: "添加 Passkey") { await model.addPasskey(name: newName); if model.errorMessage == nil { newName = "" } }
+                    await model.addPasskey(name: newName)
+                    if model.errorMessage == nil { newName = "" }
                 }
             }
             if model.passkeys.isEmpty {
@@ -74,6 +75,7 @@ struct PasskeysView: View {
                 }
             }
     }
+
 }
 
 struct TOTPView: View {
