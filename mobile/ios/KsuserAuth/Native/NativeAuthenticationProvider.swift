@@ -3,8 +3,8 @@ import Foundation
 import UIKit
 import Security
 
-enum NativeAuthenticationError: LocalizedError {
-    case cancelled, busy, invalidOptions, invalidCredential, unavailableWindow, qqUnavailable, timedOut
+enum NativeAuthenticationError: LocalizedError, Equatable {
+    case cancelled, busy, invalidOptions, invalidCredential, unavailableWindow, qqUnavailable, timedOut, appleAuthorizationFailed
     var errorDescription: String? {
         switch self {
         case .cancelled: return L10n.text("已取消验证")
@@ -14,6 +14,7 @@ enum NativeAuthenticationError: LocalizedError {
         case .unavailableWindow: return L10n.text("请返回应用后重新验证")
         case .qqUnavailable: return L10n.text("无法发起 QQ 授权，请检查网络与 QQ 应用配置")
         case .timedOut: return L10n.text("QQ 授权已超时，请重试")
+        case .appleAuthorizationFailed: return L10n.text("Apple 身份验证未能完成，请重试")
         }
     }
 }
@@ -108,7 +109,10 @@ extension Data {
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         if let active = pending {
             pending = nil; self.controller = nil
-            fail(active, (error as NSError).code == ASAuthorizationError.canceled.rawValue ? NativeAuthenticationError.cancelled : error)
+            let nsError = error as NSError
+            guard nsError.domain == ASAuthorizationError.errorDomain else { fail(active, error); return }
+            let mappedError: NativeAuthenticationError = nsError.code == ASAuthorizationError.canceled.rawValue ? .cancelled : .appleAuthorizationFailed
+            fail(active, mappedError)
         }
     }
     private func fail(_ active: Pending, _ error: Error) {

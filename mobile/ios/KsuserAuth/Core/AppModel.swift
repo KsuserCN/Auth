@@ -648,6 +648,7 @@ struct LoadingActivity: Identifiable {
     }
     private func isCancellation(_ error: Error) -> Bool {
         if error is CancellationError { return true }
+        if error as? NativeAuthenticationError == .cancelled { return true }
         if let apiError = error as? APIError, apiError == .cancelled { return true }
         if let urlError = error as? URLError, urlError.code == .cancelled { return true }
         let nsError = error as NSError

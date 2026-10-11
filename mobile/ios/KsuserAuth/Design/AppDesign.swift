@@ -246,8 +246,11 @@ struct PageScroll<Content: View>: View {
     private let content: Content
     private let maxWidth: CGFloat
     private let spacing: CGFloat
-    init(maxWidth: CGFloat = 760, spacing: CGFloat = 18, @ViewBuilder content: () -> Content) {
-        self.maxWidth = maxWidth; self.spacing = spacing; self.content = content()
+    private let showsStatusMessagesDuringSensitiveVerification: Bool
+    init(maxWidth: CGFloat = 760, spacing: CGFloat = 18, showsStatusMessagesDuringSensitiveVerification: Bool = false, @ViewBuilder content: () -> Content) {
+        self.maxWidth = maxWidth; self.spacing = spacing
+        self.showsStatusMessagesDuringSensitiveVerification = showsStatusMessagesDuringSensitiveVerification
+        self.content = content()
     }
     var body: some View {
         ScrollView {
@@ -257,7 +260,8 @@ struct PageScroll<Content: View>: View {
                 .padding(20).frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
         }.background(Brand.background).scrollDismissesKeyboard(.interactively)
             .overlay(alignment: .top) {
-                if model.loadingActivity != nil || model.errorMessage != nil || model.noticeMessage != nil {
+                let canShowStatus = model.sensitiveRequest == nil || showsStatusMessagesDuringSensitiveVerification
+                if canShowStatus && (model.loadingActivity != nil || model.errorMessage != nil || model.noticeMessage != nil) {
                     VStack(spacing: 8) {
                         if let activity = model.loadingActivity { LoadingStatusBanner(activity: activity) }
                         if let message = model.errorMessage ?? model.noticeMessage {

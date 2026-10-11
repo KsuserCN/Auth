@@ -318,6 +318,23 @@
         }
       }
     },
+    "Apple 身份验证未能完成，请重试" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple sign-in couldn't be completed. Please try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 身份验证未能完成，请重试"
+          }
+        }
+      }
+    },
     "Apple 账号已关联" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -255,7 +255,7 @@ struct SensitiveVerificationView: View {
     private let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
     private var canVerify: Bool { switch method { case "password": !password.isEmpty; case "email-code", "totp": !code.isEmpty; case "passkey", "apple": true; default: false } }
     var body: some View {
-        PageScroll(spacing: 16) {
+        PageScroll(spacing: 16, showsStatusMessagesDuringSensitiveVerification: true) {
             HStack(alignment: .center, spacing: 13) {
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 22, weight: .medium)).foregroundStyle(Brand.gold)
