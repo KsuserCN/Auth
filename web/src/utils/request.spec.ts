@@ -16,6 +16,8 @@ const rejectedResponse = (config: InternalAxiosRequestConfig, status: number, da
 }
 
 const createRequest = async (adapter: AxiosAdapter) => {
+  const { setLanguagePreference } = await import('@/i18n')
+  setLanguagePreference('zh-Hans')
   const { default: request } = await import('./request')
   request.defaults.adapter = adapter
   return request
@@ -30,6 +32,19 @@ beforeEach(() => {
 })
 
 describe('API response interceptor', () => {
+  it('sends the effective language for each request after a live switch', async () => {
+    const languages: unknown[] = []
+    const request = await createRequest(async (config) => {
+      languages.push(config.headers.get('Accept-Language'))
+      return { config, status: 200, statusText: 'OK', headers: {}, data: { code: 200, data: {} } }
+    })
+    await request.get('/auth/userinfo')
+    const { setLanguagePreference } = await import('@/i18n')
+    setLanguagePreference('en')
+    await request.get('/auth/userinfo')
+    expect(languages).toEqual(['zh-Hans', 'en'])
+  })
+
   it('uses detailed local copy for login 401 and does not attempt refresh', async () => {
     const adapter = vi.fn<AxiosAdapter>(async (config) =>
       rejectedResponse(config, 401, {

@@ -5,7 +5,7 @@ import UIKit
 enum AvatarImage {
     enum ReadError: LocalizedError {
         case invalidImage
-        var errorDescription: String? { "无法读取这张图片，请选择另一张图片" }
+        var errorDescription: String? { L10n.text("无法读取这张图片，请选择另一张图片") }
     }
 
     static func prepare(_ data: Data) throws -> UIImage {
@@ -41,6 +41,7 @@ struct AvatarSelection: Identifiable {
 }
 
 struct AvatarCropView: UIViewControllerRepresentable {
+    @Environment(\.locale) private var localizationLocale
     let image: UIImage
     let onCancel: () -> Void
     let onCrop: (UIImage) -> Void
@@ -52,7 +53,9 @@ struct AvatarCropView: UIViewControllerRepresentable {
         return navigation
     }
 
-    func updateUIViewController(_ controller: UINavigationController, context: Context) {}
+    func updateUIViewController(_ controller: UINavigationController, context: Context) {
+        (controller.viewControllers.first as? AvatarCropController)?.refreshLocalizedText()
+    }
 }
 
 @MainActor final class AvatarCropController: UIViewController, UIScrollViewDelegate {
@@ -62,6 +65,7 @@ struct AvatarCropView: UIViewControllerRepresentable {
     private let scroll = UIScrollView()
     private let imageView = UIImageView()
     private let guide = UIView()
+    private let instructions = UILabel()
     private let mask = CAShapeLayer()
     private var viewport: CGSize = .zero
 
@@ -73,10 +77,10 @@ struct AvatarCropView: UIViewControllerRepresentable {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "裁剪头像"
+        title = L10n.text("裁剪头像")
         view.backgroundColor = .systemGroupedBackground
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "取消", style: .plain, target: self, action: #selector(cancel))
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "使用头像", style: .done, target: self, action: #selector(confirm))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: L10n.text("取消"), style: .plain, target: self, action: #selector(cancel))
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: L10n.text("使用头像"), style: .done, target: self, action: #selector(confirm))
         navigationItem.rightBarButtonItem?.accessibilityIdentifier = "confirmAvatarCrop"
 
         scroll.delegate = self
@@ -90,7 +94,7 @@ struct AvatarCropView: UIViewControllerRepresentable {
         view.addSubview(scroll)
         imageView.image = image
         imageView.isAccessibilityElement = true
-        imageView.accessibilityLabel = "可拖动和缩放的头像预览"
+        imageView.accessibilityLabel = L10n.text("可拖动和缩放的头像预览")
         imageView.frame = CGRect(origin: .zero, size: image.size)
         scroll.addSubview(imageView)
         scroll.contentSize = image.size
@@ -102,8 +106,7 @@ struct AvatarCropView: UIViewControllerRepresentable {
         mask.strokeColor = UIColor.white.withAlphaComponent(0.8).cgColor; mask.lineWidth = 1
         guide.layer.addSublayer(mask)
 
-        let instructions = UILabel()
-        instructions.text = "拖动调整位置，双指缩放。圆圈内是头像预览。"
+        instructions.text = L10n.text("拖动调整位置，双指缩放。圆圈内是头像预览。")
         instructions.font = .preferredFont(forTextStyle: .subheadline)
         instructions.adjustsFontForContentSizeCategory = true
         instructions.textColor = .secondaryLabel; instructions.textAlignment = .center; instructions.numberOfLines = 0
@@ -128,6 +131,14 @@ struct AvatarCropView: UIViewControllerRepresentable {
             instructions.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
             instructions.bottomAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
         ])
+    }
+
+    func refreshLocalizedText() {
+        title = L10n.text("裁剪头像")
+        navigationItem.leftBarButtonItem?.title = L10n.text("取消")
+        navigationItem.rightBarButtonItem?.title = L10n.text("使用头像")
+        imageView.accessibilityLabel = L10n.text("可拖动和缩放的头像预览")
+        instructions.text = L10n.text("拖动调整位置，双指缩放。圆圈内是头像预览。")
     }
 
     override func viewDidLayoutSubviews() {

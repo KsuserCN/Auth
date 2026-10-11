@@ -13,11 +13,14 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'api_result_messages.dart';
+import 'i18n.dart';
+import 'l10n/generated/app_localizations.dart';
+import 'package:intl/intl.dart';
 
 const Color kPrimaryColor = Color(0xFFFFB90F);
 const Color kSurfaceTint = Color(0xFFFFF2CC);
 const String kDefaultApiBaseUrl = 'https://api.ksuser.cn';
-const String kDesktopAppName = 'Ksuser安全';
+String get kDesktopAppName => desktopL10n.ksuserSecurity;
 const String kDesktopAppVersion = '1.0.0';
 const String kDesktopBuildNumber = '2';
 const int kDesktopSessionBridgePort = 43921;
@@ -30,6 +33,11 @@ const String kThirdPartySharingUrl =
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final DesktopLanguageStore languageStore = DesktopLanguageStore();
+  desktopLocaleController = DesktopLocaleController(
+    preference: await languageStore.load(),
+    store: languageStore,
+  )..observeDeviceLocales();
   final EnvConfig envConfig = await EnvConfig.load();
   runApp(
     KsuserDesktopApp(
@@ -61,6 +69,8 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
   DesktopSessionBridgeServer? _sessionBridge;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   bool _settingsDialogOpen = false;
+  String? _lastWindowsLocale;
+  String? _lastMenuBarLocale;
   bool? _lastMenuBarAuthenticated;
   String? _lastMenuBarDisplayName;
 
@@ -135,10 +145,13 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
         try {
           if (_controller.isAuthenticated) {
             await _controller.refreshWorkspace();
-            await _showMenuBarMessage('数据刷新完成', success: true);
+            await _showMenuBarMessage(desktopL10n.dataRefreshed, success: true);
           } else {
             await _controller.fetchPasswordRequirement();
-            await _showMenuBarMessage('登录页数据已刷新', success: true);
+            await _showMenuBarMessage(
+              desktopL10n.signInPageRefreshed,
+              success: true,
+            );
           }
         } catch (error) {
           await _showMenuBarMessage(error.toString(), success: false);
@@ -206,25 +219,41 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
   }
 
   Future<void> _syncMenuBarState() async {
+    if (Platform.isWindows &&
+        _lastWindowsLocale != desktopLocaleController.languageTag) {
+      try {
+        await _windowControlChannel.invokeMethod<bool>(
+          'setLocale',
+          desktopLocaleController.languageTag,
+        );
+        _lastWindowsLocale = desktopLocaleController.languageTag;
+      } on PlatformException {
+        // Native controls must not prevent the localized Flutter UI from working.
+      }
+    }
     if (!Platform.isMacOS) {
       return;
     }
 
+    final String language = desktopLocaleController.languageTag;
     final bool authenticated = _controller.isAuthenticated;
     final String displayName = authenticated
         ? _controller.user?.username.trim() ?? ''
         : '';
 
-    if (_lastMenuBarAuthenticated == authenticated &&
+    if (_lastMenuBarLocale == language &&
+        _lastMenuBarAuthenticated == authenticated &&
         _lastMenuBarDisplayName == displayName) {
       return;
     }
 
     try {
       await _menuBarChannel.invokeMethod<bool>('updateState', <String, dynamic>{
+        'locale': language,
         'authenticated': authenticated,
         'displayName': displayName,
       });
+      _lastMenuBarLocale = language;
       _lastMenuBarAuthenticated = authenticated;
       _lastMenuBarDisplayName = displayName;
     } on PlatformException {
@@ -256,6 +285,9 @@ class _KsuserDesktopAppState extends State<KsuserDesktopApp> {
       builder: (BuildContext context, _) {
         return MaterialApp(
           title: kDesktopAppName,
+          locale: desktopLocaleController.locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           navigatorKey: _navigatorKey,
           debugShowCheckedModeBanner: false,
           theme: _buildTheme(Brightness.light),
@@ -425,7 +457,7 @@ class DesktopAgreementSplash extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              '正在检查使用协议...',
+              desktopL10n.checkingTheTerms,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -519,7 +551,7 @@ class _DesktopAgreementGateState extends State<DesktopAgreementGate> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  '开始使用前请确认',
+                                  desktopL10n.beforeYouBegin,
                                   style: theme.textTheme.headlineSmall
                                       ?.copyWith(fontWeight: FontWeight.w800),
                                 ),
@@ -538,7 +570,7 @@ class _DesktopAgreementGateState extends State<DesktopAgreementGate> {
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        '首次安装并使用本应用前，请阅读并同意以下协议和清单。未同意前将无法继续登录或使用桌面端功能。',
+                        desktopL10n.beforeInstallingAndUsingThisAppFor,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           height: 1.55,
                           color: theme.colorScheme.onSurfaceVariant,
@@ -547,21 +579,21 @@ class _DesktopAgreementGateState extends State<DesktopAgreementGate> {
                       const SizedBox(height: 20),
                       _AgreementLinkTile(
                         icon: Icons.description_outlined,
-                        title: '服务条款',
+                        title: desktopL10n.termsOfService,
                         url: kUserAgreementUrl,
                         onPressed: () => _openAgreement(kUserAgreementUrl),
                       ),
                       const SizedBox(height: 10),
                       _AgreementLinkTile(
                         icon: Icons.privacy_tip_outlined,
-                        title: '隐私政策',
+                        title: desktopL10n.privacyPolicy,
                         url: kPrivacyPolicyUrl,
                         onPressed: () => _openAgreement(kPrivacyPolicyUrl),
                       ),
                       const SizedBox(height: 10),
                       _AgreementLinkTile(
                         icon: Icons.hub_outlined,
-                        title: '第三方信息共享清单',
+                        title: desktopL10n.thirdPartyDataSharingDisclosure,
                         url: kThirdPartySharingUrl,
                         onPressed: () => _openAgreement(kThirdPartySharingUrl),
                       ),
@@ -592,7 +624,7 @@ class _DesktopAgreementGateState extends State<DesktopAgreementGate> {
                             vertical: 4,
                           ),
                           title: Text(
-                            '我已阅读并同意以上服务条款、隐私政策和第三方信息共享清单',
+                            desktopL10n.iHaveReadAndAgreeToThe,
                             style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
@@ -614,7 +646,11 @@ class _DesktopAgreementGateState extends State<DesktopAgreementGate> {
                                   ),
                                 )
                               : const Icon(Icons.arrow_forward_rounded),
-                          label: Text(_busy ? '正在保存...' : '同意并继续'),
+                          label: Text(
+                            _busy
+                                ? desktopL10n.saving
+                                : desktopL10n.agreeAndContinue,
+                          ),
                         ),
                       ),
                     ],
@@ -766,8 +802,9 @@ class DesktopWindowPlatform {
   static bool get supportsMoveToSystemTray =>
       Platform.isMacOS || Platform.isWindows;
 
-  static String get moveToSystemTrayLabel =>
-      Platform.isWindows ? '收起到托盘' : '收起到菜单栏';
+  static String get moveToSystemTrayLabel => Platform.isWindows
+      ? desktopL10n.minimizeToSystemTray
+      : desktopL10n.minimizeToMenuBar;
 
   static Future<void> moveToSystemTray() async {
     if (!supportsMoveToSystemTray) {
@@ -780,12 +817,14 @@ class DesktopWindowPlatform {
           ) ??
           false;
       if (!ok) {
-        throw ApiException('窗口收起失败');
+        throw ApiException.localized(
+          () => desktopL10n.couldNotMinimizeTheWindow,
+        );
       }
     } on PlatformException catch (error) {
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
-          : '窗口收起失败';
+          : desktopL10n.couldNotMinimizeTheWindow;
       throw ApiException(message);
     }
   }
@@ -849,6 +888,24 @@ class AgreementAcceptanceStore {
         '${environment['HOME'] ?? Directory.current.path}/.config';
     return Directory('$base${Platform.pathSeparator}ksuser_auth_desktop');
   }
+}
+
+/// A route must listen independently because it can remain open while the
+/// application locale changes. Its StatefulBuilder and input controllers stay
+/// in place when only the translated labels rebuild.
+Future<T?> showLocalizedDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+}) {
+  return showDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    builder: (BuildContext context) => AnimatedBuilder(
+      animation: desktopLocaleController,
+      builder: (BuildContext context, _) => builder(context),
+    ),
+  );
 }
 
 void showAppMessage(
@@ -918,10 +975,14 @@ Future<void> showMobileBridgeQrDialog(
   final bool isDark = theme.brightness == Brightness.dark;
   final bool available = await LocalAuthPlatform.isAvailable();
   if (!available) {
-    throw ApiException('当前设备不支持系统本地认证');
+    throw ApiException.localized(
+      () => desktopL10n.thisDeviceDoesNotSupportLocalAuthentication,
+    );
   }
 
-  await LocalAuthPlatform.authenticate(reason: '请先完成身份验证后再展示手机登录二维码');
+  await LocalAuthPlatform.authenticate(
+    reason: desktopL10n.verifyYourIdentityBeforeDisplayingTheMobile,
+  );
   if (!context.mounted) {
     return;
   }
@@ -970,7 +1031,7 @@ Future<void> showMobileBridgeQrDialog(
     }
   }
 
-  await showDialog<void>(
+  await showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext dialogContext) {
       return StatefulBuilder(
@@ -984,7 +1045,7 @@ Future<void> showMobileBridgeQrDialog(
                 unawaited(refreshTicket(setState));
               }
               return AlertDialog(
-                title: const Text('手机扫码登录'),
+                title: Text(desktopL10n.mobileQrSignIn),
                 content: SizedBox(
                   width: 360,
                   child: Column(
@@ -1014,19 +1075,23 @@ Future<void> showMobileBridgeQrDialog(
                           ),
                         )
                       else
-                        const SizedBox(
+                        SizedBox(
                           width: 240,
                           height: 240,
-                          child: Center(child: Text('正在生成二维码...')),
+                          child: Center(
+                            child: Text(desktopL10n.generatingQrCode),
+                          ),
                         ),
                       const SizedBox(height: 12),
                       Text(
-                        '剩余有效期：${max(expiresInSeconds, 0)} 秒',
+                        desktopL10n.expiresInSeconds(
+                          (max(expiresInSeconds, 0)).toString(),
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '二维码一次性有效，过期后请刷新。',
+                        desktopL10n.thisQrCodeCanOnlyBeUsed,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
@@ -1039,7 +1104,7 @@ Future<void> showMobileBridgeQrDialog(
                 actions: <Widget>[
                   TextButton(
                     onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('关闭'),
+                    child: Text(desktopL10n.close),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: busy
@@ -1052,7 +1117,7 @@ Future<void> showMobileBridgeQrDialog(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.refresh_rounded),
-                    label: const Text('刷新二维码'),
+                    label: Text(desktopL10n.refreshQrCode),
                   ),
                 ],
               );
@@ -1112,178 +1177,209 @@ Future<void> showAccountRecoveryDialog(
     }
   }
 
-  await showDialog<void>(
+  await showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext dialogContext) {
       return StatefulBuilder(
-        builder: (BuildContext dialogContext, void Function(void Function()) setState) {
-          if (!initialized) {
-            initialized = true;
-            unawaited(refreshTicket(setState));
-          }
-          final Uri? recoveryUri = ticket == null
-              ? null
-              : buildWebAccountRecoveryUri(
-                  passkeyOrigin: controller.passkeyOrigin,
-                  apiBaseUrl: controller.apiBaseUrl,
-                  recoveryCode: ticket!.recoveryCode,
-                );
-          return AlertDialog(
-            title: const Text('账号恢复授权'),
-            content: SizedBox(
-              width: 380,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  if (errorText != null && errorText!.isNotEmpty) ...<Widget>[
-                    Text(
-                      errorText!,
-                      style: const TextStyle(color: Colors.red),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (refreshing && ticket == null)
-                    const SizedBox(
-                      height: 240,
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (recoveryUri != null)
-                    Center(
-                      child: _buildLocalQrCode(
-                        recoveryUri.toString(),
-                        width: 240,
-                        height: 240,
-                        isDark: isDark,
-                      ),
-                    )
-                  else
-                    const SizedBox(
-                      height: 240,
-                      child: Center(child: Text('正在生成恢复二维码...')),
-                    ),
-                  const SizedBox(height: 12),
-                  if (ticket != null)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            '${ticket!.username} · ${ticket!.maskedEmail}',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+        builder:
+            (
+              BuildContext dialogContext,
+              void Function(void Function()) setState,
+            ) {
+              if (!initialized) {
+                initialized = true;
+                unawaited(refreshTicket(setState));
+              }
+              final Uri? recoveryUri = ticket == null
+                  ? null
+                  : buildWebAccountRecoveryUri(
+                      passkeyOrigin: controller.passkeyOrigin,
+                      apiBaseUrl: controller.apiBaseUrl,
+                      recoveryCode: ticket!.recoveryCode,
+                    );
+              return AlertDialog(
+                title: Text(desktopL10n.accountRecoveryAuthorization),
+                content: SizedBox(
+                  width: 380,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      if (errorText != null &&
+                          errorText!.isNotEmpty) ...<Widget>[
+                        Text(
+                          errorText!,
+                          style: const TextStyle(color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      if (refreshing && ticket == null)
+                        const SizedBox(
+                          height: 240,
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (recoveryUri != null)
+                        Center(
+                          child: _buildLocalQrCode(
+                            recoveryUri.toString(),
+                            width: 240,
+                            height: 240,
+                            isDark: isDark,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '背书设备：${ticket!.sponsorClientName.isNotEmpty ? ticket!.sponsorClientName : '当前桌面端'}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                        )
+                      else
+                        SizedBox(
+                          height: 240,
+                          child: Center(
+                            child: Text(desktopL10n.generatingRecoveryQrCode),
                           ),
-                          Text(
-                            '位置：${ticket!.sponsorIpLocation.isNotEmpty ? ticket!.sponsorIpLocation : '未知位置'}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
+                        ),
+                      const SizedBox(height: 12),
+                      if (ticket != null)
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                        ],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                '${ticket!.username} · ${ticket!.maskedEmail}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                desktopL10n.authorizingDevice(
+                                  (ticket!.sponsorClientName.isNotEmpty
+                                          ? ticket!.sponsorClientName
+                                          : desktopL10n.thisDesktopApp)
+                                      .toString(),
+                                ),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              Text(
+                                desktopL10n.location(
+                                  (ticket!.sponsorIpLocation.isNotEmpty
+                                          ? ticket!.sponsorIpLocation
+                                          : desktopL10n.unknownLocation)
+                                      .toString(),
+                                ),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                      Text(
+                        desktopL10n.expiresInSeconds(
+                          (max(expiresInSeconds, 0)).toString(),
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                    ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '剩余有效期：${max(expiresInSeconds, 0)} 秒',
-                    textAlign: TextAlign.center,
+                      const SizedBox(height: 8),
+                      SelectableText(
+                        ticket?.recoveryCode ??
+                            desktopL10n.generatingRecoveryCode,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        desktopL10n.openTheRecoveryPageOnAnotherDevice,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  SelectableText(
-                    ticket?.recoveryCode ?? '恢复码生成中...',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.6,
-                    ),
+                ),
+                actions: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: Text(desktopL10n.close),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '请在另一台设备打开网页恢复页后扫码，或手动输入上面的恢复码。恢复成功后旧会话会自动失效。',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurfaceVariant,
+                  TextButton.icon(
+                    onPressed: ticket == null
+                        ? null
+                        : () async {
+                            try {
+                              await Clipboard.setData(
+                                ClipboardData(text: ticket!.recoveryCode),
+                              );
+                              if (dialogContext.mounted) {
+                                showAppMessage(
+                                  dialogContext,
+                                  desktopL10n.recoveryCodeCopied,
+                                );
+                              }
+                            } catch (error) {
+                              if (dialogContext.mounted) {
+                                showAppMessage(
+                                  dialogContext,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.copy_rounded),
+                    label: Text(desktopL10n.copyRecoveryCode),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: recoveryUri == null
+                        ? null
+                        : () async {
+                            try {
+                              await openExternalUrl(recoveryUri.toString());
+                            } catch (error) {
+                              if (dialogContext.mounted) {
+                                showAppMessage(
+                                  dialogContext,
+                                  error.toString(),
+                                  error: true,
+                                );
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.open_in_new_rounded),
+                    label: Text(desktopL10n.openRecoveryPage),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: refreshing
+                        ? null
+                        : () => refreshTicket(setState),
+                    icon: refreshing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded),
+                    label: Text(
+                      refreshing
+                          ? desktopL10n.refreshing
+                          : desktopL10n.refreshAuthorization,
                     ),
                   ),
                 ],
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('关闭'),
-              ),
-              TextButton.icon(
-                onPressed: ticket == null
-                    ? null
-                    : () async {
-                        try {
-                          await Clipboard.setData(
-                            ClipboardData(text: ticket!.recoveryCode),
-                          );
-                          if (dialogContext.mounted) {
-                            showAppMessage(dialogContext, '恢复码已复制');
-                          }
-                        } catch (error) {
-                          if (dialogContext.mounted) {
-                            showAppMessage(
-                              dialogContext,
-                              error.toString(),
-                              error: true,
-                            );
-                          }
-                        }
-                      },
-                icon: const Icon(Icons.copy_rounded),
-                label: const Text('复制恢复码'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: recoveryUri == null
-                    ? null
-                    : () async {
-                        try {
-                          await openExternalUrl(recoveryUri.toString());
-                        } catch (error) {
-                          if (dialogContext.mounted) {
-                            showAppMessage(
-                              dialogContext,
-                              error.toString(),
-                              error: true,
-                            );
-                          }
-                        }
-                      },
-                icon: const Icon(Icons.open_in_new_rounded),
-                label: const Text('打开网页恢复页'),
-              ),
-              FilledButton.tonalIcon(
-                onPressed: refreshing ? null : () => refreshTicket(setState),
-                icon: refreshing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded),
-                label: Text(refreshing ? '刷新中...' : '刷新授权'),
-              ),
-            ],
-          );
-        },
+              );
+            },
       );
     },
   );
@@ -1361,7 +1457,9 @@ Future<void> showDesktopLoginQrDialog(
       return;
     }
 
-    throw ApiException('扫码登录结果无效，请重试');
+    throw ApiException.localized(
+      () => desktopL10n.invalidQrSignInResultPleaseTry,
+    );
   }
 
   Future<void> pollStatus(
@@ -1395,9 +1493,9 @@ Future<void> showDesktopLoginQrDialog(
       }
       setState(() {
         if (status.status == 'rejected') {
-          errorText = '扫码请求已被拒绝，请刷新二维码后重试';
+          errorText = desktopL10n.qrRequestRejectedRefreshTheQrCode;
         } else {
-          errorText = '二维码已过期，请刷新二维码';
+          errorText = desktopL10n.qrCodeExpiredPleaseRefreshIt;
         }
       });
     } catch (error) {
@@ -1462,7 +1560,7 @@ Future<void> showDesktopLoginQrDialog(
     }
   }
 
-  await showDialog<void>(
+  await showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext dialogContext) {
       return StatefulBuilder(
@@ -1476,7 +1574,7 @@ Future<void> showDesktopLoginQrDialog(
                 unawaited(refreshChallenge(dialogContext, setState));
               }
               return AlertDialog(
-                title: const Text('二维码登录'),
+                title: Text(desktopL10n.qrSignIn),
                 content: SizedBox(
                   width: 360,
                   child: Column(
@@ -1503,7 +1601,9 @@ Future<void> showDesktopLoginQrDialog(
                             width: 240,
                             height: 240,
                             child: qrPayload.isEmpty
-                                ? const Center(child: Text('正在生成二维码...'))
+                                ? Center(
+                                    child: Text(desktopL10n.generatingQrCode),
+                                  )
                                 : _buildLocalQrCode(
                                     qrPayload,
                                     width: 240,
@@ -1513,18 +1613,20 @@ Future<void> showDesktopLoginQrDialog(
                           ),
                         ),
                       const SizedBox(height: 16),
-                      const Text(
-                        '请使用已登录的手机端扫描二维码，授权当前桌面端登录。',
+                      Text(
+                        desktopL10n.scanWithASignedInMobileApp,
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '剩余有效期：${max(expiresInSeconds, 0)} 秒',
+                        desktopL10n.expiresInSeconds(
+                          (max(expiresInSeconds, 0)).toString(),
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '若账号开启了 MFA，扫码后还需在桌面端完成其他 MFA 验证。',
+                        desktopL10n.ifMfaIsEnabledCompleteTheRemaining,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12,
@@ -1537,7 +1639,7 @@ Future<void> showDesktopLoginQrDialog(
                 actions: <Widget>[
                   TextButton(
                     onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: const Text('关闭'),
+                    child: Text(desktopL10n.close),
                   ),
                   FilledButton.tonalIcon(
                     onPressed: refreshing
@@ -1552,7 +1654,7 @@ Future<void> showDesktopLoginQrDialog(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.refresh_rounded),
-                    label: const Text('刷新二维码'),
+                    label: Text(desktopL10n.refreshQrCode),
                   ),
                 ],
               );
@@ -1620,7 +1722,10 @@ class _DesktopAboutCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  '版本 $kDesktopAppVersion ($kDesktopBuildNumber)',
+                  desktopL10n.version(
+                    (kDesktopAppVersion).toString(),
+                    (kDesktopBuildNumber).toString(),
+                  ),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -1694,14 +1799,14 @@ Future<void> showDesktopSettingsDialog(
   BuildContext context,
   AppController controller,
 ) {
-  return showDialog<void>(
+  return showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext dialogContext) {
       return AnimatedBuilder(
         animation: controller,
         builder: (BuildContext context, _) {
           return AlertDialog(
-            title: const Text('设置'),
+            title: Text(desktopL10n.settings),
             content: SizedBox(
               width: 520,
               child: SingleChildScrollView(
@@ -1709,24 +1814,74 @@ Future<void> showDesktopSettingsDialog(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text('外观', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      desktopL10n.language,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<DesktopLanguage>(
+                      key: ValueKey<DesktopLanguage>(
+                        desktopLocaleController.preference,
+                      ),
+                      initialValue: desktopLocaleController.preference,
+                      isExpanded: true,
+                      decoration: InputDecoration(border: OutlineInputBorder()),
+                      items: <DropdownMenuItem<DesktopLanguage>>[
+                        DropdownMenuItem(
+                          value: DesktopLanguage.system,
+                          child: Text(desktopL10n.followSystem),
+                        ),
+                        DropdownMenuItem(
+                          value: DesktopLanguage.simplifiedChinese,
+                          child: Text('简体中文'),
+                        ),
+                        DropdownMenuItem(
+                          value: DesktopLanguage.english,
+                          child: Text('English'),
+                        ),
+                      ],
+                      onChanged: (DesktopLanguage? language) async {
+                        if (language == null) return;
+                        try {
+                          await desktopLocaleController.setLanguage(language);
+                        } catch (_) {
+                          if (context.mounted) {
+                            showAppMessage(
+                              context,
+                              desktopL10n.languageSaveFailed,
+                              error: true,
+                            );
+                          }
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      desktopL10n.languageSettingExplanation,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      desktopL10n.appearance,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 12),
                     SegmentedButton<ThemeMode>(
-                      segments: const <ButtonSegment<ThemeMode>>[
+                      segments: <ButtonSegment<ThemeMode>>[
                         ButtonSegment<ThemeMode>(
                           value: ThemeMode.system,
                           icon: Icon(Icons.settings_suggest_rounded),
-                          label: Text('跟随系统'),
+                          label: Text(desktopL10n.followSystem),
                         ),
                         ButtonSegment<ThemeMode>(
                           value: ThemeMode.light,
                           icon: Icon(Icons.light_mode_rounded),
-                          label: Text('浅色'),
+                          label: Text(desktopL10n.light),
                         ),
                         ButtonSegment<ThemeMode>(
                           value: ThemeMode.dark,
                           icon: Icon(Icons.dark_mode_rounded),
-                          label: Text('深色'),
+                          label: Text(desktopL10n.dark),
                         ),
                       ],
                       selected: <ThemeMode>{controller.themeMode},
@@ -1736,7 +1891,7 @@ Future<void> showDesktopSettingsDialog(
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      '本地调试',
+                      desktopL10n.localPreferences,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -1744,36 +1899,44 @@ Future<void> showDesktopSettingsDialog(
                       contentPadding: EdgeInsets.zero,
                       value: controller.compactMode,
                       onChanged: controller.setCompactMode,
-                      title: const Text('紧凑布局'),
-                      subtitle: const Text('压缩控件间距，便于桌面联调时查看更多内容'),
+                      title: Text(desktopL10n.compactLayout),
+                      subtitle: Text(
+                        desktopL10n.reduceSpacingToDisplayMoreContentOn,
+                      ),
                     ),
                     SwitchListTile.adaptive(
                       contentPadding: EdgeInsets.zero,
                       value: controller.reduceMotion,
                       onChanged: controller.setReduceMotion,
-                      title: const Text('减少动画'),
-                      subtitle: const Text('切换主题和弹窗时尽量减少动画效果'),
+                      title: Text(desktopL10n.reduceMotion),
+                      subtitle: Text(
+                        desktopL10n
+                            .reduceAnimationsWhenChangingThemesAndOpening,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     const Divider(height: 1),
                     const SizedBox(height: 18),
-                    Text('关于', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      desktopL10n.about,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 12),
                     _DesktopAboutCard(controller: controller),
                     const SizedBox(height: 12),
                     _SettingsDocumentTile(
                       icon: Icons.description_outlined,
-                      title: '服务条款',
+                      title: desktopL10n.termsOfService,
                       url: kUserAgreementUrl,
                     ),
                     _SettingsDocumentTile(
                       icon: Icons.privacy_tip_outlined,
-                      title: '隐私协议',
+                      title: desktopL10n.privacyPolicy2,
                       url: kPrivacyPolicyUrl,
                     ),
                     _SettingsDocumentTile(
                       icon: Icons.share_outlined,
-                      title: '第三方信息共享清单',
+                      title: desktopL10n.thirdPartyDataSharingDisclosure,
                       url: kThirdPartySharingUrl,
                     ),
                   ],
@@ -1783,11 +1946,11 @@ Future<void> showDesktopSettingsDialog(
             actions: <Widget>[
               TextButton(
                 onPressed: controller.resetLocalPreferences,
-                child: const Text('恢复默认'),
+                child: Text(desktopL10n.restoreDefaults),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('完成'),
+                child: Text(desktopL10n.done),
               ),
             ],
           );
@@ -1801,7 +1964,7 @@ Future<void> showDesktopAboutDialog(
   BuildContext context,
   AppController controller,
 ) {
-  return showDialog<void>(
+  return showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext context) {
       return AboutDialog(
@@ -1818,11 +1981,22 @@ Future<void> showDesktopAboutDialog(
         ),
         children: <Widget>[
           const SizedBox(height: 8),
-          const Text('桌面统一认证客户端'),
+          Text(desktopL10n.desktopUnifiedAuthenticationClient),
           const SizedBox(height: 8),
-          Text('主题模式：${themeModeLabel(controller.themeMode)}'),
           Text(
-            '本地调试：${controller.compactMode ? '紧凑布局，' : ''}${controller.reduceMotion ? '减少动画' : '标准动画'}',
+            desktopL10n.theme(
+              (themeModeLabel(controller.themeMode)).toString(),
+            ),
+          ),
+          Text(
+            desktopL10n.localPreferences2(
+              (controller.compactMode ? desktopL10n.compactLayout2 : '')
+                  .toString(),
+              (controller.reduceMotion
+                      ? desktopL10n.reduceMotion
+                      : desktopL10n.standardAnimations)
+                  .toString(),
+            ),
           ),
         ],
       );
@@ -1833,11 +2007,11 @@ Future<void> showDesktopAboutDialog(
 String themeModeLabel(ThemeMode mode) {
   switch (mode) {
     case ThemeMode.system:
-      return '跟随系统';
+      return desktopL10n.followSystem;
     case ThemeMode.light:
-      return '浅色';
+      return desktopL10n.light;
     case ThemeMode.dark:
-      return '深色';
+      return desktopL10n.dark;
   }
 }
 
@@ -1848,15 +2022,20 @@ String nativePasskeyPlatformName() {
   if (Platform.isWindows) {
     return 'Windows';
   }
-  return '系统';
+  return desktopL10n.system;
 }
 
-String nativePasskeyAvailableDescription({String action = '验证'}) {
-  return '将直接调用 ${nativePasskeyPlatformName()} 系统原生 Passkey 完成$action。';
+String nativePasskeyAvailableDescription({String? action}) {
+  return desktopL10n.useTheNativePasskeyServiceFor(
+    (nativePasskeyPlatformName()).toString(),
+    (action ?? desktopL10n.verification).toString(),
+  );
 }
 
 String nativePasskeyUnavailableDescription() {
-  return '当前设备未启用 ${nativePasskeyPlatformName()} 原生 Passkey。';
+  return desktopL10n.nativePasskeysAreNotEnabledOnThis(
+    (nativePasskeyPlatformName()).toString(),
+  );
 }
 
 class PasskeyPlatform {
@@ -1878,7 +2057,9 @@ class PasskeyPlatform {
     required String origin,
   }) async {
     if (!supportsAssertion) {
-      throw ApiException('当前平台暂不支持原生 Passkey');
+      throw ApiException.localized(
+        () => desktopL10n.nativePasskeysAreNotSupportedOnThis,
+      );
     }
 
     try {
@@ -1897,13 +2078,15 @@ class PasskeyPlatform {
             },
           );
       if (result == null) {
-        throw ApiException('未获取到 Passkey 凭证');
+        throw ApiException.localized(
+          () => desktopL10n.noPasskeyCredentialWasReceived,
+        );
       }
       return PasskeyAssertionResult.fromChannelMap(result);
     } on PlatformException catch (error) {
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
-          : 'Passkey 验证失败';
+          : desktopL10n.passkeyVerificationFailed;
       throw ApiException(message);
     }
   }
@@ -1913,7 +2096,9 @@ class PasskeyPlatform {
     required String origin,
   }) async {
     if (!supportsAssertion) {
-      throw ApiException('当前平台暂不支持原生 Passkey');
+      throw ApiException.localized(
+        () => desktopL10n.nativePasskeysAreNotSupportedOnThis,
+      );
     }
 
     try {
@@ -1932,13 +2117,15 @@ class PasskeyPlatform {
             },
           );
       if (result == null) {
-        throw ApiException('未创建 Passkey 凭证');
+        throw ApiException.localized(
+          () => desktopL10n.noPasskeyCredentialWasCreated,
+        );
       }
       return PasskeyRegistrationResult.fromChannelMap(result);
     } on PlatformException catch (error) {
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
-          : 'Passkey 创建失败';
+          : desktopL10n.couldNotCreatePasskey;
       throw ApiException(message);
     }
   }
@@ -1949,18 +2136,24 @@ class AppleLoginPlatform {
 
   static Future<String> clientId() async {
     if (!isAvailable) {
-      throw ApiException('Apple 登录仅在 macOS 上提供');
+      throw ApiException.localized(
+        () => desktopL10n.signInWithAppleIsOnlyAvailable,
+      );
     }
     try {
       final String? value = await _appleLoginChannel.invokeMethod<String>(
         'clientId',
       );
       if (value == null || value.trim().isEmpty) {
-        throw ApiException('未获取到 macOS Apple 登录配置');
+        throw ApiException.localized(
+          () => desktopL10n.noMacosSignInWithAppleConfiguration,
+        );
       }
       return value;
     } on PlatformException catch (error) {
-      throw ApiException(error.message ?? '无法读取 Apple 登录配置');
+      throw ApiException(
+        error.message ?? desktopL10n.couldNotReadTheSignInWith,
+      );
     }
   }
 
@@ -1969,7 +2162,9 @@ class AppleLoginPlatform {
     required String state,
   }) async {
     if (!isAvailable) {
-      throw ApiException('Apple 登录仅在 macOS 上提供');
+      throw ApiException.localized(
+        () => desktopL10n.signInWithAppleIsOnlyAvailable,
+      );
     }
     try {
       final Map<dynamic, dynamic>? response = await _appleLoginChannel
@@ -1980,7 +2175,9 @@ class AppleLoginPlatform {
       if (response == null ||
           asString(response['identityToken'])?.isNotEmpty != true ||
           asString(response['authorizationCode'])?.isNotEmpty != true) {
-        throw ApiException('Apple 未返回完整的登录凭据');
+        throw ApiException.localized(
+          () => desktopL10n.appleDidNotReturnCompleteSignIn,
+        );
       }
       return <String, dynamic>{
         'identityToken': asString(response['identityToken']),
@@ -1993,9 +2190,11 @@ class AppleLoginPlatform {
       };
     } on PlatformException catch (error) {
       if (error.code == 'cancelled') {
-        throw ApiException('已取消 Apple 登录');
+        throw ApiException.localized(() => desktopL10n.signInWithAppleCanceled);
       }
-      throw ApiException(error.message ?? 'Apple 登录失败，请重试');
+      throw ApiException(
+        error.message ?? desktopL10n.signInWithAppleFailedPleaseTry,
+      );
     }
   }
 }
@@ -2017,7 +2216,9 @@ class LocalAuthPlatform {
 
   static Future<void> authenticate({required String reason}) async {
     if (!supportsProtectedActions) {
-      throw ApiException('当前平台暂不支持系统本地认证');
+      throw ApiException.localized(
+        () => desktopL10n.localAuthenticationIsNotSupportedOnThis,
+      );
     }
 
     try {
@@ -2028,28 +2229,36 @@ class LocalAuthPlatform {
           ) ??
           false;
       if (!ok) {
-        throw ApiException('本地认证未通过');
+        throw ApiException.localized(
+          () => desktopL10n.localAuthenticationFailed,
+        );
       }
     } on PlatformException catch (error) {
       final String code = error.code.trim();
       if (Platform.isWindows) {
         if (code == 'canceled') {
-          throw ApiException('用户取消了系统身份验证');
+          throw ApiException.localized(
+            () => desktopL10n.systemAuthenticationCanceled,
+          );
         }
         if (code == 'not_available') {
-          throw ApiException('当前设备未启用 Windows Hello、PIN 或其他系统身份验证方式');
+          throw ApiException(
+            desktopL10n.windowsHelloPinOrAnotherSystemAuthentication,
+          );
         }
         final String message = error.message?.trim().isNotEmpty == true
             ? error.message!.trim()
-            : 'Windows 系统身份验证失败';
+            : desktopL10n.windowsAuthenticationFailed;
         throw ApiException(message);
       }
       if (code == 'canceled') {
-        throw ApiException('用户取消了本地认证');
+        throw ApiException.localized(
+          () => desktopL10n.localAuthenticationCanceled,
+        );
       }
       final String message = error.message?.trim().isNotEmpty == true
           ? error.message!.trim()
-          : '本地认证失败';
+          : desktopL10n.localAuthenticationFailed2;
       throw ApiException(message);
     }
   }
@@ -2065,7 +2274,16 @@ class AppController extends ChangeNotifier {
     _loadAgreementAcceptanceValue =
         loadAgreementAcceptance ?? AgreementAcceptanceStore.isAccepted;
     _apiClient.onSessionExpired = _handleSessionExpired;
+    desktopLocaleController.addListener(_languageChanged);
     unawaited(_loadAgreementAcceptance());
+  }
+
+  void _languageChanged() => notifyListeners();
+
+  @override
+  void dispose() {
+    desktopLocaleController.removeListener(_languageChanged);
+    super.dispose();
   }
 
   final KsuserApiClient _apiClient;
@@ -2079,7 +2297,8 @@ class AppController extends ChangeNotifier {
   List<SensitiveLogItem> sensitiveLogs = <SensitiveLogItem>[];
   List<OAuth2AuthorizedApp> authorizedApps = <OAuth2AuthorizedApp>[];
   bool authorizationsLoading = false;
-  String? authorizationsError;
+  String Function()? _authorizationsError;
+  String? get authorizationsError => _authorizationsError?.call();
   String? revokingAuthorizationId;
   List<PasskeyListItem> passkeys = <PasskeyListItem>[];
   TotpStatusResponse? totpStatus;
@@ -2093,8 +2312,9 @@ class AppController extends ChangeNotifier {
   bool reduceMotion = false;
   bool agreementLoading = true;
   bool agreementsAccepted = false;
-  String? workspaceError;
-  final List<String> _busyLabelStack = <String>[];
+  String Function()? _workspaceError;
+  String? get workspaceError => _workspaceError?.call();
+  final List<String Function()> _busyLabelStack = <String Function()>[];
 
   bool get isAuthenticated => _apiClient.accessToken != null;
   String get apiBaseUrl => _apiClient.baseUrl;
@@ -2102,15 +2322,15 @@ class AppController extends ChangeNotifier {
   bool get isUiBusy => authBusy || workspaceLoading || hasPendingUiAction;
   String get currentBusyLabel {
     if (_busyLabelStack.isNotEmpty) {
-      return _busyLabelStack.last;
+      return _busyLabelStack.last();
     }
     if (authBusy) {
-      return '正在处理认证请求...';
+      return desktopL10n.processingAuthentication;
     }
     if (workspaceLoading) {
-      return '正在同步桌面数据...';
+      return desktopL10n.syncingDesktopData;
     }
-    return '正在处理中...';
+    return desktopL10n.processing;
   }
 
   Future<void> _loadAgreementAcceptance() async {
@@ -2131,7 +2351,10 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<T> runBusyAction<T>(String label, Future<T> Function() action) async {
+  Future<T> runBusyAction<T>(
+    String Function() label,
+    Future<T> Function() action,
+  ) async {
     _busyLabelStack.add(label);
     notifyListeners();
     try {
@@ -2150,12 +2373,12 @@ class AppController extends ChangeNotifier {
     sessions = <SessionItem>[];
     sensitiveLogs = <SensitiveLogItem>[];
     authorizedApps = <OAuth2AuthorizedApp>[];
-    authorizationsError = null;
+    _authorizationsError = null;
     passkeys = <PasskeyListItem>[];
     totpStatus = null;
     adaptiveAuthStatus = null;
     pendingMfaChallenge = null;
-    workspaceError = null;
+    _workspaceError = null;
     selectedSection = DesktopSection.overview;
   }
 
@@ -2189,7 +2412,7 @@ class AppController extends ChangeNotifier {
   Future<void> refreshAuthorizations() async {
     if (!isAuthenticated || authorizationsLoading) return;
     authorizationsLoading = true;
-    authorizationsError = null;
+    _authorizationsError = null;
     notifyListeners();
     try {
       final dynamic data = await _apiClient.get(
@@ -2200,9 +2423,9 @@ class AppController extends ChangeNotifier {
           .map((dynamic item) => OAuth2AuthorizedApp.fromJson(asMap(item)))
           .toList();
     } catch (error) {
-      authorizationsError = error is ApiException
+      _authorizationsError = () => error is ApiException
           ? error.message
-          : '加载已授权应用失败，请稍后重试';
+          : desktopL10n.couldNotLoadAuthorizedAppsPleaseTry;
     } finally {
       authorizationsLoading = false;
       notifyListeners();
@@ -2221,7 +2444,7 @@ class AppController extends ChangeNotifier {
       authorizedApps = authorizedApps
           .where((OAuth2AuthorizedApp app) => app.appId != appId)
           .toList();
-      authorizationsError = null;
+      _authorizationsError = null;
     } finally {
       revokingAuthorizationId = null;
       notifyListeners();
@@ -2260,18 +2483,19 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void resetLocalPreferences() {
+  Future<void> resetLocalPreferences() async {
     themeMode = ThemeMode.system;
     compactMode = false;
     reduceMotion = false;
     notifyListeners();
+    await desktopLocaleController.setLanguage(DesktopLanguage.system);
   }
 
   Future<void> loginWithPassword({
     required String email,
     required String password,
   }) async {
-    await runBusyAction('正在登录...', () async {
+    await runBusyAction(() => desktopL10n.signingIn, () async {
       authBusy = true;
       pendingMfaChallenge = null;
       notifyListeners();
@@ -2289,7 +2513,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> sendLoginCode(String email) {
-    return runBusyAction('正在发送登录验证码...', () {
+    return runBusyAction(() => desktopL10n.sendingSignInCode, () {
       return _apiClient.post(
         '/auth/send-code',
         body: <String, dynamic>{'email': email.trim(), 'type': 'login'},
@@ -2301,7 +2525,7 @@ class AppController extends ChangeNotifier {
     required String email,
     required String code,
   }) async {
-    await runBusyAction('正在登录...', () async {
+    await runBusyAction(() => desktopL10n.signingIn, () async {
       authBusy = true;
       pendingMfaChallenge = null;
       notifyListeners();
@@ -2320,9 +2544,11 @@ class AppController extends ChangeNotifier {
 
   Future<void> loginWithApple() async {
     if (!AppleLoginPlatform.isAvailable) {
-      throw ApiException('Apple 登录仅在 macOS 上提供');
+      throw ApiException.localized(
+        () => desktopL10n.signInWithAppleIsOnlyAvailable,
+      );
     }
-    await runBusyAction('正在使用 Apple 登录...', () async {
+    await runBusyAction(() => desktopL10n.signingInWithApple, () async {
       authBusy = true;
       pendingMfaChallenge = null;
       notifyListeners();
@@ -2338,7 +2564,9 @@ class AppController extends ChangeNotifier {
         final String nonce = asString(challenge['nonce']) ?? '';
         final String state = asString(challenge['state']) ?? '';
         if (challengeId.isEmpty || nonce.isEmpty || state.isEmpty) {
-          throw ApiException('Apple 登录挑战信息不完整，请重试');
+          throw ApiException(
+            desktopL10n.incompleteAppleSignInChallengePleaseTry,
+          );
         }
         final Map<String, dynamic> credential = await AppleLoginPlatform.signIn(
           nonce: nonce,
@@ -2354,7 +2582,9 @@ class AppController extends ChangeNotifier {
         );
         final Map<String, dynamic> result = asMap(response);
         if (asBool(result['needBind'])) {
-          throw ApiException('需前往网页端或移动端绑定账号之后才可以使用该第三方登录');
+          throw ApiException.localized(
+            () => desktopL10n.linkYourAccountOnTheWebOr,
+          );
         }
         await _consumeLoginPayload(response);
       } finally {
@@ -2369,93 +2599,102 @@ class AppController extends ChangeNotifier {
     String? code,
     String? recoveryCode,
   }) async {
-    await runBusyAction('正在验证二次认证...', () async {
-      authBusy = true;
-      notifyListeners();
-      try {
-        final Map<String, dynamic> payload = <String, dynamic>{
-          'challengeId': challengeId,
-        };
-        if (code != null && code.isNotEmpty) {
-          payload['code'] = code.trim();
-        }
-        if (recoveryCode != null && recoveryCode.isNotEmpty) {
-          payload['recoveryCode'] = recoveryCode.trim();
-        }
-        final dynamic data = await _apiClient.post(
-          '/auth/totp/mfa-verify',
-          body: payload,
-        );
-        pendingMfaChallenge = null;
-        await _consumeLoginPayload(data);
-      } finally {
-        authBusy = false;
+    await runBusyAction(
+      () => desktopL10n.verifyingAdditionalAuthentication,
+      () async {
+        authBusy = true;
         notifyListeners();
-      }
-    });
-  }
-
-  Future<void> completePasskeyMfa({required String challengeId}) async {
-    await runBusyAction('正在等待 Passkey 完成二次验证...', () async {
-      authBusy = true;
-      notifyListeners();
-      try {
-        if (usesNativePasskey) {
-          if (!await PasskeyPlatform.isAvailable()) {
-            throw ApiException(passkeyUnavailableMessage);
+        try {
+          final Map<String, dynamic> payload = <String, dynamic>{
+            'challengeId': challengeId,
+          };
+          if (code != null && code.isNotEmpty) {
+            payload['code'] = code.trim();
           }
-          final PasskeyAssertionOptions options =
-              await getPasskeyAuthenticationOptions();
-          final PasskeyAssertionResult assertion =
-              await PasskeyPlatform.getAssertion(
-                options: options,
-                origin: passkeyOrigin,
-              );
+          if (recoveryCode != null && recoveryCode.isNotEmpty) {
+            payload['recoveryCode'] = recoveryCode.trim();
+          }
           final dynamic data = await _apiClient.post(
-            '/auth/passkey/mfa-verify',
-            body: <String, dynamic>{
-              'mfaChallengeId': challengeId,
-              'passkeyChallengeId': options.challengeId,
-              ...assertion.toJson(),
-            },
+            '/auth/totp/mfa-verify',
+            body: payload,
           );
           pendingMfaChallenge = null;
           await _consumeLoginPayload(data);
-        } else if (usesBrowserPasskeyBridge) {
-          if (!supportsBrowserPasskeyBridge) {
+        } finally {
+          authBusy = false;
+          notifyListeners();
+        }
+      },
+    );
+  }
+
+  Future<void> completePasskeyMfa({required String challengeId}) async {
+    await runBusyAction(
+      () => desktopL10n.waitingForPasskeyMfaVerification,
+      () async {
+        authBusy = true;
+        notifyListeners();
+        try {
+          if (usesNativePasskey) {
+            if (!await PasskeyPlatform.isAvailable()) {
+              throw ApiException(passkeyUnavailableMessage);
+            }
+            final PasskeyAssertionOptions options =
+                await getPasskeyAuthenticationOptions();
+            final PasskeyAssertionResult assertion =
+                await PasskeyPlatform.getAssertion(
+                  options: options,
+                  origin: passkeyOrigin,
+                );
+            final dynamic data = await _apiClient.post(
+              '/auth/passkey/mfa-verify',
+              body: <String, dynamic>{
+                'mfaChallengeId': challengeId,
+                'passkeyChallengeId': options.challengeId,
+                ...assertion.toJson(),
+              },
+            );
+            pendingMfaChallenge = null;
+            await _consumeLoginPayload(data);
+          } else if (usesBrowserPasskeyBridge) {
+            if (!supportsBrowserPasskeyBridge) {
+              throw ApiException(passkeyUnavailableMessage);
+            }
+            try {
+              final BrowserPasskeyBridgeResponse response =
+                  await BrowserPasskeyBridge.start(
+                    passkeyOrigin: passkeyOrigin,
+                    apiBaseUrl: apiBaseUrl,
+                    mode: BrowserPasskeyBridgeMode.mfa,
+                    mfaChallengeId: challengeId,
+                  );
+              if (response.transferCode != null &&
+                  response.transferCode!.isNotEmpty) {
+                await importSessionTransferTicket(response.transferCode!);
+                pendingMfaChallenge = null;
+                return;
+              }
+              if (response.accessToken == null ||
+                  response.accessToken!.isEmpty) {
+                throw response.toException(
+                  desktopL10n.theBrowserDidNotReturnASign,
+                );
+              }
+              _apiClient.accessToken = response.accessToken;
+              pendingMfaChallenge = null;
+              await refreshWorkspace();
+            } on SocketException catch (error) {
+              throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+            }
+          } else {
             throw ApiException(passkeyUnavailableMessage);
           }
-          try {
-            final BrowserPasskeyBridgeResponse response =
-                await BrowserPasskeyBridge.start(
-                  passkeyOrigin: passkeyOrigin,
-                  apiBaseUrl: apiBaseUrl,
-                  mode: BrowserPasskeyBridgeMode.mfa,
-                  mfaChallengeId: challengeId,
-                );
-            if (response.transferCode != null &&
-                response.transferCode!.isNotEmpty) {
-              await importSessionTransferTicket(response.transferCode!);
-              pendingMfaChallenge = null;
-              return;
-            }
-            if (response.accessToken == null || response.accessToken!.isEmpty) {
-              throw response.toException('浏览器未返回登录结果');
-            }
-            _apiClient.accessToken = response.accessToken;
-            pendingMfaChallenge = null;
-            await refreshWorkspace();
-          } on SocketException catch (error) {
-            throw ApiException(_passkeyBridgeSocketErrorMessage(error));
-          }
-        } else {
-          throw ApiException(passkeyUnavailableMessage);
+        } finally {
+          authBusy = false;
+          notifyListeners();
         }
-      } finally {
-        authBusy = false;
-        notifyListeners();
-      }
-    });
+      },
+    );
   }
 
   Future<bool> checkUsername(String username) async {
@@ -2471,19 +2710,22 @@ class AppController extends ChangeNotifier {
   }
 
   Future<PasswordRequirement> fetchPasswordRequirement() async {
-    return runBusyAction('正在加载密码规则...', () async {
-      final dynamic data = await _apiClient.get('/info/password-requirement');
-      final PasswordRequirement requirement = PasswordRequirement.fromJson(
-        asMap(data),
-      );
-      passwordRequirement = requirement;
-      notifyListeners();
-      return requirement;
-    });
+    return runBusyAction(
+      () => desktopL10n.loadingPasswordRequirements,
+      () async {
+        final dynamic data = await _apiClient.get('/info/password-requirement');
+        final PasswordRequirement requirement = PasswordRequirement.fromJson(
+          asMap(data),
+        );
+        passwordRequirement = requirement;
+        notifyListeners();
+        return requirement;
+      },
+    );
   }
 
   Future<void> sendRegisterCode(String email) {
-    return runBusyAction('正在发送注册验证码...', () {
+    return runBusyAction(() => desktopL10n.sendingRegistrationCode, () {
       return _apiClient.post(
         '/auth/send-code',
         body: <String, dynamic>{'email': email.trim(), 'type': 'register'},
@@ -2497,7 +2739,7 @@ class AppController extends ChangeNotifier {
     required String password,
     required String code,
   }) async {
-    await runBusyAction('正在创建账户...', () async {
+    await runBusyAction(() => desktopL10n.creatingAccount, () async {
       authBusy = true;
       notifyListeners();
       try {
@@ -2526,7 +2768,7 @@ class AppController extends ChangeNotifier {
       return;
     }
     workspaceLoading = true;
-    workspaceError = null;
+    _workspaceError = null;
     notifyListeners();
 
     try {
@@ -2545,7 +2787,9 @@ class AppController extends ChangeNotifier {
       totpStatus = await _loadTotpStatus();
       adaptiveAuthStatus = await _loadAdaptiveAuthStatus();
     } catch (error) {
-      workspaceError = error is ApiException ? error.message : '加载桌面数据失败';
+      _workspaceError = () => error is ApiException
+          ? error.message
+          : desktopL10n.couldNotLoadDesktopData;
       rethrow;
     } finally {
       workspaceLoading = false;
@@ -2554,7 +2798,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> refreshSensitiveLogs({SensitiveLogsQuery? query}) async {
-    await runBusyAction('正在刷新敏感日志...', () async {
+    await runBusyAction(() => desktopL10n.refreshingActivityLogs, () async {
       sensitiveLogs = await _loadSensitiveLogs(
         query ?? const SensitiveLogsQuery(),
       );
@@ -2563,31 +2807,34 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> refreshSessions() async {
-    await runBusyAction('正在刷新在线设备...', () async {
+    await runBusyAction(() => desktopL10n.refreshingOnlineDevices, () async {
       sessions = await _loadSessions();
       notifyListeners();
     });
   }
 
   Future<void> refreshPasskeys() async {
-    await runBusyAction('正在刷新 Passkey 列表...', () async {
+    await runBusyAction(() => desktopL10n.refreshingPasskeys, () async {
       passkeys = await _loadPasskeys();
       notifyListeners();
     });
   }
 
   Future<void> refreshTotpStatus() async {
-    await runBusyAction('正在刷新 TOTP 状态...', () async {
+    await runBusyAction(() => desktopL10n.refreshingTotpStatus, () async {
       totpStatus = await _loadTotpStatus();
       notifyListeners();
     });
   }
 
   Future<void> refreshAdaptiveAuthStatus() async {
-    await runBusyAction('正在刷新连续认证状态...', () async {
-      adaptiveAuthStatus = await _loadAdaptiveAuthStatus();
-      notifyListeners();
-    });
+    await runBusyAction(
+      () => desktopL10n.refreshingContinuousAuthenticationStatus,
+      () async {
+        adaptiveAuthStatus = await _loadAdaptiveAuthStatus();
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> updateSetting({
@@ -2595,7 +2842,7 @@ class AppController extends ChangeNotifier {
     bool? value,
     String? stringValue,
   }) async {
-    await runBusyAction('正在保存设置...', () async {
+    await runBusyAction(() => desktopL10n.savingSettings, () async {
       final Map<String, dynamic> payload = <String, dynamic>{'field': field};
       if (value != null) {
         payload['value'] = value;
@@ -2620,7 +2867,7 @@ class AppController extends ChangeNotifier {
     required String key,
     required String value,
   }) async {
-    await runBusyAction('正在保存资料...', () async {
+    await runBusyAction(() => desktopL10n.savingProfile, () async {
       final dynamic data = await _apiClient.post(
         '/auth/update/profile',
         authorized: true,
@@ -2636,7 +2883,7 @@ class AppController extends ChangeNotifier {
     required String fileName,
     required String contentType,
   }) async {
-    await runBusyAction('正在上传头像...', () async {
+    await runBusyAction(() => desktopL10n.uploadingAvatar, () async {
       final dynamic data = await _apiClient.postMultipartFile(
         '/auth/upload/avatar',
         fieldName: 'file',
@@ -2651,27 +2898,33 @@ class AppController extends ChangeNotifier {
   }
 
   Future<SensitiveVerificationStatus> checkSensitiveVerification() async {
-    return runBusyAction('正在检查验证状态...', () async {
-      final dynamic data = await _apiClient.get(
-        '/auth/check-sensitive-verification',
-        authorized: true,
-      );
-      return SensitiveVerificationStatus.fromJson(asMap(data));
-    });
+    return runBusyAction(
+      () => desktopL10n.checkingVerificationStatus,
+      () async {
+        final dynamic data = await _apiClient.get(
+          '/auth/check-sensitive-verification',
+          authorized: true,
+        );
+        return SensitiveVerificationStatus.fromJson(asMap(data));
+      },
+    );
   }
 
   Future<AdaptiveAuthStatus> getAdaptiveAuthStatus() async {
-    return runBusyAction('正在检查连续认证状态...', () async {
-      final dynamic data = await _apiClient.get(
-        '/auth/adaptive-auth/status',
-        authorized: true,
-      );
-      return AdaptiveAuthStatus.fromJson(asMap(data));
-    });
+    return runBusyAction(
+      () => desktopL10n.checkingContinuousAuthenticationStatus,
+      () async {
+        final dynamic data = await _apiClient.get(
+          '/auth/adaptive-auth/status',
+          authorized: true,
+        );
+        return AdaptiveAuthStatus.fromJson(asMap(data));
+      },
+    );
   }
 
   Future<void> sendSensitiveVerificationCode() {
-    return runBusyAction('正在发送验证邮件...', () {
+    return runBusyAction(() => desktopL10n.sendingVerificationEmail, () {
       return _apiClient.post(
         '/auth/send-code',
         authorized: true,
@@ -2685,7 +2938,7 @@ class AppController extends ChangeNotifier {
     String? password,
     String? code,
   }) {
-    return runBusyAction('正在验证身份...', () {
+    return runBusyAction(() => desktopL10n.verifyingIdentity, () {
       final Map<String, dynamic> payload = <String, dynamic>{'method': method};
       if (password != null && password.trim().isNotEmpty) {
         payload['password'] = password;
@@ -2734,9 +2987,9 @@ class AppController extends ChangeNotifier {
       return nativePasskeyUnavailableDescription();
     }
     if (usesBrowserPasskeyBridge) {
-      return '当前环境未配置可用的 Passkey 浏览器桥接地址';
+      return desktopL10n.noUsableBrowserPasskeyBridgeUrlIs;
     }
-    return '当前平台暂不支持 Passkey';
+    return desktopL10n.passkeysAreNotSupportedOnThisPlatform;
   }
 
   Future<bool> isPasskeyAvailable() async {
@@ -2750,7 +3003,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> loginWithPasskey() async {
-    await runBusyAction('正在等待 Passkey 登录...', () async {
+    await runBusyAction(() => desktopL10n.waitingForPasskeySignIn, () async {
       authBusy = true;
       pendingMfaChallenge = null;
       notifyListeners();
@@ -2789,7 +3042,9 @@ class AppController extends ChangeNotifier {
               return;
             }
             if (response.accessToken == null || response.accessToken!.isEmpty) {
-              throw response.toException('浏览器未返回登录结果');
+              throw response.toException(
+                desktopL10n.theBrowserDidNotReturnASign,
+              );
             }
             _apiClient.accessToken = response.accessToken;
             await refreshWorkspace();
@@ -2828,121 +3083,136 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> performPasskeySensitiveVerification() {
-    return runBusyAction('正在等待 Passkey 验证...', () async {
-      if (usesNativePasskey) {
-        if (!await PasskeyPlatform.isAvailable()) {
+    return runBusyAction(
+      () => desktopL10n.waitingForPasskeyVerification,
+      () async {
+        if (usesNativePasskey) {
+          if (!await PasskeyPlatform.isAvailable()) {
+            throw ApiException(passkeyUnavailableMessage);
+          }
+          final PasskeyAssertionOptions options =
+              await getPasskeySensitiveVerificationOptions();
+          final PasskeyAssertionResult assertion =
+              await PasskeyPlatform.getAssertion(
+                options: options,
+                origin: passkeyOrigin,
+              );
+          await verifySensitiveOperationWithPasskey(
+            challengeId: options.challengeId,
+            assertion: assertion,
+          );
+          return;
+        }
+
+        if (!usesBrowserPasskeyBridge) {
           throw ApiException(passkeyUnavailableMessage);
         }
-        final PasskeyAssertionOptions options =
-            await getPasskeySensitiveVerificationOptions();
-        final PasskeyAssertionResult assertion =
-            await PasskeyPlatform.getAssertion(
-              options: options,
-              origin: passkeyOrigin,
-            );
-        await verifySensitiveOperationWithPasskey(
-          challengeId: options.challengeId,
-          assertion: assertion,
-        );
-        return;
-      }
 
-      if (!usesBrowserPasskeyBridge) {
-        throw ApiException(passkeyUnavailableMessage);
-      }
-
-      if (!supportsBrowserPasskeyBridge) {
-        throw ApiException(passkeyUnavailableMessage);
-      }
-
-      try {
-        final BrowserPasskeyBridgeResponse response =
-            await BrowserPasskeyBridge.start(
-              passkeyOrigin: passkeyOrigin,
-              apiBaseUrl: apiBaseUrl,
-              mode: BrowserPasskeyBridgeMode.sensitive,
-              accessToken: _apiClient.accessToken,
-            );
-        if (!response.verified) {
-          throw response.toException('浏览器未完成敏感验证');
+        if (!supportsBrowserPasskeyBridge) {
+          throw ApiException(passkeyUnavailableMessage);
         }
-      } on SocketException catch (error) {
-        throw ApiException(_passkeyBridgeSocketErrorMessage(error));
-      }
-    });
+
+        try {
+          final BrowserPasskeyBridgeResponse response =
+              await BrowserPasskeyBridge.start(
+                passkeyOrigin: passkeyOrigin,
+                apiBaseUrl: apiBaseUrl,
+                mode: BrowserPasskeyBridgeMode.sensitive,
+                accessToken: _apiClient.accessToken,
+              );
+          if (!response.verified) {
+            throw response.toException(
+              desktopL10n.theBrowserDidNotCompleteVerificationFor,
+            );
+          }
+        } on SocketException catch (error) {
+          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+        }
+      },
+    );
   }
 
   Future<void> verifySensitiveOperationWithPasskeyInBrowser() {
-    return runBusyAction('正在等待 Passkey 验证...', () async {
-      try {
-        final BrowserPasskeyBridgeResponse response =
-            await BrowserPasskeyBridge.start(
-              passkeyOrigin: passkeyOrigin,
-              apiBaseUrl: apiBaseUrl,
-              mode: BrowserPasskeyBridgeMode.sensitive,
-              accessToken: _apiClient.accessToken,
+    return runBusyAction(
+      () => desktopL10n.waitingForPasskeyVerification,
+      () async {
+        try {
+          final BrowserPasskeyBridgeResponse response =
+              await BrowserPasskeyBridge.start(
+                passkeyOrigin: passkeyOrigin,
+                apiBaseUrl: apiBaseUrl,
+                mode: BrowserPasskeyBridgeMode.sensitive,
+                accessToken: _apiClient.accessToken,
+              );
+          if (!response.verified) {
+            throw response.toException(
+              desktopL10n.theBrowserDidNotCompleteVerificationFor,
             );
-        if (!response.verified) {
-          throw response.toException('浏览器未完成敏感验证');
+          }
+        } on SocketException catch (error) {
+          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
         }
-      } on SocketException catch (error) {
-        throw ApiException(_passkeyBridgeSocketErrorMessage(error));
-      }
-    });
+      },
+    );
   }
 
   Future<void> registerPasskey({String? preferredName}) async {
-    await runBusyAction('正在等待 Passkey 登记...', () async {
-      if (usesNativePasskey) {
-        if (!await PasskeyPlatform.isAvailable()) {
+    await runBusyAction(
+      () => desktopL10n.waitingForPasskeyRegistration,
+      () async {
+        if (usesNativePasskey) {
+          if (!await PasskeyPlatform.isAvailable()) {
+            throw ApiException(passkeyUnavailableMessage);
+          }
+          final String passkeyName = preferredName?.trim().isNotEmpty == true
+              ? preferredName!.trim()
+              : 'Ksuser Desktop';
+          final PasskeyRegistrationOptions options =
+              await getPasskeyRegistrationOptions(preferredName: passkeyName);
+          final PasskeyRegistrationResult credential =
+              await PasskeyPlatform.createCredential(
+                options: options,
+                origin: passkeyOrigin,
+              );
+          await _apiClient.post(
+            '/auth/passkey/registration-verify',
+            authorized: true,
+            body: <String, dynamic>{
+              ...credential.toJson(),
+              'passkeyName': passkeyName,
+            },
+          );
+          await refreshPasskeys();
+          return;
+        }
+
+        if (!usesBrowserPasskeyBridge) {
           throw ApiException(passkeyUnavailableMessage);
         }
-        final String passkeyName = preferredName?.trim().isNotEmpty == true
-            ? preferredName!.trim()
-            : 'Ksuser Desktop';
-        final PasskeyRegistrationOptions options =
-            await getPasskeyRegistrationOptions(preferredName: passkeyName);
-        final PasskeyRegistrationResult credential =
-            await PasskeyPlatform.createCredential(
-              options: options,
-              origin: passkeyOrigin,
-            );
-        await _apiClient.post(
-          '/auth/passkey/registration-verify',
-          authorized: true,
-          body: <String, dynamic>{
-            ...credential.toJson(),
-            'passkeyName': passkeyName,
-          },
-        );
-        await refreshPasskeys();
-        return;
-      }
-
-      if (!usesBrowserPasskeyBridge) {
-        throw ApiException(passkeyUnavailableMessage);
-      }
-      if (!supportsBrowserPasskeyBridge) {
-        throw ApiException(passkeyUnavailableMessage);
-      }
-
-      try {
-        final BrowserPasskeyBridgeResponse response =
-            await BrowserPasskeyBridge.start(
-              passkeyOrigin: passkeyOrigin,
-              apiBaseUrl: apiBaseUrl,
-              mode: BrowserPasskeyBridgeMode.register,
-              accessToken: _apiClient.accessToken,
-              passkeyName: preferredName,
-            );
-        if (!response.registered) {
-          throw response.toException('浏览器未完成 Passkey 登记');
+        if (!supportsBrowserPasskeyBridge) {
+          throw ApiException(passkeyUnavailableMessage);
         }
-        await refreshPasskeys();
-      } on SocketException catch (error) {
-        throw ApiException(_passkeyBridgeSocketErrorMessage(error));
-      }
-    });
+
+        try {
+          final BrowserPasskeyBridgeResponse response =
+              await BrowserPasskeyBridge.start(
+                passkeyOrigin: passkeyOrigin,
+                apiBaseUrl: apiBaseUrl,
+                mode: BrowserPasskeyBridgeMode.register,
+                accessToken: _apiClient.accessToken,
+                passkeyName: preferredName,
+              );
+          if (!response.registered) {
+            throw response.toException(
+              desktopL10n.theBrowserDidNotCompletePasskeyRegistration,
+            );
+          }
+          await refreshPasskeys();
+        } on SocketException catch (error) {
+          throw ApiException(_passkeyBridgeSocketErrorMessage(error));
+        }
+      },
+    );
   }
 
   static bool _isLoopbackBindDenied(SocketException error) {
@@ -2956,14 +3226,15 @@ class AppController extends ChangeNotifier {
 
   static String _passkeyBridgeSocketErrorMessage(SocketException error) {
     if (_isLoopbackBindDenied(error)) {
-      return '当前环境禁止创建本地回调端口，无法使用浏览器 Passkey 桥接。'
-          '请检查系统网络入站权限，或在 macOS 上启用原生 Passkey。';
+      return '${desktopL10n.thisEnvironmentPreventsALocalCallbackPort} ${desktopL10n.checkNetworkInboundPermissionsOrEnableNative}';
     }
-    return '无法创建本地 Passkey 回调服务：${error.message}';
+    return desktopL10n.couldNotCreateTheLocalPasskeyCallback(
+      (error.message).toString(),
+    );
   }
 
   Future<void> sendChangeEmailCode(String email) {
-    return runBusyAction('正在发送邮箱验证码...', () {
+    return runBusyAction(() => desktopL10n.sendingEmailVerificationCode, () {
       return _apiClient.post(
         '/auth/send-code',
         authorized: true,
@@ -2976,7 +3247,7 @@ class AppController extends ChangeNotifier {
     required String newEmail,
     required String code,
   }) async {
-    await runBusyAction('正在更新邮箱...', () async {
+    await runBusyAction(() => desktopL10n.updatingEmail, () async {
       final dynamic data = await _apiClient.post(
         '/auth/update/email',
         authorized: true,
@@ -2996,7 +3267,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> changePassword(String newPassword) {
-    return runBusyAction('正在更新密码...', () {
+    return runBusyAction(() => desktopL10n.updatingPassword, () {
       return _apiClient.post(
         '/auth/update/password',
         authorized: true,
@@ -3006,7 +3277,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> revokeSession(int sessionId) async {
-    await runBusyAction('正在撤销会话...', () async {
+    await runBusyAction(() => desktopL10n.revokingSession, () async {
       await _apiClient.post(
         '/auth/sessions/$sessionId/revoke',
         authorized: true,
@@ -3017,14 +3288,14 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logoutAll() async {
-    await runBusyAction('正在退出所有设备...', () async {
+    await runBusyAction(() => desktopL10n.signingOutAllDevices, () async {
       await _apiClient.post('/auth/logout/all', authorized: true);
       await logout();
     });
   }
 
   Future<void> renamePasskey(int passkeyId, String name) async {
-    await runBusyAction('正在重命名 Passkey...', () async {
+    await runBusyAction(() => desktopL10n.renamingPasskey, () async {
       await _apiClient.put(
         '/auth/passkey/$passkeyId/rename',
         authorized: true,
@@ -3036,7 +3307,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> deletePasskey(int passkeyId) async {
-    await runBusyAction('正在删除 Passkey...', () async {
+    await runBusyAction(() => desktopL10n.deletingPasskey, () async {
       await _apiClient.delete('/auth/passkey/$passkeyId', authorized: true);
       passkeys = await _loadPasskeys();
       notifyListeners();
@@ -3044,7 +3315,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<TotpRegistrationOptionsResponse> getTotpRegistrationOptions() async {
-    return runBusyAction('正在获取 TOTP 配置...', () async {
+    return runBusyAction(() => desktopL10n.gettingTotpConfiguration, () async {
       final dynamic data = await _apiClient.post(
         '/auth/totp/registration-options',
         authorized: true,
@@ -3057,7 +3328,7 @@ class AppController extends ChangeNotifier {
     required String code,
     required List<String> recoveryCodes,
   }) async {
-    await runBusyAction('正在启用 TOTP...', () async {
+    await runBusyAction(() => desktopL10n.enablingTotp, () async {
       await _apiClient.post(
         '/auth/totp/registration-verify',
         authorized: true,
@@ -3072,7 +3343,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<List<String>> getRecoveryCodes() async {
-    return runBusyAction('正在加载恢复码...', () async {
+    return runBusyAction(() => desktopL10n.loadingRecoveryCodes, () async {
       final dynamic data = await _apiClient.get(
         '/auth/totp/recovery-codes',
         authorized: true,
@@ -3082,19 +3353,22 @@ class AppController extends ChangeNotifier {
   }
 
   Future<List<String>> regenerateRecoveryCodes() async {
-    return runBusyAction('正在生成新的恢复码...', () async {
-      final dynamic data = await _apiClient.post(
-        '/auth/totp/recovery-codes/regenerate',
-        authorized: true,
-      );
-      totpStatus = await _loadTotpStatus();
-      notifyListeners();
-      return asList(data).map((dynamic item) => item.toString()).toList();
-    });
+    return runBusyAction(
+      () => desktopL10n.generatingNewRecoveryCodes,
+      () async {
+        final dynamic data = await _apiClient.post(
+          '/auth/totp/recovery-codes/regenerate',
+          authorized: true,
+        );
+        totpStatus = await _loadTotpStatus();
+        notifyListeners();
+        return asList(data).map((dynamic item) => item.toString()).toList();
+      },
+    );
   }
 
   Future<void> disableTotp() async {
-    await runBusyAction('正在关闭 TOTP...', () async {
+    await runBusyAction(() => desktopL10n.disablingTotp, () async {
       await _apiClient.post('/auth/totp/disable', authorized: true);
       totpStatus = await _loadTotpStatus();
       notifyListeners();
@@ -3102,7 +3376,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await runBusyAction('正在退出登录...', () async {
+    await runBusyAction(() => desktopL10n.signingOut, () async {
       try {
         if (isAuthenticated) {
           await _apiClient.post('/auth/logout', authorized: true);
@@ -3118,34 +3392,44 @@ class AppController extends ChangeNotifier {
   Future<SessionTransferTicket> createSessionTransferTicket({
     required String target,
   }) async {
-    return runBusyAction('正在生成跨端登录票据...', () async {
-      if (!isAuthenticated) {
-        throw ApiException('当前桌面端尚未登录');
-      }
-      final dynamic data = await _apiClient.post(
-        '/auth/session-transfer/create',
-        authorized: true,
-        body: <String, dynamic>{'target': target},
-      );
-      return SessionTransferTicket.fromJson(asMap(data));
-    });
+    return runBusyAction(
+      () => desktopL10n.generatingCrossDeviceSignInTicket,
+      () async {
+        if (!isAuthenticated) {
+          throw ApiException.localized(
+            () => desktopL10n.thisDesktopAppIsNotSignedIn,
+          );
+        }
+        final dynamic data = await _apiClient.post(
+          '/auth/session-transfer/create',
+          authorized: true,
+          body: <String, dynamic>{'target': target},
+        );
+        return SessionTransferTicket.fromJson(asMap(data));
+      },
+    );
   }
 
   Future<AccountRecoveryTicket> issueAccountRecoveryTicket() async {
-    return runBusyAction('正在生成账号恢复授权...', () async {
-      if (!isAuthenticated) {
-        throw ApiException('当前桌面端尚未登录');
-      }
-      final dynamic data = await _apiClient.post(
-        '/auth/account-recovery/issue',
-        authorized: true,
-      );
-      return AccountRecoveryTicket.fromJson(asMap(data));
-    });
+    return runBusyAction(
+      () => desktopL10n.generatingAccountRecoveryAuthorization,
+      () async {
+        if (!isAuthenticated) {
+          throw ApiException.localized(
+            () => desktopL10n.thisDesktopAppIsNotSignedIn,
+          );
+        }
+        final dynamic data = await _apiClient.post(
+          '/auth/account-recovery/issue',
+          authorized: true,
+        );
+        return AccountRecoveryTicket.fromJson(asMap(data));
+      },
+    );
   }
 
   Future<void> importSessionTransferTicket(String transferCode) async {
-    await runBusyAction('正在同步网页登录状态...', () async {
+    await runBusyAction(() => desktopL10n.syncingWebSignInStatus, () async {
       final dynamic data = await _apiClient.post(
         '/auth/session-transfer/exchange',
         body: <String, dynamic>{
@@ -3155,7 +3439,9 @@ class AppController extends ChangeNotifier {
       );
       final String? nextAccessToken = asString(asMap(data)['accessToken']);
       if (nextAccessToken == null || nextAccessToken.isEmpty) {
-        throw ApiException('跨端登录失败，未获取到 accessToken');
+        throw ApiException.localized(
+          () => desktopL10n.crossDeviceSignInFailedNoAccess,
+        );
       }
       _apiClient.accessToken = nextAccessToken;
       pendingMfaChallenge = null;
@@ -3334,6 +3620,10 @@ class KsuserApiClient {
       final HttpClientRequest request = await _httpClient.postUrl(uri);
       request.headers.set(HttpHeaders.userAgentHeader, _desktopUserAgent);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(
+        HttpHeaders.acceptLanguageHeader,
+        desktopLocaleController.languageTag,
+      );
       request.headers.contentType = ContentType(
         'multipart',
         'form-data',
@@ -3415,9 +3705,13 @@ class KsuserApiClient {
     } on ApiException {
       rethrow;
     } on SocketException catch (error) {
-      throw ApiException('网络连接失败：${error.message}');
+      throw ApiException(
+        desktopL10n.networkConnectionFailed((error.message).toString()),
+      );
     } catch (error) {
-      throw ApiException('头像上传失败：$error');
+      throw ApiException.localized(
+        () => desktopL10n.avatarUploadFailed((error).toString()),
+      );
     }
   }
 
@@ -3479,6 +3773,10 @@ class KsuserApiClient {
       final HttpClientRequest request = await _httpClient.openUrl(method, uri);
       request.headers.set(HttpHeaders.userAgentHeader, _desktopUserAgent);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(
+        HttpHeaders.acceptLanguageHeader,
+        desktopLocaleController.languageTag,
+      );
       request.headers.set(
         HttpHeaders.contentTypeHeader,
         'application/json; charset=utf-8',
@@ -3591,13 +3889,24 @@ class KsuserApiClient {
       }
       return decoded;
     } on SocketException catch (error) {
-      throw ApiException('无法连接到 ${uri.host}：${error.message}');
+      throw ApiException(
+        desktopL10n.couldNotConnectTo(
+          (uri.host).toString(),
+          (error.message).toString(),
+        ),
+      );
     } on HandshakeException catch (_) {
-      throw ApiException('TLS 握手失败，请检查服务证书');
+      throw ApiException.localized(
+        () => desktopL10n.tlsHandshakeFailedPleaseCheckTheServer,
+      );
     } on TimeoutException catch (_) {
-      throw ApiException('请求超时，请稍后重试');
+      throw ApiException.localized(
+        () => desktopL10n.requestTimedOutPleaseTryAgainLater,
+      );
     } on FormatException catch (_) {
-      throw ApiException('服务返回了无法解析的数据');
+      throw ApiException.localized(
+        () => desktopL10n.theServerReturnedUnreadableData,
+      );
     }
   }
 
@@ -3647,7 +3956,7 @@ class KsuserApiClient {
   }
 
   bool _isAuthenticationBootstrapEndpoint(String path) {
-    const List<String> endpoints = <String>[
+    List<String> endpoints = <String>[
       '/auth/login',
       '/auth/login-with-code',
       '/auth/register',
@@ -3663,7 +3972,10 @@ class KsuserApiClient {
     if (existingCompleter != null) {
       final String? existingToken = await existingCompleter.future;
       if (existingToken == null || existingToken.isEmpty) {
-        throw ApiException('认证已失效，请重新登录', statusCode: 401);
+        throw ApiException(
+          desktopL10n.authenticationExpiredPleaseSignInAgain,
+          statusCode: 401,
+        );
       }
       return existingToken;
     }
@@ -3681,7 +3993,10 @@ class KsuserApiClient {
       );
       final String? token = asString(asMap(data)['accessToken']);
       if (token == null || token.isEmpty) {
-        throw ApiException('刷新 Token 失败', statusCode: 401);
+        throw ApiException(
+          desktopL10n.couldNotRefreshTheToken,
+          statusCode: 401,
+        );
       }
       accessToken = token;
       completer.complete(token);
@@ -3690,7 +4005,10 @@ class KsuserApiClient {
       clearSession();
       onSessionExpired?.call();
       completer.complete(null);
-      throw ApiException('认证已失效，请重新登录', statusCode: 401);
+      throw ApiException(
+        desktopL10n.authenticationExpiredPleaseSignInAgain,
+        statusCode: 401,
+      );
     } finally {
       _refreshCompleter = null;
     }
@@ -3714,11 +4032,19 @@ class KsuserApiClient {
 
 class ApiException implements Exception {
   ApiException(
-    this.message, {
+    String message, {
     this.statusCode,
     this.errorCode,
     this.params = const <String, dynamic>{},
-  });
+  }) : _message = message,
+       _localizedMessage = null;
+
+  ApiException.localized(String Function() message)
+    : _message = '',
+      _localizedMessage = message,
+      statusCode = null,
+      errorCode = null,
+      params = const <String, dynamic>{};
 
   factory ApiException.fromResponse(dynamic response, int statusCode) {
     final String errorCode =
@@ -3738,7 +4064,15 @@ class ApiException implements Exception {
     );
   }
 
-  final String message;
+  final String _message;
+  final String Function()? _localizedMessage;
+  String get message => errorCode == null
+      ? (_localizedMessage?.call() ?? _message)
+      : resolveApiResultMessage(
+          errorCode: errorCode,
+          params: params,
+          statusCode: statusCode,
+        );
   final int? statusCode;
   final String? errorCode;
   final Map<String, dynamic> params;
@@ -3927,7 +4261,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   Future<void> _login() async {
     final String email = _loginEmailController.text.trim();
     if (email.isEmpty) {
-      _showError('请先输入邮箱地址');
+      _showError(desktopL10n.enterYourEmailAddressFirst);
       return;
     }
 
@@ -3936,7 +4270,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     try {
       if (_loginFactor == LoginFactor.password) {
         if (_passwordController.text.isEmpty) {
-          _showError('请输入密码');
+          _showError(desktopL10n.enterYourPassword);
           return;
         }
         await widget.controller.loginWithPassword(
@@ -3945,7 +4279,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
         );
       } else {
         if (_codeController.text.trim().length != 6) {
-          _showError('请输入 6 位验证码');
+          _showError(desktopL10n.enterADigitVerificationCode);
           return;
         }
         await widget.controller.loginWithCode(
@@ -3954,10 +4288,13 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
         );
       }
       if (mounted && widget.controller.pendingMfaChallenge == null) {
-        _showSuccess('登录成功');
+        _showSuccess(desktopL10n.signedIn);
       } else if (mounted) {
         _syncMfaModeWithChallenge();
-        _showSuccess('第一步验证成功，请继续完成二次验证');
+        _showSuccess(
+          desktopL10n
+              .firstVerificationCompletedContinueWithAdditionalVerification,
+        );
       }
     } catch (error) {
       _showError(error.toString());
@@ -3967,13 +4304,13 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
   Future<void> _sendLoginCode() async {
     final String email = _loginEmailController.text.trim();
     if (email.isEmpty) {
-      _showError('请先输入邮箱地址');
+      _showError(desktopL10n.enterYourEmailAddressFirst);
       return;
     }
     widget.controller.updateApiBaseUrl(_apiController.text);
     try {
       await widget.controller.sendLoginCode(email);
-      _showSuccess('验证码已发送');
+      _showSuccess(desktopL10n.verificationCodeSent);
     } catch (error) {
       _showError(error.toString());
     }
@@ -3989,7 +4326,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
         await widget.controller.completePasskeyMfa(
           challengeId: challenge.challengeId,
         );
-        _showSuccess('二次验证通过');
+        _showSuccess(desktopL10n.additionalVerificationCompleted);
       } catch (error) {
         _showError(error.toString());
       }
@@ -3997,12 +4334,12 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     }
     if (_mfaMode == MfaMode.code &&
         _mfaCodeController.text.trim().length != 6) {
-      _showError('请输入 6 位动态码');
+      _showError(desktopL10n.enterADigitAuthenticatorCode);
       return;
     }
     if (_mfaMode == MfaMode.recoveryCode &&
         _mfaRecoveryController.text.trim().isEmpty) {
-      _showError('请输入恢复码');
+      _showError(desktopL10n.enterARecoveryCode);
       return;
     }
     try {
@@ -4013,7 +4350,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
             ? _mfaRecoveryController.text
             : null,
       );
-      _showSuccess('二次验证通过');
+      _showSuccess(desktopL10n.additionalVerificationCompleted);
     } catch (error) {
       _showError(error.toString());
     }
@@ -4028,10 +4365,12 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
     try {
       await widget.controller.loginWithPasskey();
       if (mounted && widget.controller.pendingMfaChallenge == null) {
-        _showSuccess('Passkey 登录成功');
+        _showSuccess(desktopL10n.signedInWithPasskey);
       } else if (mounted) {
         _syncMfaModeWithChallenge();
-        _showSuccess('Passkey 验证成功，请继续完成二次验证');
+        _showSuccess(
+          desktopL10n.passkeyVerifiedContinueWithAdditionalVerification,
+        );
       }
     } catch (error) {
       _showError(error.toString());
@@ -4040,17 +4379,19 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
 
   Future<void> _loginWithApple() async {
     if (!AppleLoginPlatform.isAvailable) {
-      _showError('Apple 登录仅在 macOS 上提供');
+      _showError(desktopL10n.signInWithAppleIsOnlyAvailable);
       return;
     }
     widget.controller.updateApiBaseUrl(_apiController.text);
     try {
       await widget.controller.loginWithApple();
       if (mounted && widget.controller.pendingMfaChallenge == null) {
-        _showSuccess('Apple 登录成功');
+        _showSuccess(desktopL10n.signedInWithApple);
       } else if (mounted) {
         _syncMfaModeWithChallenge();
-        _showSuccess('Apple 验证成功，请继续完成二次验证');
+        _showSuccess(
+          desktopL10n.appleVerifiedContinueWithAdditionalVerification,
+        );
       }
     } catch (error) {
       _showError(error.toString());
@@ -4066,10 +4407,12 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
       }
       if (widget.controller.pendingMfaChallenge == null &&
           widget.controller.isAuthenticated) {
-        _showSuccess('扫码登录成功');
+        _showSuccess(desktopL10n.signedInWithQrCode);
       } else if (widget.controller.pendingMfaChallenge != null) {
         _syncMfaModeWithChallenge();
-        _showSuccess('扫码验证成功，请继续完成二次验证');
+        _showSuccess(
+          desktopL10n.qrCodeVerifiedContinueWithAdditionalVerification,
+        );
       }
     } catch (error) {
       _showError(error.toString());
@@ -4148,7 +4491,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
                       Text(
-                        '登录',
+                        desktopL10n.signIn,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
@@ -4156,7 +4499,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                       ),
                       const SizedBox(height: 5),
                       Text(
-                        '登录 Ksuser 安全中心，继续管理你的账户与设备。',
+                        desktopL10n.signInToKsuserSecurityToManage,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurface.withValues(
@@ -4167,16 +4510,16 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                       SizedBox(height: sectionGap + 2),
                       SegmentedButton<LoginFactor>(
                         showSelectedIcon: false,
-                        segments: const <ButtonSegment<LoginFactor>>[
+                        segments: <ButtonSegment<LoginFactor>>[
                           ButtonSegment<LoginFactor>(
                             value: LoginFactor.password,
                             icon: Icon(Icons.password_rounded, size: 18),
-                            label: Text('密码'),
+                            label: Text(desktopL10n.password),
                           ),
                           ButtonSegment<LoginFactor>(
                             value: LoginFactor.emailCode,
                             icon: Icon(Icons.mark_email_read_rounded, size: 18),
-                            label: Text('邮箱验证码'),
+                            label: Text(desktopL10n.emailCode),
                           ),
                         ],
                         selected: <LoginFactor>{_loginFactor},
@@ -4190,9 +4533,9 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                         textInputAction: _loginFactor == LoginFactor.password
                             ? TextInputAction.next
                             : TextInputAction.done,
-                        decoration: const InputDecoration(
-                          labelText: '邮箱地址',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
+                        decoration: InputDecoration(
+                          labelText: desktopL10n.emailAddress,
+                          prefixIcon: const Icon(Icons.alternate_email_rounded),
                         ),
                       ),
                       SizedBox(height: sectionGap),
@@ -4201,8 +4544,8 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           controller: _passwordController,
                           obscureText: true,
                           onSubmitted: (_) => _login(),
-                          decoration: const InputDecoration(
-                            labelText: '密码',
+                          decoration: InputDecoration(
+                            labelText: desktopL10n.password,
                             prefixIcon: Icon(Icons.lock_outline_rounded),
                           ),
                         )
@@ -4213,13 +4556,13 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                           textInputAction: TextInputAction.done,
                           onSubmitted: (_) => _login(),
                           decoration: InputDecoration(
-                            labelText: '6 位邮箱验证码',
+                            labelText: desktopL10n.digitEmailCode,
                             prefixIcon: const Icon(Icons.pin_outlined),
                             suffixIcon: TextButton(
                               onPressed: widget.controller.authBusy
                                   ? null
                                   : _sendLoginCode,
-                              child: const Text('发送验证码'),
+                              child: Text(desktopL10n.sendCode),
                             ),
                           ),
                         ),
@@ -4237,7 +4580,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                   ),
                                 )
                               : const Icon(Icons.login_rounded),
-                          label: const Text('登录'),
+                          label: Text(desktopL10n.signIn),
                         ),
                       ),
                       if (!AppleLoginPlatform.isAvailable)
@@ -4252,7 +4595,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                 horizontal: 12,
                               ),
                               child: Text(
-                                '其他登录方式',
+                                desktopL10n.otherSignInMethods,
                                 style: theme.textTheme.bodySmall,
                               ),
                             ),
@@ -4274,7 +4617,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                               ),
                             ),
                             icon: const Icon(Icons.apple, size: 20),
-                            label: const Text('使用 Apple 登录'),
+                            label: Text(desktopL10n.signInWithApple),
                           ),
                         ),
                       ],
@@ -4294,7 +4637,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                                 ),
                               ),
                               icon: const Icon(Icons.qr_code_rounded, size: 18),
-                              label: const Text('扫码登录'),
+                              label: Text(desktopL10n.qrSignIn2),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -4339,7 +4682,7 @@ class _DesktopAuthPortalState extends State<DesktopAuthPortal> {
                       SizedBox(height: sectionGap),
                       TextButton(
                         onPressed: _openWebRegister,
-                        child: const Text('还没有账号？前往网页端注册'),
+                        child: Text(desktopL10n.newToKsuserRegisterOnTheWeb),
                       ),
                     ],
                   ),
@@ -4636,7 +4979,8 @@ class DesktopWorkspace extends StatelessWidget {
                                                   ),
                                                   const SizedBox(height: 2),
                                                   Text(
-                                                    '账户安全控制台',
+                                                    desktopL10n
+                                                        .accountSecurityConsole,
                                                     style: TextStyle(
                                                       color:
                                                           sidebarSubtitleColor,
@@ -4667,7 +5011,7 @@ class DesktopWorkspace extends StatelessWidget {
                                             ),
                                             const SizedBox(width: 7),
                                             Text(
-                                              '工作台',
+                                              desktopL10n.workspace,
                                               style: TextStyle(
                                                 color: sidebarSubtitleColor,
                                                 fontSize: 11,
@@ -4701,7 +5045,7 @@ class DesktopWorkspace extends StatelessWidget {
                               children: <Widget>[
                                 _DesktopSidebarItem(
                                   icon: Icons.dashboard_rounded,
-                                  label: '账号总览',
+                                  label: desktopL10n.accountOverview,
                                   selected:
                                       controller.selectedSection ==
                                       DesktopSection.overview,
@@ -4715,7 +5059,7 @@ class DesktopWorkspace extends StatelessWidget {
                                 ),
                                 _DesktopSidebarItem(
                                   icon: Icons.badge_outlined,
-                                  label: '账号资料',
+                                  label: desktopL10n.accountProfile,
                                   selected:
                                       controller.selectedSection ==
                                       DesktopSection.profile,
@@ -4729,7 +5073,7 @@ class DesktopWorkspace extends StatelessWidget {
                                 ),
                                 _DesktopSidebarItem(
                                   icon: Icons.lock_outline_rounded,
-                                  label: '安全设置',
+                                  label: desktopL10n.securitySettings,
                                   selected:
                                       controller.selectedSection ==
                                       DesktopSection.security,
@@ -4743,7 +5087,7 @@ class DesktopWorkspace extends StatelessWidget {
                                 ),
                                 _DesktopSidebarItem(
                                   icon: Icons.devices_other_outlined,
-                                  label: '设备管理',
+                                  label: desktopL10n.deviceManagement,
                                   selected:
                                       controller.selectedSection ==
                                       DesktopSection.devices,
@@ -4757,7 +5101,7 @@ class DesktopWorkspace extends StatelessWidget {
                                 ),
                                 _DesktopSidebarItem(
                                   icon: Icons.history_rounded,
-                                  label: '操作日志',
+                                  label: desktopL10n.activityLogs,
                                   selected:
                                       controller.selectedSection ==
                                       DesktopSection.activity,
@@ -4771,7 +5115,7 @@ class DesktopWorkspace extends StatelessWidget {
                                 ),
                                 _DesktopSidebarItem(
                                   icon: Icons.admin_panel_settings_outlined,
-                                  label: '访问授权',
+                                  label: desktopL10n.accessAuthorization,
                                   selected:
                                       controller.selectedSection ==
                                       DesktopSection.authorizations,
@@ -4804,13 +5148,16 @@ class DesktopWorkspace extends StatelessWidget {
                                           color: sidebarSubtitleColor,
                                         ),
                                         const SizedBox(width: 7),
-                                        Text(
-                                          '跨端联通',
-                                          style: TextStyle(
-                                            color: sidebarSubtitleColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.2,
+                                        Expanded(
+                                          child: Text(
+                                            desktopL10n.crossDeviceAccess,
+                                            maxLines: 2,
+                                            style: TextStyle(
+                                              color: sidebarSubtitleColor,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.2,
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -4835,7 +5182,7 @@ class DesktopWorkspace extends StatelessWidget {
                                         }
                                       },
                                       icon: const Icon(Icons.qr_code_rounded),
-                                      label: const Text('手机扫码登录'),
+                                      label: Text(desktopL10n.mobileQrSignIn),
                                     ),
                                   if (!extended)
                                     Column(
@@ -4844,7 +5191,7 @@ class DesktopWorkspace extends StatelessWidget {
                                           Widget
                                         >[
                                           Tooltip(
-                                            message: '手机扫码登录',
+                                            message: desktopL10n.mobileQrSignIn,
                                             child: IconButton.filled(
                                               onPressed: () async {
                                                 try {
@@ -4870,12 +5217,14 @@ class DesktopWorkspace extends StatelessWidget {
                                           const SizedBox(height: 8),
                                         ],
                                         Tooltip(
-                                          message: '打开网页端并自动登录',
+                                          message: desktopL10n
+                                              .openTheWebAppAndSignIn,
                                           child: IconButton.filledTonal(
                                             onPressed: () async {
                                               try {
                                                 await controller.runBusyAction(
-                                                  '正在打开网页端...',
+                                                  () => desktopL10n
+                                                      .openingTheWebApp,
                                                   () async {
                                                     final SessionTransferTicket
                                                     ticket = await controller
@@ -4914,7 +5263,8 @@ class DesktopWorkspace extends StatelessWidget {
                                                 if (context.mounted) {
                                                   showAppMessage(
                                                     context,
-                                                    '已在浏览器打开网页端并自动登录',
+                                                    desktopL10n
+                                                        .webAppOpenedAndSignedInAutomatically,
                                                   );
                                                 }
                                               } catch (error) {
@@ -4934,12 +5284,14 @@ class DesktopWorkspace extends StatelessWidget {
                                         ),
                                         const SizedBox(height: 8),
                                         Tooltip(
-                                          message: '通过网页登录同步回桌面端',
+                                          message: desktopL10n
+                                              .syncWebSignInToDesktop,
                                           child: IconButton.filledTonal(
                                             onPressed: () async {
                                               try {
                                                 await controller.runBusyAction(
-                                                  '正在打开网页登录页...',
+                                                  () => desktopL10n
+                                                      .openingWebSignIn,
                                                   () async {
                                                     final Uri
                                                     baseUri = Uri.parse(
@@ -4972,7 +5324,8 @@ class DesktopWorkspace extends StatelessWidget {
                                                 if (context.mounted) {
                                                   showAppMessage(
                                                     context,
-                                                    '已打开网页登录页；网页登录成功后会自动同步回桌面端',
+                                                    desktopL10n
+                                                        .webSignInOpenedYourSessionWill,
                                                   );
                                                 }
                                               } catch (error) {
@@ -4998,7 +5351,7 @@ class DesktopWorkspace extends StatelessWidget {
                                       onPressed: () async {
                                         try {
                                           await controller.runBusyAction(
-                                            '正在打开网页端...',
+                                            () => desktopL10n.openingTheWebApp,
                                             () async {
                                               final SessionTransferTicket
                                               ticket = await controller
@@ -5032,7 +5385,8 @@ class DesktopWorkspace extends StatelessWidget {
                                           if (context.mounted) {
                                             showAppMessage(
                                               context,
-                                              '已在浏览器打开网页端并自动登录',
+                                              desktopL10n
+                                                  .webAppOpenedAndSignedInAutomatically,
                                             );
                                           }
                                         } catch (error) {
@@ -5048,7 +5402,7 @@ class DesktopWorkspace extends StatelessWidget {
                                       icon: const Icon(
                                         Icons.open_in_browser_rounded,
                                       ),
-                                      label: const Text('打开网页端'),
+                                      label: Text(desktopL10n.openWebApp),
                                     ),
                                   if (extended) const SizedBox(height: 8),
                                   if (extended)
@@ -5056,7 +5410,7 @@ class DesktopWorkspace extends StatelessWidget {
                                       onPressed: () async {
                                         try {
                                           await controller.runBusyAction(
-                                            '正在打开网页登录页...',
+                                            () => desktopL10n.openingWebSignIn,
                                             () async {
                                               final Uri baseUri = Uri.parse(
                                                 controller.passkeyOrigin
@@ -5084,7 +5438,8 @@ class DesktopWorkspace extends StatelessWidget {
                                           if (context.mounted) {
                                             showAppMessage(
                                               context,
-                                              '已打开网页登录页；网页登录成功后会自动同步回桌面端',
+                                              desktopL10n
+                                                  .webSignInOpenedYourSessionWill,
                                             );
                                           }
                                         } catch (error) {
@@ -5098,7 +5453,7 @@ class DesktopWorkspace extends StatelessWidget {
                                         }
                                       },
                                       icon: const Icon(Icons.sync_alt_rounded),
-                                      label: const Text('网页登录同步'),
+                                      label: Text(desktopL10n.syncWebSignIn),
                                     ),
                                   const SizedBox(height: 12),
                                   if (extended)
@@ -5117,7 +5472,7 @@ class DesktopWorkspace extends StatelessWidget {
                                         ),
                                         const SizedBox(width: 7),
                                         Text(
-                                          '账户操作',
+                                          desktopL10n.accountActions,
                                           style: TextStyle(
                                             color: sidebarSubtitleColor,
                                             fontSize: 11,
@@ -5134,7 +5489,7 @@ class DesktopWorkspace extends StatelessWidget {
                                         await controller.logout();
                                       },
                                       icon: const Icon(Icons.logout_rounded),
-                                      label: const Text('退出登录'),
+                                      label: Text(desktopL10n.signOut),
                                       style: FilledButton.styleFrom(
                                         foregroundColor:
                                             theme.colorScheme.error,
@@ -5239,7 +5594,7 @@ class DesktopWorkspace extends StatelessWidget {
                               ),
                             ),
                             IconButton(
-                              tooltip: '设置',
+                              tooltip: desktopL10n.settings,
                               onPressed: () {
                                 showDesktopSettingsDialog(context, controller);
                               },
@@ -5248,12 +5603,11 @@ class DesktopWorkspace extends StatelessWidget {
                             if (supportsMoveToSystemTray) ...<Widget>[
                               const SizedBox(width: 8),
                               IconButton(
-                                tooltip: DesktopWindowPlatform
-                                    .moveToSystemTrayLabel,
+                                tooltip:
+                                    DesktopWindowPlatform.moveToSystemTrayLabel,
                                 onPressed: () async {
                                   try {
-                                    await DesktopWindowPlatform
-                                        .moveToSystemTray();
+                                    await DesktopWindowPlatform.moveToSystemTray();
                                   } catch (error) {
                                     if (context.mounted) {
                                       showAppMessage(
@@ -5277,7 +5631,10 @@ class DesktopWorkspace extends StatelessWidget {
                                       try {
                                         await controller.refreshWorkspace();
                                         if (context.mounted) {
-                                          showAppMessage(context, '桌面数据已刷新');
+                                          showAppMessage(
+                                            context,
+                                            desktopL10n.desktopDataRefreshed,
+                                          );
                                         }
                                       } catch (error) {
                                         if (context.mounted) {
@@ -5298,7 +5655,7 @@ class DesktopWorkspace extends StatelessWidget {
                                       ),
                                     )
                                   : const Icon(Icons.refresh_rounded),
-                              label: const Text('刷新'),
+                              label: Text(desktopL10n.refresh),
                             ),
                           ],
                         ),
@@ -5392,31 +5749,43 @@ class OverviewPage extends StatelessWidget {
     }
     final int securityScore = computeSecurityScore(user, controller);
     final List<String> methods = <String>[
-      '密码',
-      '邮箱验证码',
+      desktopL10n.password,
+      desktopL10n.emailCode,
       if (controller.passkeys.isNotEmpty) 'Passkey',
       if (controller.totpStatus?.enabled == true) 'TOTP',
     ];
 
     final Widget profileAndMethods = _OverviewSplit(
       left: _SectionCard(
-        title: '资料摘要',
-        subtitle: '账户资料一览',
+        title: desktopL10n.profileSummary,
+        subtitle: desktopL10n.yourAccountAtAGlance,
         child: Wrap(
           spacing: 12,
           runSpacing: 12,
           children: <Widget>[
             _InfoChip(label: 'UUID', value: user.uuid),
-            _InfoChip(label: '真实姓名', value: user.realName ?? '未填写'),
-            _InfoChip(label: '地区', value: user.region ?? '未填写'),
-            _InfoChip(label: '性别', value: displayGender(user.gender)),
-            _InfoChip(label: '资料更新时间', value: formatDateTime(user.updatedAt)),
+            _InfoChip(
+              label: desktopL10n.fullName,
+              value: user.realName ?? desktopL10n.notProvided,
+            ),
+            _InfoChip(
+              label: desktopL10n.region,
+              value: user.region ?? desktopL10n.notProvided,
+            ),
+            _InfoChip(
+              label: desktopL10n.gender,
+              value: displayGender(user.gender),
+            ),
+            _InfoChip(
+              label: desktopL10n.profileUpdated,
+              value: formatDateTime(user.updatedAt),
+            ),
           ],
         ),
       ),
       right: _SectionCard(
-        title: '登录方式',
-        subtitle: '当前可用的认证方式',
+        title: desktopL10n.signInMethods,
+        subtitle: desktopL10n.availableAuthenticationMethods,
         child: Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -5438,12 +5807,12 @@ class OverviewPage extends StatelessWidget {
     );
     final Widget activity = _OverviewSplit(
       left: _SectionCard(
-        title: '近期设备活动',
-        subtitle: '最近登录的设备与会话',
+        title: desktopL10n.recentDeviceActivity,
+        subtitle: desktopL10n.recentDevicesAndSessions,
         child: controller.sessions.isEmpty
-            ? const _OverviewEmptyState(
+            ? _OverviewEmptyState(
                 icon: Icons.devices_other_rounded,
-                message: '暂无设备活动',
+                message: desktopL10n.noDeviceActivityYet,
               )
             : Column(
                 children: controller.sessions
@@ -5456,12 +5825,12 @@ class OverviewPage extends StatelessWidget {
               ),
       ),
       right: _SectionCard(
-        title: '近期敏感操作',
-        subtitle: '账户安全相关的最近记录',
+        title: desktopL10n.recentSensitiveActions,
+        subtitle: desktopL10n.recentAccountSecurityActivity,
         child: controller.sensitiveLogs.isEmpty
-            ? const _OverviewEmptyState(
+            ? _OverviewEmptyState(
                 icon: Icons.fact_check_outlined,
-                message: '暂无敏感操作记录',
+                message: desktopL10n.noSensitiveActionsYet,
               )
             : Column(
                 children: controller.sensitiveLogs
@@ -5491,34 +5860,37 @@ class OverviewPage extends StatelessWidget {
                 children: <Widget>[
                   _MetricCard(
                     width: metricWidth,
-                    title: '账户身份',
+                    title: desktopL10n.accountIdentity,
                     value: user.username,
                     caption: user.email,
                     icon: Icons.person_outline_rounded,
                   ),
                   _MetricCard(
                     width: metricWidth,
-                    title: '安全评分',
+                    title: desktopL10n.securityScore,
                     value: '$securityScore%',
                     caption: controller.totpStatus?.enabled == true
-                        ? '已启用 TOTP 防护'
-                        : '建议开启 TOTP 防护',
+                        ? desktopL10n.totpProtectionEnabled
+                        : desktopL10n.enableTotpProtection,
                     icon: Icons.shield_moon_outlined,
                     progress: securityScore / 100,
                   ),
                   _MetricCard(
                     width: metricWidth,
-                    title: '在线设备',
+                    title: desktopL10n.onlineDevices,
                     value: '${controller.sessions.length}',
-                    caption:
-                        '${controller.sessions.where((SessionItem item) => item.online).length} 台当前在线',
+                    caption: desktopL10n.devicesOnline(
+                      controller.sessions
+                          .where((SessionItem item) => item.online)
+                          .length,
+                    ),
                     icon: Icons.devices_other_rounded,
                   ),
                   _MetricCard(
                     width: metricWidth,
-                    title: '敏感日志',
+                    title: desktopL10n.activityLogs2,
                     value: '${controller.sensitiveLogs.length}',
-                    caption: '近期账户安全操作',
+                    caption: desktopL10n.recentAccountSecurityActions,
                     icon: Icons.rule_folder_outlined,
                   ),
                 ],
@@ -5548,15 +5920,15 @@ class AuthorizationsPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           _SectionCard(
-            title: '已授权应用',
-            subtitle: '查看可访问您账号信息的第三方应用及授权范围。',
+            title: desktopL10n.authorizedApps,
+            subtitle: desktopL10n.viewThirdPartyAppsThatCanAccess,
             child: Column(
               children: <Widget>[
                 Row(
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        '${controller.authorizedApps.length} 个应用',
+                        desktopL10n.apps(controller.authorizedApps.length),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -5573,7 +5945,7 @@ class AuthorizationsPage extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.refresh_rounded, size: 18),
-                      label: const Text('刷新'),
+                      label: Text(desktopL10n.refresh),
                     ),
                   ],
                 ),
@@ -5581,12 +5953,13 @@ class AuthorizationsPage extends StatelessWidget {
                 if (controller.authorizationsError != null)
                   _InlineStateCard(
                     icon: Icons.error_outline_rounded,
-                    title: '暂时无法获取授权信息',
+                    title: desktopL10n
+                        .authorizationInformationIsCurrentlyUnavailable,
                     message: controller.authorizationsError!,
                     action: TextButton.icon(
                       onPressed: () => controller.refreshAuthorizations(),
                       icon: const Icon(Icons.refresh_rounded),
-                      label: const Text('重试'),
+                      label: Text(desktopL10n.retry),
                     ),
                   )
                 else if (controller.authorizationsLoading &&
@@ -5596,10 +5969,10 @@ class AuthorizationsPage extends StatelessWidget {
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else if (controller.authorizedApps.isEmpty)
-                  const _InlineStateCard(
+                  _InlineStateCard(
                     icon: Icons.verified_user_outlined,
-                    title: '还没有授权应用',
-                    message: '您确认授权的第三方应用会显示在这里。',
+                    title: desktopL10n.noAuthorizedAppsYet,
+                    message: desktopL10n.thirdPartyAppsYouAuthorizeWillAppear,
                   )
                 else
                   Column(
@@ -5617,14 +5990,16 @@ class AuthorizationsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _SectionCard(
-            title: '授权说明',
-            subtitle: '您可以随时在网页端访问授权页面管理第三方应用。',
-            child: const Row(
+            title: desktopL10n.aboutAuthorization,
+            subtitle: desktopL10n.youCanManageThirdPartyAppsOn,
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Icon(Icons.info_outline_rounded, size: 20),
-                SizedBox(width: 10),
-                Expanded(child: Text('撤销授权后，该应用将无法继续使用现有授权访问您的账户信息。')),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(desktopL10n.afterYouRevokeAccessTheAppCan),
+                ),
               ],
             ),
           ),
@@ -5642,18 +6017,18 @@ class _AuthorizedAppTile extends StatelessWidget {
 
   Future<void> _confirmRevoke(BuildContext context) async {
     final bool confirmed =
-        await showDialog<bool>(
+        await showLocalizedDialog<bool>(
           context: context,
           builder: (BuildContext dialogContext) {
             final Color errorColor = Theme.of(dialogContext).colorScheme.error;
             return AlertDialog(
               icon: Icon(Icons.link_off_rounded, color: errorColor),
-              title: Text('取消「${app.appName}」的授权？'),
-              content: Text('取消后，该应用将无法继续访问您已授权的账号信息。若再次使用，需要重新确认授权。'),
+              title: Text(desktopL10n.revokeAccessFor(app.appName)),
+              content: Text(desktopL10n.theAppWillNoLongerBeAble),
               actions: <Widget>[
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('保留授权'),
+                  child: Text(desktopL10n.keepAccess),
                 ),
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
@@ -5664,7 +6039,7 @@ class _AuthorizedAppTile extends StatelessWidget {
                   ),
                   onPressed: () => Navigator.of(dialogContext).pop(true),
                   icon: const Icon(Icons.link_off_rounded, size: 18),
-                  label: const Text('确认取消'),
+                  label: Text(desktopL10n.revokeAccess),
                 ),
               ],
             );
@@ -5677,7 +6052,10 @@ class _AuthorizedAppTile extends StatelessWidget {
     try {
       await controller.revokeAuthorization(app.appId);
       if (context.mounted) {
-        showAppMessage(context, '已取消「${app.appName}」的授权');
+        showAppMessage(
+          context,
+          desktopL10n.accessRevokedFor((app.appName).toString()),
+        );
       }
     } catch (error) {
       if (context.mounted) {
@@ -5693,12 +6071,14 @@ class _AuthorizedAppTile extends StatelessWidget {
       alpha: 0.55,
     );
     final String expiry = app.expiresAt == null
-        ? (app.grantMode == 'ONE_TIME' ? '单次授权' : '长期有效')
-        : '有效期至 ${formatDateTime(app.expiresAt)}';
+        ? (app.grantMode == 'ONE_TIME'
+              ? desktopL10n.oneTimeAccess
+              : desktopL10n.noExpiration)
+        : desktopL10n.expires((formatDateTime(app.expiresAt)).toString());
     final String developer = app.creatorName?.isNotEmpty == true
-        ? '开发者：${app.creatorName}'
+        ? desktopL10n.developer((app.creatorName).toString())
         : app.contactInfo.isNotEmpty
-        ? '联系信息：${app.contactInfo}'
+        ? desktopL10n.contact((app.contactInfo).toString())
         : app.redirectUri;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -5785,7 +6165,9 @@ class _AuthorizedAppTile extends StatelessWidget {
             children: <Widget>[
               _MetadataLine(
                 icon: Icons.schedule_rounded,
-                label: '最近使用 ${formatDateTime(app.lastAuthorizedAt)}',
+                label: desktopL10n.lastUsed(
+                  (formatDateTime(app.lastAuthorizedAt)).toString(),
+                ),
               ),
               _MetadataLine(icon: Icons.timer_outlined, label: expiry),
               OutlinedButton.icon(
@@ -5813,7 +6195,7 @@ class _AuthorizedAppTile extends StatelessWidget {
                         ),
                       )
                     : const Icon(Icons.link_off_rounded, size: 17),
-                label: const Text('取消授权'),
+                label: Text(desktopL10n.revokeAccess2),
               ),
             ],
           ),
@@ -5894,21 +6276,21 @@ class _MetadataLine extends StatelessWidget {
 }
 
 String grantModeLabel(String value) => value == 'TIME_LIMITED'
-    ? '限时授权'
+    ? desktopL10n.timeLimitedAccess
     : value == 'ONE_TIME'
-    ? '单次授权'
-    : '永久授权';
+    ? desktopL10n.oneTimeAccess
+    : desktopL10n.permanentAccess;
 
 String scopeLabel(String scope) {
   switch (scope) {
     case 'openid':
-      return '账号标识';
+      return desktopL10n.accountIdentifier;
     case 'profile':
-      return '基本资料';
+      return desktopL10n.basicProfile;
     case 'email':
-      return '邮箱';
+      return desktopL10n.email;
     case 'phone':
-      return '手机号';
+      return desktopL10n.phoneNumber;
     default:
       return scope;
   }
@@ -5953,25 +6335,29 @@ class ProfilePage extends StatelessWidget {
     }
     Future<void> changeAvatar() async {
       try {
-        const XTypeGroup imageTypes = XTypeGroup(
-          label: '图片',
+        XTypeGroup imageTypes = XTypeGroup(
+          label: desktopL10n.images,
           extensions: <String>['jpg', 'jpeg', 'png', 'webp', 'gif'],
           uniformTypeIdentifiers: <String>['public.image'],
         );
         final XFile? image = await openFile(
           acceptedTypeGroups: <XTypeGroup>[imageTypes],
-          confirmButtonText: '选择头像',
+          confirmButtonText: desktopL10n.chooseAvatar,
         );
         if (image == null) return;
         final int size = await image.length();
         if (size > 3 * 1024 * 1024) {
           if (context.mounted) {
-            showAppMessage(context, '图片大小不能超过 3MB', error: true);
+            showAppMessage(
+              context,
+              desktopL10n.imageMustBeNoLargerThanMb,
+              error: true,
+            );
           }
           return;
         }
         final String extension = image.name.split('.').last.toLowerCase();
-        const Map<String, String> mimeTypes = <String, String>{
+        Map<String, String> mimeTypes = <String, String>{
           'jpg': 'image/jpeg',
           'jpeg': 'image/jpeg',
           'png': 'image/png',
@@ -5981,7 +6367,11 @@ class ProfilePage extends StatelessWidget {
         final String? contentType = mimeTypes[extension];
         if (contentType == null) {
           if (context.mounted) {
-            showAppMessage(context, '仅支持 JPG、PNG、WebP 或 GIF 图片', error: true);
+            showAppMessage(
+              context,
+              desktopL10n.onlyJpgPngWebpOrGifImages,
+              error: true,
+            );
           }
           return;
         }
@@ -5990,7 +6380,7 @@ class ProfilePage extends StatelessWidget {
           fileName: image.name,
           contentType: contentType,
         );
-        if (context.mounted) showAppMessage(context, '头像已更新');
+        if (context.mounted) showAppMessage(context, desktopL10n.avatarUpdated);
       } catch (error) {
         if (context.mounted) {
           showAppMessage(context, error.toString(), error: true);
@@ -6002,8 +6392,8 @@ class ProfilePage extends StatelessWidget {
       child: Column(
         children: <Widget>[
           _SectionCard(
-            title: '个人信息',
-            subtitle: '维护您的基础资料，让账号信息保持准确、完整。',
+            title: desktopL10n.personalInformation,
+            subtitle: desktopL10n.keepYourBasicProfileAccurateAndComplete,
             child: Column(
               children: <Widget>[
                 Container(
@@ -6023,7 +6413,7 @@ class ProfilePage extends StatelessWidget {
                   child: Row(
                     children: <Widget>[
                       Tooltip(
-                        message: '点击更换头像',
+                        message: desktopL10n.clickToChangeAvatar,
                         child: InkWell(
                           onTap: changeAvatar,
                           customBorder: const CircleBorder(),
@@ -6106,7 +6496,7 @@ class ProfilePage extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '点击头像更换 · JPG、PNG、WebP 或 GIF · 最大 3MB',
+                              desktopL10n.clickToChangeAvatarJpgPngWebp,
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
                                     color: Theme.of(
@@ -6120,17 +6510,17 @@ class ProfilePage extends StatelessWidget {
                       OutlinedButton.icon(
                         onPressed: changeAvatar,
                         icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                        label: const Text('更换头像'),
+                        label: Text(desktopL10n.changeAvatar),
                       ),
                     ],
                   ),
                 ),
                 _EditableRow(
-                  label: '用户名',
+                  label: desktopL10n.username,
                   value: user.username,
                   onEdit: () => _showEditDialog(
                     context,
-                    title: '修改用户名',
+                    title: () => desktopL10n.changeUsername,
                     initialValue: user.username,
                     onSubmit: (String value) => controller.updateProfileField(
                       key: 'username',
@@ -6138,23 +6528,27 @@ class ProfilePage extends StatelessWidget {
                     ),
                   ),
                 ),
-                _EditableRow(label: '邮箱', value: user.email, onEdit: null),
+                _EditableRow(
+                  label: desktopL10n.email,
+                  value: user.email,
+                  onEdit: null,
+                ),
                 _EditableRow(label: 'UUID', value: user.uuid, onEdit: null),
               ],
             ),
           ),
           const SizedBox(height: 16),
           _SectionCard(
-            title: '扩展资料',
-            subtitle: '在这里查看与修改你的个人信息',
+            title: desktopL10n.extendedProfile,
+            subtitle: desktopL10n.viewAndEditYourPersonalInformation,
             child: Column(
               children: <Widget>[
                 _EditableRow(
-                  label: '真实姓名',
-                  value: user.realName ?? '未填写',
+                  label: desktopL10n.fullName,
+                  value: user.realName ?? desktopL10n.notProvided,
                   onEdit: () => _showEditDialog(
                     context,
-                    title: '修改真实姓名',
+                    title: () => desktopL10n.changeFullName,
                     initialValue: user.realName ?? '',
                     onSubmit: (String value) => controller.updateProfileField(
                       key: 'realName',
@@ -6163,16 +6557,25 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ),
                 _EditableRow(
-                  label: '性别',
+                  label: desktopL10n.gender,
                   value: displayGender(user.gender),
                   onEdit: () => _showSelectionDialog(
                     context,
-                    title: '选择性别',
+                    title: () => desktopL10n.selectGender,
                     currentValue: user.gender ?? 'secret',
-                    options: const <_SelectionOption>[
-                      _SelectionOption(value: 'male', label: '男'),
-                      _SelectionOption(value: 'female', label: '女'),
-                      _SelectionOption(value: 'secret', label: '保密'),
+                    options: <_SelectionOption>[
+                      _SelectionOption(
+                        value: 'male',
+                        label: () => desktopL10n.male,
+                      ),
+                      _SelectionOption(
+                        value: 'female',
+                        label: () => desktopL10n.female,
+                      ),
+                      _SelectionOption(
+                        value: 'secret',
+                        label: () => desktopL10n.preferNotToSay,
+                      ),
                     ],
                     onSubmit: (String value) => controller.updateProfileField(
                       key: 'gender',
@@ -6181,11 +6584,11 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ),
                 _EditableRow(
-                  label: '出生日期',
-                  value: user.birthDate ?? '未填写',
+                  label: desktopL10n.dateOfBirth,
+                  value: user.birthDate ?? desktopL10n.notProvided,
                   onEdit: () => _showEditDialog(
                     context,
-                    title: '修改出生日期',
+                    title: () => desktopL10n.changeDateOfBirth,
                     initialValue: user.birthDate ?? '',
                     hintText: 'YYYY-MM-DD',
                     onSubmit: (String value) => controller.updateProfileField(
@@ -6195,11 +6598,11 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ),
                 _EditableRow(
-                  label: '地区',
-                  value: user.region ?? '未填写',
+                  label: desktopL10n.region,
+                  value: user.region ?? desktopL10n.notProvided,
                   onEdit: () => _showEditDialog(
                     context,
-                    title: '修改地区',
+                    title: () => desktopL10n.changeRegion,
                     initialValue: user.region ?? '',
                     onSubmit: (String value) => controller.updateProfileField(
                       key: 'region',
@@ -6208,11 +6611,11 @@ class ProfilePage extends StatelessWidget {
                   ),
                 ),
                 _EditableRow(
-                  label: '简介',
-                  value: user.bio ?? '未填写',
+                  label: desktopL10n.bio,
+                  value: user.bio ?? desktopL10n.notProvided,
                   onEdit: () => _showEditDialog(
                     context,
-                    title: '修改简介',
+                    title: () => desktopL10n.changeBio,
                     initialValue: user.bio ?? '',
                     maxLines: 4,
                     onSubmit: (String value) =>
@@ -6248,14 +6651,16 @@ class SecurityPage extends StatelessWidget {
               Expanded(
                 flex: 3,
                 child: _SectionCard(
-                  title: '安全开关',
-                  subtitle: '在这里管理你的账号安全偏好',
+                  title: desktopL10n.securityOptions,
+                  subtitle: desktopL10n.manageYourAccountSecurityPreferences,
                   child: Column(
                     children: <Widget>[
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('启用 MFA'),
-                        subtitle: const Text('登录时增加第二道验证。'),
+                        title: Text(desktopL10n.enableMfa),
+                        subtitle: Text(
+                          desktopL10n.addASecondVerificationStepWhenSigning,
+                        ),
                         value: settings.mfaEnabled,
                         onChanged: (bool value) async {
                           await _runWithFeedback(
@@ -6264,14 +6669,16 @@ class SecurityPage extends StatelessWidget {
                               field: 'mfaEnabled',
                               value: value,
                             ),
-                            success: value ? '已开启 MFA' : '已关闭 MFA',
+                            success: value
+                                ? desktopL10n.mfaEnabled
+                                : desktopL10n.mfaDisabled,
                           );
                         },
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('异地登录检测'),
-                        subtitle: const Text('发现异常位置登录时提醒。'),
+                        title: Text(desktopL10n.unusualLocationDetection),
+                        subtitle: Text(desktopL10n.getAlertsWhenASignInComes),
                         value: settings.detectUnusualLogin,
                         onChanged: (bool value) async {
                           await _runWithFeedback(
@@ -6280,14 +6687,18 @@ class SecurityPage extends StatelessWidget {
                               field: 'detectUnusualLogin',
                               value: value,
                             ),
-                            success: value ? '已开启异地登录检测' : '已关闭异地登录检测',
+                            success: value
+                                ? desktopL10n.unusualLocationDetectionEnabled
+                                : desktopL10n.unusualLocationDetectionDisabled,
                           );
                         },
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('敏感操作邮件提醒'),
-                        subtitle: const Text('修改密码、邮箱等操作发送通知。'),
+                        title: Text(desktopL10n.sensitiveActionEmails),
+                        subtitle: Text(
+                          desktopL10n.getNotificationsForPasswordEmailAndOther,
+                        ),
                         value: settings.notifySensitiveActionEmail,
                         onChanged: (bool value) async {
                           await _runWithFeedback(
@@ -6296,14 +6707,19 @@ class SecurityPage extends StatelessWidget {
                               field: 'notifySensitiveActionEmail',
                               value: value,
                             ),
-                            success: value ? '已开启提醒' : '已关闭提醒',
+                            success: value
+                                ? desktopL10n.notificationsEnabled
+                                : desktopL10n.notificationsDisabled,
                           );
                         },
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('订阅通知邮件'),
-                        subtitle: const Text('接收产品更新和系统消息。'),
+                        title: Text(desktopL10n.subscribeToEmails),
+                        subtitle: Text(
+                          desktopL10n
+                              .receiveProductUpdatesAndSystemAnnouncements,
+                        ),
                         value: settings.subscribeNewsEmail,
                         onChanged: (bool value) async {
                           await _runWithFeedback(
@@ -6312,7 +6728,9 @@ class SecurityPage extends StatelessWidget {
                               field: 'subscribeNewsEmail',
                               value: value,
                             ),
-                            success: value ? '已更新邮件订阅' : '已关闭邮件订阅',
+                            success: value
+                                ? desktopL10n.emailSubscriptionUpdated
+                                : desktopL10n.emailSubscriptionDisabled,
                           );
                         },
                       ),
@@ -6321,6 +6739,7 @@ class SecurityPage extends StatelessWidget {
                         children: <Widget>[
                           Expanded(
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               initialValue:
                                   settings.preferredMfaMethod == 'totp' ||
                                       settings.preferredMfaMethod == 'passkey'
@@ -6350,17 +6769,19 @@ class SecurityPage extends StatelessWidget {
                                           field: 'preferredMfaMethod',
                                           stringValue: value,
                                         ),
-                                        success: '登录 MFA 偏好已更新',
+                                        success: desktopL10n
+                                            .signInMfaPreferencesUpdated,
                                       );
                                     },
-                              decoration: const InputDecoration(
-                                labelText: '登录 MFA 偏好',
+                              decoration: InputDecoration(
+                                labelText: desktopL10n.signInMfaPreferences,
                               ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               initialValue:
                                   settings.preferredSensitiveMethod ==
                                           'password' ||
@@ -6373,13 +6794,13 @@ class SecurityPage extends StatelessWidget {
                                   ? settings.preferredSensitiveMethod
                                   : null,
                               items: <DropdownMenuItem<String>>[
-                                const DropdownMenuItem<String>(
+                                DropdownMenuItem<String>(
                                   value: 'password',
-                                  child: Text('密码'),
+                                  child: Text(desktopL10n.password),
                                 ),
-                                const DropdownMenuItem<String>(
+                                DropdownMenuItem<String>(
                                   value: 'email-code',
-                                  child: Text('邮箱验证码'),
+                                  child: Text(desktopL10n.emailCode),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'passkey',
@@ -6402,11 +6823,13 @@ class SecurityPage extends StatelessWidget {
                                     field: 'preferredSensitiveMethod',
                                     stringValue: value,
                                   ),
-                                  success: '敏感操作验证偏好已更新',
+                                  success: desktopL10n
+                                      .sensitiveActionVerificationPreferencesUpdated,
                                 );
                               },
-                              decoration: const InputDecoration(
-                                labelText: '敏感操作验证偏好',
+                              decoration: InputDecoration(
+                                labelText: desktopL10n
+                                    .sensitiveActionVerificationPreferences,
                               ),
                             ),
                           ),
@@ -6420,34 +6843,40 @@ class SecurityPage extends StatelessWidget {
               Expanded(
                 flex: 2,
                 child: _SectionCard(
-                  title: '身份验证能力',
-                  subtitle: '配置验证方式',
+                  title: desktopL10n.authenticationMethods,
+                  subtitle: desktopL10n.configureVerificationMethods,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       _CapabilityLine(
                         icon: Icons.key_rounded,
-                        title: '密码登录',
-                        trailing: const Text('已启用'),
+                        title: desktopL10n.passwordSignIn,
+                        trailing: Text(desktopL10n.enabled),
                       ),
                       _CapabilityLine(
                         icon: Icons.mark_email_read_rounded,
-                        title: '邮箱验证码登录',
-                        trailing: const Text('已启用'),
+                        title: desktopL10n.emailCodeSignIn,
+                        trailing: Text(desktopL10n.enabled),
                       ),
                       _CapabilityLine(
                         icon: Icons.fingerprint_rounded,
                         title: 'Passkey',
                         trailing: Text(
                           controller.passkeys.isEmpty
-                              ? '未配置'
-                              : '${controller.passkeys.length} 个',
+                              ? desktopL10n.notConfigured
+                              : desktopL10n.itemCount(
+                                  (controller.passkeys.length).toString(),
+                                ),
                         ),
                       ),
                       _CapabilityLine(
                         icon: Icons.security_rounded,
                         title: 'TOTP',
-                        trailing: Text(totp?.enabled == true ? '已启用' : '未启用'),
+                        trailing: Text(
+                          totp?.enabled == true
+                              ? desktopL10n.enabled
+                              : desktopL10n.disabled,
+                        ),
                       ),
                       const Divider(height: 32),
                       FilledButton.tonalIcon(
@@ -6458,7 +6887,7 @@ class SecurityPage extends StatelessWidget {
                               _showChangeEmailDialog(context, controller),
                         ),
                         icon: const Icon(Icons.alternate_email_rounded),
-                        label: const Text('修改邮箱'),
+                        label: Text(desktopL10n.changeEmail),
                       ),
                       const SizedBox(height: 10),
                       FilledButton.tonalIcon(
@@ -6469,7 +6898,7 @@ class SecurityPage extends StatelessWidget {
                               _showChangePasswordDialog(context, controller),
                         ),
                         icon: const Icon(Icons.password_rounded),
-                        label: const Text('修改密码'),
+                        label: Text(desktopL10n.changePassword),
                       ),
                       const SizedBox(height: 10),
                       FilledButton.tonalIcon(
@@ -6480,11 +6909,11 @@ class SecurityPage extends StatelessWidget {
                               showAccountRecoveryDialog(context, controller),
                         ),
                         icon: const Icon(Icons.qr_code_2_rounded),
-                        label: const Text('发起账号恢复'),
+                        label: Text(desktopL10n.authorizeAccountRecovery),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '为另一台设备生成 5 分钟有效的一次性恢复二维码和恢复码，恢复成功后旧会话会自动撤销。',
+                        desktopL10n.generateAOneTimeRecoveryQrCode,
                         style: TextStyle(
                           fontSize: 12,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -6499,8 +6928,8 @@ class SecurityPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _SectionCard(
-            title: '自适应连续认证引擎',
-            subtitle: '根据当前会话环境、风险信号和最近验证状态动态判断是否需要 step-up。',
+            title: desktopL10n.adaptiveContinuousAuthentication,
+            subtitle: desktopL10n.useSessionContextRiskSignalsAndRecent,
             child: _AdaptiveAuthPanel(controller: controller),
           ),
           const SizedBox(height: 16),
@@ -6509,16 +6938,16 @@ class SecurityPage extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: _SectionCard(
-                  title: 'TOTP 管理',
-                  subtitle: '在这里管理你的一次性验证码',
+                  title: desktopL10n.totpManagement,
+                  subtitle: desktopL10n.manageYourAuthenticatorCodes,
                   child: _TotpPanel(controller: controller),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _SectionCard(
-                  title: 'Passkey 列表',
-                  subtitle: '使用系统原生 Passkey 完成登录与敏感验证',
+                  title: desktopL10n.passkeys,
+                  subtitle: desktopL10n.useNativePasskeysForSignInAnd,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -6532,7 +6961,10 @@ class SecurityPage extends StatelessWidget {
                                     'Ksuser Desktop (${Platform.localHostname})',
                               );
                               if (context.mounted) {
-                                showAppMessage(context, 'Passkey 已添加');
+                                showAppMessage(
+                                  context,
+                                  desktopL10n.passkeyAdded,
+                                );
                               }
                             } catch (error) {
                               if (context.mounted) {
@@ -6545,12 +6977,12 @@ class SecurityPage extends StatelessWidget {
                             }
                           },
                           icon: const Icon(Icons.add_link_rounded),
-                          label: const Text('新增 Passkey'),
+                          label: Text(desktopL10n.addPasskey),
                         ),
                       ),
                       const SizedBox(height: 12),
                       if (controller.passkeys.isEmpty)
-                        const Text('当前没有已登记的 Passkey。')
+                        Text(desktopL10n.noPasskeysRegisteredYet)
                       else
                         Column(
                           children: controller.passkeys.map((
@@ -6591,8 +7023,8 @@ class DevicesPage extends StatelessWidget {
       child: Column(
         children: <Widget>[
           _SectionCard(
-            title: '在线会话',
-            subtitle: '管理您的登录与在线信息',
+            title: desktopL10n.onlineSessions,
+            subtitle: desktopL10n.manageYourSignInAndOnlineActivity,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -6602,18 +7034,18 @@ class DevicesPage extends StatelessWidget {
                   children: <Widget>[
                     _SessionSummaryChip(
                       icon: Icons.devices_other_rounded,
-                      label: '全部会话',
+                      label: desktopL10n.allSessions,
                       value: '${controller.sessions.length}',
                     ),
                     _SessionSummaryChip(
                       icon: Icons.wifi_tethering_rounded,
-                      label: '在线设备',
+                      label: desktopL10n.onlineDevices,
                       value: '$onlineCount',
                       tone: Colors.green,
                     ),
                     _SessionSummaryChip(
                       icon: Icons.laptop_mac_rounded,
-                      label: '当前设备',
+                      label: desktopL10n.thisDevice,
                       value: '$currentCount',
                       tone: const Color(0xFF147D74),
                     ),
@@ -6627,19 +7059,19 @@ class DevicesPage extends StatelessWidget {
                       await _runWithFeedback(
                         context,
                         controller.refreshSessions,
-                        success: '会话已刷新',
+                        success: desktopL10n.sessionsRefreshed,
                       );
                     },
                     icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('刷新列表'),
+                    label: Text(desktopL10n.refreshList),
                   ),
                 ),
                 const SizedBox(height: 8),
                 if (controller.sessions.isEmpty)
-                  const _InlineStateCard(
+                  _InlineStateCard(
                     icon: Icons.devices_other_rounded,
-                    title: '没有在线会话',
-                    message: '登录其他设备后，会话信息会显示在这里。',
+                    title: desktopL10n.noOnlineSessions,
+                    message: desktopL10n.sessionsWillAppearHereWhenYouSign,
                   )
                 else
                   Column(
@@ -6656,12 +7088,14 @@ class DevicesPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _SectionCard(
-            title: '危险操作',
-            subtitle: '对应网页端的“退出所有设备”。',
+            title: desktopL10n.dangerZone,
+            subtitle: desktopL10n.signOutOfAllDevicesIncludingThe,
             child: Row(
               children: <Widget>[
-                const Expanded(
-                  child: Text('这会撤销所有会话，包括当前设备。AccessToken 失效后需要重新登录。'),
+                Expanded(
+                  child: Text(
+                    desktopL10n.thisRevokesAllSessionsIncludingThisDevice,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 FilledButton.tonalIcon(
@@ -6673,22 +7107,25 @@ class DevicesPage extends StatelessWidget {
                   ),
                   onPressed: () async {
                     final bool confirmed =
-                        await showDialog<bool>(
+                        await showLocalizedDialog<bool>(
                           context: context,
                           builder: (BuildContext context) {
                             return AlertDialog(
-                              title: const Text('确认退出所有设备'),
-                              content: const Text('当前桌面会话也会立即失效。'),
+                              title: Text(desktopL10n.signOutAllDevices),
+                              content: Text(
+                                desktopL10n
+                                    .thisDesktopSessionWillAlsoExpireImmediately,
+                              ),
                               actions: <Widget>[
                                 TextButton(
                                   onPressed: () =>
                                       Navigator.of(context).pop(false),
-                                  child: const Text('取消'),
+                                  child: Text(desktopL10n.cancel),
                                 ),
                                 FilledButton(
                                   onPressed: () =>
                                       Navigator.of(context).pop(true),
-                                  child: const Text('确认退出'),
+                                  child: Text(desktopL10n.signOut2),
                                 ),
                               ],
                             );
@@ -6701,13 +7138,13 @@ class DevicesPage extends StatelessWidget {
                     await _runWithFeedback(
                       context,
                       controller.logoutAll,
-                      success: '已退出所有设备',
+                      success: desktopL10n.signedOutAllDevices,
                     );
                   },
                   icon: const Icon(Icons.logout_rounded, color: Colors.red),
-                  label: const Text(
-                    '退出所有设备',
-                    style: TextStyle(color: Colors.red),
+                  label: Text(
+                    desktopL10n.signOutAllDevices2,
+                    style: const TextStyle(color: Colors.red),
                   ),
                 ),
               ],
@@ -6737,7 +7174,7 @@ class _AdaptiveAuthPanel extends StatelessWidget {
     final ColorScheme colorScheme = Theme.of(context).colorScheme;
     final Color tone = adaptiveRiskTone(status.riskLevel, colorScheme);
     final List<String> reasons = status.reasons.isEmpty
-        ? const <String>['当前会话环境稳定，未发现额外风险信号']
+        ? <String>[desktopL10n.theSessionEnvironmentIsStableNoAdditional]
         : status.reasons;
 
     return Column(
@@ -6759,7 +7196,9 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      status.requiresStepUp ? '建议立即补做验证' : '当前会话可信度稳定',
+                      status.requiresStepUp
+                          ? desktopL10n.additionalVerificationIsRecommended
+                          : desktopL10n.sessionTrustIsStable,
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -6789,7 +7228,10 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                       color: tone,
                     ),
                     label: Text(
-                      '${adaptiveRiskLabel(status.riskLevel)}风险 ${status.riskScore}',
+                      desktopL10n.risk(
+                        (adaptiveRiskLabel(status.riskLevel)).toString(),
+                        (status.riskScore).toString(),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -6805,10 +7247,10 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                     ),
                     label: Text(
                       status.policyDecision == 'FREEZE'
-                          ? '策略：冻结会话'
+                          ? desktopL10n.policyFreezeSession
                           : status.policyDecision == 'STEP_UP'
-                          ? '策略：强制补验'
-                          : '策略：放行',
+                          ? desktopL10n.policyRequireVerification
+                          : desktopL10n.policyAllow,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -6824,12 +7266,20 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                             if (verified) {
                               await controller.refreshAdaptiveAuthStatus();
                               if (context.mounted) {
-                                showAppMessage(context, '连续认证状态已更新');
+                                showAppMessage(
+                                  context,
+                                  desktopL10n
+                                      .continuousAuthenticationStatusUpdated,
+                                );
                               }
                             }
                           },
                     icon: const Icon(Icons.verified_user_rounded),
-                    label: Text(status.sensitiveVerified ? '已完成验证' : '立即验证'),
+                    label: Text(
+                      status.sensitiveVerified
+                          ? desktopL10n.verified
+                          : desktopL10n.verifyNow,
+                    ),
                   ),
                 ],
               ),
@@ -6857,12 +7307,13 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    status.alertTitle ?? '风险告警',
+                    status.alertTitle ?? desktopL10n.riskAlert,
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    status.alertMessage ?? '检测到风险信号，请尽快处理',
+                    status.alertMessage ??
+                        desktopL10n.riskSignalsDetectedPleaseTakeActionSoon,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       height: 1.45,
@@ -6871,7 +7322,9 @@ class _AdaptiveAuthPanel extends StatelessWidget {
                   if (status.alertRemainingSeconds > 0) ...<Widget>[
                     const SizedBox(height: 6),
                     Text(
-                      '告警剩余有效期：${status.alertRemainingSeconds} 秒',
+                      desktopL10n.alertExpiresInSeconds(
+                        (status.alertRemainingSeconds).toString(),
+                      ),
                       style: TextStyle(
                         fontSize: 12,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -6888,28 +7341,33 @@ class _AdaptiveAuthPanel extends StatelessWidget {
           runSpacing: 12,
           children: <Widget>[
             _InfoChip(
-              label: '敏感验证状态',
+              label: desktopL10n.sensitiveActionVerification,
               value: status.sensitiveVerified
-                  ? '有效 ${status.sensitiveVerificationRemainingSeconds} 秒'
-                  : '未验证',
+                  ? desktopL10n.validForSeconds(
+                      (status.sensitiveVerificationRemainingSeconds).toString(),
+                    )
+                  : desktopL10n.notVerified,
             ),
             _InfoChip(
-              label: '会话年龄',
+              label: desktopL10n.sessionAge,
               value: formatDurationSeconds(status.authAgeSeconds),
             ),
             _InfoChip(
-              label: '空闲时长',
+              label: desktopL10n.idleTime,
               value: formatDurationSeconds(status.idleSeconds),
             ),
             _InfoChip(
-              label: '当前环境',
+              label: desktopL10n.currentEnvironment,
               value:
-                  '${status.currentLocation ?? '未知位置'} · ${status.deviceType ?? '未知设备'}',
+                  '${status.currentLocation ?? desktopL10n.unknownLocation} · ${status.deviceType ?? desktopL10n.unknownDevice}',
             ),
           ],
         ),
         const SizedBox(height: 16),
-        const Text('风险信号', style: TextStyle(fontWeight: FontWeight.w700)),
+        Text(
+          desktopL10n.riskSignals,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 10),
         Wrap(
           spacing: 10,
@@ -6976,8 +7434,9 @@ class _ActivityPageState extends State<ActivityPage> {
       child: Column(
         children: <Widget>[
           _SectionCard(
-            title: '操作日志',
-            subtitle: '在这里查看账号敏感操作和验证记录',
+            title: desktopL10n.activityLogs,
+            subtitle:
+                desktopL10n.viewSensitiveAccountActionsAndVerificationRecords,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
@@ -7006,7 +7465,7 @@ class _ActivityPageState extends State<ActivityPage> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '筛选记录',
+                            desktopL10n.filterActivity,
                             style: Theme.of(context).textTheme.titleSmall
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
@@ -7017,7 +7476,7 @@ class _ActivityPageState extends State<ActivityPage> {
                               Icons.restart_alt_rounded,
                               size: 17,
                             ),
-                            label: const Text('重置'),
+                            label: Text(desktopL10n.reset),
                           ),
                         ],
                       ),
@@ -7030,35 +7489,36 @@ class _ActivityPageState extends State<ActivityPage> {
                           SizedBox(
                             width: 245,
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               initialValue: _operationType,
-                              decoration: const InputDecoration(
-                                labelText: '操作类型',
+                              decoration: InputDecoration(
+                                labelText: desktopL10n.actionType,
                                 prefixIcon: Icon(Icons.manage_search_rounded),
                               ),
-                              items: const <DropdownMenuItem<String>>[
+                              items: <DropdownMenuItem<String>>[
                                 DropdownMenuItem<String>(
                                   value: 'LOGIN',
-                                  child: Text('登录'),
+                                  child: Text(desktopL10n.signIn),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'REGISTER',
-                                  child: Text('注册'),
+                                  child: Text(desktopL10n.register),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'CHANGE_PASSWORD',
-                                  child: Text('修改密码'),
+                                  child: Text(desktopL10n.changePassword),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'CHANGE_EMAIL',
-                                  child: Text('修改邮箱'),
+                                  child: Text(desktopL10n.changeEmail),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'ENABLE_TOTP',
-                                  child: Text('启用 TOTP'),
+                                  child: Text(desktopL10n.enableTotp),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'DISABLE_TOTP',
-                                  child: Text('禁用 TOTP'),
+                                  child: Text(desktopL10n.disableTotp),
                                 ),
                               ],
                               onChanged: (String? value) =>
@@ -7068,19 +7528,20 @@ class _ActivityPageState extends State<ActivityPage> {
                           SizedBox(
                             width: 210,
                             child: DropdownButtonFormField<String>(
+                              isExpanded: true,
                               initialValue: _result,
-                              decoration: const InputDecoration(
-                                labelText: '执行结果',
+                              decoration: InputDecoration(
+                                labelText: desktopL10n.result,
                                 prefixIcon: Icon(Icons.fact_check_outlined),
                               ),
-                              items: const <DropdownMenuItem<String>>[
+                              items: <DropdownMenuItem<String>>[
                                 DropdownMenuItem<String>(
                                   value: 'SUCCESS',
-                                  child: Text('成功'),
+                                  child: Text(desktopL10n.success),
                                 ),
                                 DropdownMenuItem<String>(
                                   value: 'FAILURE',
-                                  child: Text('失败'),
+                                  child: Text(desktopL10n.failure),
                                 ),
                               ],
                               onChanged: (String? value) =>
@@ -7098,7 +7559,11 @@ class _ActivityPageState extends State<ActivityPage> {
                                     ),
                                   )
                                 : const Icon(Icons.search_rounded, size: 19),
-                            label: Text(_loading ? '查询中' : '查询记录'),
+                            label: Text(
+                              _loading
+                                  ? desktopL10n.searching
+                                  : desktopL10n.searchRecords,
+                            ),
                           ),
                         ],
                       ),
@@ -7110,14 +7575,16 @@ class _ActivityPageState extends State<ActivityPage> {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        '查询结果',
+                        desktopL10n.searchResults,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     Text(
-                      '${widget.controller.sensitiveLogs.length} 条记录',
+                      desktopL10n.records(
+                        widget.controller.sensitiveLogs.length,
+                      ),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -7126,10 +7593,10 @@ class _ActivityPageState extends State<ActivityPage> {
                 ),
                 const SizedBox(height: 10),
                 if (widget.controller.sensitiveLogs.isEmpty)
-                  const _InlineStateCard(
+                  _InlineStateCard(
                     icon: Icons.manage_search_rounded,
-                    title: '没有匹配的记录',
-                    message: '调整操作类型或执行结果后重新查询。',
+                    title: desktopL10n.noMatchingRecords,
+                    message: desktopL10n.changeTheActionTypeOrResultAnd,
                   )
                 else
                   Column(
@@ -7231,28 +7698,36 @@ class _MfaPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
-            '二次验证',
+          Text(
+            desktopL10n.additionalVerification,
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
-          Text('当前挑战：${challenge.methods.join(' / ')}'),
+          Text(
+            desktopL10n.currentChallenge(
+              (challenge.methods.join(' / ')).toString(),
+            ),
+          ),
           const SizedBox(height: 14),
           SegmentedButton<MfaMode>(
             segments: <ButtonSegment<MfaMode>>[
-              const ButtonSegment<MfaMode>(
+              ButtonSegment<MfaMode>(
                 value: MfaMode.code,
-                label: Text('动态码'),
+                label: Text(desktopL10n.authenticatorCode),
               ),
-              const ButtonSegment<MfaMode>(
+              ButtonSegment<MfaMode>(
                 value: MfaMode.recoveryCode,
-                label: Text('恢复码'),
+                label: Text(desktopL10n.recoveryCode),
               ),
               if (supportsPasskey)
                 ButtonSegment<MfaMode>(
                   value: MfaMode.passkey,
                   enabled: passkeyAvailable,
-                  label: Text(passkeyAvailable ? 'Passkey' : 'Passkey 不可用'),
+                  label: Text(
+                    passkeyAvailable
+                        ? 'Passkey'
+                        : desktopL10n.passkeyUnavailable,
+                  ),
                 ),
             ],
             selected: <MfaMode>{mode},
@@ -7263,18 +7738,24 @@ class _MfaPanel extends StatelessWidget {
           if (mode == MfaMode.code)
             TextField(
               controller: codeController,
-              decoration: const InputDecoration(labelText: '6 位动态码'),
+              decoration: InputDecoration(
+                labelText: desktopL10n.digitAuthenticatorCode,
+              ),
             )
           else if (mode == MfaMode.recoveryCode)
             TextField(
               controller: recoveryController,
-              decoration: const InputDecoration(labelText: '恢复码'),
+              decoration: InputDecoration(labelText: desktopL10n.recoveryCode),
             )
           else
             _DisabledCapabilityCard(
-              title: passkeyAvailable ? '使用 Passkey 完成二次验证' : 'Passkey 当前不可用',
+              title: passkeyAvailable
+                  ? desktopL10n.useAPasskeyForAdditionalVerification
+                  : desktopL10n.passkeyIsCurrentlyUnavailable,
               description: passkeyAvailable
-                  ? nativePasskeyAvailableDescription(action: '二次验证')
+                  ? nativePasskeyAvailableDescription(
+                      action: desktopL10n.additionalVerification,
+                    )
                   : nativePasskeyUnavailableDescription(),
               icon: Icons.fingerprint_rounded,
             ),
@@ -7293,7 +7774,9 @@ class _MfaPanel extends StatelessWidget {
                         : Icons.verified_rounded,
                   ),
             label: Text(
-              mode == MfaMode.passkey ? '使用 Passkey 验证' : '完成 MFA 验证',
+              mode == MfaMode.passkey
+                  ? desktopL10n.verifyWithPasskey
+                  : desktopL10n.completeMfaVerification,
             ),
           ),
         ],
@@ -7347,7 +7830,11 @@ class _WorkspaceBanner extends StatelessWidget {
                 Text(user.email),
                 const SizedBox(height: 8),
                 Text(
-                  '当前安全评分 $score%，已同步 ${controller.sessions.length} 台设备和 ${controller.sensitiveLogs.length} 条日志。',
+                  desktopL10n.securityScoreSyncedDevicesAndLogs(
+                    (score).toString(),
+                    (controller.sessions.length).toString(),
+                    (controller.sensitiveLogs.length).toString(),
+                  ),
                 ),
               ],
             ),
@@ -7622,27 +8109,30 @@ class _SectionCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.15,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.15,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colors.onSurfaceVariant,
-              height: 1.45,
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                height: 1.45,
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
-          child,
-        ],
+            const SizedBox(height: 18),
+            child,
+          ],
+        ),
       ),
     );
   }
@@ -7771,7 +8261,7 @@ class _EditableRow extends StatelessWidget {
               TextButton.icon(
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit_outlined),
-                label: const Text('编辑'),
+                label: Text(desktopL10n.edit),
               ),
           ],
         ),
@@ -7846,14 +8336,18 @@ class _TotpPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      enabled ? 'TOTP 已启用' : 'TOTP 尚未启用',
+                      enabled
+                          ? desktopL10n.totpEnabled
+                          : desktopL10n.totpIsNotEnabled,
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       enabled
-                          ? '恢复码剩余 ${status?.recoveryCodesCount ?? 0} 个'
-                          : '可通过二维码或密钥完成注册。',
+                          ? desktopL10n.recoveryCodesRemaining(
+                              status?.recoveryCodesCount ?? 0,
+                            )
+                          : desktopL10n.registerWithTheQrCodeOrSecret,
                     ),
                   ],
                 ),
@@ -7874,11 +8368,11 @@ class _TotpPanel extends StatelessWidget {
                     action: () => _runWithFeedback(
                       context,
                       controller.disableTotp,
-                      success: 'TOTP 已关闭',
+                      success: desktopL10n.totpDisabled,
                     ),
                   );
                 },
-                child: Text(enabled ? '禁用' : '启用'),
+                child: Text(enabled ? desktopL10n.disable : desktopL10n.enable),
               ),
             ],
           ),
@@ -7900,7 +8394,7 @@ class _TotpPanel extends StatelessWidget {
                           if (context.mounted) {
                             await _showRecoveryCodesDialog(
                               context,
-                              '恢复码列表',
+                              () => desktopL10n.recoveryCodes,
                               codes,
                             );
                           }
@@ -7909,7 +8403,7 @@ class _TotpPanel extends StatelessWidget {
                     }
                   : null,
               icon: const Icon(Icons.visibility_outlined),
-              label: const Text('查看恢复码'),
+              label: Text(desktopL10n.viewRecoveryCodes),
             ),
             OutlinedButton.icon(
               onPressed: enabled
@@ -7923,7 +8417,7 @@ class _TotpPanel extends StatelessWidget {
                           if (context.mounted) {
                             await _showRecoveryCodesDialog(
                               context,
-                              '新恢复码',
+                              () => desktopL10n.newRecoveryCodes,
                               codes,
                             );
                           }
@@ -7932,7 +8426,7 @@ class _TotpPanel extends StatelessWidget {
                     }
                   : null,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('重新生成恢复码'),
+              label: Text(desktopL10n.regenerateRecoveryCodes),
             ),
           ],
         ),
@@ -7970,11 +8464,17 @@ class _PasskeyRow extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
-                Text('创建于 ${formatDateTime(item.createdAt)}'),
+                Text(
+                  desktopL10n.created(
+                    (formatDateTime(item.createdAt)).toString(),
+                  ),
+                ),
                 Text(
                   item.lastUsedAt == null
-                      ? '从未使用'
-                      : '最近使用 ${formatDateTime(item.lastUsedAt)}',
+                      ? desktopL10n.neverUsed
+                      : desktopL10n.lastUsed(
+                          (formatDateTime(item.lastUsedAt)).toString(),
+                        ),
                 ),
               ],
             ),
@@ -7982,30 +8482,32 @@ class _PasskeyRow extends StatelessWidget {
           TextButton(
             onPressed: () => _showEditDialog(
               context,
-              title: '重命名 Passkey',
+              title: () => desktopL10n.renamePasskey,
               initialValue: item.name,
               onSubmit: (String value) =>
                   controller.renamePasskey(item.id, value),
             ),
-            child: const Text('重命名'),
+            child: Text(desktopL10n.rename),
           ),
           TextButton(
             onPressed: () async {
               final bool confirmed =
-                  await showDialog<bool>(
+                  await showLocalizedDialog<bool>(
                     context: context,
                     builder: (BuildContext context) {
                       return AlertDialog(
-                        title: const Text('删除 Passkey'),
-                        content: Text('确认删除 ${item.name}？'),
+                        title: Text(desktopL10n.deletePasskey),
+                        content: Text(
+                          desktopL10n.delete((item.name).toString()),
+                        ),
                         actions: <Widget>[
                           TextButton(
                             onPressed: () => Navigator.of(context).pop(false),
-                            child: const Text('取消'),
+                            child: Text(desktopL10n.cancel),
                           ),
                           FilledButton(
                             onPressed: () => Navigator.of(context).pop(true),
-                            child: const Text('删除'),
+                            child: Text(desktopL10n.delete2),
                           ),
                         ],
                       );
@@ -8018,10 +8520,10 @@ class _PasskeyRow extends StatelessWidget {
               await _runWithFeedback(
                 context,
                 () => controller.deletePasskey(item.id),
-                success: 'Passkey 已删除',
+                success: desktopL10n.passkeyDeleted,
               );
             },
-            child: const Text('删除'),
+            child: Text(desktopL10n.delete2),
           ),
         ],
       ),
@@ -8119,10 +8621,10 @@ class _SessionRow extends StatelessWidget {
                       ),
                       child: Text(
                         item.current
-                            ? '当前'
+                            ? desktopL10n.current
                             : item.online
-                            ? '在线'
-                            : '离线',
+                            ? desktopL10n.online
+                            : desktopL10n.offline,
                         style: TextStyle(
                           fontSize: 12,
                           color: statusColor,
@@ -8146,11 +8648,13 @@ class _SessionRow extends StatelessWidget {
                   children: <Widget>[
                     _SessionMetaPill(
                       icon: Icons.location_on_outlined,
-                      text: item.ipLocation ?? '未知位置',
+                      text: item.ipLocation ?? desktopL10n.unknownLocation,
                     ),
                     _SessionMetaPill(
                       icon: Icons.schedule_rounded,
-                      text: '活跃 ${formatRelativeTime(item.lastSeenAt)}',
+                      text: desktopL10n.active(
+                        (formatRelativeTime(item.lastSeenAt)).toString(),
+                      ),
                     ),
                   ],
                 ),
@@ -8161,7 +8665,10 @@ class _SessionRow extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(left: 10),
               child: item.current
-                  ? OutlinedButton(onPressed: null, child: const Text('当前设备'))
+                  ? OutlinedButton(
+                      onPressed: null,
+                      child: Text(desktopL10n.thisDevice),
+                    )
                   : FilledButton.tonalIcon(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.red.withValues(alpha: 0.08),
@@ -8170,7 +8677,7 @@ class _SessionRow extends StatelessWidget {
                         await _runWithFeedback(
                           context,
                           () => controller!.revokeSession(item.id),
-                          success: '会话已撤销',
+                          success: desktopL10n.sessionRevoked,
                         );
                       },
                       icon: const Icon(
@@ -8178,9 +8685,9 @@ class _SessionRow extends StatelessWidget {
                         color: Colors.red,
                         size: 18,
                       ),
-                      label: const Text(
-                        '撤销',
-                        style: TextStyle(color: Colors.red),
+                      label: Text(
+                        desktopL10n.revoke,
+                        style: const TextStyle(color: Colors.red),
                       ),
                     ),
             ),
@@ -8358,7 +8865,9 @@ class _LogTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        log.result == 'SUCCESS' ? '成功' : '失败',
+                        log.result == 'SUCCESS'
+                            ? desktopL10n.success
+                            : desktopL10n.failure,
                         style: TextStyle(
                           color: statusColor,
                           fontSize: 12,
@@ -8391,7 +8900,7 @@ class _LogTile extends StatelessWidget {
                     children: <Widget>[
                       _SessionMetaPill(
                         icon: Icons.location_on_outlined,
-                        text: log.ipLocation ?? '未知位置',
+                        text: log.ipLocation ?? desktopL10n.unknownLocation,
                       ),
                       _SessionMetaPill(
                         icon: Icons.language_rounded,
@@ -8399,7 +8908,7 @@ class _LogTile extends StatelessWidget {
                       ),
                       _SessionMetaPill(
                         icon: Icons.shield_outlined,
-                        text: '风险 ${log.riskScore}',
+                        text: desktopL10n.risk2((log.riskScore).toString()),
                       ),
                     ],
                   ),
@@ -8442,7 +8951,7 @@ class _SelectionOption {
   const _SelectionOption({required this.value, required this.label});
 
   final String value;
-  final String label;
+  final String Function() label;
 }
 
 Future<void> _runWithSensitiveVerification(
@@ -8479,7 +8988,7 @@ Future<void> _runWithSensitiveVerification(
     if (!context.mounted) {
       return;
     }
-    showAppMessage(context, '需要先完成身份验证');
+    showAppMessage(context, desktopL10n.verifyYourIdentityFirst);
     final bool verified = await _showSensitiveVerificationDialog(
       context,
       controller: controller,
@@ -8492,7 +9001,7 @@ Future<void> _runWithSensitiveVerification(
     if (!context.mounted) {
       return;
     }
-    showAppMessage(context, '需要先完成身份验证');
+    showAppMessage(context, desktopL10n.verifyYourIdentityFirst);
     final bool verified = await _showSensitiveVerificationDialog(
       context,
       controller: controller,
@@ -8508,7 +9017,7 @@ Future<bool> _showSensitiveVerificationDialog(
   required AppController controller,
   SensitiveVerificationStatus? initialStatus,
 }) async {
-  final bool? verified = await showDialog<bool>(
+  final bool? verified = await showLocalizedDialog<bool>(
     context: context,
     builder: (BuildContext context) {
       return _SensitiveVerificationDialog(
@@ -8687,22 +9196,22 @@ class _SensitiveVerificationDialogState
       if (status.status == 'approved') {
         if (!status.verified) {
           setState(() {
-            _qrErrorText = '扫码验证结果无效，请刷新二维码后重试';
+            _qrErrorText = desktopL10n.invalidQrVerificationResultRefreshTheQr;
           });
           return;
         }
-        showAppMessage(context, '验证成功');
+        showAppMessage(context, desktopL10n.verified2);
         Navigator.of(context).pop(true);
         return;
       }
       if (status.status == 'rejected') {
         setState(() {
-          _qrErrorText = '扫码请求已被拒绝，请刷新二维码';
+          _qrErrorText = desktopL10n.qrRequestRejectedPleaseRefreshTheQr;
         });
         return;
       }
       setState(() {
-        _qrErrorText = '二维码已过期，请刷新二维码';
+        _qrErrorText = desktopL10n.qrCodeExpiredPleaseRefreshIt;
       });
     } catch (error) {
       if (!mounted) {
@@ -8771,7 +9280,7 @@ class _SensitiveVerificationDialogState
       await widget.controller.sendSensitiveVerificationCode();
       _startCountdown();
       if (mounted) {
-        showAppMessage(context, '验证码已发送');
+        showAppMessage(context, desktopL10n.verificationCodeSent);
       }
     } catch (error) {
       if (mounted) {
@@ -8811,18 +9320,18 @@ class _SensitiveVerificationDialogState
     String? message;
     if (_selectedMethod == SensitiveVerificationMethod.password &&
         _passwordController.text.trim().isEmpty) {
-      message = '请输入登录密码';
+      message = desktopL10n.enterYourSignInPassword;
     } else if (_selectedMethod == SensitiveVerificationMethod.emailCode &&
         _codeController.text.trim().length != 6) {
-      message = '请输入 6 位邮箱验证码';
+      message = desktopL10n.enterADigitEmailCode;
     } else if (_selectedMethod == SensitiveVerificationMethod.totp &&
         _totpController.text.trim().length != 6) {
-      message = '请输入 6 位动态码';
+      message = desktopL10n.enterADigitAuthenticatorCode;
     } else if (_selectedMethod == SensitiveVerificationMethod.passkey &&
         !_passkeyAvailable) {
       message = widget.controller.passkeyUnavailableMessage;
     } else if (_selectedMethod == SensitiveVerificationMethod.qr) {
-      message = '请使用手机扫码完成验证';
+      message = desktopL10n.scanTheQrCodeWithYourPhone;
     }
     if (message != null) {
       showAppMessage(context, message, error: true);
@@ -8856,7 +9365,9 @@ class _SensitiveVerificationDialogState
           if (mounted) {
             showAppMessage(
               context,
-              '即将调用 ${nativePasskeyPlatformName()} 系统 Passkey',
+              desktopL10n.openingTheNativePasskeyService(
+                (nativePasskeyPlatformName()).toString(),
+              ),
             );
           }
           await widget.controller.performPasskeySensitiveVerification();
@@ -8866,7 +9377,7 @@ class _SensitiveVerificationDialogState
       }
       await widget.controller.refreshAdaptiveAuthStatus();
       if (mounted) {
-        showAppMessage(context, '验证成功');
+        showAppMessage(context, desktopL10n.verified2);
         Navigator.of(context).pop(true);
       }
     } catch (error) {
@@ -8885,7 +9396,7 @@ class _SensitiveVerificationDialogState
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('敏感操作验证'),
+      title: Text(desktopL10n.sensitiveActionVerification2),
       content: SizedBox(
         width: 560,
         child: _loading
@@ -8898,7 +9409,7 @@ class _SensitiveVerificationDialogState
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    const Text('请先验证身份后继续执行当前操作。'),
+                    Text(desktopL10n.verifyYourIdentityToContinueWithThis),
                     const SizedBox(height: 16),
                     Wrap(
                       spacing: 10,
@@ -8930,7 +9441,9 @@ class _SensitiveVerificationDialogState
                       TextField(
                         controller: _passwordController,
                         obscureText: true,
-                        decoration: const InputDecoration(labelText: '登录密码'),
+                        decoration: InputDecoration(
+                          labelText: desktopL10n.signInPassword,
+                        ),
                       )
                     else if (_selectedMethod ==
                         SensitiveVerificationMethod.emailCode)
@@ -8940,8 +9453,8 @@ class _SensitiveVerificationDialogState
                             child: TextField(
                               controller: _codeController,
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: '邮箱验证码',
+                              decoration: InputDecoration(
+                                labelText: desktopL10n.emailCode,
                               ),
                               inputFormatters: <TextInputFormatter>[
                                 FilteringTextInputFormatter.digitsOnly,
@@ -8965,7 +9478,7 @@ class _SensitiveVerificationDialogState
                                 : Text(
                                     _codeCountdown > 0
                                         ? '${_codeCountdown}s'
-                                        : '发送验证码',
+                                        : desktopL10n.sendCode,
                                   ),
                           ),
                         ],
@@ -8975,7 +9488,9 @@ class _SensitiveVerificationDialogState
                       TextField(
                         controller: _totpController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: '6 位动态码'),
+                        decoration: InputDecoration(
+                          labelText: desktopL10n.digitAuthenticatorCode,
+                        ),
                         inputFormatters: <TextInputFormatter>[
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(6),
@@ -9005,7 +9520,12 @@ class _SensitiveVerificationDialogState
                             ),
                           const SizedBox(height: 12),
                           Text(
-                            '剩余有效期：${_qrExpiresInSeconds > 0 ? _qrExpiresInSeconds : 0} 秒',
+                            desktopL10n.expiresInSeconds(
+                              (_qrExpiresInSeconds > 0
+                                      ? _qrExpiresInSeconds
+                                      : 0)
+                                  .toString(),
+                            ),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),
@@ -9033,15 +9553,19 @@ class _SensitiveVerificationDialogState
                                     ),
                                   )
                                 : const Icon(Icons.refresh_rounded),
-                            label: Text(_qrRefreshing ? '刷新中...' : '刷新二维码'),
+                            label: Text(
+                              _qrRefreshing
+                                  ? desktopL10n.refreshing
+                                  : desktopL10n.refreshQrCode,
+                            ),
                           ),
                         ],
                       )
                     else
                       _DisabledCapabilityCard(
                         title: _passkeyAvailable
-                            ? 'Passkey 验证已接入'
-                            : 'Passkey 当前不可用',
+                            ? desktopL10n.passkeyVerificationAvailable
+                            : desktopL10n.passkeyIsCurrentlyUnavailable,
                         description: _passkeyAvailable
                             ? nativePasskeyAvailableDescription()
                             : widget.controller.passkeyUnavailableMessage,
@@ -9054,7 +9578,7 @@ class _SensitiveVerificationDialogState
       actions: <Widget>[
         TextButton(
           onPressed: _verifying ? null : () => Navigator.of(context).pop(false),
-          child: const Text('取消'),
+          child: Text(desktopL10n.cancel),
         ),
         FilledButton.icon(
           onPressed:
@@ -9070,7 +9594,9 @@ class _SensitiveVerificationDialogState
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.verified_user_rounded),
-          label: Text(_verifying ? '验证中...' : '验证'),
+          label: Text(
+            _verifying ? desktopL10n.verifying : desktopL10n.verification,
+          ),
         ),
       ],
     );
@@ -9079,18 +9605,18 @@ class _SensitiveVerificationDialogState
 
 Future<void> _showEditDialog(
   BuildContext context, {
-  required String title,
+  required String Function() title,
   required String initialValue,
   required Future<void> Function(String value) onSubmit,
   String? hintText,
   int maxLines = 1,
 }) async {
   String value = initialValue;
-  final String? nextValue = await showDialog<String>(
+  final String? nextValue = await showLocalizedDialog<String>(
     context: context,
     builder: (BuildContext context) {
       return AlertDialog(
-        title: Text(title),
+        title: Text(title()),
         content: TextFormField(
           initialValue: initialValue,
           maxLines: maxLines,
@@ -9102,11 +9628,11 @@ Future<void> _showEditDialog(
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('取消'),
+            child: Text(desktopL10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(value),
-            child: const Text('保存'),
+            child: Text(desktopL10n.save),
           ),
         ],
       );
@@ -9120,7 +9646,7 @@ Future<void> _showEditDialog(
   try {
     await onSubmit(nextValue);
     if (context.mounted) {
-      showAppMessage(context, '已保存');
+      showAppMessage(context, desktopL10n.saved);
     }
   } catch (error) {
     if (context.mounted) {
@@ -9131,26 +9657,26 @@ Future<void> _showEditDialog(
 
 Future<void> _showSelectionDialog(
   BuildContext context, {
-  required String title,
+  required String Function() title,
   required String currentValue,
   required List<_SelectionOption> options,
   required Future<void> Function(String value) onSubmit,
 }) async {
   String value = currentValue;
-  final String? nextValue = await showDialog<String>(
+  final String? nextValue = await showLocalizedDialog<String>(
     context: context,
     builder: (BuildContext context) {
       return StatefulBuilder(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
               return AlertDialog(
-                title: Text(title),
+                title: Text(title()),
                 content: Wrap(
                   spacing: 10,
                   runSpacing: 10,
                   children: options.map((_SelectionOption option) {
                     return ChoiceChip(
-                      label: Text(option.label),
+                      label: Text(option.label()),
                       selected: value == option.value,
                       onSelected: (_) {
                         setState(() {
@@ -9163,11 +9689,11 @@ Future<void> _showSelectionDialog(
                 actions: <Widget>[
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
+                    child: Text(desktopL10n.cancel),
                   ),
                   FilledButton(
                     onPressed: () => Navigator.of(context).pop(value),
-                    child: const Text('保存'),
+                    child: Text(desktopL10n.save),
                   ),
                 ],
               );
@@ -9183,7 +9709,7 @@ Future<void> _showSelectionDialog(
   try {
     await onSubmit(nextValue);
     if (context.mounted) {
-      showAppMessage(context, '已保存');
+      showAppMessage(context, desktopL10n.saved);
     }
   } catch (error) {
     if (context.mounted) {
@@ -9198,7 +9724,7 @@ Future<void> _showChangeEmailDialog(
 ) async {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
-  await showDialog<void>(
+  await showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext context) {
       bool busy = false;
@@ -9206,13 +9732,15 @@ Future<void> _showChangeEmailDialog(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
               return AlertDialog(
-                title: const Text('修改邮箱'),
+                title: Text(desktopL10n.changeEmail),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     TextField(
                       controller: emailController,
-                      decoration: const InputDecoration(labelText: '新邮箱'),
+                      decoration: InputDecoration(
+                        labelText: desktopL10n.newEmail,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -9220,7 +9748,9 @@ Future<void> _showChangeEmailDialog(
                         Expanded(
                           child: TextField(
                             controller: codeController,
-                            decoration: const InputDecoration(labelText: '验证码'),
+                            decoration: InputDecoration(
+                              labelText: desktopL10n.verificationCode,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -9233,7 +9763,10 @@ Future<void> _showChangeEmailDialog(
                                       emailController.text,
                                     );
                                     if (context.mounted) {
-                                      showAppMessage(context, '验证码已发送');
+                                      showAppMessage(
+                                        context,
+                                        desktopL10n.verificationCodeSent,
+                                      );
                                     }
                                   } catch (error) {
                                     if (context.mounted) {
@@ -9253,7 +9786,7 @@ Future<void> _showChangeEmailDialog(
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('发送验证码'),
+                              : Text(desktopL10n.sendCode),
                         ),
                       ],
                     ),
@@ -9262,7 +9795,7 @@ Future<void> _showChangeEmailDialog(
                 actions: <Widget>[
                   TextButton(
                     onPressed: busy ? null : () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
+                    child: Text(desktopL10n.cancel),
                   ),
                   FilledButton.icon(
                     onPressed: busy
@@ -9278,7 +9811,10 @@ Future<void> _showChangeEmailDialog(
                               );
                               if (context.mounted) {
                                 Navigator.of(context).pop();
-                                showAppMessage(context, '邮箱已更新');
+                                showAppMessage(
+                                  context,
+                                  desktopL10n.emailUpdated,
+                                );
                               }
                             } catch (error) {
                               if (context.mounted) {
@@ -9303,7 +9839,7 @@ Future<void> _showChangeEmailDialog(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.save_rounded),
-                    label: Text(busy ? '保存中...' : '保存'),
+                    label: Text(busy ? desktopL10n.saving2 : desktopL10n.save),
                   ),
                 ],
               );
@@ -9322,7 +9858,7 @@ Future<void> _showChangePasswordDialog(
   AppController controller,
 ) async {
   final TextEditingController passwordController = TextEditingController();
-  await showDialog<void>(
+  await showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext context) {
       bool busy = false;
@@ -9330,16 +9866,18 @@ Future<void> _showChangePasswordDialog(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
               return AlertDialog(
-                title: const Text('修改密码'),
+                title: Text(desktopL10n.changePassword),
                 content: TextField(
                   controller: passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: '新密码'),
+                  decoration: InputDecoration(
+                    labelText: desktopL10n.newPassword,
+                  ),
                 ),
                 actions: <Widget>[
                   TextButton(
                     onPressed: busy ? null : () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
+                    child: Text(desktopL10n.cancel),
                   ),
                   FilledButton.icon(
                     onPressed: busy
@@ -9354,7 +9892,10 @@ Future<void> _showChangePasswordDialog(
                               );
                               if (context.mounted) {
                                 Navigator.of(context).pop();
-                                showAppMessage(context, '密码已更新');
+                                showAppMessage(
+                                  context,
+                                  desktopL10n.passwordUpdated,
+                                );
                               }
                             } catch (error) {
                               if (context.mounted) {
@@ -9379,7 +9920,7 @@ Future<void> _showChangePasswordDialog(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.save_rounded),
-                    label: Text(busy ? '保存中...' : '保存'),
+                    label: Text(busy ? desktopL10n.saving2 : desktopL10n.save),
                   ),
                 ],
               );
@@ -9402,7 +9943,7 @@ Future<void> _showEnableTotpDialog(
     return;
   }
   final TextEditingController codeController = TextEditingController();
-  await showDialog<void>(
+  await showLocalizedDialog<void>(
     context: navigator.context,
     builder: (BuildContext context) {
       bool busy = false;
@@ -9410,7 +9951,7 @@ Future<void> _showEnableTotpDialog(
         builder:
             (BuildContext context, void Function(void Function()) setState) {
               return AlertDialog(
-                title: const Text('启用 TOTP'),
+                title: Text(desktopL10n.enableTotp),
                 content: SizedBox(
                   width: 480,
                   child: SingleChildScrollView(
@@ -9418,7 +9959,7 @@ Future<void> _showEnableTotpDialog(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        const Text('扫描二维码或手动录入密钥，然后输入身份验证器生成的 6 位动态码。'),
+                        Text(desktopL10n.scanTheQrCodeOrEnterThe),
                         const SizedBox(height: 16),
                         _buildQrWidget(context, options.qrCodeUrl),
                         const SizedBox(height: 16),
@@ -9429,10 +9970,12 @@ Future<void> _showEnableTotpDialog(
                         const SizedBox(height: 16),
                         TextField(
                           controller: codeController,
-                          decoration: const InputDecoration(labelText: '动态码'),
+                          decoration: InputDecoration(
+                            labelText: desktopL10n.authenticatorCode,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        const Text('初始恢复码'),
+                        Text(desktopL10n.initialRecoveryCodes),
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -9448,7 +9991,7 @@ Future<void> _showEnableTotpDialog(
                 actions: <Widget>[
                   TextButton(
                     onPressed: busy ? null : () => Navigator.of(context).pop(),
-                    child: const Text('取消'),
+                    child: Text(desktopL10n.cancel),
                   ),
                   FilledButton.icon(
                     onPressed: busy
@@ -9466,10 +10009,13 @@ Future<void> _showEnableTotpDialog(
                                 Navigator.of(context).pop();
                                 await _showRecoveryCodesDialog(
                                   navigator.context,
-                                  '请保存恢复码',
+                                  () => desktopL10n.saveYourRecoveryCodes,
                                   options.recoveryCodes,
                                 );
-                                showAppMessage(messenger.context, 'TOTP 已启用');
+                                showAppMessage(
+                                  messenger.context,
+                                  desktopL10n.totpEnabled,
+                                );
                               }
                             } catch (error) {
                               if (context.mounted) {
@@ -9494,7 +10040,11 @@ Future<void> _showEnableTotpDialog(
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.verified_user_rounded),
-                    label: Text(busy ? '启用中...' : '确认启用'),
+                    label: Text(
+                      busy
+                          ? desktopL10n.enabling
+                          : desktopL10n.confirmAndEnable,
+                    ),
                   ),
                 ],
               );
@@ -9522,14 +10072,14 @@ Future<void> _awaitDialogTeardown() async {
 
 Future<void> _showRecoveryCodesDialog(
   BuildContext context,
-  String title,
+  String Function() title,
   List<String> codes,
 ) {
-  return showDialog<void>(
+  return showLocalizedDialog<void>(
     context: context,
     builder: (BuildContext context) {
       return AlertDialog(
-        title: Text(title),
+        title: Text(title()),
         content: SizedBox(
           width: 420,
           child: Wrap(
@@ -9543,7 +10093,7 @@ Future<void> _showRecoveryCodesDialog(
         actions: <Widget>[
           FilledButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
+            child: Text(desktopL10n.close),
           ),
         ],
       );
@@ -9598,7 +10148,9 @@ Widget _buildLocalQrCode(
         color: codeColor,
       ),
       errorStateBuilder: (BuildContext context, Object? error) {
-        return const Center(child: Text('二维码生成失败，请刷新'));
+        return Center(
+          child: Text(desktopL10n.couldNotGenerateQrCodePleaseRefresh),
+        );
       },
     ),
   );
@@ -9658,15 +10210,15 @@ String sensitiveVerificationMethodChipLabel(
 ) {
   switch (method) {
     case SensitiveVerificationMethod.password:
-      return '密码';
+      return desktopL10n.password;
     case SensitiveVerificationMethod.emailCode:
-      return '邮箱验证码';
+      return desktopL10n.emailCode;
     case SensitiveVerificationMethod.totp:
       return 'TOTP';
     case SensitiveVerificationMethod.passkey:
       return 'Passkey';
     case SensitiveVerificationMethod.qr:
-      return '扫码验证';
+      return desktopL10n.qrVerification;
   }
 }
 
@@ -9675,49 +10227,49 @@ String sensitiveVerificationMethodDescription(
 ) {
   switch (method) {
     case SensitiveVerificationMethod.password:
-      return '输入当前登录密码完成验证。';
+      return desktopL10n.enterYourCurrentSignInPasswordTo;
     case SensitiveVerificationMethod.emailCode:
-      return '向当前绑定邮箱发送一次性验证码。';
+      return desktopL10n.sendAOneTimeCodeToYour;
     case SensitiveVerificationMethod.totp:
-      return '输入身份验证器生成的 6 位动态码。';
+      return desktopL10n.enterTheDigitCodeGeneratedByYour;
     case SensitiveVerificationMethod.passkey:
       return nativePasskeyAvailableDescription();
     case SensitiveVerificationMethod.qr:
-      return '使用已登录手机端扫码确认当前敏感操作。';
+      return desktopL10n.scanWithYourSignedInMobileApp;
   }
 }
 
 String sectionTitle(DesktopSection section) {
   switch (section) {
     case DesktopSection.overview:
-      return '账号总览';
+      return desktopL10n.accountOverview;
     case DesktopSection.profile:
-      return '账号资料';
+      return desktopL10n.accountProfile;
     case DesktopSection.security:
-      return '安全设置';
+      return desktopL10n.securitySettings;
     case DesktopSection.devices:
-      return '设备管理';
+      return desktopL10n.deviceManagement;
     case DesktopSection.activity:
-      return '操作日志';
+      return desktopL10n.activityLogs;
     case DesktopSection.authorizations:
-      return '访问授权';
+      return desktopL10n.accessAuthorization;
   }
 }
 
 String sectionSubtitle(DesktopSection section) {
   switch (section) {
     case DesktopSection.overview:
-      return '查看桌面端的账号状态、登录方式和近期活动。';
+      return desktopL10n.viewAccountStatusSignInMethodsAnd;
     case DesktopSection.profile:
-      return '管理账户资料与扩展信息。';
+      return desktopL10n.manageYourAccountProfileAndExtendedInformation;
     case DesktopSection.security:
-      return '配置 MFA、TOTP、Passkey 和敏感验证偏好。';
+      return desktopL10n.configureMfaTotpPasskeysAndSensitiveAction;
     case DesktopSection.devices:
-      return '查看在线设备、登录会话和当前状态。';
+      return desktopL10n.viewOnlineDevicesSessionsAndTheirCurrent;
     case DesktopSection.activity:
-      return '筛选查看敏感操作与验证记录。';
+      return desktopL10n.filterSensitiveActionsAndVerificationRecords;
     case DesktopSection.authorizations:
-      return '查看已授权访问您账号信息的第三方应用。';
+      return desktopL10n.viewThirdPartyAppsAuthorizedToAccess;
   }
 }
 
@@ -9783,12 +10335,12 @@ bool sessionIsMobileApp(SessionItem item) {
 
 String sessionClientLabel(SessionItem item) {
   if (sessionIsDesktopApp(item)) {
-    return '桌面端';
+    return desktopL10n.desktopApp;
   }
   if (sessionIsMobileApp(item)) {
-    return '移动端';
+    return desktopL10n.mobileApp;
   }
-  return item.browser ?? '未知浏览器';
+  return item.browser ?? desktopL10n.unknownBrowser;
 }
 
 String sessionSystemLabel(SessionItem item) {
@@ -9814,67 +10366,67 @@ String sessionSystemLabel(SessionItem item) {
     return 'Linux';
   }
   if (sessionIsDesktopApp(item)) {
-    return '桌面端';
+    return desktopL10n.desktopApp;
   }
   if (sessionIsMobileApp(item)) {
-    return '移动端';
+    return desktopL10n.mobileApp;
   }
-  return item.deviceType ?? '未知设备';
+  return item.deviceType ?? desktopL10n.unknownDevice;
 }
 
 String displayGender(String? gender) {
   switch (gender) {
     case 'male':
-      return '男';
+      return desktopL10n.male;
     case 'female':
-      return '女';
+      return desktopL10n.female;
     default:
-      return '保密';
+      return desktopL10n.preferNotToSay;
   }
 }
 
 String operationLabel(String operationType) {
-  const Map<String, String> labels = <String, String>{
-    'REGISTER': '注册',
-    'LOGIN': '登录',
-    'SENSITIVE_VERIFY': '敏感操作验证',
-    'CHANGE_PASSWORD': '修改密码',
-    'CHANGE_EMAIL': '修改邮箱',
-    'ADD_PASSKEY': '新增 Passkey',
-    'DELETE_PASSKEY': '删除 Passkey',
-    'ENABLE_TOTP': '启用 TOTP',
-    'DISABLE_TOTP': '禁用 TOTP',
+  Map<String, String> labels = <String, String>{
+    'REGISTER': desktopL10n.register,
+    'LOGIN': desktopL10n.signIn,
+    'SENSITIVE_VERIFY': desktopL10n.sensitiveActionVerification2,
+    'CHANGE_PASSWORD': desktopL10n.changePassword,
+    'CHANGE_EMAIL': desktopL10n.changeEmail,
+    'ADD_PASSKEY': desktopL10n.addPasskey,
+    'DELETE_PASSKEY': desktopL10n.deletePasskey,
+    'ENABLE_TOTP': desktopL10n.enableTotp,
+    'DISABLE_TOTP': desktopL10n.disableTotp,
   };
   return labels[operationType] ?? operationType;
 }
 
 String loginMethodLabel(String? loginMethod) {
-  const Map<String, String> labels = <String, String>{
-    'PASSWORD': '密码登录',
-    'PASSWORD_MFA': '密码 + 二步验证',
-    'EMAIL_CODE': '验证码登录',
-    'EMAIL_CODE_MFA': '验证码 + 二步验证',
-    'PASSKEY': 'Passkey 登录',
-    'PASSKEY_MFA': 'Passkey + 二步验证',
-    'QR': '扫码登录',
-    'QR_MFA': '扫码 + 二步验证',
-    'BRIDGE': '桥接登录',
-    'BRIDGE_FROM_DESKTOP': '电脑端桥接',
-    'BRIDGE_FROM_WEB': '网页端桥接',
-    'BRIDGE_TO_MOBILE': '桥接到手机端',
-    'ACCOUNT_RECOVERY': '账号恢复',
+  Map<String, String> labels = <String, String>{
+    'PASSWORD': desktopL10n.passwordSignIn,
+    'PASSWORD_MFA': desktopL10n.passwordMfa,
+    'EMAIL_CODE': desktopL10n.codeSignIn,
+    'EMAIL_CODE_MFA': desktopL10n.codeMfa,
+    'PASSKEY': desktopL10n.passkeySignIn,
+    'PASSKEY_MFA': desktopL10n.passkeyMfa,
+    'QR': desktopL10n.qrSignIn2,
+    'QR_MFA': desktopL10n.qrCodeMfa,
+    'BRIDGE': desktopL10n.bridgeSignIn,
+    'BRIDGE_FROM_DESKTOP': desktopL10n.desktopBridge,
+    'BRIDGE_FROM_WEB': desktopL10n.webBridge,
+    'BRIDGE_TO_MOBILE': desktopL10n.mobileBridge,
+    'ACCOUNT_RECOVERY': desktopL10n.accountRecovery,
   };
-  return labels[loginMethod] ?? (loginMethod ?? '通用操作');
+  return labels[loginMethod] ?? (loginMethod ?? desktopL10n.generalAction);
 }
 
 String adaptiveRiskLabel(String riskLevel) {
   switch (riskLevel.toLowerCase()) {
     case 'high':
-      return '高';
+      return desktopL10n.high;
     case 'medium':
-      return '中';
+      return desktopL10n.medium;
     default:
-      return '低';
+      return desktopL10n.low;
   }
 }
 
@@ -9891,15 +10443,15 @@ Color adaptiveRiskTone(String riskLevel, ColorScheme colorScheme) {
 
 String formatDurationSeconds(int seconds) {
   if (seconds < 60) {
-    return '$seconds 秒';
+    return desktopL10n.seconds(seconds);
   }
   if (seconds < 3600) {
-    return '${seconds ~/ 60} 分钟';
+    return desktopL10n.minutes(seconds ~/ 60);
   }
   if (seconds < 86400) {
-    return '${seconds ~/ 3600} 小时';
+    return desktopL10n.hours(seconds ~/ 3600);
   }
-  return '${seconds ~/ 86400} 天';
+  return desktopL10n.days(seconds ~/ 86400);
 }
 
 String formatDateTime(String? value) {
@@ -9910,7 +10462,9 @@ String formatDateTime(String? value) {
   if (time == null) {
     return value;
   }
-  return '${time.year}-${twoDigits(time.month)}-${twoDigits(time.day)} ${twoDigits(time.hour)}:${twoDigits(time.minute)}';
+  return DateFormat.yMd(
+    desktopLocaleController.locale.languageCode,
+  ).add_Hm().format(time);
 }
 
 String formatRelativeTime(String? value) {
@@ -9923,16 +10477,16 @@ String formatRelativeTime(String? value) {
   }
   final Duration diff = DateTime.now().difference(time);
   if (diff.inMinutes < 1) {
-    return '刚刚';
+    return desktopL10n.justNow;
   }
   if (diff.inMinutes < 60) {
-    return '${diff.inMinutes} 分钟前';
+    return desktopL10n.minutesAgo(diff.inMinutes);
   }
   if (diff.inHours < 24) {
-    return '${diff.inHours} 小时前';
+    return desktopL10n.hoursAgo(diff.inHours);
   }
   if (diff.inDays < 7) {
-    return '${diff.inDays} 天前';
+    return desktopL10n.daysAgo(diff.inDays);
   }
   return formatDateTime(value);
 }
@@ -9948,7 +10502,7 @@ Map<String, dynamic> asMap(dynamic value) {
       (dynamic key, dynamic data) => MapEntry(key.toString(), data),
     );
   }
-  throw ApiException('数据格式错误');
+  throw ApiException.localized(() => desktopL10n.invalidDataFormat);
 }
 
 List<dynamic> asList(dynamic value) {
@@ -10039,7 +10593,7 @@ class UserSettings {
 class OAuth2AuthorizedApp {
   const OAuth2AuthorizedApp({
     required this.appId,
-    required this.appName,
+    required String appName,
     required this.contactInfo,
     required this.redirectUri,
     required this.scopes,
@@ -10049,12 +10603,12 @@ class OAuth2AuthorizedApp {
     this.logoUrl,
     this.creatorName,
     this.expiresAt,
-  });
+  }) : _appName = appName;
 
   factory OAuth2AuthorizedApp.fromJson(Map<String, dynamic> json) {
     return OAuth2AuthorizedApp(
       appId: asString(json['appId']) ?? '',
-      appName: asString(json['appName']) ?? '未命名应用',
+      appName: asString(json['appName']) ?? '',
       logoUrl: asString(json['logoUrl']),
       creatorName: asString(json['creatorName']),
       contactInfo: asString(json['contactInfo']) ?? '',
@@ -10070,7 +10624,8 @@ class OAuth2AuthorizedApp {
   }
 
   final String appId;
-  final String appName;
+  final String _appName;
+  String get appName => _appName.isEmpty ? desktopL10n.unnamedApp : _appName;
   final String? logoUrl;
   final String? creatorName;
   final String contactInfo;
@@ -10165,8 +10720,10 @@ class PasswordRequirement {
     required this.requireDigits,
     required this.requireSpecialChars,
     required this.rejectCommonWeakPasswords,
-    required this.requirementMessage,
-  });
+    required String requirementMessage,
+    this.requirementCode,
+    this.requirementParams = const <String, dynamic>{},
+  }) : _requirementMessage = requirementMessage;
 
   factory PasswordRequirement.fromJson(Map<String, dynamic> json) {
     return PasswordRequirement(
@@ -10177,6 +10734,9 @@ class PasswordRequirement {
       requireDigits: asBool(json['requireDigits']),
       requireSpecialChars: asBool(json['requireSpecialChars']),
       rejectCommonWeakPasswords: asBool(json['rejectCommonWeakPasswords']),
+      requirementCode:
+          asString(json['requirementCode']) ?? apiFallbackResultCode(null),
+      requirementParams: apiResultParams(json['requirementParams']),
       requirementMessage: resolveApiResultMessage(
         errorCode: asString(json['requirementCode']),
         params: apiResultParams(json['requirementParams']),
@@ -10191,23 +10751,34 @@ class PasswordRequirement {
   final bool requireDigits;
   final bool requireSpecialChars;
   final bool rejectCommonWeakPasswords;
-  final String requirementMessage;
+  final String _requirementMessage;
+  final String? requirementCode;
+  final Map<String, dynamic> requirementParams;
+  String get requirementMessage => requirementCode == null
+      ? _requirementMessage
+      : resolveApiResultMessage(
+          errorCode: requirementCode,
+          params: requirementParams,
+        );
 
   String? validate(String password) {
     if (password.length < minLength || password.length > maxLength) {
-      return '密码长度必须在 $minLength-$maxLength 个字符之间';
+      return desktopL10n.passwordMustBeBetweenAndCharactersLong(
+        (minLength).toString(),
+        (maxLength).toString(),
+      );
     }
     if (requireUppercase && !RegExp(r'[A-Z]').hasMatch(password)) {
-      return '密码必须包含至少一个大写字母';
+      return desktopL10n.passwordMustContainAtLeastOneUppercase;
     }
     if (requireLowercase && !RegExp(r'[a-z]').hasMatch(password)) {
-      return '密码必须包含至少一个小写字母';
+      return desktopL10n.passwordMustContainAtLeastOneLowercase;
     }
     if (requireDigits && !RegExp(r'[0-9]').hasMatch(password)) {
-      return '密码必须包含至少一个数字';
+      return desktopL10n.passwordMustContainAtLeastOneDigit;
     }
     if (requireSpecialChars && !RegExp(r'[^A-Za-z0-9]').hasMatch(password)) {
-      return '密码必须包含至少一个特殊字符';
+      return desktopL10n.passwordMustContainAtLeastOneSpecial;
     }
     return null;
   }
@@ -10282,12 +10853,19 @@ class AdaptiveAuthStatus {
     required this.deviceType,
     required this.multiEndpointAlert,
     required this.alertLevel,
-    required this.alertTitle,
-    required this.alertMessage,
+    required String? alertTitle,
+    required String? alertMessage,
     required this.alertRemainingSeconds,
-    required this.recommendedAction,
-    required this.reasons,
-  });
+    required String recommendedAction,
+    required List<String> reasons,
+    this.alertTitleCode,
+    this.alertMessageCode,
+    this.recommendedActionCode,
+    this.reasonCodes = const <dynamic>[],
+  }) : _alertTitle = alertTitle,
+       _alertMessage = alertMessage,
+       _recommendedAction = recommendedAction,
+       _reasons = reasons;
 
   factory AdaptiveAuthStatus.fromJson(Map<String, dynamic> json) {
     return AdaptiveAuthStatus(
@@ -10312,6 +10890,10 @@ class AdaptiveAuthStatus {
       deviceType: asString(json['deviceType']),
       multiEndpointAlert: asBool(json['multiEndpointAlert']),
       alertLevel: asString(json['alertLevel']),
+      alertTitleCode: asString(json['alertTitleCode']),
+      alertMessageCode: asString(json['alertMessageCode']),
+      recommendedActionCode: asString(json['recommendedActionCode']),
+      reasonCodes: asList(json['reasonCodes']),
       alertTitle: json['alertTitleCode'] == null
           ? null
           : resolveApiResultMessage(
@@ -10354,11 +10936,29 @@ class AdaptiveAuthStatus {
   final String? deviceType;
   final bool multiEndpointAlert;
   final String? alertLevel;
-  final String? alertTitle;
-  final String? alertMessage;
+  final String? _alertTitle;
+  final String? _alertMessage;
+  final String? alertTitleCode;
+  final String? alertMessageCode;
+  final String? recommendedActionCode;
+  final List<dynamic> reasonCodes;
+  String? get alertTitle => alertTitleCode == null
+      ? _alertTitle
+      : resolveApiResultMessage(errorCode: alertTitleCode);
+  String? get alertMessage => alertMessageCode == null
+      ? _alertMessage
+      : resolveApiResultMessage(errorCode: alertMessageCode);
   final int alertRemainingSeconds;
-  final String recommendedAction;
-  final List<String> reasons;
+  final String _recommendedAction;
+  final List<String> _reasons;
+  String get recommendedAction => recommendedActionCode == null
+      ? _recommendedAction
+      : resolveApiResultMessage(errorCode: recommendedActionCode);
+  List<String> get reasons => reasonCodes.isEmpty
+      ? _reasons
+      : reasonCodes
+            .map((dynamic code) => resolveApiResultPayload(code))
+            .toList();
 }
 
 class PasskeyAllowedCredential {
@@ -10527,10 +11127,10 @@ class PasskeyRegistrationOptions {
       try {
         return asMap(jsonDecode(value));
       } catch (_) {
-        return <String, dynamic>{};
+        return const <String, dynamic>{};
       }
     }
-    return <String, dynamic>{};
+    return const <String, dynamic>{};
   }
 }
 
@@ -10671,10 +11271,10 @@ class SensitiveLogItem {
     required this.browser,
     required this.deviceType,
     required this.result,
-    required this.failureReason,
+    required String? failureReason,
     required this.riskScore,
     required this.createdAt,
-  });
+  }) : _failureReason = failureReason;
 
   factory SensitiveLogItem.fromJson(Map<String, dynamic> json) {
     return SensitiveLogItem(
@@ -10686,7 +11286,7 @@ class SensitiveLogItem {
       browser: asString(json['browser']),
       deviceType: asString(json['deviceType']),
       result: asString(json['result']) ?? 'SUCCESS',
-      failureReason: resolveAuditFailureReason(asString(json['failureReason'])),
+      failureReason: asString(json['failureReason']),
       riskScore: asInt(json['riskScore']) ?? 0,
       createdAt: asString(json['createdAt']) ?? '',
     );
@@ -10700,7 +11300,8 @@ class SensitiveLogItem {
   final String? browser;
   final String? deviceType;
   final String result;
-  final String? failureReason;
+  final String? _failureReason;
+  String? get failureReason => resolveAuditFailureReason(_failureReason);
   final int riskScore;
   final String createdAt;
 }
@@ -10740,21 +11341,22 @@ enum BrowserPasskeyBridgeMode { login, mfa, sensitive, register }
 class BrowserPasskeyBridgeResponse {
   const BrowserPasskeyBridgeResponse({
     required this.success,
-    required this.message,
+    required String? message,
     this.errorCode,
     this.params = const <String, dynamic>{},
     this.accessToken,
     this.transferCode,
     this.verified = false,
     this.registered = false,
-  });
+  }) : _message = message;
 
   factory BrowserPasskeyBridgeResponse.fromJson(Map<String, dynamic> json) {
     final bool success = asString(json['status']) != 'error';
     return BrowserPasskeyBridgeResponse(
       success: success,
       message: resolveApiResultPayload(json, statusCode: success ? 200 : 400),
-      errorCode: apiResultCode(json),
+      errorCode:
+          apiResultCode(json) ?? apiFallbackResultCode(success ? 200 : 400),
       params: apiResultParams(json['params']),
       accessToken: asString(json['accessToken']),
       transferCode: asString(json['transferCode']),
@@ -10764,7 +11366,14 @@ class BrowserPasskeyBridgeResponse {
   }
 
   final bool success;
-  final String? message;
+  final String? _message;
+  String? get message => errorCode == null
+      ? _message
+      : resolveApiResultMessage(
+          errorCode: errorCode,
+          params: params,
+          statusCode: success ? 200 : 400,
+        );
   final String? errorCode;
   final Map<String, dynamic> params;
   final String? accessToken;
@@ -10798,7 +11407,9 @@ class BrowserPasskeyBridge {
     String? passkeyName,
   }) async {
     if (!isSupported(passkeyOrigin)) {
-      throw ApiException('当前环境未配置可用的 Passkey 浏览器桥接地址');
+      throw ApiException.localized(
+        () => desktopL10n.noUsableBrowserPasskeyBridgeUrlIs,
+      );
     }
 
     final HttpServer server = await HttpServer.bind(
@@ -10843,7 +11454,9 @@ class BrowserPasskeyBridge {
       await openExternalUrl(launchUri.toString());
       return await completer.future.timeout(
         const Duration(minutes: 5),
-        onTimeout: () => throw ApiException('等待浏览器回传结果超时'),
+        onTimeout: () => throw ApiException.localized(
+          () => desktopL10n.timedOutWaitingForTheBrowserResult,
+        ),
       );
     } finally {
       if (!completer.isCompleted) {
@@ -10919,11 +11532,13 @@ class BrowserPasskeyBridge {
       final String rawPayload =
           request.uri.queryParameters['bridgePayload'] ?? '';
       payload = rawPayload.isEmpty
-          ? <String, dynamic>{}
+          ? const <String, dynamic>{}
           : asMap(jsonDecode(rawPayload));
     } else {
       final String raw = await utf8.decoder.bind(request).join();
-      payload = raw.isEmpty ? <String, dynamic>{} : asMap(jsonDecode(raw));
+      payload = raw.isEmpty
+          ? const <String, dynamic>{}
+          : asMap(jsonDecode(raw));
     }
     final String? state = asString(payload['state']);
     if (state != expectedState) {
@@ -10931,7 +11546,11 @@ class BrowserPasskeyBridge {
       request.response.write('<html><body>Invalid state</body></html>');
       await request.response.close();
       if (!completer.isCompleted) {
-        completer.completeError(ApiException('浏览器桥接状态校验失败'));
+        completer.completeError(
+          ApiException.localized(
+            () => desktopL10n.browserBridgeStateVerificationFailed,
+          ),
+        );
       }
       return;
     }
@@ -10951,7 +11570,7 @@ class BrowserPasskeyBridge {
         completer.complete(response);
       } else {
         completer.completeError(
-          response.toException('浏览器未完成 Passkey 操作'),
+          response.toException(desktopL10n.theBrowserDidNotCompleteThePasskey),
         );
       }
     }
@@ -10965,16 +11584,16 @@ class BrowserPasskeyBridge {
 
   static String _successHtml(String? message) {
     final String text = htmlEscape.convert(
-      message ?? '桌面端已收到 Passkey 结果，可以关闭当前页面。',
+      message ?? desktopL10n.theDesktopAppReceivedThePasskeyResult,
     );
-    return '<html><body style="font-family:sans-serif;padding:32px;background:#f6f4ee;">'
-        '<h2>操作已完成</h2><p>$text</p><p>现在可以回到桌面端。</p></body></html>';
+    return '<html lang="${desktopLocaleController.languageTag}"><body style="font-family:sans-serif;padding:32px;background:#f6f4ee;">${desktopL10n.hActionCompletedHPPP((text).toString())}';
   }
 
   static String _errorHtml(String? message) {
-    final String text = htmlEscape.convert(message ?? '桌面端未收到有效结果。');
-    return '<html><body style="font-family:sans-serif;padding:32px;background:#fff4f4;">'
-        '<h2>操作失败</h2><p>$text</p><p>请返回桌面端重试。</p></body></html>';
+    final String text = htmlEscape.convert(
+      message ?? desktopL10n.theDesktopAppDidNotReceiveA,
+    );
+    return '<html lang="${desktopLocaleController.languageTag}"><body style="font-family:sans-serif;padding:32px;background:#fff4f4;">${desktopL10n.hActionFailedHPPP((text).toString())}';
   }
 }
 
@@ -10991,7 +11610,7 @@ Future<void> openExternalUrl(String url) async {
   if (result.exitCode != 0) {
     final String message = result.stderr?.toString().trim().isNotEmpty == true
         ? result.stderr.toString().trim()
-        : '无法打开外部浏览器';
+        : desktopL10n.couldNotOpenTheExternalBrowser;
     throw ApiException(message);
   }
 }
@@ -11102,7 +11721,7 @@ class DesktopSessionBridgeServer {
           request.uri.path == '/ksuser-auth/bridge/import') {
         final String raw = await utf8.decoder.bind(request).join();
         final Map<String, dynamic> payload = raw.isEmpty
-            ? <String, dynamic>{}
+            ? const <String, dynamic>{}
             : asMap(jsonDecode(raw));
         final String? transferCode = asString(payload['transferCode']);
         if (transferCode == null || transferCode.trim().isEmpty) {

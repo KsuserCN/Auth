@@ -45,8 +45,9 @@ enum QRImageDecoder {
 }
 
 struct QRScannerView: UIViewControllerRepresentable {
+    @Environment(\.locale) private var localizationLocale
     let onDetected: (String) -> Void
-    let onError: (String) -> Void
+    let onError: (LocalizedMessage) -> Void
     func makeUIViewController(context: Context) -> ScannerController { ScannerController(onDetected: onDetected, onError: onError) }
     func updateUIViewController(_ uiViewController: ScannerController, context: Context) {}
     static func dismantleUIViewController(_ controller: ScannerController, coordinator: ()) { controller.stop() }
@@ -61,11 +62,11 @@ final class CameraSession: @unchecked Sendable {
 @MainActor final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
     private let camera = CameraSession()
     private let onDetected: (String) -> Void
-    private let onError: (String) -> Void
+    private let onError: (LocalizedMessage) -> Void
     private var preview: AVCaptureVideoPreviewLayer?
     private var delivered = false
     private var active = true
-    init(onDetected: @escaping (String) -> Void, onError: @escaping (String) -> Void) {
+    init(onDetected: @escaping (String) -> Void, onError: @escaping (LocalizedMessage) -> Void) {
         self.onDetected = onDetected; self.onError = onError; super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
@@ -96,7 +97,7 @@ final class CameraSession: @unchecked Sendable {
             preview.videoGravity = .resizeAspectFill; view.layer.addSublayer(preview); self.preview = preview
             view.setNeedsLayout()
             camera.queue.async { [camera] in camera.session.startRunning() }
-        } catch { onError("相机启动失败：\(error.localizedDescription)") }
+        } catch { onError("相机启动失败：\(LocalizedMessage(error: error))") }
     }
     override func viewDidLayoutSubviews() { super.viewDidLayoutSubviews(); preview?.frame = view.bounds }
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {

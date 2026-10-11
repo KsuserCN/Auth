@@ -1,3 +1,4 @@
+import { LocalizedError } from '@/i18n'
 import type { AppleLoginResponse } from '@/api/auth'
 
 const STORAGE_KEY = 'ksuser:pending-apple-account'
@@ -11,7 +12,7 @@ export interface PendingAppleAccount {
 
 export const savePendingAppleAccount = (response: AppleLoginResponse): void => {
   if (!response.needBind || !response.oauthBindToken?.trim()) {
-    throw new Error('Apple 授权信息缺失，请重新登录')
+    throw new LocalizedError('ui.appleAccountFlow.message001')
   }
   sessionStorage.removeItem(BIND_AFTER_LOGIN_KEY)
   sessionStorage.setItem(

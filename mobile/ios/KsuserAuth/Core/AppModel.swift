@@ -3,7 +3,9 @@ import Observation
 
 struct LoadingActivity: Identifiable {
     let id = UUID()
-    let message: String?
+    let localizedMessage: LocalizedMessage?
+    var message: String? { localizedMessage?.rendered }
+    init(message: LocalizedMessage?) { localizedMessage = message }
     let startedAt = Date()
 }
 
@@ -15,8 +17,17 @@ struct LoadingActivity: Identifiable {
     var isBusy: Bool { !loadingActivities.isEmpty }
     var loadingActivity: LoadingActivity? { loadingActivities.first(where: { $0.message != nil }) ?? loadingActivities.first }
     var isAuthenticated: Bool { user != nil }
-    var errorMessage: String?
-    var noticeMessage: String?
+    private var errorNotice: LocalizedMessage?
+    private var notice: LocalizedMessage?
+    var errorMessage: String? {
+        get { errorNotice?.rendered }
+        set { errorNotice = newValue.map { LocalizedMessage(key: $0) } }
+    }
+    var noticeMessage: String? {
+        get { notice?.rendered }
+        set { notice = newValue.map { LocalizedMessage(key: $0) } }
+    }
+    func reportError(_ error: any Error) { errorNotice = LocalizedMessage(error: error) }
     var passwordRequirement: PasswordRequirement?
     var mfaChallenge: MFAChallenge?
     var pendingOAuth: PendingOAuth?
@@ -150,7 +161,7 @@ struct LoadingActivity: Identifiable {
     }
     func register(username: String, email: String, password: String, code: String) async {
         await authenticate(message: "正在注册账号…") { staged in
-            if let error = self.passwordRequirement?.validationError(for: password) { throw APIError.server(400, error) }
+            if let error = self.passwordRequirement?.validationMessage(for: password) { throw APIError.server(400, error) }
             return .success(try await staged.register(username: username, email: email, password: password, code: code))
         }
     }
@@ -288,7 +299,7 @@ struct LoadingActivity: Identifiable {
             self.noticeMessage = "设置已保存"
         }
     }
-    func requireSensitive(title: String = "验证身份", action: @MainActor @escaping () async throws -> Void) async {
+    func requireSensitive(title: LocalizedMessage = "验证身份", action: @MainActor @escaping () async throws -> Void) async {
         await run(message: "正在\(title)…") {
             let status = try await self.repository.sensitiveStatus()
             if status.verified { try await action() }
@@ -361,7 +372,7 @@ struct LoadingActivity: Identifiable {
     }
     func changePassword(newPassword: String) async {
         await requireSensitive(title: "修改密码") {
-            if let error = self.passwordRequirement?.validationError(for: newPassword) { throw APIError.server(400, error) }
+            if let error = self.passwordRequirement?.validationMessage(for: newPassword) { throw APIError.server(400, error) }
             try await self.repository.changePassword(newPassword); self.user?.hasPassword = true
             if let user = self.user { try await self.repository.client.cacheUser(user) }; self.noticeMessage = "密码已更新"
         }
@@ -544,7 +555,7 @@ struct LoadingActivity: Identifiable {
         }
         return returnURL
     }
-    private func authenticate(source: String = "password", preservePending: Bool = true, message: String = "正在登录…", operation: @MainActor (KsuserRepository) async throws -> AuthResult) async {
+    private func authenticate(source: String = "password", preservePending: Bool = true, message: LocalizedMessage = "正在登录…", operation: @MainActor (KsuserRepository) async throws -> AuthResult) async {
         guard !authenticationInProgress else { return }
         authenticationInProgress = true
         defer { authenticationInProgress = false }
@@ -608,7 +619,7 @@ struct LoadingActivity: Identifiable {
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; qqBound = false; totpSetup = nil
         totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0); recoveryCodes = []; qrConfirmation = nil; pendingRawQRCode = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
     }
-    private func run(message: String? = nil, reportError: Bool = true, operation: @MainActor () async throws -> Void) async {
+    private func run(message: LocalizedMessage? = nil, reportError: Bool = true, operation: @MainActor () async throws -> Void) async {
         #if DEBUG
         let simulatesLoading = isUITesting && ProcessInfo.processInfo.arguments.contains("--ui-test-loading") && message != nil
         #else
@@ -632,7 +643,7 @@ struct LoadingActivity: Identifiable {
             if let apiError = error as? APIError, apiError.isUnauthorized, !(await repository.client.hasSession()) {
                 try? native.clearAppleCredential(); clearUserState()
             }
-            if reportError { errorMessage = error.localizedDescription }
+            if reportError { self.reportError(error) }
         }
     }
     private func isCancellation(_ error: Error) -> Bool {

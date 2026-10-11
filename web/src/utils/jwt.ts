@@ -1,3 +1,4 @@
+import { intlLocale } from '@/i18n'
 /**
  * JWT 解析工具
  */
@@ -89,7 +90,7 @@ export const getCurrentUserFromToken = (): JWTPayload | null => {
  */
 export const formatTimestamp = (timestamp: number): string => {
   const date = new Date(timestamp * 1000)
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(intlLocale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

@@ -20,3 +20,13 @@ App 接收服务端生成的五分钟临时请求，登录后读取真实的应�
 - 自动唤起是否成功取决于 iOS 浏览器与是否安装新版 App。网页保留“打开 Ksuser App”“已在 App 完成，继续”和网页授权入口。自动领取仅发生于回跳页，避免原标签页和回跳页争抢同一份结果。
 
 本地验证：`npm --prefix web run test:unit -- --run`、API 的 `MobileAuthorizationServiceTest`，以及 iOS 的 `CoreTests` / `testApplicationConsentShowsMetadataScopesAndDuration`。UI 测试通过 `--ui-testing --ui-test-authenticated --ui-test-application-consent` 启用隔离的界面预览数据。
+
+# iOS 显示语言
+
+原生 iOS App 支持简体中文和英语。“关于与设置 → 语言”提供跟随系统、简体中文和 English，登录前后均可更改。偏好保存在此设备的 `UserDefaults.language`，切换即时生效，保留当前输入、登录状态和已加载内容。默认读取设备的首选语言；任何中文语言变体显示简体中文，其他语言显示英语。回到前台时会重新读取系统语言。
+
+界面文案维护在 `KsuserAuth/Localization/Localizable.xcstrings`，持久显示的提示保存文案标识与参数，展示时再翻译。API 结果码来自共享目录生成的双语表；每次 API 请求发送当前有效的 `Accept-Language`。用户资料、应用名称、历史审计原文及协议字段保持原值。带时区时间戳按当前显示语言及设备时区格式化；不带时区的日期和时间按浮动墙钟值本地化显示，不转换设备时区，非法日期保留原值。
+
+App 图标名称、相机权限等系统界面的资源位于 `zh-Hans.lproj/InfoPlist.strings` 和 `en.lproj/InfoPlist.strings`，由 iOS 选择 App 语言；App 内语言选择无法即时覆盖系统权限弹窗或主屏幕 App 名称。App 内原生裁剪界面和动态快捷操作会跟随 App 内语言。
+
+验证使用 `npm run test:mobile:ios`、`npm run build:mobile:ios`。已有中文 UI 回归测试显式指定中文系统语言；新增本地化测试覆盖语言解析、偏好存储、API 文案及请求语言、时间格式，以及切换时的输入与提示保留。

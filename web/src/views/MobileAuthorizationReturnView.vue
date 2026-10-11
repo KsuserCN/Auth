@@ -2,15 +2,24 @@
   <main class="authorization-return">
     <div class="return-card">
       <img src="/favicon.ico" alt="Ksuser" width="48" height="48" />
-      <h1>{{ error ? '无法继续授权' : '授权已确认' }}</h1>
-      <p>{{ error || '正在返回应用，请稍候…' }}</p>
-      <el-button v-if="error && credentials" type="primary" :loading="busy" @click="complete"
-        >重试</el-button
-      >
+      <h1>
+        {{
+          error
+            ? t('ui.mobileAuthorizationReturn.message001')
+            : t('ui.mobileAuthorizationReturn.message002')
+        }}
+      </h1>
+      <p>{{ renderMessage(error) || t('ui.mobileAuthorizationReturn.message003') }}</p>
+      <el-button v-if="error && credentials" type="primary" :loading="busy" @click="complete">{{
+        t('ui.desktopPasskeyBridge.message007')
+      }}</el-button>
     </div>
   </main>
 </template>
 <script setup lang="ts">
+import { t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
+
+import { localizedError } from '@/utils/apiResult'
 import { onMounted, ref } from 'vue'
 import {
   readMobileAuthorizationReturn,
@@ -20,21 +29,21 @@ import {
 const credentials = readMobileAuthorizationReturn(window.location.hash)
 // Remove the secret before loading any external application resources.
 window.history.replaceState(window.history.state, '', window.location.pathname)
-const error = ref('')
+const error = ref<LocalizedMessage>('')
 const busy = ref(false)
 const complete = async () => {
   if (!credentials) {
-    error.value = '授权回跳参数无效，请返回原应用重新发起授权。'
+    error.value = uiMessage('ui.mobileAuthorizationReturn.message004')
     return
   }
   busy.value = true
   error.value = ''
   try {
     if (!continueMobileAuthorization(await consumeMobileAuthorization(credentials))) {
-      error.value = '授权尚未完成，请返回 Ksuser App 确认。'
+      error.value = uiMessage('ui.mobileAuthorizationReturn.message005')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '请求已完成或过期，请返回原应用重新发起授权。'
+    error.value = localizedError(e, 'ui.mobileAuthorizationReturn.message006')
   } finally {
     busy.value = false
   }

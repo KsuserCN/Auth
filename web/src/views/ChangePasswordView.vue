@@ -6,49 +6,75 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">修改密码</h1>
-        <p class="login-description">设置一个新的安全密码来保护您的账户</p>
+        <h1 class="login-title">{{ t('ui.changePassword.message001') }}</h1>
+        <p class="login-description">{{ t('ui.changePassword.message002') }}</p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lock />
             </el-icon>
-            <span class="feature-text">安全加密</span>
+            <span class="feature-text">{{ t('ui.changePassword.message003') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lightning />
             </el-icon>
-            <span class="feature-text">快速更新</span>
+            <span class="feature-text">{{ t('ui.changePassword.message004') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Key />
             </el-icon>
-            <span class="feature-text">密码强度</span>
+            <span class="feature-text">{{ t('ui.changePassword.message005') }}</span>
           </div>
         </div>
       </div>
 
       <!-- 右侧：表单内容 -->
       <div class="login-right">
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in">
+        <Transition
+          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in"
+        >
           <!-- 第一步：输入新密码 -->
           <div v-if="step === 'new-password'" class="step-container" key="new-password">
-            <h2 class="step-title">设置新密码</h2>
-            <p class="step-subtitle">{{ resolveApiResult({ errorCode: passwordRequirement.requirementCode, params: passwordRequirement.requirementParams }) }}</p>
+            <h2 class="step-title">{{ t('ui.changePassword.message006') }}</h2>
+            <p class="step-subtitle">
+              {{
+                resolveApiResult({
+                  errorCode: passwordRequirement.requirementCode,
+                  params: passwordRequirement.requirementParams,
+                })
+              }}
+            </p>
 
-            <el-form ref="newPasswordFormRef" :model="passwordInput" :rules="newPasswordRules" label-position="top">
+            <el-form
+              ref="newPasswordFormRef"
+              :model="passwordInput"
+              :rules="newPasswordRules"
+              label-position="top"
+            >
               <el-form-item prop="newPassword">
-                <el-input v-model="passwordInput.newPassword" type="password" placeholder="输入新密码" show-password
-                  @keyup.enter="goToConfirmStep" autocomplete="new-password" autofocus />
+                <el-input
+                  v-model="passwordInput.newPassword"
+                  type="password"
+                  :placeholder="t('ui.changePassword.message007')"
+                  show-password
+                  @keyup.enter="goToConfirmStep"
+                  autocomplete="new-password"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
             <div class="password-requirements">
-              <div class="requirement-title">密码要求：</div>
-              <div v-for="(item, index) in requirementItems" :key="index" class="requirement-item"
-                :class="{ met: item.met }">
+              <div class="requirement-title">{{ t('ui.changePassword.message008') }}</div>
+              <div
+                v-for="(item, index) in requirementItems"
+                :key="index"
+                class="requirement-item"
+                :class="{ met: item.met }"
+              >
                 <el-icon :size="14">
                   <CircleCheck v-if="item.met" />
                   <CircleClose v-else />
@@ -58,30 +84,49 @@
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="handleCancel">取消</el-button>
+              <el-button class="back-btn" @click="handleCancel">{{
+                t('ui.addPasskey.message009')
+              }}</el-button>
               <el-button class="next-btn" @click="goToConfirmStep">
-                下一步
+                {{ t('ui.changePassword.message009') }}
               </el-button>
             </div>
           </div>
 
           <!-- 第二步：确认新密码 -->
-          <div v-else-if="step === 'confirm-password'" class="step-container" key="confirm-password">
-            <h2 class="step-title">确认新密码</h2>
-            <p class="step-subtitle">请再次输入新密码以确认</p>
+          <div
+            v-else-if="step === 'confirm-password'"
+            class="step-container"
+            key="confirm-password"
+          >
+            <h2 class="step-title">{{ t('ui.changePassword.message010') }}</h2>
+            <p class="step-subtitle">{{ t('ui.changePassword.message011') }}</p>
 
-            <el-form ref="confirmPasswordFormRef" :model="passwordInput" :rules="confirmPasswordRules"
-              label-position="top">
+            <el-form
+              ref="confirmPasswordFormRef"
+              :model="passwordInput"
+              :rules="confirmPasswordRules"
+              label-position="top"
+            >
               <el-form-item prop="confirmPassword">
-                <el-input v-model="passwordInput.confirmPassword" type="password" placeholder="再次输入新密码" show-password
-                  @keyup.enter="handleSubmit" autocomplete="new-password" autofocus />
+                <el-input
+                  v-model="passwordInput.confirmPassword"
+                  type="password"
+                  :placeholder="t('ui.changePassword.message012')"
+                  show-password
+                  @keyup.enter="handleSubmit"
+                  autocomplete="new-password"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToNewPassword">返回</el-button>
+              <el-button class="back-btn" @click="backToNewPassword">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
               <el-button class="next-btn" @click="handleSubmit" :loading="submitLoading">
-                修改密码
+                {{ t('ui.changePassword.message001') }}
               </el-button>
             </div>
           </div>
@@ -92,6 +137,8 @@
 </template>
 
 <script setup lang="ts">
+import { t, LocalizedError } from '@/i18n'
+
 import { resolveApiResult } from '@/utils/apiResult'
 import { ref, computed, onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
@@ -99,7 +146,12 @@ import { ElMessage } from 'element-plus'
 import { Lock, Lightning, Key, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { changePassword, checkSensitiveVerification, getPasswordRequirement, type PasswordRequirement } from '@/api/auth'
+import {
+  changePassword,
+  checkSensitiveVerification,
+  getPasswordRequirement,
+  type PasswordRequirement,
+} from '@/api/auth'
 
 const router = useRouter()
 
@@ -124,7 +176,7 @@ const updateStep = (newStep: 'new-password' | 'confirm-password') => {
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // 密码要求
@@ -137,7 +189,7 @@ const passwordRequirement = ref<PasswordRequirement>({
   requireSpecialChars: false,
   rejectCommonWeakPasswords: true,
   requirementCode: 'PASSWORD_REQUIREMENTS_7',
-  requirementParams: { minLength: 6, maxLength: 66 }
+  requirementParams: { minLength: 6, maxLength: 66 },
 })
 
 // 密码输入
@@ -160,17 +212,22 @@ const validatePassword = (rule: any, value: any, callback: any) => {
   const req = passwordRequirement.value
 
   if (value === '') {
-    callback(new Error('请输入新密码'))
+    callback(new LocalizedError('ui.changePassword.message013'))
   } else if (value.length < req.minLength || value.length > req.maxLength) {
-    callback(new Error(`密码长度必须在${req.minLength}-${req.maxLength}个字符之间`))
+    callback(
+      new LocalizedError('ui.changePassword.message014', {
+        arg0: req.minLength,
+        arg1: req.maxLength,
+      }),
+    )
   } else if (req.requireUppercase && !/[A-Z]/.test(value)) {
-    callback(new Error('密码必须包含至少一个大写字母'))
+    callback(new LocalizedError('ui.changePassword.message015'))
   } else if (req.requireLowercase && !/[a-z]/.test(value)) {
-    callback(new Error('密码必须包含至少一个小写字母'))
+    callback(new LocalizedError('ui.changePassword.message016'))
   } else if (req.requireDigits && !/\d/.test(value)) {
-    callback(new Error('密码必须包含至少一个数字'))
+    callback(new LocalizedError('ui.changePassword.message017'))
   } else if (req.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
-    callback(new Error('密码必须包含至少一个特殊字符'))
+    callback(new LocalizedError('ui.changePassword.message018'))
   } else {
     callback()
   }
@@ -178,24 +235,20 @@ const validatePassword = (rule: any, value: any, callback: any) => {
 
 const validateConfirmPassword = (rule: any, value: any, callback: any) => {
   if (value === '') {
-    callback(new Error('请再次输入新密码'))
+    callback(new LocalizedError('ui.changePassword.message019'))
   } else if (value !== passwordInput.value.newPassword) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new LocalizedError('ui.changePassword.message020'))
   } else {
     callback()
   }
 }
 
 const newPasswordRules: FormRules = {
-  newPassword: [
-    { required: true, validator: validatePassword, trigger: 'blur' }
-  ],
+  newPassword: [{ required: true, validator: validatePassword, trigger: 'blur' }],
 }
 
 const confirmPasswordRules: FormRules = {
-  confirmPassword: [
-    { required: true, validator: validateConfirmPassword, trigger: 'blur' }
-  ],
+  confirmPassword: [{ required: true, validator: validateConfirmPassword, trigger: 'blur' }],
 }
 
 // 密码要求检查
@@ -217,36 +270,36 @@ const requirementItems = computed(() => {
   const req = passwordRequirement.value
   const items = [
     {
-      text: `${req.minLength}-${req.maxLength}个字符`,
-      met: requirements.value.length
-    }
+      text: t('ui.changePassword.message021', { arg0: req.minLength, arg1: req.maxLength }),
+      met: requirements.value.length,
+    },
   ]
 
   if (req.requireUppercase) {
     items.push({
-      text: '至少一个大写字母',
-      met: requirements.value.hasUpperCase
+      text: t('ui.changePassword.message022'),
+      met: requirements.value.hasUpperCase,
     })
   }
 
   if (req.requireLowercase) {
     items.push({
-      text: '至少一个小写字母',
-      met: requirements.value.hasLowerCase
+      text: t('ui.changePassword.message023'),
+      met: requirements.value.hasLowerCase,
     })
   }
 
   if (req.requireDigits) {
     items.push({
-      text: '至少一个数字',
-      met: requirements.value.hasNumber
+      text: t('ui.changePassword.message024'),
+      met: requirements.value.hasNumber,
     })
   }
 
   if (req.requireSpecialChars) {
     items.push({
-      text: '至少一个特殊字符',
-      met: requirements.value.hasSpecialChar
+      text: t('ui.changePassword.message025'),
+      met: requirements.value.hasSpecialChar,
     })
   }
 
@@ -283,10 +336,10 @@ const handleSubmit = async () => {
 
     // 调用修改密码接口
     await changePassword({
-      newPassword: passwordInput.value.newPassword
+      newPassword: passwordInput.value.newPassword,
     })
 
-    ElMessage.success('密码修改成功')
+    ElMessage.success(t('ui.changePassword.message026'))
     router.push('/home/login-options')
   } catch (error: unknown) {
     console.error('Change password failed:', error)

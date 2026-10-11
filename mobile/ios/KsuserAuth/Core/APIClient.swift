@@ -1,14 +1,14 @@
 import Foundation
 
 enum APIError: Error, LocalizedError, Equatable {
-    case server(Int, String), invalidResponse, storage(Int32), invalidQRCode, cancelled, unsupported(String)
+    case server(Int, LocalizedMessage), invalidResponse, storage(Int32), invalidQRCode, cancelled, unsupported(LocalizedMessage)
     var errorDescription: String? {
         switch self {
-        case .server(_, let message), .unsupported(let message): return message
+        case .server(_, let message), .unsupported(let message): return message.rendered
         case .invalidResponse: return APIResultCodeResolver.message(errorCode: "INVALID_RESPONSE")
-        case .storage: return "无法安全保存登录凭据，请解锁设备后重试"
-        case .invalidQRCode: return "这不是有效的 Ksuser 授权二维码"
-        case .cancelled: return "操作已取消"
+        case .storage: return L10n.text("无法安全保存登录凭据，请解锁设备后重试")
+        case .invalidQRCode: return L10n.text("这不是有效的 Ksuser 授权二维码")
+        case .cancelled: return L10n.text("操作已取消")
         }
     }
     var isUnauthorized: Bool { if case .server(401, _) = self { return true }; return false }
@@ -64,7 +64,7 @@ actor APIClient {
 
     func request<T: Decodable & Sendable>(_ path: String, method: String = "GET", query: [String: String] = [:], body: [String: JSONValue]? = nil, authenticated: Bool = true, acceptedCodes: Set<Int> = [200]) async throws -> T {
         let envelope: APIEnvelope<T> = try await envelope(path, method: method, query: query, body: body, authenticated: authenticated)
-        guard acceptedCodes.contains(envelope.code) else { throw APIError.server(envelope.code, envelope.resultMessage) }
+        guard acceptedCodes.contains(envelope.code) else { throw APIError.server(envelope.code, envelope.localizedMessage) }
         guard let payload = envelope.data else {
             if T.self == EmptyPayload.self { return EmptyPayload() as! T }
             throw APIError.invalidResponse
@@ -84,7 +84,7 @@ actor APIClient {
         var body = Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"avatar.\(fileExtension)\"\r\nContent-Type: \(mimeType)\r\n\r\n".utf8)
         body.append(data); body.append(Data("\r\n--\(boundary)--\r\n".utf8))
         let envelope: APIEnvelope<T> = try await perform(path, method: "POST", query: [:], data: body, contentType: "multipart/form-data; boundary=\(boundary)", authenticated: true, canReplay: true)
-        guard envelope.code == 200 else { throw APIError.server(envelope.code, envelope.resultMessage) }
+        guard envelope.code == 200 else { throw APIError.server(envelope.code, envelope.localizedMessage) }
         guard let payload = envelope.data else { throw APIError.invalidResponse }
         return payload
     }
@@ -114,7 +114,7 @@ actor APIClient {
         do {
             try await ensureCSRF()
             let envelope: APIEnvelope<TokenPayload> = try await perform("/auth/refresh", method: "POST", query: [:], data: Data("{}".utf8), contentType: "application/json", authenticated: false, canReplay: false)
-            guard envelope.code == 200 else { throw APIError.server(envelope.code, envelope.resultMessage) }
+            guard envelope.code == 200 else { throw APIError.server(envelope.code, envelope.localizedMessage) }
             guard let token = envelope.data?.accessToken else { throw APIError.invalidResponse }
             guard generation == startedGeneration else { throw APIError.cancelled }
             try setAccessToken(token); return token
@@ -130,6 +130,7 @@ actor APIClient {
         if !query.isEmpty { components.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) } }
         guard let url = components.url else { throw APIError.invalidResponse }
         var request = URLRequest(url: url); request.httpMethod = method; request.httpBody = data
+        request.setValue(L10n.language, forHTTPHeaderField: "Accept-Language")
         request.setValue("application/json", forHTTPHeaderField: "Accept"); request.setValue(environment.userAgent, forHTTPHeaderField: "User-Agent")
         if let contentType { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         let requestToken = authenticated ? session.accessToken : nil
@@ -165,12 +166,12 @@ actor APIClient {
         }
         if (response.statusCode == 401 || status == 401), authenticated, !canReplay {
             try clearSession()
-            throw APIError.server(401, result?.message(statusCode: 401) ?? APIResultCodeResolver.message(errorCode: nil, statusCode: 401))
+            throw APIError.server(401, LocalizedMessage(errorCode: result?.errorCode, params: result?.params, statusCode: 401))
         }
         guard (200..<300).contains(response.statusCode) else {
-            throw APIError.server(response.statusCode, result?.message(statusCode: response.statusCode) ?? APIResultCodeResolver.message(errorCode: nil, statusCode: response.statusCode))
+            throw APIError.server(response.statusCode, LocalizedMessage(errorCode: result?.errorCode, params: result?.params, statusCode: response.statusCode))
         }
-        if status >= 400 { throw APIError.server(status, result?.message(statusCode: status) ?? APIResultCodeResolver.message(errorCode: nil, statusCode: status)) }
+        if status >= 400 { throw APIError.server(status, LocalizedMessage(errorCode: result?.errorCode, params: result?.params, statusCode: status)) }
         guard let parsed else { throw APIError.invalidResponse }
         return parsed
     }

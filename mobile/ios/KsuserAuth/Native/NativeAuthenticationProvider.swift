@@ -7,13 +7,13 @@ enum NativeAuthenticationError: LocalizedError {
     case cancelled, busy, invalidOptions, invalidCredential, unavailableWindow, qqUnavailable, timedOut
     var errorDescription: String? {
         switch self {
-        case .cancelled: return "已取消验证"
-        case .busy: return "请先完成当前验证"
-        case .invalidOptions: return "验证选项无效，请重新发起"
-        case .invalidCredential: return "未取得完整的验证凭据，请重试"
-        case .unavailableWindow: return "请返回应用后重新验证"
-        case .qqUnavailable: return "无法发起 QQ 授权，请检查网络与 QQ 应用配置"
-        case .timedOut: return "QQ 授权已超时，请重试"
+        case .cancelled: return L10n.text("已取消验证")
+        case .busy: return L10n.text("请先完成当前验证")
+        case .invalidOptions: return L10n.text("验证选项无效，请重新发起")
+        case .invalidCredential: return L10n.text("未取得完整的验证凭据，请重试")
+        case .unavailableWindow: return L10n.text("请返回应用后重新验证")
+        case .qqUnavailable: return L10n.text("无法发起 QQ 授权，请检查网络与 QQ 应用配置")
+        case .timedOut: return L10n.text("QQ 授权已超时，请重试")
         }
     }
 }

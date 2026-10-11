@@ -1,5 +1,6 @@
+import { LocalizedError } from '@/i18n'
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 import { getUserInfo, getUserDetailsInfo, type User, type UserDetails } from '@/api/auth'
 
 export const useUserStore = defineStore('user', () => {
@@ -7,7 +8,8 @@ export const useUserStore = defineStore('user', () => {
   const userDetails = ref<UserDetails | null>(null)
   const loading = ref(false)
   const detailsLoading = ref(false)
-  const error = ref('')
+  const errorCause = shallowRef<Error | null>(null)
+  const error = computed(() => errorCause.value?.message || '')
 
   // 获取用户信息
   async function fetchUserInfo() {
@@ -23,7 +25,7 @@ export const useUserStore = defineStore('user', () => {
           if (!loading.value) {
             clearInterval(checkLoading)
             if (error.value) {
-              reject(error.value)
+              reject(errorCause.value)
             } else {
               resolve(user.value)
             }
@@ -34,15 +36,14 @@ export const useUserStore = defineStore('user', () => {
 
     // 开始加载
     loading.value = true
-    error.value = ''
+    errorCause.value = null
     try {
       const res = await getUserInfo()
       user.value = res as User
       return user.value
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      error.value = message || '获取用户信息失败'
-      throw error.value
+      errorCause.value = err instanceof Error ? err : new LocalizedError('ui.user.message001')
+      throw errorCause.value
     } finally {
       loading.value = false
     }
@@ -52,7 +53,7 @@ export const useUserStore = defineStore('user', () => {
   function clearUser() {
     user.value = null
     userDetails.value = null
-    error.value = ''
+    errorCause.value = null
   }
 
   // 清除详细信息缓存（当需要重新加载时使用）
@@ -74,7 +75,7 @@ export const useUserStore = defineStore('user', () => {
           if (!detailsLoading.value) {
             clearInterval(checkLoading)
             if (error.value) {
-              reject(error.value)
+              reject(errorCause.value)
             } else {
               resolve(userDetails.value)
             }
@@ -85,7 +86,7 @@ export const useUserStore = defineStore('user', () => {
 
     // 开始加载详细信息
     detailsLoading.value = true
-    error.value = ''
+    errorCause.value = null
     try {
       const res = await getUserDetailsInfo()
       // res 现在已经是提取后的真实数据
@@ -99,9 +100,8 @@ export const useUserStore = defineStore('user', () => {
       }
       return res
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
-      error.value = message || '获取用户详细信息失败'
-      throw error.value
+      errorCause.value = err instanceof Error ? err : new LocalizedError('ui.user.message002')
+      throw errorCause.value
     } finally {
       detailsLoading.value = false
     }

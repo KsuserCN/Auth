@@ -46,7 +46,8 @@ struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
     let errorCode: String?
     let params: [String: JSONValue]?
     let data: T?
-    var resultMessage: String { APIResultCodeResolver.message(errorCode: errorCode, params: params, statusCode: code) }
+    var localizedMessage: LocalizedMessage { LocalizedMessage(errorCode: errorCode, params: params, statusCode: code) }
+    var resultMessage: String { localizedMessage.rendered }
 }
 struct APIResultDescriptor: Codable, Sendable {
     let code: Int?
@@ -66,14 +67,15 @@ struct PasswordRequirement: Codable, Sendable {
     let rejectCommonWeakPasswords: Bool?; let requirementCode: String?; let requirementParams: [String: JSONValue]?
     var requirementMessage: String {
         if let requirementCode { return APIResultCodeResolver.message(errorCode: requirementCode, params: requirementParams, statusCode: 400) }
-        var parts = ["\(minLength)–\(maxLength) 个字符"]
-        if requireUppercase { parts.append("包含大写字母") }
-        if requireLowercase { parts.append("包含小写字母") }
-        if requireDigits { parts.append("包含数字") }
-        if requireSpecialChars { parts.append("包含特殊字符 @$!%*?&") }
-        return parts.joined(separator: "，")
+        var parts = [L10n.format("{0}–{1} 个字符", [String(describing: minLength), String(describing: maxLength)])]
+        if requireUppercase { parts.append(L10n.text("包含大写字母")) }
+        if requireLowercase { parts.append(L10n.text("包含小写字母")) }
+        if requireDigits { parts.append(L10n.text("包含数字")) }
+        if requireSpecialChars { parts.append(L10n.text("包含特殊字符 @$!%*?&")) }
+        return parts.joined(separator: L10n.text("separator.clause"))
     }
-    func validationError(for password: String) -> String? {
+    func validationError(for password: String) -> String? { validationMessage(for: password)?.rendered }
+    func validationMessage(for password: String) -> LocalizedMessage? {
         if password.utf16.count < minLength || password.utf16.count > maxLength { return "密码需要 \(minLength)–\(maxLength) 个字符" }
         if password.rangeOfCharacter(from: .newlines) != nil { return "密码不能包含换行符" }
         if requireUppercase && password.range(of: "[A-Z]", options: .regularExpression) == nil { return "密码需包含大写字母 A–Z" }
@@ -106,7 +108,13 @@ struct UserProfile: Codable, Sendable, Identifiable {
 }
 struct MFAChallenge: Identifiable, Sendable { let challengeId: String; let method: String; let methods: [String]; let source: String; var id: String { challengeId } }
 struct PendingOAuth: Identifiable, Sendable {
-    let provider: String; let bindToken: String; let message: String?; var canRegister = true; var emailConflict = false
+    let provider: String; let bindToken: String; let localizedMessage: LocalizedMessage?; var canRegister = true; var emailConflict = false
+    var message: String? { localizedMessage?.rendered }
+    init(provider: String, bindToken: String, localizedMessage: LocalizedMessage? = nil, message: String? = nil, canRegister: Bool = true, emailConflict: Bool = false) {
+        self.provider = provider; self.bindToken = bindToken
+        self.localizedMessage = localizedMessage ?? message.map { LocalizedMessage(key: $0) }
+        self.canRegister = canRegister; self.emailConflict = emailConflict
+    }
     var id: String { bindToken }
 }
 enum AuthResult: Sendable { case success(String), needsMFA(MFAChallenge), needsOAuth(PendingOAuth) }
@@ -204,7 +212,10 @@ struct OAuthAccountStatusItem: Codable, Sendable {
     let provider: String; let bound: Bool; let lastLoginAt: String?
 }
 struct OAuthAccountStatus: Codable, Sendable { let appleBound: Bool?; let qqBound: Bool?; let hasPassword: Bool? }
-struct SensitiveRequest: Identifiable { let id = UUID(); let title: String; let status: SensitiveVerificationStatus }
+struct SensitiveRequest: Identifiable { let id = UUID(); let localizedTitle: LocalizedMessage; let status: SensitiveVerificationStatus
+    var title: String { localizedTitle.rendered }
+    init(title: LocalizedMessage, status: SensitiveVerificationStatus) { localizedTitle = title; self.status = status }
+}
 typealias TOTPSetup = TotpRegistrationOptions
 
 @MainActor protocol NativeAuthenticationProviding {

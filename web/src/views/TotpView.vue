@@ -6,26 +6,26 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">启用 TOTP</h1>
-        <p class="login-description">使用身份验证器应用保护您的账户</p>
+        <h1 class="login-title">{{ t('ui.loginOptions.message028') }}</h1>
+        <p class="login-description">{{ t('ui.totp.message001') }}</p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lock />
             </el-icon>
-            <span class="feature-text">双因素认证</span>
+            <span class="feature-text">{{ t('ui.totp.message002') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lightning />
             </el-icon>
-            <span class="feature-text">额外保护</span>
+            <span class="feature-text">{{ t('ui.totp.message003') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Key />
             </el-icon>
-            <span class="feature-text">恢复码</span>
+            <span class="feature-text">{{ t('ui.sensitiveVerificationDialog.message021') }}</span>
           </div>
         </div>
       </div>
@@ -39,20 +39,25 @@
 
         <!-- 如果已启用，显示提示 -->
         <div v-else-if="totpEnabled" class="step-container">
-          <h2 class="step-title">TOTP 已启用</h2>
-          <p class="step-subtitle">您的账户已启用两步验证</p>
+          <h2 class="step-title">{{ t('ui.totp.message004') }}</h2>
+          <p class="step-subtitle">{{ t('ui.totp.message005') }}</p>
           <div class="step-actions">
-            <el-button class="back-btn" @click="handleCancel">返回</el-button>
+            <el-button class="back-btn" @click="handleCancel">{{
+              t('ui.sensitiveVerificationDialog.message007')
+            }}</el-button>
           </div>
         </div>
 
         <!-- 设置流程 -->
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in"
-          v-else>
+        <Transition
+          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in"
+          v-else
+        >
           <!-- 第一步：扫码或输入密钥 -->
           <div v-if="step === 'qrcode'" class="step-container" key="qrcode">
-            <h2 class="step-title">扫码或输入密钥</h2>
-            <p class="step-subtitle">在身份验证器应用中扫描此二维码</p>
+            <h2 class="step-title">{{ t('ui.totp.message006') }}</h2>
+            <p class="step-subtitle">{{ t('ui.totp.message007') }}</p>
 
             <div class="qrcode-section">
               <canvas ref="qrcodeCanvas" class="qrcode-canvas" v-show="qrcodeReady"></canvas>
@@ -61,69 +66,110 @@
                 <el-icon class="qrcode-error-icon">
                   <WarningFilled />
                 </el-icon>
-                <span>{{ qrcodeError }}</span>
+                <span>{{ renderMessage(qrcodeError) }}</span>
               </div>
             </div>
 
             <div class="secret-section">
-              <div class="secret-label">或者手动输入此密钥：</div>
+              <div class="secret-label">{{ t('ui.totp.message008') }}</div>
               <div class="secret-display">
                 <span class="secret-text">{{ setupOptions?.secret || '' }}</span>
-                <el-button type="primary" link @click="copySecret" size="small">复制</el-button>
+                <el-button type="primary" link @click="copySecret" size="small">{{
+                  t('ui.accountRecoveryCard.message012')
+                }}</el-button>
               </div>
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="handleCancel">取消</el-button>
-              <el-button class="next-btn" @click="goToVerifyStep">下一步</el-button>
+              <el-button class="back-btn" @click="handleCancel">{{
+                t('ui.addPasskey.message009')
+              }}</el-button>
+              <el-button class="next-btn" @click="goToVerifyStep">{{
+                t('ui.changePassword.message009')
+              }}</el-button>
             </div>
           </div>
 
           <!-- 第二步：验证码确认 -->
           <div v-else-if="step === 'verify'" class="step-container" key="verify">
-            <h2 class="step-title">验证码确认</h2>
-            <p class="step-subtitle">请输入身份验证器应用中显示的 6 位动态码</p>
+            <h2 class="step-title">{{ t('ui.totp.message009') }}</h2>
+            <p class="step-subtitle">{{ t('ui.totp.message010') }}</p>
 
-            <el-form ref="verifyFormRef" :model="verifyInput" :rules="verifyRules" label-position="top">
+            <el-form
+              ref="verifyFormRef"
+              :model="verifyInput"
+              :rules="verifyRules"
+              label-position="top"
+            >
               <el-form-item prop="verificationCode">
-                <el-input v-model="verifyInput.verificationCode" placeholder="输入6位动态码" maxlength="6"
-                  @input="verifyInput.verificationCode = verifyInput.verificationCode.replace(/[^\d]/g, '').slice(0, 6)"
-                  @keydown.enter.prevent="goToRecoveryStep" autofocus />
+                <el-input
+                  v-model="verifyInput.verificationCode"
+                  :placeholder="t('ui.sensitiveVerificationDialog.message022')"
+                  maxlength="6"
+                  @input="
+                    verifyInput.verificationCode = verifyInput.verificationCode
+                      .replace(/[^\d]/g, '')
+                      .slice(0, 6)
+                  "
+                  @keydown.enter.prevent="goToRecoveryStep"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToQrcode">返回</el-button>
-              <el-button class="next-btn" @click="goToRecoveryStep" :loading="verifyLoading" :disabled="verifyLoading">
-                下一步
+              <el-button class="back-btn" @click="backToQrcode">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
+              <el-button
+                class="next-btn"
+                @click="goToRecoveryStep"
+                :loading="verifyLoading"
+                :disabled="verifyLoading"
+              >
+                {{ t('ui.changePassword.message009') }}
               </el-button>
             </div>
           </div>
 
           <!-- 第三步：保存恢复码 -->
           <div v-else-if="step === 'recovery'" class="step-container" key="recovery">
-            <h2 class="step-title">保存恢复码</h2>
-            <p class="step-subtitle">请妥善保存这些恢复码，以便在丢失访问权限时恢复账户</p>
+            <h2 class="step-title">{{ t('ui.totp.message011') }}</h2>
+            <p class="step-subtitle">{{ t('ui.totp.message012') }}</p>
 
             <div class="recovery-codes-section">
               <div class="recovery-codes-list">
-                <div v-for="(code, index) in setupOptions?.recoveryCodes" :key="index" class="recovery-code-item">
+                <div
+                  v-for="(code, index) in setupOptions?.recoveryCodes"
+                  :key="index"
+                  class="recovery-code-item"
+                >
                   {{ code }}
                 </div>
               </div>
               <div class="recovery-actions">
-                <el-button @click="copyRecoveryCodes" size="small">复制所有</el-button>
-                <el-button @click="downloadRecoveryCodes" size="small">下载</el-button>
+                <el-button @click="copyRecoveryCodes" size="small">{{
+                  t('ui.totp.message013')
+                }}</el-button>
+                <el-button @click="downloadRecoveryCodes" size="small">{{
+                  t('ui.privacy.message035')
+                }}</el-button>
               </div>
             </div>
 
-            <el-checkbox v-model="recoveryCodesSaved" label="我已妥善保存恢复码" />
+            <el-checkbox v-model="recoveryCodesSaved" :label="t('ui.totp.message014')" />
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToVerify" :disabled="!recoveryCodesSaved">返回</el-button>
-              <el-button class="next-btn" @click="handleComplete" :loading="completeLoading"
-                :disabled="!recoveryCodesSaved">
-                完成设置
+              <el-button class="back-btn" @click="backToVerify" :disabled="!recoveryCodesSaved">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
+              <el-button
+                class="next-btn"
+                @click="handleComplete"
+                :loading="completeLoading"
+                :disabled="!recoveryCodesSaved"
+              >
+                {{ t('ui.totp.message015') }}
               </el-button>
             </div>
           </div>
@@ -131,12 +177,19 @@
       </div>
     </div>
 
-    <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
-      @cancel="handleSensitiveVerificationCancel" />
+    <SensitiveVerificationDialog
+      v-model="sensitiveDialogVisible"
+      @success="handleSensitiveVerificationSuccess"
+      @cancel="handleSensitiveVerificationCancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
+import { t, uiMessage, renderMessage, type LocalizedMessage, LocalizedError } from '@/i18n'
+
 import { ref, onMounted, nextTick, watch } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -144,7 +197,12 @@ import { Lock, Lightning, Key, WarningFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import QRCode from 'qrcode'
-import { checkSensitiveVerification, getTotpStatus, getTotpRegistrationOptions, verifyTotpRegistration } from '@/api/auth'
+import {
+  checkSensitiveVerification,
+  getTotpStatus,
+  getTotpRegistrationOptions,
+  verifyTotpRegistration,
+} from '@/api/auth'
 import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const router = useRouter()
@@ -167,7 +225,7 @@ const updateStep = (newStep: 'qrcode' | 'verify' | 'recovery') => {
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // TOTP 状态
@@ -175,34 +233,36 @@ const statusLoading = ref(true)
 const totpEnabled = ref(false)
 
 // TOTP 设置
-const setupOptions = ref<{ secret: string; qrCodeUrl: string; recoveryCodes: string[] } | null>(null)
+const setupOptions = ref<{ secret: string; qrCodeUrl: string; recoveryCodes: string[] } | null>(
+  null,
+)
 const qrcodeCanvas = ref<HTMLCanvasElement | null>(null)
 const qrcodeReady = ref(false)
 const qrcodeRendering = ref(false)
 const qrcodeLoading = ref(true)
-const qrcodeError = ref('')
+const qrcodeError = ref<LocalizedMessage>('')
 
 // 验证码输入
 const verifyInput = ref({
-  verificationCode: ''
+  verificationCode: '',
 })
 
-const verifyRules: FormRules = {
+const verifyRules = computed<FormRules>(() => ({
   verificationCode: [
-    { required: true, message: '请输入 6 位动态码', trigger: 'blur' },
+    { required: true, message: t('ui.desktopPasskeyBridge.message035'), trigger: 'blur' },
     {
       validator: (_rule: unknown, value: string, callback: (err?: Error) => void) => {
         const v = (value || '').trim()
         if (!/^[0-9]{6}$/.test(v)) {
-          callback(new Error('请输入6位动态码'))
+          callback(new LocalizedError('ui.totp.message016'))
         } else {
           callback()
         }
       },
-      trigger: 'blur'
-    }
-  ]
-}
+      trigger: 'blur',
+    },
+  ],
+}))
 
 // 加载和提交状态
 const verifyLoading = ref(false)
@@ -219,7 +279,7 @@ const initTotpPage = async () => {
   try {
     const verificationStatus = await checkSensitiveVerification()
     if (!verificationStatus.verified) {
-      ElMessage.info('需要验证身份')
+      ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
       sensitiveDialogVisible.value = true
       return
     }
@@ -233,7 +293,7 @@ const initTotpPage = async () => {
     }
   } catch (error) {
     console.error('Failed to fetch TOTP status or setup options:', error)
-    ElMessage.error('加载失败')
+    ElMessage.error(t('ui.totp.message017'))
   } finally {
     statusLoading.value = false
   }
@@ -254,7 +314,7 @@ const renderQrCode = async () => {
   qrcodeLoading.value = true
   qrcodeReady.value = false
   if (!setupOptions.value?.qrCodeUrl) {
-    qrcodeError.value = '二维码数据缺失，请刷新后重试'
+    qrcodeError.value = uiMessage('ui.totp.message018')
     qrcodeLoading.value = false
     return
   }
@@ -268,24 +328,28 @@ const renderQrCode = async () => {
       margin: 1,
       color: {
         dark: '#000000',
-        light: '#FFFFFF'
-      }
+        light: '#FFFFFF',
+      },
     })
     qrcodeReady.value = true
   } catch (error) {
     console.error('Failed to generate QR code:', error)
-    qrcodeError.value = '生成二维码失败，请刷新重试'
+    qrcodeError.value = uiMessage('ui.totp.message019')
   } finally {
     qrcodeLoading.value = false
     qrcodeRendering.value = false
   }
 }
 
-watch([statusLoading, totpEnabled, setupOptions, step, qrcodeCanvas], async () => {
-  if (!statusLoading.value && !totpEnabled.value && step.value === 'qrcode') {
-    await renderQrCode()
-  }
-}, { immediate: true, flush: 'post' })
+watch(
+  [statusLoading, totpEnabled, setupOptions, step, qrcodeCanvas],
+  async () => {
+    if (!statusLoading.value && !totpEnabled.value && step.value === 'qrcode') {
+      await renderQrCode()
+    }
+  },
+  { immediate: true, flush: 'post' },
+)
 
 const handleCancel = () => {
   router.push('/home/login-options')
@@ -308,7 +372,7 @@ const goToRecoveryStep = async () => {
     await verifyFormRef.value?.validate()
 
     if (!setupOptions.value?.recoveryCodes?.length) {
-      ElMessage.error('恢复码缺失，请重新获取 TOTP 注册选项')
+      ElMessage.error(t('ui.totp.message020'))
       return
     }
 
@@ -334,7 +398,7 @@ const backToVerify = () => {
 const handleComplete = async () => {
   try {
     completeLoading.value = true
-    ElMessage.success('TOTP 已成功启用')
+    ElMessage.success(t('ui.totp.message021'))
     router.push('/home/login-options')
   } catch (error) {
     console.error('Complete TOTP setup failed:', error)
@@ -348,10 +412,10 @@ const copySecret = async () => {
   if (!setupOptions.value) return
   try {
     await navigator.clipboard.writeText(setupOptions.value.secret)
-    ElMessage.success('密钥已复制')
+    ElMessage.success(t('ui.totp.message022'))
   } catch (error) {
     console.error('Failed to copy secret:', error)
-    ElMessage.error('复制失败')
+    ElMessage.error(t('ui.loginOptions.message081'))
   }
 }
 
@@ -360,10 +424,10 @@ const copyRecoveryCodes = async () => {
   try {
     const text = setupOptions.value.recoveryCodes.join('\n')
     await navigator.clipboard.writeText(text)
-    ElMessage.success('恢复码已复制')
+    ElMessage.success(t('ui.accountRecoveryCard.message022'))
   } catch (error) {
     console.error('Failed to copy recovery codes:', error)
-    ElMessage.error('复制失败')
+    ElMessage.error(t('ui.loginOptions.message081'))
   }
 }
 

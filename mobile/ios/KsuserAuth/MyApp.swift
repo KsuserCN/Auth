@@ -25,6 +25,7 @@ import UserNotifications
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         rememberShortcut(in: launchOptions)
+        Self.refreshShortcuts()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
             if ProcessInfo.processInfo.arguments.contains("--ui-test-push-log") {
@@ -37,8 +38,8 @@ import UserNotifications
                     guard (try? await center.requestAuthorization(options: [.alert, .sound])) == true else { return }
                     Self.pushAccountID = "ui-fixture-only"
                     let content = UNMutableNotificationContent()
-                    content.title = "Ksuser 推送回归测试"
-                    content.body = "点按查看安全日志详情"
+                    content.title = L10n.text("Ksuser 推送回归测试")
+                    content.body = L10n.text("点按查看安全日志详情")
                     content.userInfo = ["kind": "security", "accountId": "ui-fixture-only", "eventId": "1"]
                     let request = UNNotificationRequest(identifier: "security-ui-test", content: content,
                                                         trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false))
@@ -72,6 +73,15 @@ import UserNotifications
         let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
         configuration.delegateClass = ShortcutSceneDelegate.self
         return configuration
+    }
+
+    static func refreshShortcuts() {
+        UIApplication.shared.shortcutItems = [
+            UIApplicationShortcutItem(type: scanShortcut, localizedTitle: L10n.text("扫码授权"), localizedSubtitle: L10n.text("扫描登录或安全验证二维码"), icon: UIApplicationShortcutIcon(systemImageName: "qrcode.viewfinder")),
+            UIApplicationShortcutItem(type: securityShortcut, localizedTitle: L10n.text("安全中心"), localizedSubtitle: nil, icon: UIApplicationShortcutIcon(systemImageName: "shield.lefthalf.filled")),
+            UIApplicationShortcutItem(type: sessionsShortcut, localizedTitle: L10n.text("设备会话"), localizedSubtitle: nil, icon: UIApplicationShortcutIcon(systemImageName: "laptopcomputer.and.iphone")),
+            UIApplicationShortcutItem(type: profileShortcut, localizedTitle: L10n.text("账号资料"), localizedSubtitle: nil, icon: UIApplicationShortcutIcon(systemImageName: "person.crop.circle"))
+        ]
     }
 
     static func takePendingShortcutType() -> String? {
@@ -139,18 +149,26 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
 @main struct MyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var language: LanguageSettings
     @State private var model = AppModel(native: NativeAuthenticationProvider())
     init() {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-preferences") {
             UserDefaults.standard.removeObject(forKey: "agreementAccepted")
             UserDefaults.standard.removeObject(forKey: "appearance")
+            UserDefaults.standard.removeObject(forKey: "language")
         }
         #endif
+        _language = State(initialValue: LanguageSettings())
     }
     var body: some Scene {
         WindowGroup {
-            ContentView().environment(model)
+            ContentView().environment(model).environment(language).environment(\.locale, language.locale)
+                .onChange(of: language.preference) { _, _ in AppDelegate.refreshShortcuts() }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                    language.refreshSystemLanguage()
+                    AppDelegate.refreshShortcuts()
+                }
         }
     }
 }

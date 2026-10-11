@@ -1,3 +1,4 @@
+import { LocalizedError } from '@/i18n'
 import { getUserDetailsInfo, type UserDetails } from '@/api/auth'
 import { getOAuth2Authorizations, type OAuth2AuthorizedApp } from '@/api/oauth2'
 import { getSSOAuthorizations, type SSOAuthorizedClient } from '@/api/sso'
@@ -45,11 +46,10 @@ export const fetchPrivacyExportData = async (): Promise<PrivacyExportPayload> =>
       },
     }
   } catch (error) {
-    const fallbackMessage = '拉取导出数据失败，请稍后重试'
     if (error instanceof Error && error.message) {
-      throw new Error(error.message)
+      throw error
     }
-    throw new Error(fallbackMessage)
+    throw new LocalizedError('ui.privacyExport.message001')
   }
 }
 

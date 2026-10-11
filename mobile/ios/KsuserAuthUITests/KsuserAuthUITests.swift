@@ -3,14 +3,86 @@ import XCTest
 @MainActor final class KsuserAuthUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    private func launch(authenticated: Bool = false, resetPreferences: Bool = true, arguments: [String] = []) -> XCUIApplication {
+    private func launch(authenticated: Bool = false, resetPreferences: Bool = true, arguments: [String] = [], language: String = "zh-Hans") -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        app.launchArguments = ["--ui-testing", "-AppleLanguages", "(\(language))", "-AppleLocale", language == "zh-Hans" ? "zh_CN" : "en_US"]
         if authenticated { app.launchArguments.append("--ui-test-authenticated") }
         if resetPreferences { app.launchArguments.append("--ui-test-reset-preferences") }
         app.launchArguments += arguments
         app.launch()
         return app
+    }
+
+    func testLanguageSwitchUpdatesSettingsAndLoginPreservingInputAndPreference() {
+        var app = launch(language: "en")
+        XCTAssertTrue(app.buttons["loginButton"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["loginHeading"].label, "Sign In to Ksuser")
+        attach(app, name: "English login")
+        let email = app.textFields["Email"]
+        email.tap(); email.typeText("fixture@example.invalid")
+        let enteredEmail = email.value as? String
+        XCTAssertTrue(enteredEmail?.hasPrefix("fixture") == true)
+        app.buttons["keyboardDone"].tap()
+        app.buttons["aboutButton"].tap()
+        let picker = app.descendants(matching: .any)["languagePicker"].firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        attach(app, name: "English About and Settings")
+        picker.tap(); app.buttons["简体中文"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["关于与设置"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["语言"].exists)
+        app.buttons["完成"].firstMatch.tap()
+        XCTAssertEqual(app.staticTexts["loginHeading"].label, "登录 Ksuser")
+        XCTAssertEqual(app.textFields["邮箱"].value as? String, enteredEmail)
+        app.terminate()
+        app = launch(resetPreferences: false, language: "en")
+        XCTAssertTrue(app.buttons["loginButton"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["loginHeading"].label, "登录 Ksuser")
+        app.buttons["aboutButton"].tap()
+        app.descendants(matching: .any)["languagePicker"].firstMatch.tap()
+        app.buttons["English"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["About & Settings"].waitForExistence(timeout: 5))
+        app.descendants(matching: .any)["languagePicker"].firstMatch.tap()
+        // The appearance selector also has a Follow System button.
+        app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Follow System", "theme-system")).firstMatch.tap()
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertFalse(app.navigationBars["About & Settings"].exists)
+        XCTAssertEqual(app.staticTexts["loginHeading"].label, "Sign In to Ksuser")
+        app.terminate()
+        app = launch(resetPreferences: false, language: "zh-Hans")
+        XCTAssertTrue(app.buttons["loginButton"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["loginHeading"].label, "登录 Ksuser")
+    }
+
+    func testEnglishLoginAndSettingsAtLargeTextSize() {
+        let app = launch(arguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"], language: "en")
+        XCTAssertTrue(app.buttons["aboutButton"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["loginHeading"].label, "Sign In to Ksuser")
+        attach(app, name: "English login at large text size")
+        app.buttons["aboutButton"].tap()
+        XCTAssertTrue(app.navigationBars["About & Settings"].waitForExistence(timeout: 5))
+        let picker = app.descendants(matching: .any)["languagePicker"].firstMatch
+        for _ in 0..<6 {
+            if picker.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(picker.isHittable)
+        attach(app, name: "English settings at large text size")
+        picker.tap()
+        XCTAssertTrue(app.buttons["简体中文"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["English"].firstMatch.exists)
+        XCTAssertTrue(app.buttons["Follow System"].firstMatch.exists)
+    }
+
+    func testLanguageSwitchUpdatesAuthenticatedNavigationAndRetainedNotice() {
+        let app = launch(authenticated: true, arguments: ["--ui-test-notice"], language: "en")
+        XCTAssertTrue(app.staticTexts["Code sent. Check your email"].waitForExistence(timeout: 10))
+        app.buttons["aboutButton"].tap()
+        app.descendants(matching: .any)["languagePicker"].firstMatch.tap()
+        app.buttons["简体中文"].firstMatch.tap()
+        app.buttons["完成"].firstMatch.tap()
+        XCTAssertTrue(app.tabBars.buttons["安全"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["验证码已发送，请检查邮箱"].exists)
+        XCTAssertEqual(app.staticTexts["welcomeUsername"].label, "ios_test_user")
     }
 
     func testApplicationConsentShowsMetadataScopesAndDuration() {
@@ -457,9 +529,9 @@ import XCTest
             app.swipeUp()
         }
         XCTAssertTrue(date.isHittable)
-        XCTAssertTrue(app.staticTexts["2026-10-01 10:00:00"].exists)
+        XCTAssertTrue(app.staticTexts["2026年10月1日 10:00:00"].exists)
         date.swipeLeft()
-        XCTAssertTrue(app.staticTexts["2026-10-01 10:00:00"].exists)
+        XCTAssertTrue(app.staticTexts["2026年10月1日 10:00:00"].exists)
         attach(app, name: "Complete dates at large text size")
     }
 

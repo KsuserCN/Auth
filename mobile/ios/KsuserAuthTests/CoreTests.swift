@@ -2,6 +2,18 @@ import XCTest
 @testable import KsuserAuth
 
 final class CoreTests: XCTestCase {
+    private var previousLanguage: String?
+    override func setUp() {
+        super.setUp()
+        previousLanguage = UserDefaults.standard.string(forKey: "language")
+        UserDefaults.standard.set("zh-Hans", forKey: "language")
+    }
+    override func tearDown() {
+        if let previousLanguage { UserDefaults.standard.set(previousLanguage, forKey: "language") }
+        else { UserDefaults.standard.removeObject(forKey: "language") }
+        super.tearDown()
+    }
+
     func testPlaceholderRealNameFallsBackToUsernameInProfile() {
         for placeholder in ["无", " 无 ", "未设置", "暂无", "NULL", "-"] {
             let user = UserProfile(uuid: "fixture", username: "fixture_user", email: "fixture@example.invalid", realName: placeholder)
@@ -78,13 +90,19 @@ final class CoreTests: XCTestCase {
         XCTAssertFalse(model.isAuthenticated)
     }
 
-    func testDateDisplayKeepsLocalTimeAndRemovesISOSeparator() {
-        XCTAssertEqual(displayDate("2026-10-04T10:02:03"), "2026-10-04 10:02:03")
-        XCTAssertEqual(displayDate("2026-10-04T10:02:03.123456789"), "2026-10-04 10:02:03.123456789")
-        XCTAssertEqual(displayDate("2026-10-04 10:02:03"), "2026-10-04 10:02:03")
+    func testDateDisplayLocalizesFloatingTimeAndKeepsInvalidInput() {
+        let localized = "2026年10月4日 10:02:03"
+        XCTAssertEqual(displayDate("2026-10-04T10:02:03"), localized)
+        XCTAssertEqual(displayDate("2026-10-04T10:02:03.123456789"), localized)
+        XCTAssertEqual(displayDate("2026-10-04 10:02:03"), localized)
+        XCTAssertEqual(displayDate("2026-10-04T10:02"), "2026年10月4日 10:02:00")
+        XCTAssertEqual(displayDate("2026-10-04"), "2026年10月4日")
+        for invalid in ["not-a-date", "2026-02-30T10:02:03", "2026-13-04", "2026-10-04T25:00:00"] {
+            XCTAssertEqual(displayDate(invalid), invalid)
+        }
         XCTAssertEqual(displayDate(nil), "暂无记录")
         XCTAssertEqual(displayDate("  "), "暂无记录")
-        XCTAssertNotNil(displayDate("2026-10-04T10:02:03.123Z").range(of: #"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$"#, options: .regularExpression))
+        XCTAssertTrue(displayDate("2026-10-04T10:02:03.123Z").contains("2026"))
     }
 
     private var environment: AppEnvironment {

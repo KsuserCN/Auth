@@ -3,6 +3,18 @@ import UserNotifications
 @testable import KsuserAuth
 
 final class PushNotificationTests: XCTestCase {
+    private var previousLanguage: String?
+    override func setUp() {
+        super.setUp()
+        previousLanguage = UserDefaults.standard.string(forKey: "language")
+        UserDefaults.standard.set("zh-Hans", forKey: "language")
+    }
+    override func tearDown() {
+        if let previousLanguage { UserDefaults.standard.set(previousLanguage, forKey: "language") }
+        else { UserDefaults.standard.removeObject(forKey: "language") }
+        super.tearDown()
+    }
+
     @MainActor func testNotificationResponseFromBackgroundCompletesOnMainThreadWithLogTarget() async {
         AppDelegate.pendingPushAccountID = nil
         AppDelegate.pendingPushEventID = nil

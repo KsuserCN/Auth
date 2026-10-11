@@ -3,6 +3,18 @@ import XCTest
 @testable import KsuserAuth
 
 final class APIResultCodeTests: XCTestCase {
+    private var previousLanguage: String?
+    override func setUp() {
+        super.setUp()
+        previousLanguage = UserDefaults.standard.string(forKey: "language")
+        UserDefaults.standard.set("zh-Hans", forKey: "language")
+    }
+    override func tearDown() {
+        if let previousLanguage { UserDefaults.standard.set(previousLanguage, forKey: "language") }
+        else { UserDefaults.standard.removeObject(forKey: "language") }
+        super.tearDown()
+    }
+
     func testDetailedCodeAndNumericParametersResolveLocally() throws {
         let envelope = try JSONDecoder().decode(APIEnvelope<EmptyPayload>.self, from: Data(#"{"code":400,"errorCode":"AUTH_020","params":{"min":8,"max":64},"msg":"服务端原始错误"}"#.utf8))
         XCTAssertEqual(envelope.resultMessage, "密码长度必须在8-64个字符之间")
@@ -26,7 +38,7 @@ final class APIResultCodeTests: XCTestCase {
             let _: TokenPayload = try await client.request("/fixture", authenticated: false)
             XCTFail("Expected API error")
         } catch let error as APIError {
-            XCTAssertEqual(error, .server(400, "密码长度必须在8-64个字符之间"))
+            XCTAssertEqual(error, .server(400, LocalizedMessage(errorCode: "AUTH_020", params: ["min": .number(8), "max": .number(64)], statusCode: 400)))
         }
     }
 

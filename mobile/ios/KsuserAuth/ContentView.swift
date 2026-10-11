@@ -4,7 +4,7 @@ import AuthenticationServices
 enum MainDestination: String, CaseIterable, Identifiable {
     case home, profile, security, sessions, logs
     var id: String { rawValue }
-    var title: String { switch self { case .home: "概览"; case .profile: "资料"; case .security: "安全"; case .sessions: "会话"; case .logs: "日志" } }
+    var title: String { switch self { case .home: L10n.text("概览"); case .profile: L10n.text("资料"); case .security: L10n.text("安全"); case .sessions: L10n.text("会话"); case .logs: L10n.text("日志") } }
     var icon: String { switch self { case .home: "square.grid.2x2"; case .profile: "person.crop.circle"; case .security: "shield.lefthalf.filled"; case .sessions: "laptopcomputer.and.iphone"; case .logs: "clock.arrow.circlepath" } }
 }
 
@@ -14,6 +14,7 @@ private enum ChallengeSheet: Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -130,9 +131,9 @@ struct ContentView: View {
                                 Label(entry.title, systemImage: entry.icon).foregroundStyle(destination == entry ? Brand.gold : Color.primary).frame(minHeight: 44)
                             }.listRowBackground(destination == entry ? Brand.subtleGold : nil)
                         }
-                    }.navigationTitle("Ksuser 安全").listStyle(.sidebar)
+                    }.navigationTitle(L10n.text("Ksuser 安全")).listStyle(.sidebar)
                     .safeAreaInset(edge: .bottom) {
-                        HStack { Button("扫码", systemImage: "qrcode.viewfinder") { showScanner = true }; Spacer(); Button("关于", systemImage: "info.circle") { showAbout = true } }.padding()
+                        HStack { Button(L10n.text("扫码"), systemImage: "qrcode.viewfinder") { showScanner = true }; Spacer(); Button(L10n.text("关于"), systemImage: "info.circle") { showAbout = true } }.padding()
                     }
                 } detail: { AppNavigationStack { destinationView(destination).navigationTitle(destination.title).toolbar { shellToolbar } } }
             } else {
@@ -158,8 +159,8 @@ struct ContentView: View {
 
     @ToolbarContentBuilder private var shellToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Button("扫码", systemImage: "qrcode.viewfinder") { showScanner = true }.accessibilityIdentifier("scanButton")
-            Button("关于与设置", systemImage: "gearshape") { showAbout = true }.accessibilityIdentifier("aboutButton")
+            Button(L10n.text("扫码"), systemImage: "qrcode.viewfinder") { showScanner = true }.accessibilityIdentifier("scanButton")
+            Button(L10n.text("关于与设置"), systemImage: "gearshape") { showAbout = true }.accessibilityIdentifier("aboutButton")
         }
     }
 

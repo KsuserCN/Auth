@@ -40,3 +40,13 @@ flutter build windows --release
 - `ksuser-auth-desktop-windows-x64`
 
 可通过 `Actions -> Build Desktop` 手动触发，也会在推送到 `main` 或发起 `pull_request` 时执行。
+
+## 界面语言
+
+桌面端支持简体中文和英语，首次启动跟随设备首选语言；中文的所有地区/字形变体使用简体中文，其余语言默认使用英语。设置 → 语言可选择跟随系统、简体中文或 English。选择保存在本机应用支持目录的 `language_preference.json`，退出账号不会清除它；恢复默认会重新跟随系统。
+
+语言切换即时更新界面、已打开的弹窗、API 结果文案以及原生菜单/托盘，保留登录状态与输入内容。请求会携带当前有效语言的 `Accept-Language`。系统身份验证弹窗仍由操作系统提供。
+
+界面文案维护于 `lib/l10n/app_en.arb` 与中文 ARB 文件；修改后执行 `flutter gen-l10n`。API 详细结果文案通过仓库共享目录和 `npm run generate:api-codes` 维护。执行 `flutter analyze` 与 `flutter test` 验证；英文布局测试覆盖桌面最小窗口宽度。
+
+Windows 原生托盘与 Passkey 桥接同样支持语言切换；Windows C++ 构建仍需在 Windows runner 或 Windows 开发设备验证。

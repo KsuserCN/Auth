@@ -6,26 +6,26 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">注销账号</h1>
-        <p class="login-description">这是一个不可逆的操作，请谨慎选择</p>
+        <h1 class="login-title">{{ t('ui.deleteAccount.message001') }}</h1>
+        <p class="login-description">{{ t('ui.deleteAccount.message002') }}</p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <WarningFilled />
             </el-icon>
-            <span class="feature-text">数据将永久删除</span>
+            <span class="feature-text">{{ t('ui.deleteAccount.message003') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lock />
             </el-icon>
-            <span class="feature-text">安全保护验证</span>
+            <span class="feature-text">{{ t('ui.deleteAccount.message004') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lightning />
             </el-icon>
-            <span class="feature-text">双重确认机制</span>
+            <span class="feature-text">{{ t('ui.deleteAccount.message005') }}</span>
           </div>
         </div>
       </div>
@@ -38,14 +38,14 @@
         >
           <!-- 第一步：输入用户名确认 -->
           <div v-if="step === 'username'" class="step-container" key="username">
-            <h2 class="step-title">确认用户名</h2>
-            <p class="step-subtitle">请输入您的用户名以继续</p>
+            <h2 class="step-title">{{ t('ui.deleteAccount.message006') }}</h2>
+            <p class="step-subtitle">{{ t('ui.deleteAccount.message007') }}</p>
 
             <div class="warning-box">
               <el-icon class="warning-icon">
                 <WarningFilled />
               </el-icon>
-              <p>注销后，您的账号和所有数据将被永久删除，无法恢复</p>
+              <p>{{ t('ui.deleteAccount.message008') }}</p>
             </div>
 
             <el-form
@@ -57,7 +57,7 @@
               <el-form-item prop="username">
                 <el-input
                   v-model="usernameInput.username"
-                  placeholder="请输入您的用户名"
+                  :placeholder="t('ui.deleteAccount.message009')"
                   @keyup.enter="goToConfirmStep"
                   autofocus
                 />
@@ -65,19 +65,23 @@
             </el-form>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="handleCancel">取消</el-button>
-              <el-button class="next-btn" @click="goToConfirmStep"> 下一步 </el-button>
+              <el-button class="back-btn" @click="handleCancel">{{
+                t('ui.addPasskey.message009')
+              }}</el-button>
+              <el-button class="next-btn" @click="goToConfirmStep">
+                {{ t('ui.changePassword.message009') }}
+              </el-button>
             </div>
           </div>
 
           <!-- 第二步：最终确认 -->
           <div v-else-if="step === 'confirm'" class="step-container" key="confirm">
-            <h2 class="step-title">最终确认</h2>
-            <p class="step-subtitle">请再次确认您要注销账号</p>
+            <h2 class="step-title">{{ t('ui.deleteAccount.message010') }}</h2>
+            <p class="step-subtitle">{{ t('ui.deleteAccount.message011') }}</p>
 
             <div class="confirm-info">
               <div class="info-item">
-                <span class="info-label">用户名</span>
+                <span class="info-label">{{ t('ui.deleteAccount.message012') }}</span>
                 <span class="info-value">{{ usernameInput.username }}</span>
               </div>
             </div>
@@ -86,7 +90,11 @@
               <el-icon class="warning-icon">
                 <WarningFilled />
               </el-icon>
-              <p>此操作<strong>不可撤销</strong><br />您的账号和所有相关数据将被永久删除。</p>
+              <p>
+                {{ t('ui.deleteAccount.message013')
+                }}<strong>{{ t('ui.deleteAccount.message014') }}</strong
+                ><br />{{ t('ui.deleteAccount.message015') }}
+              </p>
             </div>
 
             <el-form
@@ -98,7 +106,7 @@
               <el-form-item prop="confirmText">
                 <el-input
                   v-model="confirmTextInput.confirmText"
-                  placeholder="请输入 我真的不想要我的号辣 以确认"
+                  :placeholder="t('ui.deleteAccount.message016')"
                   @keyup.enter="handleSubmit"
                   autofocus
                 />
@@ -106,18 +114,22 @@
             </el-form>
 
             <p class="confirm-hint">
-              输入确切的短语 <strong>我真的不想要我的号辣</strong> 来确认账号注销
+              {{ t('ui.deleteAccount.message017') }}
+              <strong>{{ t('ui.deleteAccount.message018') }}</strong>
+              {{ t('ui.deleteAccount.message019') }}
             </p>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToUsername">返回</el-button>
+              <el-button class="back-btn" @click="backToUsername">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
               <el-button
                 class="next-btn danger-btn"
                 @click="handleSubmit"
                 :loading="submitLoading"
-                :disabled="confirmTextInput.confirmText !== '我真的不想要我的号辣'"
+                :disabled="confirmTextInput.confirmText !== t('ui.deleteAccount.message018')"
               >
-                确认注销
+                {{ t('ui.deleteAccount.message020') }}
               </el-button>
             </div>
           </div>
@@ -128,10 +140,15 @@
 </template>
 
 <script setup lang="ts">
+import { localizedMessageBox } from '@/utils/localizedMessageBox'
+import { computed } from 'vue'
+
+import { t, uiMessage } from '@/i18n'
+
 import { ApiError } from '@/utils/apiResult'
 import { ref, onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Lock, Lightning, WarningFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
@@ -176,16 +193,16 @@ const confirmTextInput = ref({
 })
 
 // 验证规则
-const usernameRules: FormRules = {
+const usernameRules = computed<FormRules>(() => ({
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 1, message: '用户名不能为空', trigger: 'blur' },
+    { required: true, message: t('ui.deleteAccount.message021'), trigger: 'blur' },
+    { min: 1, message: t('ui.deleteAccount.message022'), trigger: 'blur' },
   ],
-}
+}))
 
-const confirmTextRules: FormRules = {
-  confirmText: [{ required: true, message: '请输入 我真的不想要我的号辣 以确认', trigger: 'blur' }],
-}
+const confirmTextRules = computed<FormRules>(() => ({
+  confirmText: [{ required: true, message: t('ui.deleteAccount.message016'), trigger: 'blur' }],
+}))
 
 // 加载状态
 const submitLoading = ref(false)
@@ -197,7 +214,7 @@ onMounted(async () => {
   try {
     const status = await checkSensitiveVerification()
     if (!status.verified) {
-      ElMessage.warning('请先完成身份验证')
+      ElMessage.warning(t('ui.changeEmail.message017'))
       router.push({
         path: '/sensitive-verification',
         query: { returnTo: '/delete-account' },
@@ -227,7 +244,7 @@ const goToConfirmStep = async () => {
 
     // 验证用户名是否正确
     if (usernameInput.value.username !== userStore.user?.username) {
-      ElMessage.error('用户名不正确')
+      ElMessage.error(t('ui.deleteAccount.message023'))
       return
     }
 
@@ -246,32 +263,38 @@ const handleSubmit = async () => {
   try {
     await confirmTextFormRef.value?.validate()
 
-    if (confirmTextInput.value.confirmText !== '我真的不想要我的号辣') {
-      ElMessage.error('请输入正确的确认文本')
+    if (confirmTextInput.value.confirmText !== t('ui.deleteAccount.message018')) {
+      ElMessage.error(t('ui.deleteAccount.message024'))
       return
     }
 
     // 最后的确认对话框
-    await ElMessageBox.confirm(
-      '您确定要注销账号吗？此操作不可逆转，所有数据将被永久删除。',
-      '最终确认',
+    await localizedMessageBox.confirm(
+      uiMessage('ui.deleteAccount.message025'),
+      uiMessage('ui.deleteAccount.message010'),
       {
-        confirmButtonText: '确认注销',
-        cancelButtonText: '取消',
+        confirmButtonText: uiMessage('ui.deleteAccount.message020'),
+        cancelButtonText: uiMessage('ui.addPasskey.message009'),
         type: 'warning',
       },
     )
 
     submitLoading.value = true
+    // Fixed protocol confirmation token expected by the API, independent of interface language.
     await deleteAccount({ confirmText: '我真的不想要我的号辣' })
 
-    ElMessage.success('账号已注销')
+    ElMessage.success(t('ui.deleteAccount.message026'))
     // 清除用户信息并跳转到登录页
     userStore.user = null
     clearAuthSession()
     router.push('/login')
   } catch (error: any) {
-    if (error?.message === 'Cancel' || error?.message === 'cancel') {
+    if (
+      error === 'cancel' ||
+      error === 'close' ||
+      error?.message === 'Cancel' ||
+      error?.message === 'cancel'
+    ) {
       // 用户取消了确认对话框
       return
     }
@@ -286,7 +309,7 @@ const handleSubmit = async () => {
     } else if (error instanceof ApiError) {
       ElMessage.error(error.message)
     } else {
-      ElMessage.error('注销失败，请重试')
+      ElMessage.error(t('ui.deleteAccount.message027'))
     }
   } finally {
     submitLoading.value = false

@@ -1,3 +1,4 @@
+#include "desktop_localization.h"
 #include "passkey_bridge.h"
 
 #include <flutter/standard_method_codec.h>
@@ -255,7 +256,7 @@ void PasskeyBridge::HandleMethodCall(const MethodCall& call,
   const auto* arguments =
       raw_arguments == nullptr ? nullptr : std::get_if<EncodableMap>(raw_arguments);
   if (arguments == nullptr) {
-    result->Error("bad_args", "Passkey 参数缺失");
+    result->Error("bad_args", DesktopText("Passkey 参数缺失", "Passkey parameters are missing"));
     return;
   }
   HandlePerformAssertion(*arguments, std::move(result));
@@ -279,12 +280,12 @@ bool PasskeyBridge::IsAvailable() const {
 void PasskeyBridge::HandlePerformAssertion(
     const EncodableMap& arguments, std::unique_ptr<MethodResult> result) {
   if (!IsAvailable()) {
-    result->Error("not_available", "当前设备未启用 Windows 原生 Passkey");
+    result->Error("not_available", DesktopText("当前设备未启用 Windows 原生 Passkey", "Native Windows passkeys are not enabled on this device"));
     return;
   }
 
   if (request_in_progress_) {
-    result->Error("busy", "已有进行中的 Passkey 请求");
+    result->Error("busy", DesktopText("已有进行中的 Passkey 请求", "A passkey request is already in progress"));
     return;
   }
 
@@ -299,21 +300,21 @@ void PasskeyBridge::HandlePerformAssertion(
       GetStringArgument(arguments, "userVerification");
 
   if (!challenge.has_value() || challenge->empty()) {
-    result->Error("bad_args", "challenge 不能为空");
+    result->Error("bad_args", DesktopText("challenge 不能为空", "Challenge cannot be empty"));
     return;
   }
   if (!rp_id.has_value() || rp_id->empty()) {
-    result->Error("bad_args", "rpId 不能为空");
+    result->Error("bad_args", DesktopText("rpId 不能为空", "RP ID cannot be empty"));
     return;
   }
   if (!origin.has_value() || origin->empty()) {
-    result->Error("bad_args", "origin 不能为空");
+    result->Error("bad_args", DesktopText("origin 不能为空", "Origin cannot be empty"));
     return;
   }
 
   const std::wstring rp_id_wide = Utf16FromUtf8(*rp_id);
   if (rp_id_wide.empty()) {
-    result->Error("bad_args", "rpId 格式无效");
+    result->Error("bad_args", DesktopText("rpId 格式无效", "Invalid RP ID format"));
     return;
   }
 
@@ -325,19 +326,19 @@ void PasskeyBridge::HandlePerformAssertion(
     for (const EncodableValue& item : *allow_credentials) {
       const auto* credential_map = std::get_if<EncodableMap>(&item);
       if (credential_map == nullptr) {
-        result->Error("bad_args", "allowCredentials 格式无效");
+        result->Error("bad_args", DesktopText("allowCredentials 格式无效", "Invalid allowed credentials format"));
         return;
       }
       const std::optional<std::string> credential_id =
           GetStringArgument(*credential_map, "id");
       if (!credential_id.has_value() || credential_id->empty()) {
-        result->Error("bad_args", "allowCredentials.id 不能为空");
+        result->Error("bad_args", DesktopText("allowCredentials.id 不能为空", "Allowed credential ID cannot be empty"));
         return;
       }
 
       const auto decoded_id = Base64UrlDecode(*credential_id);
       if (!decoded_id.has_value() || decoded_id->empty()) {
-        result->Error("bad_args", "allowCredentials.id 编码无效");
+        result->Error("bad_args", DesktopText("allowCredentials.id 编码无效", "Invalid allowed credential ID encoding"));
         return;
       }
 
@@ -389,13 +390,13 @@ void PasskeyBridge::HandlePerformAssertion(
       WebAuthNFreeAssertion(assertion);
     }
     if (IsCanceledHRESULT(hr, error_name)) {
-      result->Error("canceled", "用户取消了 Passkey 验证");
+      result->Error("canceled", DesktopText("用户取消了 Passkey 验证", "Passkey verification canceled"));
       return;
     }
 
     const std::string detail = Utf8FromUtf16(error_name.c_str());
     result->Error("assertion_failed",
-                  detail.empty() ? "Passkey 验证失败" : detail);
+                  detail.empty() ? DesktopText("Passkey 验证失败", "Passkey verification failed") : detail);
     return;
   }
 

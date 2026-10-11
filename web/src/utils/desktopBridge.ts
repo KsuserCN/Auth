@@ -1,3 +1,4 @@
+import { LocalizedError } from '@/i18n'
 import { createSessionTransfer, exchangeSessionTransfer } from '@/api/auth'
 import { clearStoredUser, storeAuthSession } from '@/utils/authSession'
 import { ApiError, type ApiResultPayload } from '@/utils/apiResult'
@@ -49,12 +50,14 @@ const withTimeout = async (
 const normalizeBridgeError = (error: unknown, timeoutMs: number): Error => {
   if (error instanceof Error) {
     if (error.name === 'AbortError' || error.message.includes('signal is aborted')) {
-      return new Error(`桌面端响应超时（>${Math.ceil(timeoutMs / 1000)} 秒），请确认桌面端仍在运行`)
+      return new LocalizedError('ui.desktopBridge.message001', {
+        arg0: Math.ceil(timeoutMs / 1000),
+      })
     }
     return error
   }
 
-  return new Error('桌面桥接请求失败')
+  return new LocalizedError('ui.desktopBridge.message002')
 }
 
 const resolveBridgeBaseUrl = async (forceRefresh = false): Promise<string | null> => {
@@ -98,7 +101,7 @@ const requestBridge = async <T>(
 ): Promise<T> => {
   const baseUrl = await resolveBridgeBaseUrl(forceRefresh)
   if (!baseUrl) {
-    throw new Error('桌面端未运行或未开启桥接服务')
+    throw new LocalizedError('ui.desktopBridge.message003')
   }
 
   let response: Response

@@ -1,6 +1,7 @@
+import { LocalizedError } from '@/i18n'
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
-import { ApiError, resolveAuditReason, unwrapApiResult, type ApiResultPayload } from '@/utils/apiResult'
+import { ApiError, unwrapApiResult, type ApiResultPayload } from '@/utils/apiResult'
 
 // 用户基本信息类型
 export interface User {
@@ -342,11 +343,10 @@ export const renamePasskey = async (passkeyId: number, newName: string): Promise
  * POST /auth/refresh
  */
 export const refreshAccessToken = async (): Promise<{ accessToken: string }> => {
-  const response = await request.post<ApiResponse<{ accessToken: string }>>(
-    '/auth/refresh',
-    {},
-    { _skipAuthRefresh: true, _suppressErrorToast: true } as any,
-  )
+  const response = await request.post<ApiResponse<{ accessToken: string }>>('/auth/refresh', {}, {
+    _skipAuthRefresh: true,
+    _suppressErrorToast: true,
+  } as any)
   return response.data as unknown as { accessToken: string }
 }
 
@@ -440,11 +440,9 @@ export const approveMobileBridgeChallenge = async (
 }
 
 export const cancelMobileBridgeChallenge = async (challengeId: string): Promise<void> => {
-  await request.post<ApiResponse<void>>(
-    '/auth/mobile-bridge/cancel',
-    { challengeId },
-    { _suppressErrorToast: true } as any,
-  )
+  await request.post<ApiResponse<void>>('/auth/mobile-bridge/cancel', { challengeId }, {
+    _suppressErrorToast: true,
+  } as any)
 }
 
 export interface AccountRecoveryTicketResponse {
@@ -520,7 +518,10 @@ export interface QrChallengeStatusResponse {
 }
 
 export const initQrLogin = async (): Promise<QrChallengeInitResponse> => {
-  const response = await request.post<ApiResponse<QrChallengeInitResponse>>('/auth/qr/login/init', {})
+  const response = await request.post<ApiResponse<QrChallengeInitResponse>>(
+    '/auth/qr/login/init',
+    {},
+  )
   return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
 }
 
@@ -843,7 +844,7 @@ export const getSensitiveLogs = async (
   const result = (response as unknown as ApiResponse<SensitiveLogsResponse>).data
   return {
     ...result,
-    data: result.data.map((log) => ({ ...log, failureReason: resolveAuditReason(log.failureReason) })),
+    data: result.data,
   }
 }
 
@@ -1337,7 +1338,7 @@ export const handleQQCallbackByOperation = async (
     return handleQQUnbindCallback({ state: data.state })
   }
 
-  throw new Error('不支持的 QQ 回调操作类型')
+  throw new LocalizedError('ui.auth.message001')
 }
 
 /**
@@ -1419,7 +1420,7 @@ export const handleGithubCallbackByOperation = async (
     return handleGithubUnbindCallback({ state: data.state })
   }
 
-  throw new Error('不支持的 GitHub 回调操作类型')
+  throw new LocalizedError('ui.auth.message002')
 }
 
 /**
@@ -1504,7 +1505,7 @@ export const handleGoogleCallbackByOperation = async (
     return handleGoogleUnbindCallback({ state: data.state })
   }
 
-  throw new Error('不支持的 Google 回调操作类型')
+  throw new LocalizedError('ui.auth.message003')
 }
 
 /**
@@ -1598,7 +1599,7 @@ export const handleMicrosoftCallbackByOperation = async (
     })
   }
 
-  throw new Error('不支持的 Microsoft 回调操作类型')
+  throw new LocalizedError('ui.auth.message004')
 }
 
 // 兼容旧调用（默认按登录回调处理）
@@ -1702,7 +1703,9 @@ export interface AppleLoginResponse extends OAuthLoginCallbackResponse {
   emailConflict?: boolean
 }
 
-export const createAppleChallenge = async (purpose: 'login' | 'bind' | 'sensitive'): Promise<AppleChallenge> => {
+export const createAppleChallenge = async (
+  purpose: 'login' | 'bind' | 'sensitive',
+): Promise<AppleChallenge> => {
   const response = await request.post<ApiResponse<AppleChallenge>>('/oauth/apple/challenge', {
     purpose,
     clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
@@ -1718,16 +1721,26 @@ export const submitAppleCredential = async (data: {
   givenName?: string
   familyName?: string
 }): Promise<AppleLoginResponse> => {
-  const response = await request.post<ApiResponse<AppleLoginResponse>>('/oauth/apple/mobile-login', data)
+  const response = await request.post<ApiResponse<AppleLoginResponse>>(
+    '/oauth/apple/mobile-login',
+    data,
+  )
   return unwrapApiResult(response as unknown as ApiResponse<AppleLoginResponse>)
 }
 
-export const registerPendingApple = async (oauthBindToken: string, acceptTerms: boolean, username: string): Promise<LoginResponse | MFAChallenge> => {
-  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>('/oauth/apple/register-pending', {
-    oauthBindToken,
-    acceptTerms,
-    username,
-  })
+export const registerPendingApple = async (
+  oauthBindToken: string,
+  acceptTerms: boolean,
+  username: string,
+): Promise<LoginResponse | MFAChallenge> => {
+  const response = await request.post<ApiResponse<LoginResponse | MFAChallenge>>(
+    '/oauth/apple/register-pending',
+    {
+      oauthBindToken,
+      acceptTerms,
+      username,
+    },
+  )
   return (response as unknown as ApiResponse<LoginResponse | MFAChallenge>).data
 }
 
@@ -1741,7 +1754,7 @@ export const bindPendingApple = async (oauthBindToken: string): Promise<void> =>
     throw new ApiError(result)
   }
   if (result.data?.bound !== true) {
-    throw new Error('Apple 绑定未完成，请重新授权')
+    throw new LocalizedError('ui.auth.message005')
   }
 }
 
@@ -1749,9 +1762,18 @@ export const unbindApple = async (): Promise<void> => {
   await request.post('/oauth/apple/unbind')
 }
 
-export const getAppleStatus = async (): Promise<{ bound: boolean; enabled: boolean; canUnbind: boolean }> => {
-  const response = await request.get<ApiResponse<{ bound: boolean; enabled: boolean; canUnbind: boolean }>>('/oauth/apple/status')
-  return (response as unknown as ApiResponse<{ bound: boolean; enabled: boolean; canUnbind: boolean }>).data
+export const getAppleStatus = async (): Promise<{
+  bound: boolean
+  enabled: boolean
+  canUnbind: boolean
+}> => {
+  const response =
+    await request.get<ApiResponse<{ bound: boolean; enabled: boolean; canUnbind: boolean }>>(
+      '/oauth/apple/status',
+    )
+  return (
+    response as unknown as ApiResponse<{ bound: boolean; enabled: boolean; canUnbind: boolean }>
+  ).data
 }
 
 export const verifyAppleSensitive = async (data: {

@@ -9,7 +9,7 @@
           </el-button>
           <div class="brand">
             <img src="/favicon.ico" class="brand-logo" alt="logo" />
-            <span class="brand-text">Ksuser 统一认证中心</span>
+            <span class="brand-text">{{ t('ui.mainLayout.message001') }}</span>
           </div>
         </div>
         <div class="navbar-right">
@@ -20,21 +20,30 @@
                 <Moon v-else-if="currentThemeIcon === 'dark'" />
                 <Monitor v-else />
               </el-icon>
-              <span class="theme-label">外观</span>
+              <span class="theme-label">{{ t('ui.mainLayout.message002') }}</span>
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="light">光亮模式</el-dropdown-item>
-                <el-dropdown-item command="dark">暗黑模式</el-dropdown-item>
-                <el-dropdown-item command="system">跟随浏览器</el-dropdown-item>
+                <el-dropdown-item command="light">{{
+                  t('ui.mainLayout.message003')
+                }}</el-dropdown-item>
+                <el-dropdown-item command="dark">{{
+                  t('ui.mainLayout.message004')
+                }}</el-dropdown-item>
+                <el-dropdown-item command="system">{{
+                  t('ui.mainLayout.message005')
+                }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
           <el-divider direction="vertical" />
           <!-- 加载中：显示骨架屏 -->
           <div v-if="loading" class="user-skeleton">
-            <el-skeleton-item variant="text" class="skeleton-avatar"
-              style="width: 32px; height: 32px; min-width: 32px" />
+            <el-skeleton-item
+              variant="text"
+              class="skeleton-avatar"
+              style="width: 32px; height: 32px; min-width: 32px"
+            />
             <div class="skeleton-text">
               <el-skeleton-item variant="text" style="width: 80px; height: 16px" />
               <el-skeleton-item variant="text" style="width: 140px; height: 14px" />
@@ -47,9 +56,14 @@
             </el-avatar>
             <div class="user-meta">
               <div class="user-name">
-                {{ user?.username || '未登录' }}
-                <el-tag v-if="verificationLabel" size="small" effect="plain" :type="verificationTagType"
-                  class="verify-tag">
+                {{ user?.username || t('ui.mainLayout.message006') }}
+                <el-tag
+                  v-if="verificationLabel"
+                  size="small"
+                  effect="plain"
+                  :type="verificationTagType"
+                  class="verify-tag"
+                >
                   {{ verificationLabel }}
                 </el-tag>
               </div>
@@ -62,7 +76,7 @@
       <el-container class="body">
         <!-- 侧边栏 -->
         <el-aside class="sidebar" width="240px">
-          <div class="side-title">账号中心</div>
+          <div class="side-title">{{ t('ui.mainLayout.message007') }}</div>
           <el-menu class="side-menu" :default-active="$route.path" router>
             <el-menu-item
               v-for="item in visibleMenuItems"
@@ -79,12 +93,18 @@
 
           <div class="side-footer">
             <MobileBridgeQrSidebarAction />
-            <el-button class="logout-btn" type="danger" plain :loading="logoutLoading" :disabled="logoutLoading"
-              @click="handleLogout">
+            <el-button
+              class="logout-btn"
+              type="danger"
+              plain
+              :loading="logoutLoading"
+              :disabled="logoutLoading"
+              @click="handleLogout"
+            >
               <el-icon>
                 <SwitchButton />
               </el-icon>
-              <span>退出登录</span>
+              <span>{{ t('ui.mainLayout.message008') }}</span>
             </el-button>
           </div>
         </el-aside>
@@ -103,7 +123,7 @@
       size="78%"
       :with-header="false"
     >
-      <div class="side-title mobile-side-title">账号中心</div>
+      <div class="side-title mobile-side-title">{{ t('ui.mainLayout.message007') }}</div>
       <el-menu
         class="side-menu mobile-side-menu"
         :default-active="currentPath"
@@ -130,7 +150,7 @@
           <el-icon>
             <SwitchButton />
           </el-icon>
-          <span>退出登录</span>
+          <span>{{ t('ui.mainLayout.message008') }}</span>
         </el-button>
       </div>
     </el-drawer>
@@ -138,6 +158,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { ref, computed, watch, onMounted } from 'vue'
 import { useDark, useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
@@ -169,23 +191,23 @@ const router = useRouter()
 const route = useRoute()
 const mobileMenuVisible = ref(false)
 
-const menuItems = [
-  { path: '/home/overview', label: '账号总览', icon: HomeFilled },
-  { path: '/home/profile', label: '账号资料', icon: User },
-  { path: '/home/security', label: '安全设置', icon: Lock },
-  { path: '/home/login-options', label: '登录方式', icon: Key },
-  { path: '/home/devices', label: '设备管理', icon: Monitor },
-  { path: '/home/privacy', label: '访问授权', icon: DataLine },
-  { path: '/home/preferences', label: '使用偏好', icon: Setting },
-  { path: '/home/open-platform', label: '服务接入', icon: Connection },
-]
+const menuItems = computed(() => [
+  { path: '/home/overview', label: t('ui.mainLayout.message009'), icon: HomeFilled },
+  { path: '/home/profile', label: t('ui.mainLayout.message010'), icon: User },
+  { path: '/home/security', label: t('ui.mainLayout.message011'), icon: Lock },
+  { path: '/home/login-options', label: t('ui.mainLayout.message012'), icon: Key },
+  { path: '/home/devices', label: t('ui.mainLayout.message013'), icon: Monitor },
+  { path: '/home/privacy', label: t('ui.mainLayout.message014'), icon: DataLine },
+  { path: '/home/preferences', label: t('ui.mainLayout.message015'), icon: Setting },
+  { path: '/home/open-platform', label: t('ui.mainLayout.message016'), icon: Connection },
+])
 
 const currentPath = computed(() => route.path)
 const canCreateApps = computed(() =>
   ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
 )
 const visibleMenuItems = computed(() =>
-  menuItems.filter((item) => item.path !== '/home/open-platform' || canCreateApps.value),
+  menuItems.value.filter((item) => item.path !== '/home/open-platform' || canCreateApps.value),
 )
 
 // 使用 VueUse 的 useDark 和 useStorage 实现持久化主题
@@ -205,9 +227,9 @@ const currentThemeIcon = computed(() => {
 
 const verificationLabel = computed(() => {
   const type = user.value?.verificationType
-  if (type === 'admin') return '管理员'
-  if (type === 'enterprise') return '企业认证'
-  if (type === 'personal') return '个人认证'
+  if (type === 'admin') return t('ui.mainLayout.message017')
+  if (type === 'enterprise') return t('ui.mainLayout.message018')
+  if (type === 'personal') return t('ui.mainLayout.message019')
   return ''
 })
 
@@ -242,13 +264,13 @@ const handleLogout = async () => {
 
     clearAuthSession()
 
-    ElMessage.success('退出登录成功')
+    ElMessage.success(t('ui.mainLayout.message020'))
 
     // 跳转到登录页面
     router.push('/login')
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    ElMessage.error(message || '退出登录失败')
+    ElMessage.error(message || t('ui.mainLayout.message021'))
     logoutLoading.value = false
   }
 }
@@ -420,7 +442,6 @@ onMounted(() => {
 }
 
 @keyframes pulse {
-
   0%,
   100% {
     opacity: 1;

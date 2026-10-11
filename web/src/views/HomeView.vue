@@ -2,14 +2,14 @@
   <div class="overview-page">
     <div class="content-header card-like">
       <div class="header-main">
-        <h1 class="page-title">账号总览</h1>
-        <p class="page-subtitle">在这里查看账号安全状态、常用入口和近期概况</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message009') }}</h1>
+        <p class="page-subtitle">{{ t('ui.home.message001') }}</p>
       </div>
       <el-button class="primary-btn" :loading="refreshing" @click="refreshOverview">
         <el-icon>
           <Refresh />
         </el-icon>
-        刷新
+        {{ t('ui.devices.message002') }}
       </el-button>
     </div>
 
@@ -19,21 +19,21 @@
       <el-card class="hero-card" shadow="never">
         <div class="hero-top">
           <div>
-            <div class="hero-greeting">{{ user?.username || '欢迎回来' }}</div>
-            <div class="hero-meta">{{ user?.email || '暂未绑定邮箱' }}</div>
+            <div class="hero-greeting">{{ user?.username || t('ui.home.message002') }}</div>
+            <div class="hero-meta">{{ user?.email || t('ui.home.message003') }}</div>
           </div>
           <el-tag :type="securityLevelTagType" effect="light" round>
-            安全等级：{{ securityLevelLabel }}
+            {{ t('ui.home.message004') }}{{ securityLevelLabel }}
           </el-tag>
         </div>
         <div class="hero-score-row">
           <div class="hero-score">{{ securityScore }}</div>
           <div class="hero-score-text">
-            <div class="hero-score-title">安全分（100）</div>
+            <div class="hero-score-title">{{ t('ui.home.message005') }}</div>
             <div class="hero-score-desc">{{ securityHint }}</div>
           </div>
           <el-button class="hero-action-btn" type="primary" @click="goTo('/home/security')">
-            前往安全设置
+            {{ t('ui.home.message006') }}
           </el-button>
         </div>
       </el-card>
@@ -41,7 +41,7 @@
       <el-row :gutter="16" class="section-row">
         <el-col :xs="24" :lg="14">
           <el-card class="action-card" shadow="never">
-            <div class="section-title">安全检查清单</div>
+            <div class="section-title">{{ t('ui.home.message007') }}</div>
             <div class="check-list">
               <div v-for="item in securityChecklist" :key="item.title" class="check-item">
                 <div class="check-left">
@@ -55,7 +55,7 @@
                   </div>
                 </div>
                 <el-button class="check-action-btn" text type="primary" @click="goTo(item.path)">
-                  处理
+                  {{ t('ui.home.message008') }}
                   <el-icon>
                     <ArrowRight />
                   </el-icon>
@@ -67,49 +67,53 @@
 
         <el-col :xs="24" :lg="10">
           <el-card class="action-card" shadow="never">
-            <div class="section-title">常用入口</div>
+            <div class="section-title">{{ t('ui.home.message009') }}</div>
             <div class="shortcut-grid">
               <button class="shortcut-item" @click="goTo('/home/profile')">
                 <el-icon>
                   <User />
                 </el-icon>
-                <span>账号资料</span>
+                <span>{{ t('ui.mainLayout.message010') }}</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/security')">
                 <el-icon>
                   <Lock />
                 </el-icon>
-                <span>安全设置</span>
+                <span>{{ t('ui.mainLayout.message011') }}</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/login-options')">
                 <el-icon>
                   <Link />
                 </el-icon>
-                <span>登录方式</span>
+                <span>{{ t('ui.mainLayout.message012') }}</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/devices')">
                 <el-icon>
                   <Monitor />
                 </el-icon>
-                <span>设备管理</span>
+                <span>{{ t('ui.mainLayout.message013') }}</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/privacy')">
                 <el-icon>
                   <DataLine />
                 </el-icon>
-                <span>访问授权</span>
+                <span>{{ t('ui.mainLayout.message014') }}</span>
               </button>
               <button class="shortcut-item" @click="goTo('/home/preferences')">
                 <el-icon>
                   <Setting />
                 </el-icon>
-                <span>使用偏好</span>
+                <span>{{ t('ui.mainLayout.message015') }}</span>
               </button>
-              <button v-if="canCreateApps" class="shortcut-item" @click="goTo('/home/open-platform')">
+              <button
+                v-if="canCreateApps"
+                class="shortcut-item"
+                @click="goTo('/home/open-platform')"
+              >
                 <el-icon>
                   <Connection />
                 </el-icon>
-                <span>服务接入</span>
+                <span>{{ t('ui.mainLayout.message016') }}</span>
               </button>
             </div>
           </el-card>
@@ -117,26 +121,34 @@
       </el-row>
 
       <el-alert v-if="errorText" type="warning" :closable="false" class="error-banner" show-icon>
-        {{ errorText }}
+        {{ renderMessage(errorText) }}
       </el-alert>
     </template>
 
     <footer class="overview-footer">
       <div class="footer-left">
         <a href="https://docs.ksuser.cn/agreement/user" target="_blank" rel="noopener noreferrer">
-          服务条款
+          {{ t('ui.home.message010') }}
         </a>
-        <a href="https://docs.ksuser.cn/agreement/privacy" target="_blank" rel="noopener noreferrer">
-          隐私协议
+        <a
+          href="https://docs.ksuser.cn/agreement/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ t('ui.home.message011') }}
         </a>
-        <a href="https://docs.ksuser.cn/agreement/third-party-information-sharing" target="_blank" rel="noopener noreferrer">
-          第三方信息共享清单
+        <a
+          href="https://docs.ksuser.cn/agreement/third-party-information-sharing"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {{ t('ui.home.message012') }}
         </a>
       </div>
       <div class="footer-right">
         <span>Ksuser Auth 2025-{{ currentYear }}</span>
         <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
-          沪ICP备2025144703号-2
+          {{ t('ui.home.message013') }}
         </a>
         <a
           class="beian-link with-img"
@@ -147,11 +159,11 @@
           <img
             class="beian-icon"
             src="https://static.ksuser.cn/gongan.png"
-            alt="公安备案图标"
+            :alt="t('ui.home.message014')"
             loading="lazy"
             decoding="async"
           />
-          <span>沪公网安备31011502403952号</span>
+          <span>{{ t('ui.home.message015') }}</span>
         </a>
       </div>
     </footer>
@@ -159,6 +171,8 @@
 </template>
 
 <script setup lang="ts">
+import { t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
+
 import { computed, onMounted, ref } from 'vue'
 import {
   ArrowRight,
@@ -174,10 +188,7 @@ import {
   WarningFilled,
 } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import {
-  getPasskeyList,
-  getTotpStatus,
-} from '@/api/auth'
+import { getPasskeyList, getTotpStatus } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 
@@ -190,7 +201,7 @@ const canCreateApps = computed(() =>
 
 const initialLoading = ref(true)
 const refreshing = ref(false)
-const errorText = ref('')
+const errorText = ref<LocalizedMessage>('')
 const currentYear = new Date().getFullYear()
 
 const passkeyCount = ref(0)
@@ -209,9 +220,9 @@ const securityScore = computed(() => {
 })
 
 const securityLevelLabel = computed(() => {
-  if (securityScore.value >= 80) return '高'
-  if (securityScore.value >= 50) return '中'
-  return '低'
+  if (securityScore.value >= 80) return t('ui.home.message016')
+  if (securityScore.value >= 50) return t('ui.home.message017')
+  return t('ui.home.message018')
 })
 
 const securityLevelTagType = computed(() => {
@@ -221,28 +232,31 @@ const securityLevelTagType = computed(() => {
 })
 
 const securityHint = computed(() => {
-  if (securityScore.value >= 80) return '关键防护已就位，建议定期检查登录设备'
-  if (securityScore.value >= 50) return '基础防护已开启，建议补全 Passkey 或 TOTP'
-  return '建议尽快开启 MFA 并完善登录防护'
+  if (securityScore.value >= 80) return t('ui.home.message019')
+  if (securityScore.value >= 50) return t('ui.home.message020')
+  return t('ui.home.message021')
 })
 
 const securityChecklist = computed(() => {
   return [
     {
-      title: '开启两步验证',
-      desc: mfaEnabled.value ? '已开启，登录将触发额外验证' : '建议立即开启，降低账号被盗风险',
+      title: t('ui.home.message022'),
+      desc: mfaEnabled.value ? t('ui.home.message023') : t('ui.home.message024'),
       done: mfaEnabled.value,
       path: '/home/security',
     },
     {
-      title: '配置 Passkey',
-      desc: passkeyCount.value > 0 ? `已配置 ${passkeyCount.value} 个 Passkey` : '尚未配置，建议添加设备级凭据',
+      title: t('ui.home.message025'),
+      desc:
+        passkeyCount.value > 0
+          ? t('ui.home.message026', { arg0: passkeyCount.value })
+          : t('ui.home.message027'),
       done: passkeyCount.value > 0,
       path: '/home/login-options',
     },
     {
-      title: '启用 TOTP 动态码',
-      desc: totpEnabled.value ? '已启用动态码校验' : '未启用，建议作为备用 MFA 方式',
+      title: t('ui.home.message028'),
+      desc: totpEnabled.value ? t('ui.home.message029') : t('ui.home.message030'),
       done: totpEnabled.value,
       path: '/home/login-options',
     },
@@ -275,11 +289,11 @@ const loadOverview = async () => {
     }
 
     if (hasPartialError) {
-      errorText.value = '部分概览信息暂不可用，已展示可加载的数据'
+      errorText.value = uiMessage('ui.home.message031')
     }
   } catch (error) {
     console.error('Load overview failed:', error)
-    errorText.value = '概览信息加载失败，请稍后重试'
+    errorText.value = uiMessage('ui.home.message032')
   }
 }
 
@@ -305,9 +319,11 @@ onMounted(async () => {
   --surface-subtle: var(--el-fill-color-extra-light);
   --brand-soft: var(--el-color-primary-light-9);
   --brand-border: var(--el-color-primary-light-7);
-  --hero-score-bg: linear-gradient(140deg,
-      var(--el-color-primary) 0%,
-      var(--el-color-primary-light-3) 100%);
+  --hero-score-bg: linear-gradient(
+    140deg,
+    var(--el-color-primary) 0%,
+    var(--el-color-primary-light-3) 100%
+  );
   --hero-score-border: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
   display: flex;
   flex-direction: column;
@@ -441,7 +457,10 @@ onMounted(async () => {
   border-radius: 16px;
   border: 1px solid var(--el-border-color-light);
   background: var(--el-bg-color);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
   overflow: hidden;
 }
 
@@ -482,7 +501,9 @@ onMounted(async () => {
   border-radius: 12px;
   border: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color);
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .check-item:hover {
@@ -543,7 +564,10 @@ onMounted(async () => {
   background: var(--el-bg-color);
   color: var(--el-text-color-primary);
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
   font-weight: 600;
 }
 
@@ -655,7 +679,6 @@ onMounted(async () => {
     justify-content: flex-start;
     text-align: left;
   }
-
 }
 
 @media (max-width: 720px) {

@@ -3,25 +3,31 @@
     <div v-if="mobileWaiting" class="consent-box consent-box--loading consent-box--mobile-handoff">
       <div class="loading-stage loading-stage--mobile-handoff">
         <div class="brand-line">
-          <img src="/favicon.ico" alt="Ksuser" class="brand-logo" /><span class="brand-text"
-            >Ksuser 安全授权</span
-          >
+          <img src="/favicon.ico" alt="Ksuser" class="brand-logo" /><span class="brand-text">{{
+            t('ui.oAuthAuthorize.message001')
+          }}</span>
         </div>
         <div class="loading-card loading-card--mobile-handoff">
-          <h1 class="loading-title">在 Ksuser安全 App 中继续授权</h1>
+          <h1 class="loading-title">{{ t('ui.oAuthAuthorize.message002') }}</h1>
           <p class="loading-description">
-            请在 App 中查看应用信息与授权范围，完成后会自动返回网页。
+            {{ t('ui.oAuthAuthorize.message003') }}
           </p>
-          <p v-if="mobileError" class="loading-description" role="alert">{{ mobileError }}</p>
+          <p v-if="mobileError" class="loading-description" role="alert">
+            {{ renderMessage(mobileError) }}
+          </p>
           <div class="consent-actions mobile-consent-actions">
-            <el-button type="primary" @click="openMobileApp">打开 Ksuser App</el-button>
-            <el-button @click="completeMobileAuthorization">已在 App 完成，继续</el-button>
-            <el-button :loading="mobileFallingBack" @click="continueInBrowser"
-              >继续网页授权</el-button
-            >
+            <el-button type="primary" @click="openMobileApp">{{
+              t('ui.oAuthAuthorize.message004')
+            }}</el-button>
+            <el-button @click="completeMobileAuthorization">{{
+              t('ui.oAuthAuthorize.message005')
+            }}</el-button>
+            <el-button :loading="mobileFallingBack" @click="continueInBrowser">{{
+              t('ui.oAuthAuthorize.message006')
+            }}</el-button>
           </div>
-          <p class="loading-description">如返回浏览器错误，请使用默认浏览器授权</p>
-          <p class="loading-description">未安装App或未能打开时，可以继续使用网页</p>
+          <p class="loading-description">{{ t('ui.oAuthAuthorize.message007') }}</p>
+          <p class="loading-description">{{ t('ui.oAuthAuthorize.message008') }}</p>
         </div>
       </div>
     </div>
@@ -29,7 +35,7 @@
       <div class="loading-stage">
         <div class="brand-line">
           <img src="/favicon.ico" alt="Ksuser" class="brand-logo" />
-          <span class="brand-text">Ksuser 统一认证中心</span>
+          <span class="brand-text">{{ t('ui.mainLayout.message001') }}</span>
         </div>
 
         <div class="loading-card">
@@ -50,11 +56,17 @@
             <Loading />
           </el-icon>
           <div class="loading-title">
-            {{ autoRedirecting ? '已完成授权，正在继续…' : '正在准备授权信息…' }}
+            {{
+              autoRedirecting
+                ? t('ui.oAuthAuthorize.message009')
+                : t('ui.oAuthAuthorize.message010')
+            }}
           </div>
           <div class="loading-description">
             {{
-              autoRedirecting ? '请稍候，页面会自动回到应用。' : '正在校验应用信息与当前登录状态。'
+              autoRedirecting
+                ? t('ui.oAuthAuthorize.message011')
+                : t('ui.oAuthAuthorize.message012')
             }}
           </div>
         </div>
@@ -66,7 +78,7 @@
       <div class="consent-left">
         <div class="brand-line">
           <img src="/favicon.ico" alt="Ksuser" class="brand-logo" />
-          <span class="brand-text">Ksuser 统一认证中心</span>
+          <span class="brand-text">{{ t('ui.mainLayout.message001') }}</span>
         </div>
 
         <div class="left-body">
@@ -86,7 +98,7 @@
               <h1 class="app-name">{{ context.appName }}</h1>
               <p class="app-subtitle">{{ leftSubtitle }}</p>
               <p v-if="context.contactInfo" class="app-support">
-                联系方式：{{ context.contactInfo }}
+                {{ t('ui.oAuthAuthorize.message013') }}{{ context.contactInfo }}
               </p>
             </div>
           </div>
@@ -96,8 +108,8 @@
               <div class="app-logo app-logo-fallback">?</div>
             </div>
             <div class="app-meta">
-              <h1 class="app-name">授权确认</h1>
-              <p class="app-subtitle">正在加载应用信息…</p>
+              <h1 class="app-name">{{ t('ui.oAuthAuthorize.message014') }}</h1>
+              <p class="app-subtitle">{{ t('ui.oAuthAuthorize.message015') }}</p>
             </div>
           </div>
 
@@ -105,11 +117,11 @@
             v-if="context && user && !loading && !autoRedirecting && !errorMessage"
             class="permission-box"
           >
-            <div class="permission-title">将允许该应用：</div>
+            <div class="permission-title">{{ t('ui.oAuthAuthorize.message016') }}</div>
             <ul class="permission-list">
               <li v-for="item in permissionItems" :key="item">{{ item }}</li>
             </ul>
-            <div class="permission-footnote">我们不会向应用透露您的密码。</div>
+            <div class="permission-footnote">{{ t('ui.oAuthAuthorize.message017') }}</div>
           </div>
         </div>
       </div>
@@ -118,8 +130,10 @@
       <div class="consent-right">
         <div v-if="errorMessage" class="state-panel error-panel">
           <el-icon><CircleCloseFilled /></el-icon>
-          <p>{{ errorMessage }}</p>
-          <el-button type="primary" @click="backToLogin">返回登录</el-button>
+          <p>{{ renderMessage(errorMessage) }}</p>
+          <el-button type="primary" @click="backToLogin">{{
+            t('ui.appleRegister.message015')
+          }}</el-button>
         </div>
 
         <div v-else-if="context && user" class="right-body">
@@ -136,21 +150,21 @@
 
             <button class="account-row account-row--switch" type="button" @click="switchAccount">
               <div class="account-meta">
-                <div class="switch-title">使用其他账号</div>
+                <div class="switch-title">{{ t('ui.oAuthAuthorize.message018') }}</div>
               </div>
             </button>
           </div>
 
           <div class="grant-policy-card">
             <div class="grant-policy-header">
-              <div class="grant-policy-title">授权方式</div>
+              <div class="grant-policy-title">{{ t('ui.oAuthAuthorize.message019') }}</div>
               <div class="grant-policy-subtitle">
-                默认保持长期授权，也可切换为一次性或限时授权。
+                {{ t('ui.oAuthAuthorize.message020') }}
               </div>
             </div>
 
             <div v-if="context.alreadyAuthorized && hasConsentPrompt" class="grant-policy-banner">
-              当前应用已有可复用授权，手动确认后可切换为更严格的授权方式。
+              {{ t('ui.oAuthAuthorize.message021') }}
             </div>
 
             <el-radio-group v-model="grantMode" class="grant-policy-options">
@@ -166,7 +180,7 @@
             <div class="grant-policy-note">{{ grantModeDescription }}</div>
 
             <div v-if="grantMode === 'TIME_LIMITED'" class="grant-ttl-row">
-              <span class="grant-ttl-label">有效期</span>
+              <span class="grant-ttl-label">{{ t('ui.oAuthAuthorize.message022') }}</span>
               <el-select v-model="grantTtlSeconds" class="grant-ttl-select">
                 <el-option
                   v-for="option in grantTtlOptions"
@@ -178,32 +192,35 @@
             </div>
 
             <div v-if="existingGrantSummary" class="grant-policy-footnote">
-              当前可复用授权：{{ existingGrantSummary }}
+              {{ t('ui.oAuthAuthorize.message023') }}{{ existingGrantSummary }}
             </div>
           </div>
 
           <div class="consent-actions">
-            <el-button class="consent-secondary-btn" @click="handleDeny">拒绝</el-button>
+            <el-button class="consent-secondary-btn" @click="handleDeny">{{
+              t('ui.oAuthAuthorize.message024')
+            }}</el-button>
             <el-button
               class="consent-primary-btn"
               type="primary"
               :loading="approving"
               @click="handleApprove"
             >
-              同意
+              {{ t('ui.oAuthAuthorize.message025') }}
             </el-button>
           </div>
 
           <div class="right-note">
-            点击“同意”即表示允许 <span class="right-note-app">{{ context.appName }}</span> 使用您的
-            Ksuser 账号继续。
+            {{ t('ui.oAuthAuthorize.message026') }}
+            <span class="right-note-app">{{ context.appName }}</span>
+            {{ t('ui.oAuthAuthorize.message027') }}
           </div>
         </div>
 
         <div v-else-if="context" class="right-body">
           <div class="state-panel">
             <template v-if="desktopBridgeUser">
-              <p class="unauth-title">检测到桌面端已登录</p>
+              <p class="unauth-title">{{ t('ui.login.message014') }}</p>
               <button
                 class="account-row account-row--active account-row--desktop-bridge"
                 type="button"
@@ -234,22 +251,22 @@
                   :loading="desktopSigningIn"
                   @click="continueWithDesktopAccount"
                 >
-                  使用该账号继续
+                  {{ t('ui.oAuthAuthorize.message028') }}
                 </el-button>
-                <el-button class="consent-secondary-btn" @click="switchAccount"
-                  >使用其他账号登录</el-button
-                >
+                <el-button class="consent-secondary-btn" @click="switchAccount">{{
+                  t('ui.oAuthAuthorize.message029')
+                }}</el-button>
               </div>
             </template>
 
             <template v-else>
-              <p class="unauth-title">当前浏览器尚未登录</p>
+              <p class="unauth-title">{{ t('ui.oAuthAuthorize.message030') }}</p>
               <p class="unauth-description">
-                请先登录后再完成授权，或打开桌面端后刷新页面自动检测登录状态。
+                {{ t('ui.oAuthAuthorize.message031') }}
               </p>
               <div class="consent-actions">
                 <el-button class="consent-primary-btn" type="primary" @click="switchAccount">
-                  登录账号
+                  {{ t('ui.oAuthAuthorize.message032') }}
                 </el-button>
               </div>
             </template>
@@ -261,6 +278,9 @@
 </template>
 
 <script setup lang="ts">
+import { localizedError } from '@/utils/apiResult'
+import { intlLocale, t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
+
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
@@ -317,7 +337,7 @@ const { user } = storeToRefs(userStore)
 
 const mobileWaiting = ref(false)
 const mobileFallingBack = ref(false)
-const mobileError = ref('')
+const mobileError = ref<LocalizedMessage>('')
 let mobileTicket: MobileAuthorizationTicket | null = null
 let mobileDisposed = false
 let mobileExpiresAt = 0
@@ -328,9 +348,9 @@ const completeMobileAuthorization = async () => {
   if (!mobileTicket || mobileDisposed || !mobileWaiting.value) return
   try {
     if (!continueMobileAuthorization(await consumeMobileAuthorization(mobileTicket)))
-      mobileError.value = '请先在 Ksuser App 中完成授权。'
+      mobileError.value = uiMessage('ui.oAuthAuthorize.message033')
   } catch (e) {
-    mobileError.value = e instanceof Error ? e.message : '无法获取授权结果，请返回原应用重试。'
+    mobileError.value = localizedError(e, 'ui.oAuthAuthorize.message034')
     return
   }
 }
@@ -350,7 +370,7 @@ const continueInBrowser = async () => {
     })
     await loadContext()
   } catch (e) {
-    mobileError.value = e instanceof Error ? e.message : '授权已提交，请等待结果。'
+    mobileError.value = localizedError(e, 'ui.oAuthAuthorize.message035')
   } finally {
     mobileFallingBack.value = false
   }
@@ -362,7 +382,7 @@ const loading = ref(true)
 const approving = ref(false)
 const desktopSigningIn = ref(false)
 const autoRedirecting = ref(false)
-const errorMessage = ref('')
+const errorMessage = ref<LocalizedMessage>('')
 const context = ref<NormalizedAuthorizeContext | null>(null)
 const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
 const grantMode = ref<AuthorizationGrantMode>('PERSISTENT')
@@ -407,30 +427,30 @@ const requestParams = computed(() => {
   }
 })
 
-const grantModeOptions: GrantModeOption[] = [
+const grantModeOptions = computed<GrantModeOption[]>(() => [
   {
     value: 'PERSISTENT',
-    label: '长期授权',
-    description: '后续同范围请求可自动放行，直到您主动撤销。',
+    label: t('ui.oAuthAuthorize.message036'),
+    description: t('ui.oAuthAuthorize.message037'),
   },
   {
     value: 'ONE_TIME',
-    label: '一次性授权',
-    description: '仅本次继续有效，下次同应用再次请求时必须重新确认。',
+    label: t('ui.oAuthAuthorize.message038'),
+    description: t('ui.oAuthAuthorize.message039'),
   },
   {
     value: 'TIME_LIMITED',
-    label: '限时授权',
-    description: '在设定时限内自动放行，过期后需要重新确认。',
+    label: t('ui.oAuthAuthorize.message040'),
+    description: t('ui.oAuthAuthorize.message041'),
   },
-]
+])
 
-const grantTtlOptions = [
-  { value: 300, label: '5 分钟' },
-  { value: 3600, label: '1 小时' },
-  { value: 86400, label: '24 小时' },
-  { value: 604800, label: '7 天' },
-]
+const grantTtlOptions = computed(() => [
+  { value: 300, label: t('ui.oAuthAuthorize.message042') },
+  { value: 3600, label: t('ui.oAuthAuthorize.message043') },
+  { value: 86400, label: t('ui.oAuthAuthorize.message044') },
+  { value: 604800, label: t('ui.oAuthAuthorize.message045') },
+])
 
 const hasConsentPrompt = computed(() => {
   const prompt = requestParams.value.prompt?.toLowerCase()
@@ -439,7 +459,7 @@ const hasConsentPrompt = computed(() => {
 })
 
 const leftSubtitle = computed(() =>
-  mode.value === 'sso' ? '想要使用您的 Ksuser 账号登录' : '想要访问您的 Ksuser 账号信息',
+  mode.value === 'sso' ? t('ui.oAuthAuthorize.message046') : t('ui.oAuthAuthorize.message047'),
 )
 
 const permissionItems = computed(() => {
@@ -450,34 +470,36 @@ const permissionItems = computed(() => {
     .map((scope) => scope.trim().toLowerCase())
     .filter(Boolean)
 
-  const items: string[] = ['确认您的身份（基础信息）']
+  const items: string[] = [t('ui.oAuthAuthorize.message048')]
 
   if (scopes.includes('email')) {
-    items.push('获取您的邮箱地址')
+    items.push(t('ui.oAuthAuthorize.message049'))
   }
 
   if (scopes.includes('profile')) {
-    items.push('获取您的昵称与头像')
+    items.push(t('ui.oAuthAuthorize.message050'))
   }
 
   const knownScopes = new Set(['openid', 'email', 'profile'])
   const hasUnknownScope = scopes.some((scope) => !knownScopes.has(scope))
   if (hasUnknownScope) {
-    items.push('获取您的其他账号信息')
+    items.push(t('ui.oAuthAuthorize.message051'))
   }
 
   return items
 })
 
 const grantModeDescription = computed(() => {
-  return grantModeOptions.find((option) => option.value === grantMode.value)?.description ?? ''
+  return (
+    grantModeOptions.value.find((option) => option.value === grantMode.value)?.description ?? ''
+  )
 })
 
 const formatGrantDateTime = (value?: string | null) => {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(intlLocale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -490,13 +512,15 @@ const existingGrantSummary = computed(() => {
   const currentContext = context.value
   if (!currentContext?.alreadyAuthorized) return ''
   if (currentContext.existingGrantMode === 'ONE_TIME') {
-    return '一次性授权'
+    return t('ui.oAuthAuthorize.message038')
   }
   if (currentContext.existingGrantMode === 'TIME_LIMITED') {
     const expiresAt = formatGrantDateTime(currentContext.existingGrantExpiresAt)
-    return expiresAt ? `限时授权，至 ${expiresAt}` : '限时授权'
+    return expiresAt
+      ? t('ui.oAuthAuthorize.message052', { arg0: expiresAt })
+      : t('ui.oAuthAuthorize.message040')
   }
-  return '长期授权'
+  return t('ui.oAuthAuthorize.message036')
 })
 
 const buildDeniedRedirect = () => {
@@ -598,7 +622,7 @@ const loadContext = async () => {
   const { clientId, redirectUri, responseType } = requestParams.value
 
   if (!clientId || !redirectUri || !responseType) {
-    errorMessage.value = '授权链接无效或缺少必要信息，请返回应用后重新发起授权。'
+    errorMessage.value = uiMessage('ui.oAuthAuthorize.message053')
     loading.value = false
     return
   }
@@ -643,8 +667,7 @@ const loadContext = async () => {
       return
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : ''
-    errorMessage.value = message || '授权请求无效，请返回应用重试或联系应用支持。'
+    errorMessage.value = localizedError(error, 'ui.oAuthAuthorize.message054')
   } finally {
     if (!autoRedirecting.value) {
       loading.value = false
@@ -688,11 +711,16 @@ const handleApprove = async (silent = false) => {
     window.location.replace(response.redirectUrl)
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : ''
-    const message = rawMessage || '授权失败，请稍后重试'
+    const message = rawMessage || t('ui.oAuthAuthorize.message055')
     autoRedirecting.value = false
     loading.value = false
     if (silent) {
-      errorMessage.value = `${message}，请手动确认一次授权。`
+      errorMessage.value = {
+        render: () =>
+          t('ui.oAuthAuthorize.message056', {
+            arg0: renderMessage(localizedError(error, 'ui.oAuthAuthorize.message055')),
+          }),
+      }
       return
     }
     ElMessage.error(message)
@@ -704,7 +732,7 @@ const handleApprove = async (silent = false) => {
 const handleDeny = () => {
   const deniedRedirect = buildDeniedRedirect()
   if (!deniedRedirect) {
-    errorMessage.value = '无法构造拒绝回调地址，请返回来源应用后重试。'
+    errorMessage.value = uiMessage('ui.oAuthAuthorize.message057')
     return
   }
   window.location.replace(deniedRedirect)
@@ -738,7 +766,7 @@ const continueWithDesktopAccount = async () => {
       return
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : '使用桌面端登录失败'
+    const message = error instanceof Error ? error.message : t('ui.oAuthAuthorize.message058')
     ElMessage.error(message)
     await refreshDesktopBridgeStatus()
   } finally {

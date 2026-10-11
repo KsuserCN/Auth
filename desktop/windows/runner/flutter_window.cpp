@@ -1,3 +1,4 @@
+#include "desktop_localization.h"
 #include "flutter_window.h"
 
 #include <flutter/standard_method_codec.h>
@@ -49,13 +50,24 @@ bool FlutterWindow::OnCreate() {
       &flutter::StandardMethodCodec::GetInstance());
   window_control_channel_->SetMethodCallHandler(
       [this](const auto& call, auto result) {
+        if (call.method_name() == "setLocale") {
+          const auto* locale = std::get_if<std::string>(call.arguments());
+          SetDesktopLocale(locale ? *locale : "en");
+          SetWindowTextW(GetHandle(), DesktopText(L"Ksuser安全", L"Ksuser Security"));
+          if (tray_icon_added_) {
+            RemoveTrayIcon();
+            AddTrayIcon();
+          }
+          result->Success(flutter::EncodableValue(true));
+          return;
+        }
         if (call.method_name() != "moveToTray") {
           result->NotImplemented();
           return;
         }
         if (!MoveToTray()) {
           result->Error("tray_unavailable",
-                        "无法创建系统托盘图标，请检查 Windows 托盘设置。");
+                        DesktopText("无法创建系统托盘图标，请检查 Windows 托盘设置。", "Could not create the system tray icon. Check the Windows tray settings."));
           return;
         }
         result->Success(flutter::EncodableValue(true));
@@ -167,7 +179,7 @@ bool FlutterWindow::AddTrayIcon() {
   tray_icon.hIcon = static_cast<HICON>(LoadImageW(
       GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON), IMAGE_ICON, 0,
       0, LR_DEFAULTSIZE | LR_SHARED));
-  wcscpy_s(tray_icon.szTip, L"Ksuser安全");
+  wcscpy_s(tray_icon.szTip, DesktopText(L"Ksuser安全", L"Ksuser Security"));
 
   if (tray_icon.hIcon == nullptr ||
       !Shell_NotifyIconW(NIM_ADD, &tray_icon)) {
@@ -211,9 +223,9 @@ void FlutterWindow::ShowTrayMenu() {
     return;
   }
 
-  AppendMenuW(menu, MF_STRING, kShowWindowCommand, L"显示主窗口");
+  AppendMenuW(menu, MF_STRING, kShowWindowCommand, DesktopText(L"显示主窗口", L"Show main window"));
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, kQuitCommand, L"退出应用");
+  AppendMenuW(menu, MF_STRING, kQuitCommand, DesktopText(L"退出应用", L"Quit app"));
 
   POINT cursor{};
   GetCursorPos(&cursor);

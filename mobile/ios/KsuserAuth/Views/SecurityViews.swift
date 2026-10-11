@@ -6,6 +6,7 @@ private enum SecuritySheet: String, Identifiable {
 }
 
 struct SecurityView: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     @State private var sheet: SecuritySheet?
     @State private var pendingSheet: SecuritySheet?
@@ -17,76 +18,76 @@ struct SecurityView: View {
     var body: some View {
         PageScroll(spacing: 16) {
             if let risk = model.adaptiveStatus { RiskStatusCard(status: risk) }
-            SecuritySection(title: "验证方式", icon: "key.fill") {
-                ActionRow(title: "Passkey", icon: "person.badge.key.fill", subtitle: "\(model.passkeys.count) 个通行密钥") { sheet = .passkeys }
+            SecuritySection(title: L10n.text("验证方式"), icon: "key.fill") {
+                ActionRow(title: "Passkey", icon: "person.badge.key.fill", subtitle: L10n.format("{0} 个通行密钥", [String(describing: model.passkeys.count)])) { sheet = .passkeys }
                 sectionDivider
-                ActionRow(title: "验证器", icon: "number.square", subtitle: model.totpStatus.enabled ? "已启用" : "未启用") { protected(.totp) }
+                ActionRow(title: L10n.text("验证器"), icon: "number.square", subtitle: model.totpStatus.enabled ? L10n.text("已启用") : L10n.text("未启用")) { protected(.totp) }
                 if model.totpStatus.enabled {
                     sectionDivider
-                    ActionRow(title: "TOTP 恢复码", icon: "key.horizontal", subtitle: "剩余 \(model.totpStatus.recoveryCodesCount) 个") {
+                    ActionRow(title: L10n.text("TOTP 恢复码"), icon: "key.horizontal", subtitle: L10n.format("剩余 {0} 个", [String(describing: model.totpStatus.recoveryCodesCount)])) {
                         Task { await model.requireSensitive(title: "查看恢复码") { await model.showRecoveryCodes(); if model.errorMessage == nil { present(.recoveryCodes) } } }
                     }
                 }
                 sectionDivider
                 if model.appleBound {
-                    ActionRow(title: "Apple 登录", icon: "apple.logo", subtitle: "已绑定") { unbindApple = true }
-                        .confirmationDialog("解除 Apple 绑定？", isPresented: $unbindApple, titleVisibility: .visible) {
+                    ActionRow(title: L10n.text("Apple 登录"), icon: "apple.logo", subtitle: L10n.text("已绑定")) { unbindApple = true }
+                        .confirmationDialog(L10n.text("解除 Apple 绑定？"), isPresented: $unbindApple, titleVisibility: .visible) {
                             Button("解除绑定", role: .destructive) { Task { await model.requireSensitive(title: "解除 Apple 绑定") { await model.unbindApple() } } }
-                        } message: { Text("解绑前请确保已经设置密码或其他可用的登录方式。") }
+                        } message: { Text(L10n.text("解绑前请确保已经设置密码或其他可用的登录方式。")) }
                 } else {
                     ActionRow(title: "Apple 登录", icon: "apple.logo", subtitle: "未绑定") { Task { await model.requireSensitive(title: "绑定 Apple") { await model.bindApple() } } }
                 }
                 sectionDivider
                 if model.qqBound {
-                    ActionRow(title: "QQ 登录", icon: "person.crop.circle", subtitle: "已绑定") { unbindQQ = true }
+                    ActionRow(title: L10n.text("QQ 登录"), icon: "person.crop.circle", subtitle: L10n.text("已绑定")) { unbindQQ = true }
                         .accessibilityIdentifier("qqBindingRow")
-                        .confirmationDialog("解除 QQ 绑定？", isPresented: $unbindQQ, titleVisibility: .visible) {
-                            Button("解除绑定", role: .destructive) { Task { await model.unbindQQ() } }
-                        } message: { Text("解绑前请确保已经设置密码或其他可用的登录方式。") }
+                        .confirmationDialog(L10n.text("解除 QQ 绑定？"), isPresented: $unbindQQ, titleVisibility: .visible) {
+                            Button(L10n.text("解除绑定"), role: .destructive) { Task { await model.unbindQQ() } }
+                        } message: { Text(L10n.text("解绑前请确保已经设置密码或其他可用的登录方式。")) }
                 } else {
-                    ActionRow(title: "QQ 登录", icon: "person.crop.circle", subtitle: "未绑定") { Task { await model.bindQQ() } }
+                    ActionRow(title: L10n.text("QQ 登录"), icon: "person.crop.circle", subtitle: L10n.text("未绑定")) { Task { await model.bindQQ() } }
                         .accessibilityIdentifier("qqBindingRow")
                 }
             }
-            SecuritySection(title: "登录保护", icon: "lock.shield") {
-                settingToggle("双重验证", icon: "checkmark.shield", field: "mfaEnabled", value: model.user?.settings?.mfaEnabled ?? false)
+            SecuritySection(title: L10n.text("登录保护"), icon: "lock.shield") {
+                settingToggle(L10n.text("双重验证"), icon: "checkmark.shield", field: "mfaEnabled", value: model.user?.settings?.mfaEnabled ?? false)
                 sectionDivider
-                settingToggle("异地登录检测", icon: "location.magnifyingglass", field: "detectUnusualLogin", value: model.user?.settings?.detectUnusualLogin ?? true)
+                settingToggle(L10n.text("异地登录检测"), icon: "location.magnifyingglass", field: "detectUnusualLogin", value: model.user?.settings?.detectUnusualLogin ?? true)
                 sectionDivider
-                settingToggle("敏感操作邮件提醒", icon: "envelope.badge", field: "notifySensitiveActionEmail", value: model.user?.settings?.notifySensitiveActionEmail ?? true)
+                settingToggle(L10n.text("敏感操作邮件提醒"), icon: "envelope.badge", field: "notifySensitiveActionEmail", value: model.user?.settings?.notifySensitiveActionEmail ?? true)
                 sectionDivider
-                settingToggle("订阅动态邮件", icon: "envelope", field: "subscribeNewsEmail", value: model.user?.settings?.subscribeNewsEmail ?? false)
+                settingToggle(L10n.text("订阅动态邮件"), icon: "envelope", field: "subscribeNewsEmail", value: model.user?.settings?.subscribeNewsEmail ?? false)
                 sectionDivider
-                preference("首选双重验证", icon: "checkmark.shield", field: "preferredMfaMethod", selected: model.user?.settings?.preferredMfaMethod ?? "totp", methods: ["totp", "passkey"])
+                preference(L10n.text("首选双重验证"), icon: "checkmark.shield", field: "preferredMfaMethod", selected: model.user?.settings?.preferredMfaMethod ?? "totp", methods: ["totp", "passkey"])
                 sectionDivider
-                preference("首选敏感验证", icon: "lock.shield", field: "preferredSensitiveMethod", selected: model.user?.settings?.preferredSensitiveMethod ?? (model.user?.hasPassword == false ? "apple" : "password"), methods: availableSensitiveMethods)
+                preference(L10n.text("首选敏感验证"), icon: "lock.shield", field: "preferredSensitiveMethod", selected: model.user?.settings?.preferredSensitiveMethod ?? (model.user?.hasPassword == false ? "apple" : "password"), methods: availableSensitiveMethods)
             }
             PushNotificationSettingsView()
-            SecuritySection(title: "账号与会话", icon: "person.crop.circle") {
-                ActionRow(title: model.user?.email.isEmpty == true ? "绑定邮箱" : "修改邮箱", icon: "envelope", subtitle: model.user?.email) { protected(.email) }
+            SecuritySection(title: L10n.text("账号与会话"), icon: "person.crop.circle") {
+                ActionRow(title: model.user?.email.isEmpty == true ? L10n.text("绑定邮箱") : L10n.text("修改邮箱"), icon: "envelope", subtitle: model.user?.email) { protected(.email) }
                 sectionDivider
-                ActionRow(title: model.user?.hasPassword == false ? "设置密码" : "修改密码", icon: "lock.rotation") { protected(.password) }
+                ActionRow(title: model.user?.hasPassword == false ? L10n.text("设置密码") : L10n.text("修改密码"), icon: "lock.rotation") { protected(.password) }
                 sectionDivider
-                ActionRow(title: "退出当前账号", icon: "rectangle.portrait.and.arrow.right") { logoutCurrent = true }
+                ActionRow(title: L10n.text("退出当前账号"), icon: "rectangle.portrait.and.arrow.right") { logoutCurrent = true }
                     .accessibilityIdentifier("logoutCurrentRow")
-                    .confirmationDialog("退出当前账号？", isPresented: $logoutCurrent, titleVisibility: .visible) {
-                        Button("退出登录", role: .destructive) { Task { await model.logout() } }
+                    .confirmationDialog(L10n.text("退出当前账号？"), isPresented: $logoutCurrent, titleVisibility: .visible) {
+                        Button(L10n.text("退出登录"), role: .destructive) { Task { await model.logout() } }
                             .accessibilityIdentifier("confirmLogoutCurrent")
                     }
                 sectionDivider
-                ActionRow(title: "退出所有设备", icon: "power", destructive: true) { logoutAll = true }
+                ActionRow(title: L10n.text("退出所有设备"), icon: "power", destructive: true) { logoutAll = true }
                     .accessibilityIdentifier("logoutAllRow")
-                    .confirmationDialog("退出所有设备？", isPresented: $logoutAll, titleVisibility: .visible) {
+                    .confirmationDialog(L10n.text("退出所有设备？"), isPresented: $logoutAll, titleVisibility: .visible) {
                         Button("退出所有设备", role: .destructive) { Task { await model.requireSensitive(title: "退出所有设备") { await model.logout(allDevices: true) } } }
                             .accessibilityIdentifier("confirmLogoutAll")
-                    } message: { Text("所有登录会话都会被撤销，包括这台设备。") }
+                    } message: { Text(L10n.text("所有登录会话都会被撤销，包括这台设备。")) }
             }
-            SecuritySection(title: "恢复与账号管理", icon: "lifepreserver") {
-                ActionRow(title: "生成恢复授权", icon: "qrcode", subtitle: "供其他设备找回账号") {
+            SecuritySection(title: L10n.text("恢复与账号管理"), icon: "lifepreserver") {
+                ActionRow(title: L10n.text("生成恢复授权"), icon: "qrcode", subtitle: L10n.text("供其他设备找回账号")) {
                     Task { await model.requireSensitive(title: "生成账号恢复授权") { await model.generateRecoveryTicket(); if model.errorMessage == nil { present(.recovery) } } }
                 }
                 sectionDivider
-                ActionRow(title: "删除账号", icon: "person.crop.circle.badge.xmark", subtitle: "永久删除账号及相关数据", destructive: true) { sheet = .deleteAccount }
+                ActionRow(title: L10n.text("删除账号"), icon: "person.crop.circle.badge.xmark", subtitle: L10n.text("永久删除账号及相关数据"), destructive: true) { sheet = .deleteAccount }
                     .accessibilityIdentifier("deleteAccountRow")
             }
         }.refreshable { await model.refreshSecurity() }.task { await model.refreshSecurity() }
@@ -152,6 +153,7 @@ struct SecurityView: View {
 }
 
 private struct SecuritySection<Content: View>: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     let icon: String
     let content: Content
@@ -186,10 +188,11 @@ private struct SecurityRowLabelStyle: LabelStyle {
 }
 
 struct RiskStatusCard: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     let status: AdaptiveAuthStatus
     @State private var showDetails = false
-    private var title: String { status.sessionFrozen ? "当前会话已冻结" : status.requiresStepUp ? "需要再次验证身份" : "当前会话安全状态" }
+    private var title: String { status.sessionFrozen ? L10n.text("当前会话已冻结") : status.requiresStepUp ? L10n.text("需要再次验证身份") : L10n.text("当前会话安全状态") }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
@@ -200,28 +203,28 @@ struct RiskStatusCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(.headline)
-                    Text(status.recommendedAction.isEmpty ? "持续检查登录环境与近期活动" : status.recommendedAction)
+                    Text(status.recommendedAction.isEmpty ? L10n.text("持续检查登录环境与近期活动") : status.recommendedAction)
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
-                StatusPill(title: "风险：\(riskLabel)", positive: status.riskLevel == "low")
-                if status.sensitiveVerified { StatusPill(title: "已验证") }
+                StatusPill(title: L10n.format("风险：{0}", [String(describing: riskLabel)]), positive: status.riskLevel == "low")
+                if status.sensitiveVerified { StatusPill(title: L10n.text("已验证")) }
                 Spacer(minLength: 0)
                 Text("\(status.riskScore) / 100").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }
             if let alert = status.alertMessage, !alert.isEmpty {
                 Label(alert, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundStyle(Brand.gold).fixedSize(horizontal: false, vertical: true)
             }
-            DisclosureGroup("会话详情与风险原因", isExpanded: $showDetails) {
+            DisclosureGroup(L10n.text("会话详情与风险原因"), isExpanded: $showDetails) {
                 VStack(spacing: 10) {
-                    InfoRow(title: "位置", value: status.currentLocation ?? "未知")
-                    InfoRow(title: "IP", value: status.currentIp ?? "未知")
-                    InfoRow(title: "设备", value: [status.deviceType, status.browser].compactMap { $0 }.joined(separator: " · "))
-                    InfoRow(title: "最近认证", value: "\(status.authAgeSeconds) 秒前")
-                    InfoRow(title: "空闲时间", value: "\(status.idleSeconds) 秒")
-                    if status.sensitiveVerified { InfoRow(title: "敏感验证有效期", value: "\(status.sensitiveVerificationRemainingSeconds) 秒") }
+                    InfoRow(title: L10n.text("位置"), value: status.currentLocation ?? L10n.text("未知"))
+                    InfoRow(title: "IP", value: status.currentIp ?? L10n.text("未知"))
+                    InfoRow(title: L10n.text("设备"), value: [status.deviceType, status.browser].compactMap { $0 }.joined(separator: " · "))
+                    InfoRow(title: L10n.text("最近认证"), value: L10n.format("{0} 秒前", [String(describing: status.authAgeSeconds)]))
+                    InfoRow(title: L10n.text("空闲时间"), value: L10n.format("{0} 秒", [String(describing: status.idleSeconds)]))
+                    if status.sensitiveVerified { InfoRow(title: L10n.text("敏感验证有效期"), value: L10n.format("{0} 秒", [String(describing: status.sensitiveVerificationRemainingSeconds)])) }
                     ForEach(status.reasons, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading) }
                 }.padding(.top, 10)
             }
@@ -230,15 +233,16 @@ struct RiskStatusCard: View {
             if status.requiresStepUp && !status.sessionFrozen {
                 AsyncActionButton(title: "立即验证", isBusy: model.isBusy) { await model.requireSensitive(title: "提升会话安全等级") { await model.refreshSecurity() } }
             }
-            if status.sessionFrozen { AsyncActionButton(title: "重新登录", isBusy: model.isBusy) { await model.logout() } }
+            if status.sessionFrozen { AsyncActionButton(title: L10n.text("重新登录"), isBusy: model.isBusy) { await model.logout() } }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .background(Brand.card, in: RoundedRectangle(cornerRadius: 18))
     }
-    private var riskLabel: String { switch status.riskLevel { case "low": "低"; case "medium": "中"; case "high": "高"; default: status.riskLevel } }
+    private var riskLabel: String { switch status.riskLevel { case "low": L10n.text("低"); case "medium": L10n.text("中"); case "high": L10n.text("高"); default: status.riskLevel } }
 }
 
 struct SensitiveVerificationView: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let request: SensitiveRequest
@@ -260,16 +264,16 @@ struct SensitiveVerificationView: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(request.title).font(.title3.weight(.semibold))
-                    Text("验证成功后继续当前操作").font(.subheadline).foregroundStyle(.secondary)
+                    Text(L10n.text("验证成功后继续当前操作")).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 2)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("选择验证方式").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                Text(L10n.text("选择验证方式")).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                 if dynamicTypeSize.isAccessibilitySize {
-                    Picker("验证方式", selection: $method) {
+                    Picker(L10n.text("验证方式"), selection: $method) {
                         ForEach(methods, id: \.self) { Text(methodLabel($0)).tag($0) }
                     }
                     .pickerStyle(.menu).frame(minHeight: 44)
@@ -285,28 +289,28 @@ struct SensitiveVerificationView: View {
             .background(Brand.card, in: RoundedRectangle(cornerRadius: 18))
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("完成验证").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                Text(L10n.text("完成验证")).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                 switch method {
-                case "password": FormField(title: "当前密码", text: $password, secure: true, contentType: .password)
+                case "password": FormField(title: L10n.text("当前密码"), text: $password, secure: true, contentType: .password)
                 case "email-code":
-                    FormField(title: "邮箱验证码", text: $code, keyboard: .numberPad, contentType: .oneTimeCode)
+                    FormField(title: L10n.text("邮箱验证码"), text: $code, keyboard: .numberPad, contentType: .oneTimeCode)
                     CodeSendButton(email: nil, type: "sensitive-verification", resendAt: $resendAt)
                 case "totp":
-                    AdaptivePicker("验证器或恢复码", selection: $recovery) { Text("验证器").tag(false); Text("恢复码").tag(true) }
-                    FormField(title: recovery ? "恢复码" : "6 位验证码", text: $code, keyboard: recovery ? .default : .numberPad, contentType: .oneTimeCode)
-                case "passkey": verificationHint("person.badge.key.fill", "使用 Face ID、Touch ID 或设备密码验证 Passkey")
-                case "apple": verificationHint("apple.logo", "重新验证已绑定的 Apple 身份")
-                default: Text("正在读取可用验证方式…").font(.subheadline).foregroundStyle(.secondary)
+                    AdaptivePicker(L10n.text("验证器或恢复码"), selection: $recovery) { Text(L10n.text("验证器")).tag(false); Text(L10n.text("恢复码")).tag(true) }
+                    FormField(title: recovery ? L10n.text("恢复码") : L10n.text("6 位验证码"), text: $code, keyboard: recovery ? .default : .numberPad, contentType: .oneTimeCode)
+                case "passkey": verificationHint("person.badge.key.fill", L10n.text("使用 Face ID、Touch ID 或设备密码验证 Passkey"))
+                case "apple": verificationHint("apple.logo", L10n.text("重新验证已绑定的 Apple 身份"))
+                default: Text(L10n.text("正在读取可用验证方式…")).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             .padding(15).frame(maxWidth: .infinity, alignment: .leading)
             .background(Brand.card, in: RoundedRectangle(cornerRadius: 18))
-        }.navigationTitle("验证身份").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { model.cancelSensitive() } } }
+        }.navigationTitle(L10n.text("验证身份")).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { model.cancelSensitive() } } }
             .onAppear { method = request.status.preferredMethod.flatMap { methods.contains($0) ? $0 : nil } ?? methods.first ?? "" }
             .onChange(of: method) { _, _ in password = ""; code = ""; recovery = false }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                AsyncActionButton(title: "验证并继续", isBusy: model.isBusy, disabled: !canVerify) {
+                AsyncActionButton(title: L10n.text("验证并继续"), isBusy: model.isBusy, disabled: !canVerify) {
                     await model.verifySensitive(method: method, password: method == "password" ? password : nil, code: method == "totp" && recovery ? nil : code, recoveryCode: method == "totp" && recovery ? code : nil)
                 }
                 .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)

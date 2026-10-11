@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="modelValue"
     class="sensitive-verification-dialog"
-    title="敏感操作验证"
+    :title="t('ui.sensitiveVerificationDialog.message001')"
     width="560px"
     align-center
     :close-on-click-modal="true"
@@ -14,19 +14,35 @@
 
     <div v-else-if="step === 'method'" class="panel">
       <div class="verification-intro">
-        <span class="intro-icon"><el-icon><Lock /></el-icon></span>
+        <span class="intro-icon"
+          ><el-icon><Lock /></el-icon
+        ></span>
         <div>
-          <div class="intro-title">确认您的身份</div>
-          <p class="subtitle">请选择一种方式继续敏感操作</p>
+          <div class="intro-title">{{ t('ui.sensitiveVerificationDialog.message002') }}</div>
+          <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message003') }}</p>
         </div>
       </div>
-      <el-button v-if="appleBound" class="apple-verify-button" :loading="appleLoading" @click="handleAppleVerify">
-        <i class="fa-brands fa-apple" aria-hidden="true"></i>&nbsp; 使用 Apple 验证
+      <el-button
+        v-if="appleBound"
+        class="apple-verify-button"
+        :loading="appleLoading"
+        @click="handleAppleVerify"
+      >
+        <i class="fa-brands fa-apple" aria-hidden="true"></i
+        >{{ t('ui.sensitiveVerificationDialog.message004') }}
       </el-button>
       <div class="method-list">
-        <button v-for="method in allMethods" :key="method" type="button" class="method-item"
-          :disabled="methodSelecting || !isMethodSelectable(method)" @click="selectMethod(method)">
-          <span class="method-icon"><el-icon><component :is="methodIconMap[method]" /></el-icon></span>
+        <button
+          v-for="method in allMethods"
+          :key="method"
+          type="button"
+          class="method-item"
+          :disabled="methodSelecting || !isMethodSelectable(method)"
+          @click="selectMethod(method)"
+        >
+          <span class="method-icon"
+            ><el-icon><component :is="methodIconMap[method]" /></el-icon
+          ></span>
           <span class="method-copy">
             <span class="method-title">{{ methodLabelMap[method] }}</span>
             <span class="method-desc">{{ methodDescMap[method] }}</span>
@@ -37,88 +53,162 @@
     </div>
 
     <div v-else-if="step === 'password'" class="panel">
-      <p class="subtitle">请输入登录密码</p>
-      <el-form ref="passwordFormRef" :model="passwordInput" :rules="passwordRules" label-position="top">
+      <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message005') }}</p>
+      <el-form
+        ref="passwordFormRef"
+        :model="passwordInput"
+        :rules="passwordRules"
+        label-position="top"
+      >
         <el-form-item prop="password">
-          <el-input v-model="passwordInput.password" type="password" show-password placeholder="输入密码"
-            autocomplete="current-password" @keyup.enter="handlePasswordVerify" />
+          <el-input
+            v-model="passwordInput.password"
+            type="password"
+            show-password
+            :placeholder="t('ui.sensitiveVerificationDialog.message006')"
+            autocomplete="current-password"
+            @keyup.enter="handlePasswordVerify"
+          />
         </el-form-item>
       </el-form>
       <div class="actions">
-        <el-button @click="backToMethod">返回</el-button>
-        <el-button type="primary" :loading="passwordLoading" @click="handlePasswordVerify">验证</el-button>
+        <el-button @click="backToMethod">{{
+          t('ui.sensitiveVerificationDialog.message007')
+        }}</el-button>
+        <el-button type="primary" :loading="passwordLoading" @click="handlePasswordVerify">{{
+          t('ui.sensitiveVerificationDialog.message008')
+        }}</el-button>
       </div>
     </div>
 
     <div v-else-if="step === 'email-code'" class="panel">
-      <p class="subtitle">验证码已发送到您的邮箱</p>
+      <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message009') }}</p>
       <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
         <el-form-item prop="code">
-          <el-input v-model="codeInput.code" placeholder="输入6位验证码" maxlength="6"
-            @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')" @keyup.enter="handleCodeVerify" />
+          <el-input
+            v-model="codeInput.code"
+            :placeholder="t('ui.sensitiveVerificationDialog.message010')"
+            maxlength="6"
+            @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
+            @keyup.enter="handleCodeVerify"
+          />
         </el-form-item>
       </el-form>
       <div class="code-actions">
-        <el-button v-if="!canResendCode" disabled>{{ codeCountdown }}s 后可重发</el-button>
-        <el-button v-else @click="resendCode">重新发送验证码</el-button>
+        <el-button v-if="!canResendCode" disabled
+          >{{ codeCountdown }}{{ t('ui.sensitiveVerificationDialog.message011') }}</el-button
+        >
+        <el-button v-else @click="resendCode">{{
+          t('ui.sensitiveVerificationDialog.message012')
+        }}</el-button>
       </div>
       <div class="actions">
-        <el-button @click="backToMethod">返回</el-button>
-        <el-button type="primary" :loading="codeLoading" @click="handleCodeVerify">验证</el-button>
+        <el-button @click="backToMethod">{{
+          t('ui.sensitiveVerificationDialog.message007')
+        }}</el-button>
+        <el-button type="primary" :loading="codeLoading" @click="handleCodeVerify">{{
+          t('ui.sensitiveVerificationDialog.message008')
+        }}</el-button>
       </div>
     </div>
 
     <div v-else-if="step === 'passkey'" class="panel">
-      <p class="subtitle">请按照浏览器提示完成 Passkey 验证</p>
+      <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message013') }}</p>
       <div class="actions">
-        <el-button @click="backToMethod">返回</el-button>
+        <el-button @click="backToMethod">{{
+          t('ui.sensitiveVerificationDialog.message007')
+        }}</el-button>
         <el-button type="primary" :loading="passkeyLoading" @click="handlePasskeyVerify">
-          {{ passkeyLoading ? '验证中...' : '验证身份' }}
+          {{
+            passkeyLoading
+              ? t('ui.sensitiveVerificationDialog.message014')
+              : t('ui.sensitiveVerificationDialog.message015')
+          }}
         </el-button>
       </div>
     </div>
 
     <div v-else-if="step === 'qr'" class="panel">
-      <p class="subtitle">请使用已登录手机端扫描二维码完成敏感验证</p>
+      <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message016') }}</p>
       <div class="qr-wrap">
-        <img v-if="qrCodeImage" :src="qrCodeImage" alt="敏感验证扫码二维码" class="qr-image" />
-        <div v-else class="qr-placeholder">正在生成二维码...</div>
-        <div class="qr-meta">剩余有效期：{{ Math.max(qrExpiresInSeconds, 0) }} 秒</div>
+        <img
+          v-if="qrCodeImage"
+          :src="qrCodeImage"
+          :alt="t('ui.sensitiveVerificationDialog.message017')"
+          class="qr-image"
+        />
+        <div v-else class="qr-placeholder">
+          {{ t('ui.mobileBridgeQrSidebarAction.message004') }}
+        </div>
+        <div class="qr-meta">
+          {{ t('ui.accountRecoveryCard.message009') }}{{ Math.max(qrExpiresInSeconds, 0) }}
+          {{ t('ui.accountRecoveryCard.message010') }}
+        </div>
       </div>
       <div class="actions">
-        <el-button @click="backToMethod">返回</el-button>
+        <el-button @click="backToMethod">{{
+          t('ui.sensitiveVerificationDialog.message007')
+        }}</el-button>
         <el-button type="primary" :loading="qrRefreshing" @click="refreshQrVerification">
-          刷新二维码
+          {{ t('ui.mobileBridgeQrSidebarAction.message006') }}
         </el-button>
       </div>
     </div>
 
     <div v-else-if="step === 'totp'" class="panel">
-      <p class="subtitle">请输入动态码或恢复码</p>
-      <div class="totp-mode-switch" role="tablist" aria-label="TOTP 模式切换">
-        <button type="button" class="chip" :class="{ active: totpMode === 'totp' }" @click="setTotpMode('totp')">
-          动态码
+      <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message018') }}</p>
+      <div
+        class="totp-mode-switch"
+        role="tablist"
+        :aria-label="t('ui.sensitiveVerificationDialog.message019')"
+      >
+        <button
+          type="button"
+          class="chip"
+          :class="{ active: totpMode === 'totp' }"
+          @click="setTotpMode('totp')"
+        >
+          {{ t('ui.sensitiveVerificationDialog.message020') }}
         </button>
-        <button type="button" class="chip" :class="{ active: totpMode === 'recovery' }"
-          @click="setTotpMode('recovery')">
-          恢复码
+        <button
+          type="button"
+          class="chip"
+          :class="{ active: totpMode === 'recovery' }"
+          @click="setTotpMode('recovery')"
+        >
+          {{ t('ui.sensitiveVerificationDialog.message021') }}
         </button>
       </div>
       <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
         <el-form-item prop="code">
-          <el-input v-model="totpInput.code" :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位恢复码'"
-            :maxlength="totpMode === 'totp' ? 6 : 8" @input="handleTotpInput" @keyup.enter="handleTotpVerify" />
+          <el-input
+            v-model="totpInput.code"
+            :placeholder="
+              totpMode === 'totp'
+                ? t('ui.sensitiveVerificationDialog.message022')
+                : t('ui.sensitiveVerificationDialog.message023')
+            "
+            :maxlength="totpMode === 'totp' ? 6 : 8"
+            @input="handleTotpInput"
+            @keyup.enter="handleTotpVerify"
+          />
         </el-form-item>
       </el-form>
       <div class="actions">
-        <el-button @click="backToMethod">返回</el-button>
-        <el-button type="primary" :loading="totpLoading" @click="handleTotpVerify">验证</el-button>
+        <el-button @click="backToMethod">{{
+          t('ui.sensitiveVerificationDialog.message007')
+        }}</el-button>
+        <el-button type="primary" :loading="totpLoading" @click="handleTotpVerify">{{
+          t('ui.sensitiveVerificationDialog.message008')
+        }}</el-button>
       </div>
     </div>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
+import { t, LocalizedError } from '@/i18n'
+
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
@@ -136,14 +226,21 @@ import {
   verifySensitiveOperation,
 } from '@/api/auth'
 import { prepareAppleSignIn, verifySensitiveWithApple } from '@/utils/appleSignIn'
-import { extractAuthenticationData, getPasskeyCredential, isWebAuthnSupported } from '@/utils/webauthn'
+import {
+  extractAuthenticationData,
+  getPasskeyCredential,
+  isWebAuthnSupported,
+} from '@/utils/webauthn'
 
-const props = withDefaults(defineProps<{
-  modelValue: boolean
-  disableQrMethod?: boolean
-}>(), {
-  disableQrMethod: false,
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean
+    disableQrMethod?: boolean
+  }>(),
+  {
+    disableQrMethod: false,
+  },
+)
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
@@ -159,21 +256,25 @@ const allMethods: Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'> =
   'qr',
 ]
 
-const methodLabelMap: Record<'password' | 'email-code' | 'passkey' | 'totp' | 'qr', string> = {
-  password: '密码验证',
-  'email-code': '邮箱验证码',
-  passkey: 'Passkey 验证',
-  totp: 'TOTP 验证',
-  qr: '扫码验证',
-}
+const methodLabelMap = computed<
+  Record<'password' | 'email-code' | 'passkey' | 'totp' | 'qr', string>
+>(() => ({
+  password: t('ui.sensitiveVerificationDialog.message024'),
+  'email-code': t('ui.sensitiveVerificationDialog.message025'),
+  passkey: t('ui.sensitiveVerificationDialog.message026'),
+  totp: t('ui.sensitiveVerificationDialog.message027'),
+  qr: t('ui.sensitiveVerificationDialog.message028'),
+}))
 
-const methodDescMap: Record<'password' | 'email-code' | 'passkey' | 'totp' | 'qr', string> = {
-  password: '输入登录密码',
-  'email-code': '使用邮箱验证码',
-  passkey: '使用生物识别或安全密钥',
-  totp: '输入动态码或恢复码',
-  qr: '使用已登录手机端扫码',
-}
+const methodDescMap = computed<
+  Record<'password' | 'email-code' | 'passkey' | 'totp' | 'qr', string>
+>(() => ({
+  password: t('ui.sensitiveVerificationDialog.message029'),
+  'email-code': t('ui.sensitiveVerificationDialog.message030'),
+  passkey: t('ui.sensitiveVerificationDialog.message031'),
+  totp: t('ui.sensitiveVerificationDialog.message032'),
+  qr: t('ui.sensitiveVerificationDialog.message033'),
+}))
 
 const methodIconMap = {
   password: Lock,
@@ -202,11 +303,13 @@ const handleAppleVerify = async () => {
   appleLoading.value = true
   try {
     await verifySensitiveWithApple()
-    ElMessage.success('Apple 身份验证成功')
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message034'))
     emit('success')
     setVisible(false)
   } catch (error: unknown) {
-    ElMessage.error(error instanceof Error ? error.message : 'Apple 验证失败，请重试')
+    ElMessage.error(
+      error instanceof Error ? error.message : t('ui.sensitiveVerificationDialog.message035'),
+    )
   } finally {
     appleLoading.value = false
   }
@@ -221,30 +324,32 @@ const codeInput = ref({ code: '' })
 const totpInput = ref({ code: '' })
 const totpMode = ref<'totp' | 'recovery'>('totp')
 
-const passwordRules = {
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-}
-
-const codeRules = {
-  code: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码应为6位数字', trigger: 'blur' },
+const passwordRules = computed(() => ({
+  password: [
+    { required: true, message: t('ui.sensitiveVerificationDialog.message036'), trigger: 'blur' },
   ],
-}
+}))
+
+const codeRules = computed(() => ({
+  code: [
+    { required: true, message: t('ui.sensitiveVerificationDialog.message037'), trigger: 'blur' },
+    { len: 6, message: t('ui.sensitiveVerificationDialog.message038'), trigger: 'blur' },
+  ],
+}))
 
 const totpRules = computed(() => ({
   code: [
-    { required: true, message: '请输入验证码或恢复码', trigger: 'blur' },
+    { required: true, message: t('ui.sensitiveVerificationDialog.message039'), trigger: 'blur' },
     {
       validator: (_rule: unknown, value: string, callback: (err?: Error) => void) => {
         const v = (value || '').trim()
         if (totpMode.value === 'totp' && !/^[0-9]{6}$/.test(v)) {
-          callback(new Error('请输入 6 位数字动态码'))
+          callback(new LocalizedError('ui.sensitiveVerificationDialog.message040'))
           return
         }
 
         if (totpMode.value === 'recovery' && !/^[A-Z]{8}$/.test(v)) {
-          callback(new Error('请输入 8 位大写字母恢复码'))
+          callback(new LocalizedError('ui.sensitiveVerificationDialog.message041'))
           return
         }
 
@@ -308,7 +413,9 @@ const initDialog = async () => {
 
   try {
     const status = await checkSensitiveVerification()
-    appleBound.value = await getAppleStatus().then((result) => result.enabled).catch(() => false)
+    appleBound.value = await getAppleStatus()
+      .then((result) => result.enabled)
+      .catch(() => false)
     if (appleBound.value) void prepareAppleSignIn().catch(() => {})
     if (status.verified && status.remainingSeconds > 0) {
       emit('success')
@@ -321,7 +428,7 @@ const initDialog = async () => {
       step.value = 'method'
       return
     }
-    const sanitizedMethods = methods.filter((item): item is typeof allMethods[number] =>
+    const sanitizedMethods = methods.filter((item): item is (typeof allMethods)[number] =>
       allMethods.includes(item),
     )
 
@@ -332,12 +439,15 @@ const initDialog = async () => {
     const mergedMethods = props.disableQrMethod
       ? mergedMethodsBase.filter((item) => item !== 'qr')
       : [...new Set([...mergedMethodsBase, 'qr'])]
-    availableMethods.value = mergedMethods as Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>
+    availableMethods.value = mergedMethods as Array<
+      'password' | 'email-code' | 'passkey' | 'totp' | 'qr'
+    >
 
     // 默认进入偏好方式，同时保留返回入口让用户切换其他方式。
     const preferredMethod = status.preferredMethod
     const defaultMethod = [preferredMethod, ...availableMethods.value].find(
-      (item) => !!item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'),
+      (item) =>
+        !!item && isMethodSelectable(item as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr'),
     ) as 'password' | 'email-code' | 'passkey' | 'totp' | 'qr' | undefined
 
     if (defaultMethod) {
@@ -348,7 +458,7 @@ const initDialog = async () => {
     step.value = 'method'
   } catch (error) {
     console.error('Load sensitive verification preference failed:', error)
-    ElMessage.error('加载验证方式失败，请稍后重试')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message042'))
   } finally {
     initializing.value = false
   }
@@ -370,7 +480,7 @@ watch(
 const selectMethod = async (method: 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
   if (methodSelecting.value) return
   if (!isMethodSelectable(method)) {
-    ElMessage.error('当前不可使用该验证方式')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message043'))
     return
   }
 
@@ -402,7 +512,7 @@ const handleQrStatusApproved = async (status: QrChallengeStatusResponse) => {
     verifySuccess()
     return
   }
-  ElMessage.error('扫码验证结果无效，请重试')
+  ElMessage.error(t('ui.sensitiveVerificationDialog.message044'))
 }
 
 const pollQrVerification = async () => {
@@ -419,10 +529,10 @@ const pollQrVerification = async () => {
       return
     }
     if (status.status === 'rejected') {
-      ElMessage.error('扫码请求已被拒绝，请刷新二维码')
+      ElMessage.error(t('ui.sensitiveVerificationDialog.message045'))
       return
     }
-    ElMessage.warning('二维码已过期，请刷新二维码')
+    ElMessage.warning(t('ui.sensitiveVerificationDialog.message046'))
   } catch (error) {
     cleanupQrPolling()
     console.error('QR sensitive polling failed:', error)
@@ -449,7 +559,7 @@ const startQrVerification = async () => {
     startQrPolling()
   } catch (error) {
     console.error('Init QR sensitive verification failed:', error)
-    ElMessage.error('初始化扫码验证失败，请重试')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message047'))
   } finally {
     qrRefreshing.value = false
   }
@@ -460,7 +570,7 @@ const refreshQrVerification = async () => {
 }
 
 const verifySuccess = () => {
-  ElMessage.success('验证成功')
+  ElMessage.success(t('ui.sensitiveVerificationDialog.message048'))
   emit('success')
   setVisible(false)
 }
@@ -486,7 +596,7 @@ const sendCode = async () => {
   step.value = 'email-code'
   codeInput.value.code = ''
   startCodeCountdown()
-  ElMessage.success('验证码已发送')
+  ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
 }
 
 const resendCode = async () => {
@@ -495,7 +605,7 @@ const resendCode = async () => {
     await sendSensitiveVerificationCode()
     codeInput.value.code = ''
     startCodeCountdown()
-    ElMessage.success('验证码已重新发送')
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message050'))
   } catch (error) {
     console.error('Resend code failed:', error)
   } finally {
@@ -522,7 +632,10 @@ const handleTotpInput = (value: string) => {
     return
   }
 
-  totpInput.value.code = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 8)
+  totpInput.value.code = value
+    .replace(/[^a-zA-Z]/g, '')
+    .toUpperCase()
+    .slice(0, 8)
 }
 
 const setTotpMode = (mode: 'totp' | 'recovery') => {
@@ -554,7 +667,7 @@ const handleTotpVerify = async () => {
 const handlePasskeyVerify = async () => {
   if (passkeyLoading.value) return
   if (!passkeySupported.value) {
-    ElMessage.error('当前浏览器不支持 Passkey')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message051'))
     return
   }
 
@@ -570,7 +683,7 @@ const handlePasskeyVerify = async () => {
     })
 
     if (!credential) {
-      throw new Error('未获取到凭证')
+      throw new LocalizedError('ui.sensitiveVerificationDialog.message052')
     }
 
     const authData = extractAuthenticationData(credential)
@@ -578,7 +691,7 @@ const handlePasskeyVerify = async () => {
     verifySuccess()
   } catch (error) {
     if (error instanceof Error && error.name === 'NotAllowedError') {
-      ElMessage.error('用户取消了认证')
+      ElMessage.error(t('ui.sensitiveVerificationDialog.message053'))
       return
     }
     console.error('Passkey verify failed:', error)
@@ -726,7 +839,11 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color);
   padding: 13px 12px;
   cursor: pointer;
-  transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .method-item:hover:not(:disabled) {
@@ -776,7 +893,9 @@ onBeforeUnmount(() => {
 .method-arrow {
   flex: 0 0 auto;
   color: var(--el-text-color-placeholder);
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .method-item:hover:not(:disabled) .method-arrow {
@@ -816,7 +935,9 @@ onBeforeUnmount(() => {
 }
 
 .panel :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+  box-shadow:
+    0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px var(--el-color-primary-light-9);
 }
 
 .code-actions {

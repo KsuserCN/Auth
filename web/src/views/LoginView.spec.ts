@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
 import LoginView from './LoginView.vue'
+import { setLanguagePreference } from '@/i18n'
 
 const mocks = vi.hoisted(() => ({
   ios: vi.fn(),
@@ -257,23 +258,42 @@ describe('Apple login account routing', () => {
   it('logs in an already linked identity and returns to the requested destination', async () => {
     mocks.apple.mockResolvedValue({ accessToken: 'apple-session', user: { uuid: 'linked-user' } })
     await loginWithApple()
-    expect(mocks.finalize).toHaveBeenCalledWith({ accessToken: 'apple-session', user: { uuid: 'linked-user' } })
+    expect(mocks.finalize).toHaveBeenCalledWith({
+      accessToken: 'apple-session',
+      user: { uuid: 'linked-user' },
+    })
     expect(mocks.replace).toHaveBeenCalledWith('/home/security')
     expect(mocks.push).not.toHaveBeenCalled()
   })
 
-  it.each([false, true])('offers account choices for unlinked Apple identities (email conflict: %s)', async (conflict) => {
-    mocks.apple.mockResolvedValue({ needBind: true, oauthBindToken: 'apple-ticket', canRegister: !conflict, emailConflict: conflict })
-    await loginWithApple()
-    expect(mocks.push).toHaveBeenCalledWith('/oauth/apple/continue')
-    expect(mocks.finalize).not.toHaveBeenCalled()
-  })
+  it.each([false, true])(
+    'offers account choices for unlinked Apple identities (email conflict: %s)',
+    async (conflict) => {
+      mocks.apple.mockResolvedValue({
+        needBind: true,
+        oauthBindToken: 'apple-ticket',
+        canRegister: !conflict,
+        emailConflict: conflict,
+      })
+      await loginWithApple()
+      expect(mocks.push).toHaveBeenCalledWith('/oauth/apple/continue')
+      expect(mocks.finalize).not.toHaveBeenCalled()
+    },
+  )
 
   it('retains binding intent when Apple login requires MFA', async () => {
     mocks.route.query = { oauthBindProvider: 'apple' }
     mocks.apple.mockResolvedValue({ challengeId: 'apple-mfa', method: 'totp', methods: ['totp'] })
     await loginWithApple()
-    expect(mocks.push).toHaveBeenCalledWith(expect.objectContaining({ query: expect.objectContaining({ oauthBindProvider: 'apple', challengeId: 'apple-mfa', mfaFrom: 'apple' }) }))
+    expect(mocks.push).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: expect.objectContaining({
+          oauthBindProvider: 'apple',
+          challengeId: 'apple-mfa',
+          mfaFrom: 'apple',
+        }),
+      }),
+    )
     expect(mocks.finalize).not.toHaveBeenCalled()
   })
 
@@ -284,5 +304,30 @@ describe('Apple login account routing', () => {
     await loginWithApple()
     expect(mocks.replace).toHaveBeenCalledWith('/oauth/apple/continue?mode=bind')
     expect(sessionStorage.getItem('ksuser:post-login-redirect')).toBe('/home/security')
+  })
+})
+
+describe('live sign-in localization', () => {
+  it('updates copy and validation rules without resetting the form or current step', async () => {
+    mocks.ios.mockReturnValue(false)
+    mocks.android.mockReturnValue(false)
+    const wrapper = render()
+    await flushPromises()
+    const state = wrapper.vm as unknown as {
+      emailInput: { email: string }
+      step: string
+      emailRules: { email: Array<{ message: string }> }
+    }
+    state.emailInput.email = 'existing-input@example.com'
+    const currentStep = state.step
+    setLanguagePreference('en')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Get started')
+    expect(state.emailInput.email).toBe('existing-input@example.com')
+    expect(state.step).toBe(currentStep)
+    expect(state.emailRules.email[0]?.message).toBe('Please enter an email address')
+    setLanguagePreference('zh-Hans')
+    await flushPromises()
+    expect(state.emailRules.email[0]?.message).toBe('请输入邮箱地址')
   })
 })

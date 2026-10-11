@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct AboutView: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
+    @Environment(LanguageSettings.self) private var language
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -24,10 +26,10 @@ struct AboutView: View {
             VStack(spacing: 10) {
                 Image("AppLogo").resizable().scaledToFit().frame(width: 84, height: 84)
                     .clipShape(RoundedRectangle(cornerRadius: 20))
-                    .accessibilityLabel("Ksuser 安全软件图标").accessibilityIdentifier("appLogo")
-                Text("Ksuser 安全").font(.title2.weight(.bold))
-                Text("安全连接，安心使用。").font(.subheadline).foregroundStyle(.secondary)
-                Text("版本 \(version) (\(build))")
+                    .accessibilityLabel(L10n.text("Ksuser 安全软件图标")).accessibilityIdentifier("appLogo")
+                Text(L10n.text("Ksuser 安全")).font(.title2.weight(.bold))
+                Text(L10n.text("安全连接，安心使用。")).font(.subheadline).foregroundStyle(.secondary)
+                Text(L10n.format("版本 {0} ({1})", [String(describing: version), String(describing: build)]))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12).padding(.vertical, 7)
@@ -36,30 +38,54 @@ struct AboutView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 20).padding(.bottom, 12)
             VStack(alignment: .leading, spacing: 10) {
-                Text("外观").font(.headline).padding(.horizontal, 4)
+                Text(L10n.text("外观")).font(.headline).padding(.horizontal, 4)
                 themeLayout {
                     ForEach(AppTheme.allCases) { theme in themeButton(theme) }
                 }
                 .padding(12)
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
             }
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L10n.text("语言")).font(.headline).padding(.horizontal, 4)
+                VStack(alignment: .leading, spacing: 8) {
+                    Menu {
+                        ForEach(AppLanguage.allCases) { option in
+                            Button { language.preference = option } label: {
+                                if language.preference == option { Label(option.title, systemImage: "checkmark") }
+                                else { Text(option.title) }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text(language.preference.title)
+                                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                            Image(systemName: "chevron.up.chevron.down").accessibilityHidden(true)
+                        }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .tint(Brand.gold)
+                    .accessibilityLabel(L10n.text("语言")).accessibilityValue(language.preference.title)
+                    .accessibilityIdentifier("languagePicker")
+                    Text(L10n.text("跟随设备语言，或为此设备选择显示语言。"))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }.padding(12).background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
+            }
             if model.isAuthenticated { PushNotificationSettingsView() }
             VStack(alignment: .leading, spacing: 10) {
-                Text("协议与隐私").font(.headline).padding(.horizontal, 4)
+                Text(L10n.text("协议与隐私")).font(.headline).padding(.horizontal, 4)
                 VStack(spacing: 0) {
-                    legalLink("服务协议", subtitle: "使用条款", icon: "doc.text", path: "user")
+                    legalLink(L10n.text("服务协议"), subtitle: L10n.text("使用条款"), icon: "doc.text", path: "user")
                     Divider().padding(.leading, 48)
-                    legalLink("隐私政策", subtitle: "个人信息保护", icon: "hand.raised", path: "privacy")
+                    legalLink(L10n.text("隐私政策"), subtitle: L10n.text("个人信息保护"), icon: "hand.raised", path: "privacy")
                     Divider().padding(.leading, 48)
-                    legalLink("第三方信息共享清单", subtitle: "第三方服务说明", icon: "square.stack.3d.up", path: "third-party-information-sharing")
+                    legalLink(L10n.text("第三方信息共享清单"), subtitle: L10n.text("第三方服务说明"), icon: "square.stack.3d.up", path: "third-party-information-sharing")
                 }
                 .padding(.horizontal, 16).padding(.vertical, 4)
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text("帮助与反馈").font(.headline).padding(.horizontal, 4)
+                Text(L10n.text("帮助与反馈")).font(.headline).padding(.horizontal, 4)
                 VStack(spacing: 0) {
-                    externalLink("问题反馈", subtitle: "提交问题或建议", icon: "bubble.left.and.bubble.right", url: "https://github.com/KsuserCN/Auth/issues")
+                    externalLink(L10n.text("问题反馈"), subtitle: L10n.text("提交问题或建议"), icon: "bubble.left.and.bubble.right", url: "https://github.com/KsuserCN/Auth/issues")
                 }
                 .padding(.horizontal, 16).padding(.vertical, 4)
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
@@ -69,11 +95,12 @@ struct AboutView: View {
                 VStack(spacing: 0) {
                     Text("\(currentYear.formatted(.number.grouping(.never))) Ksuser | KsuserKqy")
                         .font(.caption2)
+                        .lineLimit(1).minimumScaleFactor(0.2)
                         .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity, minHeight: 24)
                     Button { openURL(URL(string: "https://beian.miit.gov.cn/")!) } label: {
                         HStack(spacing: 4) {
-                            Text(filingNumber)
+                            Text(filingNumber).lineLimit(1).minimumScaleFactor(0.2)
                             Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold)).accessibilityHidden(true)
                         }
                         .font(.caption2)
@@ -83,31 +110,31 @@ struct AboutView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(filingNumber)
-                    .accessibilityHint("在应用内打开工信部备案管理系统")
+                    .accessibilityHint(L10n.text("在应用内打开工信部备案管理系统"))
                     .accessibilityIdentifier("icpFilingNumber")
                 }
                 .padding(.horizontal, 20)
                 .background(Brand.background)
             }
-            .navigationTitle("关于与设置").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(L10n.text("关于与设置")).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(L10n.text("完成")) { dismiss() } }
                 if model.isAuthenticated {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("退出", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                        Button(L10n.text("退出"), systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
                             showLogoutConfirmation = true
                         }
                         .disabled(model.isBusy)
                         .accessibilityIdentifier("settingsLogoutButton")
-                        .confirmationDialog("退出当前账号？", isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
-                            Button("退出登录", role: .destructive) {
+                        .confirmationDialog(L10n.text("退出当前账号？"), isPresented: $showLogoutConfirmation, titleVisibility: .visible) {
+                            Button(L10n.text("退出登录"), role: .destructive) {
                                 Task {
                                     await model.logout()
                                     dismiss()
                                 }
                             }
                         } message: {
-                            Text("退出后需要重新登录才能继续使用。")
+                            Text(L10n.text("退出后需要重新登录才能继续使用。"))
                         }
                     }
                 }
@@ -134,7 +161,7 @@ struct AboutView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(theme.title)
-        .accessibilityValue(selected ? "已选择" : "未选择")
+        .accessibilityValue(selected ? L10n.text("已选择") : L10n.text("未选择"))
         .accessibilityIdentifier("theme-" + theme.rawValue)
     }
 

@@ -6,29 +6,34 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">{{ getPendingOAuthBind() ? '注册并绑定账号' : '创建账户' }}</h1>
-        <p class="login-description">{{ getPendingOAuthBind() ? '创建 Ksuser 账号后，将自动绑定刚刚授权的第三方账号' : '开始您的安全之旅，创建一个新账户' }}</p>
+        <h1 class="login-title">
+          {{ getPendingOAuthBind() ? t('ui.register.message001') : t('ui.register.message002') }}
+        </h1>
+        <p class="login-description">
+          {{ getPendingOAuthBind() ? t('ui.register.message003') : t('ui.register.message004') }}
+        </p>
         <p v-if="!getPendingOAuthBind()" class="login-description">
-          使用第三方账号？<router-link to="/login" class="link">前往登录并关联账号</router-link>
+          {{ t('ui.register.message005')
+          }}<router-link to="/login" class="link">{{ t('ui.register.message006') }}</router-link>
         </p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lock />
             </el-icon>
-            <span class="feature-text">安全保护</span>
+            <span class="feature-text">{{ t('ui.appleRegister.message003') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lightning />
             </el-icon>
-            <span class="feature-text">快速开始</span>
+            <span class="feature-text">{{ t('ui.appleRegister.message004') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Key />
             </el-icon>
-            <span class="feature-text">密码强度</span>
+            <span class="feature-text">{{ t('ui.changePassword.message005') }}</span>
           </div>
         </div>
       </div>
@@ -41,8 +46,8 @@
         >
           <!-- 第一步：用户名 -->
           <div v-if="step === 'username'" class="step-container" key="username">
-            <h2 class="step-title">选择用户名</h2>
-            <p class="step-subtitle">3-20个字符，支持中文、字母、数字、下划线和连字符</p>
+            <h2 class="step-title">{{ t('ui.appleRegister.message019') }}</h2>
+            <p class="step-subtitle">{{ t('ui.register.message007') }}</p>
 
             <el-form
               ref="usernameFormRef"
@@ -53,7 +58,7 @@
               <el-form-item prop="username">
                 <el-input
                   v-model="formData.username"
-                  placeholder="用户名"
+                  :placeholder="t('ui.deleteAccount.message012')"
                   @keyup.enter="goToPassword"
                   autocomplete="off"
                   autofocus
@@ -70,21 +75,30 @@
                 <CircleCheck v-if="usernameAvailable" />
                 <CircleClose v-else />
               </el-icon>
-              <span>{{ usernameCheckResult }}</span>
+              <span>{{ renderMessage(usernameCheckResult) }}</span>
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="handleCancel">取消</el-button>
+              <el-button class="back-btn" @click="handleCancel">{{
+                t('ui.addPasskey.message009')
+              }}</el-button>
               <el-button class="next-btn" @click="goToPassword" :loading="usernameLoading">
-                下一步
+                {{ t('ui.changePassword.message009') }}
               </el-button>
             </div>
           </div>
 
           <!-- 第二步：密码 -->
           <div v-else-if="step === 'password'" class="step-container" key="password">
-            <h2 class="step-title">设置密码</h2>
-            <p class="step-subtitle">{{ resolveApiResult({ errorCode: passwordRequirement.requirementCode, params: passwordRequirement.requirementParams }) }}</p>
+            <h2 class="step-title">{{ t('ui.register.message008') }}</h2>
+            <p class="step-subtitle">
+              {{
+                resolveApiResult({
+                  errorCode: passwordRequirement.requirementCode,
+                  params: passwordRequirement.requirementParams,
+                })
+              }}
+            </p>
 
             <el-form
               ref="passwordFormRef"
@@ -96,7 +110,7 @@
                 <el-input
                   v-model="formData.password"
                   type="password"
-                  placeholder="输入密码"
+                  :placeholder="t('ui.sensitiveVerificationDialog.message006')"
                   show-password
                   @keyup.enter="goToPasswordConfirm"
                   autocomplete="new-password"
@@ -106,7 +120,7 @@
             </el-form>
 
             <div class="password-requirements">
-              <div class="requirement-title">密码要求：</div>
+              <div class="requirement-title">{{ t('ui.changePassword.message008') }}</div>
               <div
                 v-for="(item, index) in requirementItems"
                 :key="index"
@@ -122,8 +136,12 @@
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToUsername">返回</el-button>
-              <el-button class="next-btn" @click="goToPasswordConfirm"> 下一步 </el-button>
+              <el-button class="back-btn" @click="backToUsername">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
+              <el-button class="next-btn" @click="goToPasswordConfirm">
+                {{ t('ui.changePassword.message009') }}
+              </el-button>
             </div>
           </div>
 
@@ -133,8 +151,8 @@
             class="step-container"
             key="password-confirm"
           >
-            <h2 class="step-title">确认密码</h2>
-            <p class="step-subtitle">请再次输入密码以确认</p>
+            <h2 class="step-title">{{ t('ui.register.message009') }}</h2>
+            <p class="step-subtitle">{{ t('ui.register.message010') }}</p>
 
             <el-form
               ref="passwordConfirmFormRef"
@@ -146,7 +164,7 @@
                 <el-input
                   v-model="formData.passwordConfirm"
                   type="password"
-                  placeholder="再次输入密码"
+                  :placeholder="t('ui.register.message011')"
                   show-password
                   @keyup.enter="goToEmail"
                   autocomplete="new-password"
@@ -156,22 +174,26 @@
             </el-form>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToPassword">返回</el-button>
-              <el-button class="next-btn" @click="goToEmail"> 下一步 </el-button>
+              <el-button class="back-btn" @click="backToPassword">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
+              <el-button class="next-btn" @click="goToEmail">
+                {{ t('ui.changePassword.message009') }}
+              </el-button>
             </div>
           </div>
 
           <!-- 第四步：邮箱 -->
           <div v-else-if="step === 'email'" class="step-container" key="email">
-            <h2 class="step-title">输入邮箱</h2>
-            <p class="step-subtitle">用于接收验证码和系统通知</p>
+            <h2 class="step-title">{{ t('ui.register.message012') }}</h2>
+            <p class="step-subtitle">{{ t('ui.register.message013') }}</p>
 
             <el-form ref="emailFormRef" :model="formData" :rules="emailRules" label-position="top">
               <el-form-item prop="email">
                 <el-input
                   v-model="formData.email"
                   type="email"
-                  placeholder="邮箱地址"
+                  :placeholder="t('ui.login.message011')"
                   @keyup.enter="handleSendCode"
                   autocomplete="email"
                   autofocus
@@ -180,28 +202,32 @@
             </el-form>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToPasswordConfirm">返回</el-button>
+              <el-button class="back-btn" @click="backToPasswordConfirm">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
               <el-button class="next-btn" @click="handleSendCode" :loading="sendLoading">
-                发送验证码
+                {{ t('ui.changeEmail.message009') }}
               </el-button>
             </div>
           </div>
 
           <!-- 第五步：验证码 -->
           <div v-else-if="step === 'code'" class="step-container" key="code">
-            <h2 class="step-title">输入验证码</h2>
-            <p class="step-subtitle">验证码已发送至 {{ formData.email }}</p>
+            <h2 class="step-title">{{ t('ui.changeEmail.message010') }}</h2>
+            <p class="step-subtitle">{{ t('ui.changeEmail.message011') }} {{ formData.email }}</p>
 
             <div class="email-confirm">
               <span class="email-display">{{ formData.email }}</span>
-              <el-button link class="change-email-btn" @click="backToEmail">修改邮箱</el-button>
+              <el-button link class="change-email-btn" @click="backToEmail">{{
+                t('ui.changeEmail.message012')
+              }}</el-button>
             </div>
 
             <el-form ref="codeFormRef" :model="formData" :rules="codeRules" label-position="top">
               <el-form-item prop="code">
                 <el-input
                   v-model="formData.code"
-                  placeholder="输入6位验证码"
+                  :placeholder="t('ui.sensitiveVerificationDialog.message010')"
                   maxlength="6"
                   @input="formData.code = formData.code.replace(/[^\d]/g, '')"
                   @keyup.enter="handleRegister"
@@ -212,7 +238,7 @@
 
             <div class="code-actions">
               <el-button v-if="!canResendCode" disabled class="resend-btn resend-disabled">
-                {{ codeCountdown }}s 后重新发送
+                {{ codeCountdown }}{{ t('ui.changeEmail.message013') }}
               </el-button>
               <el-button
                 v-else
@@ -221,14 +247,16 @@
                 class="resend-btn"
                 :loading="resendLoading"
               >
-                重新发送验证码
+                {{ t('ui.sensitiveVerificationDialog.message012') }}
               </el-button>
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToEmail">返回</el-button>
+              <el-button class="back-btn" @click="backToEmail">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
               <el-button class="next-btn" @click="handleRegister" :loading="registerLoading">
-                创建账户
+                {{ t('ui.register.message002') }}
               </el-button>
             </div>
           </div>
@@ -239,6 +267,8 @@
 </template>
 
 <script setup lang="ts">
+import { t, uiMessage, renderMessage, type LocalizedMessage, LocalizedError } from '@/i18n'
+
 import { resolveApiResult } from '@/utils/apiResult'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
@@ -310,7 +340,7 @@ const passwordRequirement = ref<PasswordRequirement>({
 
 // 用户名检查
 const usernameLoading = ref(false)
-const usernameCheckResult = ref('')
+const usernameCheckResult = ref<LocalizedMessage>('')
 const usernameAvailable = ref(false)
 
 // 密码验证规则
@@ -318,17 +348,22 @@ const validatePassword = (rule: any, value: any, callback: any) => {
   const req = passwordRequirement.value
 
   if (value === '') {
-    callback(new Error('请输入密码'))
+    callback(new LocalizedError('ui.sensitiveVerificationDialog.message036'))
   } else if (value.length < req.minLength || value.length > req.maxLength) {
-    callback(new Error(`密码长度必须在${req.minLength}-${req.maxLength}个字符之间`))
+    callback(
+      new LocalizedError('ui.changePassword.message014', {
+        arg0: req.minLength,
+        arg1: req.maxLength,
+      }),
+    )
   } else if (req.requireUppercase && !/[A-Z]/.test(value)) {
-    callback(new Error('密码必须包含至少一个大写字母'))
+    callback(new LocalizedError('ui.changePassword.message015'))
   } else if (req.requireLowercase && !/[a-z]/.test(value)) {
-    callback(new Error('密码必须包含至少一个小写字母'))
+    callback(new LocalizedError('ui.changePassword.message016'))
   } else if (req.requireDigits && !/\d/.test(value)) {
-    callback(new Error('密码必须包含至少一个数字'))
+    callback(new LocalizedError('ui.changePassword.message017'))
   } else if (req.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
-    callback(new Error('密码必须包含至少一个特殊字符'))
+    callback(new LocalizedError('ui.changePassword.message018'))
   } else {
     callback()
   }
@@ -336,26 +371,26 @@ const validatePassword = (rule: any, value: any, callback: any) => {
 
 const validatePasswordConfirm = (rule: any, value: any, callback: any) => {
   if (value === '') {
-    callback(new Error('请再次输入密码'))
+    callback(new LocalizedError('ui.register.message014'))
   } else if (value !== formData.value.password) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new LocalizedError('ui.changePassword.message020'))
   } else {
     callback()
   }
 }
 
 // 表单验证规则
-const usernameRules: FormRules = {
+const usernameRules = computed<FormRules>(() => ({
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在3-20个字符之间', trigger: 'blur' },
+    { required: true, message: t('ui.deleteAccount.message021'), trigger: 'blur' },
+    { min: 3, max: 20, message: t('ui.register.message015'), trigger: 'blur' },
     {
       pattern: /^[a-zA-Z0-9_\-\u4e00-\u9fa5]+$/,
-      message: '用户名只能包含中文、字母、数字、下划线和连字符',
+      message: t('ui.register.message016'),
       trigger: 'blur',
     },
   ],
-}
+}))
 
 const passwordRules: FormRules = {
   password: [{ required: true, validator: validatePassword, trigger: 'blur' }],
@@ -365,14 +400,14 @@ const passwordConfirmRules: FormRules = {
   passwordConfirm: [{ required: true, validator: validatePasswordConfirm, trigger: 'blur' }],
 }
 
-const emailRules: FormRules = {
+const emailRules = computed<FormRules>(() => ({
   email: [
-    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+    { required: true, message: t('ui.login.message069'), trigger: 'blur' },
     {
       validator: (_rule, value, callback) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(value)) {
-          callback(new Error('邮箱格式不正确'))
+          callback(new LocalizedError('ui.changeEmail.message016'))
         } else {
           callback()
         }
@@ -380,14 +415,14 @@ const emailRules: FormRules = {
       trigger: 'blur',
     },
   ],
-}
+}))
 
-const codeRules: FormRules = {
+const codeRules = computed<FormRules>(() => ({
   code: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码应为6位数字', trigger: 'blur' },
+    { required: true, message: t('ui.sensitiveVerificationDialog.message037'), trigger: 'blur' },
+    { len: 6, message: t('ui.sensitiveVerificationDialog.message038'), trigger: 'blur' },
   ],
-}
+}))
 
 // 加载状态
 const sendLoading = ref(false)
@@ -407,35 +442,35 @@ const requirementItems = computed(() => {
 
   if (req.minLength || req.maxLength) {
     items.push({
-      text: `长度 ${req.minLength}-${req.maxLength} 个字符`,
+      text: t('ui.register.message017', { arg0: req.minLength, arg1: req.maxLength }),
       met: pwd.length >= req.minLength && pwd.length <= req.maxLength,
     })
   }
 
   if (req.requireUppercase) {
     items.push({
-      text: '至少包含一个大写字母',
+      text: t('ui.register.message018'),
       met: /[A-Z]/.test(pwd),
     })
   }
 
   if (req.requireLowercase) {
     items.push({
-      text: '至少包含一个小写字母',
+      text: t('ui.register.message019'),
       met: /[a-z]/.test(pwd),
     })
   }
 
   if (req.requireDigits) {
     items.push({
-      text: '至少包含一个数字',
+      text: t('ui.register.message020'),
       met: /\d/.test(pwd),
     })
   }
 
   if (req.requireSpecialChars) {
     items.push({
-      text: '至少包含一个特殊字符',
+      text: t('ui.register.message021'),
       met: /[!@#$%^&*(),.?":{}|<>]/.test(pwd),
     })
   }
@@ -470,10 +505,12 @@ const checkUsernameAvailability = async () => {
   try {
     const available = await checkUsername(formData.value.username)
     usernameAvailable.value = available
-    usernameCheckResult.value = available ? '用户名可用' : '用户名已被使用'
+    usernameCheckResult.value = available
+      ? uiMessage('ui.register.message022')
+      : uiMessage('ui.register.message023')
     return available
   } catch (error) {
-    usernameCheckResult.value = '检查失败'
+    usernameCheckResult.value = uiMessage('ui.register.message024')
     usernameAvailable.value = false
     return false
   } finally {
@@ -489,7 +526,7 @@ const goToPassword = async () => {
     // 点击下一步时检查用户名是否可用
     const available = await checkUsernameAvailability()
     if (!available) {
-      ElMessage.error('用户名不可用，请更换')
+      ElMessage.error(t('ui.register.message025'))
       return
     }
 
@@ -566,7 +603,7 @@ const handleSendCode = async () => {
     sendLoading.value = true
 
     await sendRegisterCode({ email: formData.value.email })
-    ElMessage.success('验证码已发送')
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
 
     startCodeCountdown()
     updateStep('code')
@@ -582,7 +619,7 @@ const resendCode = async () => {
   resendLoading.value = true
   try {
     await sendRegisterCode({ email: formData.value.email })
-    ElMessage.success('验证码已重新发送')
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message050'))
     startCodeCountdown()
   } catch (error: any) {
     console.error('Resend register code failed:', error)
@@ -595,7 +632,10 @@ const getPendingOAuthBind = (): { provider: OAuthProvider; bindToken: string } |
   const provider = route.query.oauthBindProvider
   const bindToken = route.query.oauthBindToken
   if (
-    (provider === 'qq' || provider === 'github' || provider === 'microsoft' || provider === 'google') &&
+    (provider === 'qq' ||
+      provider === 'github' ||
+      provider === 'microsoft' ||
+      provider === 'google') &&
     typeof bindToken === 'string' &&
     bindToken.trim()
   ) {
@@ -639,7 +679,7 @@ const handleRegister = async () => {
 
     await bindPendingOAuthAfterRegister()
 
-    ElMessage.success(desktopSynced ? '注册成功，已同步到桌面端' : '注册成功')
+    ElMessage.success(desktopSynced ? t('ui.register.message026') : t('ui.register.message027'))
     // 直接跳转到首页
     router.push('/home')
   } catch (error: any) {
@@ -780,6 +820,10 @@ const handleRegister = async () => {
   color: var(--el-text-color-primary);
   margin: 0 0 12px 0;
   letter-spacing: -0.5px;
+}
+
+.login-description .link {
+  margin-inline-start: 4px;
 }
 
 .login-description {

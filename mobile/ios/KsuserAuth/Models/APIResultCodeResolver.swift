@@ -2,9 +2,9 @@ import Foundation
 
 /// Resolve API results from the shared catalogue. Server prose is never displayed.
 enum APIResultCodeResolver {
-    static func message(errorCode: String?, params: [String: JSONValue]? = nil, statusCode: Int = 500) -> String {
-        guard let errorCode, let template = GeneratedAPIResultCodes.messages[errorCode] else {
-            return fallback(statusCode: statusCode)
+    static func message(errorCode: String?, params: [String: JSONValue]? = nil, statusCode: Int = 500, language: String = L10n.language) -> String {
+        guard let errorCode, let template = (GeneratedAPIResultCodes.messagesByLocale[language] ?? GeneratedAPIResultCodes.messages)[errorCode] else {
+            return fallback(statusCode: statusCode, language: language)
         }
         let expression = try! NSRegularExpression(pattern: #"\{([A-Za-z][A-Za-z0-9_]*)\}"#)
         let matches = expression.matches(in: template, range: NSRange(template.startIndex..., in: template))
@@ -13,14 +13,14 @@ enum APIResultCodeResolver {
             guard let nameRange = Range(match.range(at: 1), in: template),
                   let value = params?[String(template[nameRange])]?.displayParameter,
                   let replacementRange = Range(match.range, in: resolved) else {
-                return fallback(statusCode: statusCode)
+                return fallback(statusCode: statusCode, language: language)
             }
             resolved.replaceSubrange(replacementRange, with: value)
         }
         return resolved
     }
 
-    private static func fallback(statusCode: Int) -> String {
+    private static func fallback(statusCode: Int, language: String) -> String {
         let code: String
         switch statusCode {
         case 200..<300: code = "REQUEST_SUCCESS"
@@ -37,7 +37,7 @@ enum APIResultCodeResolver {
         case 500...: code = "SERVER_ERROR"
         default: code = "REQUEST_FAILED"
         }
-        return GeneratedAPIResultCodes.messages[code] ?? "请求失败，请重试"
+        return (GeneratedAPIResultCodes.messagesByLocale[language] ?? GeneratedAPIResultCodes.messages)[code] ?? L10n.text("请求失败，请重试", language: language)
     }
 }
 

@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">账号资料</h1>
-        <p class="page-subtitle">查看和维护您的账户资料与个人信息</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message010') }}</h1>
+        <p class="page-subtitle">{{ t('ui.profile.message001') }}</p>
       </div>
     </div>
 
@@ -14,15 +14,19 @@
             <el-icon>
               <User />
             </el-icon>
-            <span>个人信息</span>
+            <span>{{ t('ui.profile.message002') }}</span>
           </div>
-          <p class="card-description">维护您的基础资料，让账号信息保持准确、完整。</p>
+          <p class="card-description">{{ t('ui.profile.message003') }}</p>
 
           <!-- 只读信息列表 -->
           <el-skeleton v-if="detailsLoading" animated>
             <template #template>
-              <div v-for="(rowHeight, index) in skeletonRows" :key="index" class="skeleton-row"
-                :style="{ height: `${rowHeight}px` }">
+              <div
+                v-for="(rowHeight, index) in skeletonRows"
+                :key="index"
+                class="skeleton-row"
+                :style="{ height: `${rowHeight}px` }"
+              >
                 <el-skeleton-item variant="text" class="skeleton-item" />
               </div>
             </template>
@@ -30,7 +34,12 @@
 
           <div v-else class="info-list">
             <div class="profile-identity">
-              <button class="avatar-preview" type="button" aria-label="点击修改头像" @click="triggerAvatarSelect">
+              <button
+                class="avatar-preview"
+                type="button"
+                :aria-label="t('ui.profile.message004')"
+                @click="triggerAvatarSelect"
+              >
                 <el-avatar :size="72" :src="form.avatarUrl" class="profile-avatar">
                   {{ form.username?.slice(0, 1) || 'K' }}
                 </el-avatar>
@@ -39,18 +48,24 @@
                     <Camera />
                   </el-icon>
                 </span>
-                <input type="file" ref="fileInput" class="file-input" accept="image/*" @change="handleAvatarChange" />
+                <input
+                  type="file"
+                  ref="fileInput"
+                  class="file-input"
+                  accept="image/*"
+                  @change="handleAvatarChange"
+                />
               </button>
               <div class="identity-copy">
                 <button class="identity-name" type="button" @click="openEditDialog('username')">
-                  {{ form.username || '设置用户名' }}
+                  {{ form.username || t('ui.profile.message005') }}
                   <el-icon><Edit /></el-icon>
                 </button>
                 <div class="identity-email">
                   <el-icon><Message /></el-icon>
-                  <span>{{ form.email || '暂未绑定邮箱' }}</span>
+                  <span>{{ form.email || t('ui.home.message003') }}</span>
                 </div>
-                <span class="upload-tip">点击头像即可更换（最大 3MB）</span>
+                <span class="upload-tip">{{ t('ui.profile.message006') }}</span>
               </div>
             </div>
 
@@ -60,7 +75,7 @@
                 <el-icon class="row-icon">
                   <User />
                 </el-icon>
-                <span class="row-label">用户 ID</span>
+                <span class="row-label">{{ t('ui.profile.message007') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">{{ user?.uuid || '—' }}</span>
@@ -73,10 +88,10 @@
                 <el-icon class="row-icon">
                   <Lock />
                 </el-icon>
-                <span class="row-label">账户状态</span>
+                <span class="row-label">{{ t('ui.profile.message008') }}</span>
               </div>
               <div class="row-right">
-                <el-tag type="success" class="status-tag">正常</el-tag>
+                <el-tag type="success" class="status-tag">{{ t('ui.profile.message009') }}</el-tag>
               </div>
             </div>
 
@@ -86,7 +101,7 @@
                 <el-icon class="row-icon">
                   <Lock />
                 </el-icon>
-                <span class="row-label">账号认证</span>
+                <span class="row-label">{{ t('ui.openPlatform.message007') }}</span>
               </div>
               <div class="row-right">
                 <el-tag :type="verificationTagType" effect="light">{{ verificationLabel }}</el-tag>
@@ -99,7 +114,7 @@
                 <el-icon class="row-icon">
                   <Iphone />
                 </el-icon>
-                <span class="row-label">真实姓名</span>
+                <span class="row-label">{{ t('ui.profile.message010') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">{{ form.realName || '—' }}</span>
@@ -115,7 +130,7 @@
                 <el-icon class="row-icon">
                   <User />
                 </el-icon>
-                <span class="row-label">性别</span>
+                <span class="row-label">{{ t('ui.profile.message011') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">{{ genderText(form.gender) }}</span>
@@ -131,7 +146,7 @@
                 <el-icon class="row-icon">
                   <Calendar />
                 </el-icon>
-                <span class="row-label">出生日期</span>
+                <span class="row-label">{{ t('ui.profile.message012') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">{{ form.birthday || '—' }}</span>
@@ -147,7 +162,7 @@
                 <el-icon class="row-icon">
                   <Location />
                 </el-icon>
-                <span class="row-label">地区</span>
+                <span class="row-label">{{ t('ui.profile.message013') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">{{ regionText(form.region) }}</span>
@@ -163,7 +178,7 @@
                 <el-icon class="row-icon">
                   <Document />
                 </el-icon>
-                <span class="row-label">个人简介</span>
+                <span class="row-label">{{ t('ui.profile.message014') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value bio-preview">{{ form.bio || '—' }}</span>
@@ -179,17 +194,13 @@
 
     <el-dialog
       v-model="avatarCropDialogVisible"
-      title="裁剪头像"
+      :title="t('ui.profile.message015')"
       width="520px"
       :close-on-click-modal="false"
       @close="resetAvatarCropDialog"
     >
       <div class="avatar-crop-wrapper">
-        <div
-          class="crop-stage"
-          @mousedown="startDragImage"
-          @touchstart.prevent="startDragImage"
-        >
+        <div class="crop-stage" @mousedown="startDragImage" @touchstart.prevent="startDragImage">
           <img
             v-if="cropImageUrl"
             :src="cropImageUrl"
@@ -204,7 +215,7 @@
           <div class="crop-frame" />
         </div>
         <div class="crop-slider-row">
-          <span class="slider-label">缩放</span>
+          <span class="slider-label">{{ t('ui.openPlatform.message066') }}</span>
           <el-slider
             v-model="cropScale"
             :min="cropMinScale"
@@ -216,9 +227,11 @@
       </div>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="avatarCropDialogVisible = false">取消</el-button>
+          <el-button @click="avatarCropDialogVisible = false">{{
+            t('ui.addPasskey.message009')
+          }}</el-button>
           <el-button type="primary" :loading="avatarUploading" @click="confirmAvatarCrop">
-            确认上传
+            {{ t('ui.openPlatform.message067') }}
           </el-button>
         </span>
       </template>
@@ -233,11 +246,26 @@
       align-center
       @close="resetEditDialog"
     >
-      <p class="edit-dialog-hint">更新后的内容会显示在您的账号资料中。</p>
-      <el-form ref="editFormRef" :model="editForm" :rules="getFieldRules()" label-position="top" @submit.prevent>
+      <p class="edit-dialog-hint">{{ t('ui.profile.message016') }}</p>
+      <el-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="getFieldRules()"
+        label-position="top"
+        @submit.prevent
+      >
         <!-- 用户名编辑 -->
-        <el-form-item v-if="editingField === 'username'" label="用户名" prop="value">
-          <el-input v-model="editForm.value" placeholder="请输入用户名" maxlength="20" clearable>
+        <el-form-item
+          v-if="editingField === 'username'"
+          :label="t('ui.deleteAccount.message012')"
+          prop="value"
+        >
+          <el-input
+            v-model="editForm.value"
+            :placeholder="t('ui.deleteAccount.message021')"
+            maxlength="20"
+            clearable
+          >
             <template #suffix>
               <span class="char-count">{{ editForm.value?.length || 0 }}/20</span>
             </template>
@@ -245,40 +273,70 @@
         </el-form-item>
 
         <!-- 真实姓名编辑 -->
-        <el-form-item v-if="editingField === 'realName'" label="真实姓名" prop="value">
-          <el-input v-model="editForm.value" placeholder="请输入真实姓名" maxlength="30" clearable />
+        <el-form-item
+          v-if="editingField === 'realName'"
+          :label="t('ui.profile.message010')"
+          prop="value"
+        >
+          <el-input
+            v-model="editForm.value"
+            :placeholder="t('ui.profile.message017')"
+            maxlength="30"
+            clearable
+          />
         </el-form-item>
 
         <!-- 性别编辑 -->
-        <el-form-item v-if="editingField === 'gender'" label="性别" prop="value">
-          <el-select v-model="editForm.value" placeholder="请选择性别" clearable>
-            <el-option label="男" value="male" />
-            <el-option label="女" value="female" />
-            <el-option label="保密" value="secret" />
+        <el-form-item
+          v-if="editingField === 'gender'"
+          :label="t('ui.profile.message011')"
+          prop="value"
+        >
+          <el-select v-model="editForm.value" :placeholder="t('ui.profile.message018')" clearable>
+            <el-option :label="t('ui.profile.message019')" value="male" />
+            <el-option :label="t('ui.profile.message020')" value="female" />
+            <el-option :label="t('ui.profile.message021')" value="secret" />
           </el-select>
         </el-form-item>
 
         <!-- 出生日期编辑 -->
-        <el-form-item v-if="editingField === 'birthday'" label="出生日期" prop="value">
-          <el-date-picker v-model="editForm.value" type="date" placeholder="请选择出生日期" value-format="YYYY-MM-DD" />
+        <el-form-item
+          v-if="editingField === 'birthday'"
+          :label="t('ui.profile.message012')"
+          prop="value"
+        >
+          <el-date-picker
+            v-model="editForm.value"
+            type="date"
+            :placeholder="t('ui.profile.message022')"
+            value-format="YYYY-MM-DD"
+          />
         </el-form-item>
 
         <!-- 地区编辑 -->
-        <el-form-item v-if="editingField === 'region'" label="地区" prop="value">
-          <el-select v-model="editForm.value" placeholder="请选择地区" clearable>
-            <el-option label="中国" value="CN" />
-            <el-option label="美国" value="US" />
-            <el-option label="日本" value="JP" />
-            <el-option label="其他" value="OTHER" />
+        <el-form-item
+          v-if="editingField === 'region'"
+          :label="t('ui.profile.message013')"
+          prop="value"
+        >
+          <el-select v-model="editForm.value" :placeholder="t('ui.profile.message023')" clearable>
+            <el-option :label="t('ui.profile.message024')" value="CN" />
+            <el-option :label="t('ui.profile.message025')" value="US" />
+            <el-option :label="t('ui.profile.message026')" value="JP" />
+            <el-option :label="t('ui.profile.message027')" value="OTHER" />
           </el-select>
         </el-form-item>
 
         <!-- 个人简介编辑 -->
-        <el-form-item v-if="editingField === 'bio'" label="个人简介" prop="value">
+        <el-form-item
+          v-if="editingField === 'bio'"
+          :label="t('ui.profile.message014')"
+          prop="value"
+        >
           <el-input
             v-model="editForm.value"
             type="textarea"
-            placeholder="简单介绍一下自己"
+            :placeholder="t('ui.profile.message028')"
             maxlength="200"
             show-word-limit
             :autosize="{ minRows: 4, maxRows: 7 }"
@@ -288,8 +346,12 @@
 
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="editDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleEditSave" :loading="submitLoading">保存</el-button>
+          <el-button @click="editDialogVisible = false">{{
+            t('ui.addPasskey.message009')
+          }}</el-button>
+          <el-button type="primary" @click="handleEditSave" :loading="submitLoading">{{
+            t('ui.profile.message029')
+          }}</el-button>
         </span>
       </template>
     </el-dialog>
@@ -297,9 +359,22 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { ref, reactive, onMounted, computed, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
-import { User, Camera, Message, ArrowRight, Lock, Iphone, Calendar, Location, Document, Edit } from '@element-plus/icons-vue'
+import {
+  User,
+  Camera,
+  Message,
+  ArrowRight,
+  Lock,
+  Iphone,
+  Calendar,
+  Location,
+  Document,
+  Edit,
+} from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { updateUserProfile, uploadAvatar, type UserDetails } from '@/api/auth'
 import { storeToRefs } from 'pinia'
@@ -343,14 +418,14 @@ const dragState = reactive({
   startX: 0,
   startY: 0,
   startOffsetX: 0,
-  startOffsetY: 0
+  startOffsetY: 0,
 })
 
 // 编辑对话框相关
 const editDialogVisible = ref(false)
 const editingField = ref<string | null>(null)
 const editForm = reactive({
-  value: ''
+  value: '',
 })
 
 const skeletonRows = [101, 40, 40, 40, 40, 40, 40, 40, 40, 40]
@@ -364,15 +439,15 @@ const form = reactive({
   phone: '',
   region: '',
   bio: '',
-  avatarUrl: ''
+  avatarUrl: '',
 })
 
 const verificationLabel = computed(() => {
   const type = user.value?.verificationType
-  if (type === 'admin') return '管理员'
-  if (type === 'enterprise') return '企业认证'
-  if (type === 'personal') return '个人认证'
-  return '未认证'
+  if (type === 'admin') return t('ui.mainLayout.message017')
+  if (type === 'enterprise') return t('ui.mainLayout.message018')
+  if (type === 'personal') return t('ui.mainLayout.message019')
+  return t('ui.openPlatform.message070')
 })
 
 const verificationTagType = computed(() => {
@@ -387,9 +462,9 @@ const verificationTagType = computed(() => {
 const genderText = (value: string | null | undefined) => {
   if (!value) return '—'
   const genderMap: Record<string, string> = {
-    male: '男',
-    female: '女',
-    secret: '保密'
+    male: t('ui.profile.message019'),
+    female: t('ui.profile.message020'),
+    secret: t('ui.profile.message021'),
   }
   return genderMap[value] || '—'
 }
@@ -398,10 +473,10 @@ const genderText = (value: string | null | undefined) => {
 const regionText = (value: string | null | undefined) => {
   if (!value) return '—'
   const regionMap: Record<string, string> = {
-    CN: '中国',
-    US: '美国',
-    JP: '日本',
-    OTHER: '其他'
+    CN: t('ui.profile.message024'),
+    US: t('ui.profile.message025'),
+    JP: t('ui.profile.message026'),
+    OTHER: t('ui.profile.message027'),
   }
   return regionMap[value] || '—'
 }
@@ -409,36 +484,34 @@ const regionText = (value: string | null | undefined) => {
 // 获取字段对应的编辑对话框标题
 const editDialogTitle = computed(() => {
   const titleMap: Record<string, string> = {
-    username: '编辑用户名',
-    realName: '编辑真实姓名',
-    gender: '编辑性别',
-    birthday: '编辑出生日期',
-    region: '编辑地区',
-    bio: '编辑个人简介'
+    username: t('ui.profile.message030'),
+    realName: t('ui.profile.message031'),
+    gender: t('ui.profile.message032'),
+    birthday: t('ui.profile.message033'),
+    region: t('ui.profile.message034'),
+    bio: t('ui.profile.message035'),
   }
-  return titleMap[editingField.value || ''] || '编辑'
+  return titleMap[editingField.value || ''] || t('ui.openPlatform.message034')
 })
 
 // 获取字段对应的验证规则
 const getFieldRules = (): { value: ValidationRule[] } => {
   const rulesMap: Record<string, ValidationRule[]> = {
     username: [
-      { required: true, message: '用户名不能为空', trigger: 'blur' },
-      { min: 3, max: 30, message: '用户名长度应为 3-20 个字符', trigger: 'blur' },
+      { required: true, message: t('ui.deleteAccount.message022'), trigger: 'blur' },
+      { min: 3, max: 30, message: t('ui.profile.message036'), trigger: 'blur' },
       {
-        message: '用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）',
+        message: t('ui.profile.message037'),
         trigger: 'blur',
 
-        pattern: /^[A-Za-z0-9_\-\u4e00-\u9fa5]{3,20}$/
-      }
+        pattern: /^[A-Za-z0-9_\-\u4e00-\u9fa5]{3,20}$/,
+      },
     ],
-    realName: [
-      { max: 30, message: '真实姓名长度不超过 30 个字符', trigger: 'blur' }
-    ],
+    realName: [{ max: 30, message: t('ui.profile.message038'), trigger: 'blur' }],
     gender: [],
     birthday: [],
     region: [],
-    bio: []
+    bio: [],
   }
   return { value: rulesMap[editingField.value || ''] || [] }
 }
@@ -450,7 +523,7 @@ onMounted(async () => {
 
   // 然后获取详细信息
   try {
-    const details = await userStore.fetchUserDetails() as UserDetails
+    const details = (await userStore.fetchUserDetails()) as UserDetails
     // 使用返回的详细信息更新表单（包含所有字段）
     if (details && typeof details === 'object') {
       form.username = details.username || ''
@@ -462,10 +535,10 @@ onMounted(async () => {
       form.region = details.region || ''
       form.bio = details.bio || ''
     } else {
-      ElMessage.error('获取的详细信息格式不正确')
+      ElMessage.error(t('ui.profile.message039'))
     }
   } catch {
-    ElMessage.error('获取详细信息失败')
+    ElMessage.error(t('ui.profile.message040'))
   }
 })
 
@@ -495,13 +568,13 @@ const handleEditSave = async () => {
     const newValue = editForm.value
 
     if (newValue === '') {
-      ElMessage.error('新值不能为空')
+      ElMessage.error(t('ui.profile.message041'))
       return
     }
 
     // 检查是否有实际改动
     if (oldValue === newValue) {
-      ElMessage.info('没有任何改动')
+      ElMessage.info(t('ui.profile.message042'))
       editDialogVisible.value = false
       return
     }
@@ -520,7 +593,7 @@ const handleEditSave = async () => {
     // 调用更新接口
     const result = await updateUserProfile({
       key: updateKey,
-      value: newValue
+      value: newValue,
     })
 
     // 更新表单数据
@@ -530,11 +603,11 @@ const handleEditSave = async () => {
     userStore.user = result
     userStore.userDetails = result
 
-    ElMessage.success('信息保存成功')
+    ElMessage.success(t('ui.profile.message043'))
     editDialogVisible.value = false
     submitLoading.value = false
   } catch {
-    ElMessage.error('保存失败，请检查信息')
+    ElMessage.error(t('ui.profile.message044'))
     submitLoading.value = false
   }
 }
@@ -547,14 +620,14 @@ const handleAvatarChange = (event: Event) => {
 
   // 验证文件类型
   if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
+    ElMessage.error(t('ui.openPlatform.message100'))
     target.value = ''
     return
   }
 
   // 验证文件大小（最大 3MB）
   if (file.size > MAX_AVATAR_SIZE) {
-    ElMessage.error('图片大小不能超过 3MB')
+    ElMessage.error(t('ui.openPlatform.message101'))
     target.value = ''
     return
   }
@@ -582,7 +655,7 @@ const openAvatarCropDialog = (file: File) => {
   }
   image.onerror = () => {
     URL.revokeObjectURL(objectUrl)
-    ElMessage.error('图片读取失败，请重试')
+    ElMessage.error(t('ui.openPlatform.message102'))
   }
   image.src = objectUrl
 }
@@ -592,7 +665,7 @@ const initializeCropState = () => {
 
   const minScaleByFrame = Math.max(
     CROP_FRAME_SIZE / cropImageNaturalWidth.value,
-    CROP_FRAME_SIZE / cropImageNaturalHeight.value
+    CROP_FRAME_SIZE / cropImageNaturalHeight.value,
   )
 
   cropMinScale.value = minScaleByFrame
@@ -660,12 +733,12 @@ const getEventPoint = (event: MouseEvent | TouchEvent) => {
     const touch = event.touches[0] || event.changedTouches[0]
     return {
       x: touch?.clientX || 0,
-      y: touch?.clientY || 0
+      y: touch?.clientY || 0,
     }
   }
   return {
     x: event.clientX,
-    y: event.clientY
+    y: event.clientY,
   }
 }
 
@@ -697,9 +770,9 @@ const confirmAvatarCrop = async () => {
     userStore.user = result
     userStore.userDetails = result
     avatarCropDialogVisible.value = false
-    ElMessage.success('头像已更新')
+    ElMessage.success(t('ui.profile.message045'))
   } catch {
-    ElMessage.error('头像上传失败')
+    ElMessage.error(t('ui.profile.message046'))
   } finally {
     avatarUploading.value = false
   }
@@ -731,16 +804,20 @@ const exportCroppedAvatarBlob = async (): Promise<Blob> => {
         0,
         0,
         canvas.width,
-        canvas.height
+        canvas.height,
       )
 
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          reject(new Error('crop_failed'))
-          return
-        }
-        resolve(blob)
-      }, 'image/jpeg', 0.92)
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error('crop_failed'))
+            return
+          }
+          resolve(blob)
+        },
+        'image/jpeg',
+        0.92,
+      )
     }
     image.onerror = () => reject(new Error('image_load_failed'))
     image.src = cropImageUrl.value
@@ -765,7 +842,7 @@ const resetAvatarCropDialog = () => {
 const cropImageStyle = computed(() => ({
   width: `${cropImageNaturalWidth.value * cropScale.value}px`,
   height: `${cropImageNaturalHeight.value * cropScale.value}px`,
-  transform: `translate(${cropOffsetX.value}px, ${cropOffsetY.value}px)`
+  transform: `translate(${cropOffsetX.value}px, ${cropOffsetY.value}px)`,
 }))
 
 onBeforeUnmount(() => {
@@ -984,7 +1061,9 @@ onBeforeUnmount(() => {
 .info-item .value {
   font-size: 13px;
   color: var(--el-text-color-primary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
   max-width: 180px;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -1028,7 +1107,10 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   padding: 12px 14px;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 12px;
   user-select: none;
@@ -1172,7 +1254,9 @@ onBeforeUnmount(() => {
 
 :deep(.el-input__wrapper.is-focus),
 :deep(.el-select__wrapper.is-focused) {
-  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+  box-shadow:
+    0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px var(--el-color-primary-light-9);
 }
 
 :deep(.el-textarea__inner) {
@@ -1182,7 +1266,9 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-textarea__inner:focus) {
-  box-shadow: 0 0 0 1px var(--el-color-primary) inset, 0 0 0 3px var(--el-color-primary-light-9);
+  box-shadow:
+    0 0 0 1px var(--el-color-primary) inset,
+    0 0 0 3px var(--el-color-primary-light-9);
 }
 
 .edit-dialog-hint {

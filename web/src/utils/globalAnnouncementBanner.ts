@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 import { computed, type ComputedRef, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { parseEnvBoolean, parseEnvNumber } from './env'
@@ -31,8 +32,7 @@ export type GlobalAnnouncementBannerSettings = {
   }
 }
 
-const DEFAULT_MESSAGE =
-  '当前系统正在Beta测试阶段，如遇到数据丢失/服务不稳定为正常情况，请勿上传真实信息'
+const DEFAULT_MESSAGE_KEY = 'ui.globalAnnouncementBanner.message002'
 
 const STORAGE_KEYS = {
   enabled: 'global-announcement-banner:enabled:v1',
@@ -45,8 +45,7 @@ const STORAGE_KEYS = {
 export const useGlobalAnnouncementBanner = (): GlobalAnnouncementBannerSettings => {
   const envEnabled = parseEnvBoolean(import.meta.env.VITE_GLOBAL_BANNER_ENABLED, true)
   const envLocked = parseEnvBoolean(import.meta.env.VITE_GLOBAL_BANNER_LOCKED, false)
-  const envMessage =
-    (import.meta.env.VITE_GLOBAL_BANNER_MESSAGE as string | undefined) || DEFAULT_MESSAGE
+  const envMessage = (import.meta.env.VITE_GLOBAL_BANNER_MESSAGE as string | undefined) || ''
   const envHeightPx = Math.max(0, parseEnvNumber(import.meta.env.VITE_GLOBAL_BANNER_HEIGHT, 40))
   const envDismissible = parseEnvBoolean(import.meta.env.VITE_GLOBAL_BANNER_DISMISSIBLE, true)
 
@@ -57,7 +56,9 @@ export const useGlobalAnnouncementBanner = (): GlobalAnnouncementBannerSettings 
   const localDismissed = useStorage<boolean>(STORAGE_KEYS.dismissed, false)
 
   const effectiveEnabled = computed(() => envEnabled && (envLocked ? true : localEnabled.value))
-  const effectiveMessage = computed(() => (envLocked ? envMessage : localMessage.value))
+  const effectiveMessage = computed(
+    () => (envLocked ? envMessage : localMessage.value) || t(DEFAULT_MESSAGE_KEY),
+  )
   const effectiveHeightPx = computed(() => {
     const raw = envLocked ? envHeightPx : localHeightPx.value
     return Math.max(0, Math.round(raw))
@@ -80,7 +81,9 @@ export const useGlobalAnnouncementBanner = (): GlobalAnnouncementBannerSettings 
     env: {
       enabled: envEnabled,
       locked: envLocked,
-      message: envMessage,
+      get message() {
+        return envMessage || t(DEFAULT_MESSAGE_KEY)
+      },
       heightPx: envHeightPx,
       dismissible: envDismissible,
     },

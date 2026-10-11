@@ -2,10 +2,12 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">设备管理</h1>
-        <p class="page-subtitle">查看在线设备、登录会话和当前状态</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message013') }}</h1>
+        <p class="page-subtitle">{{ t('ui.devices.message001') }}</p>
       </div>
-      <el-button @click="loadSessions" :loading="loading" :icon="Refresh"> 刷新 </el-button>
+      <el-button @click="loadSessions" :loading="loading" :icon="Refresh">
+        {{ t('ui.devices.message002') }}
+      </el-button>
     </div>
 
     <el-row :gutter="16">
@@ -15,7 +17,7 @@
             <el-icon>
               <Monitor />
             </el-icon>
-            <span>已连接的设备</span>
+            <span>{{ t('ui.devices.message003') }}</span>
             <el-tag
               v-if="sessions.length > 0"
               type="info"
@@ -23,7 +25,7 @@
               size="small"
               style="margin-left: 8px"
             >
-              {{ sessions.length }} 个会话
+              {{ sessions.length }} {{ t('ui.devices.message004') }}
             </el-tag>
           </div>
 
@@ -51,8 +53,13 @@
               </div>
             </template>
             <template #default>
-              <el-table :data="sessions" class="modern-table" size="small" empty-text="暂无设备">
-                <el-table-column label="设备" min-width="220">
+              <el-table
+                :data="sessions"
+                class="modern-table"
+                size="small"
+                :empty-text="t('ui.devices.message005')"
+              >
+                <el-table-column :label="t('ui.devices.message006')" min-width="220">
                   <template #default="{ row }">
                     <div class="device-cell">
                       <div class="device-logo" :class="getDeviceLogoTone(row)" aria-hidden="true">
@@ -60,14 +67,14 @@
                           <el-icon
                             v-if="getClientKind(row) === 'desktop-app'"
                             class="device-app-icon"
-                            aria-label="桌面端"
+                            :aria-label="t('ui.devices.message007')"
                           >
                             <Monitor />
                           </el-icon>
                           <el-icon
                             v-else-if="getClientKind(row) === 'mobile-app'"
                             class="device-app-icon"
-                            aria-label="移动端"
+                            :aria-label="t('ui.devices.message008')"
                           >
                             <Cellphone />
                           </el-icon>
@@ -98,7 +105,7 @@
                             effect="plain"
                             style="margin-left: 8px"
                           >
-                            当前
+                            {{ t('ui.devices.message009') }}
                           </el-tag>
                         </div>
                         <div class="device-os">
@@ -108,13 +115,17 @@
                     </div>
                   </template>
                 </el-table-column>
-                <el-table-column prop="ipLocation" label="位置" min-width="120">
+                <el-table-column
+                  prop="ipLocation"
+                  :label="t('ui.accountRecoveryCard.message015')"
+                  min-width="120"
+                >
                   <template #default="{ row }">
-                    {{ row.ipLocation || '未知' }}
+                    {{ row.ipLocation || t('ui.devices.message010') }}
                   </template>
                 </el-table-column>
                 <el-table-column
-                  label="最后活动"
+                  :label="t('ui.devices.message011')"
                   min-width="160"
                   sortable
                   :sort-method="sortByLastSeen"
@@ -123,17 +134,17 @@
                     {{ formatLastSeen(row.lastSeenAt) }}
                   </template>
                 </el-table-column>
-                <el-table-column label="状态" width="100">
+                <el-table-column :label="t('ui.devices.message012')" width="100">
                   <template #default="{ row }">
                     <el-tag :type="row.online ? 'success' : 'info'" size="small" effect="plain">
-                      {{ row.online ? '在线' : '离线' }}
+                      {{ row.online ? t('ui.devices.message013') : t('ui.devices.message014') }}
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140" align="right">
+                <el-table-column :label="t('ui.devices.message015')" width="140" align="right">
                   <template #default="{ row }">
                     <el-button text type="primary" size="small" @click="openDetails(row)">
-                      详情
+                      {{ t('ui.devices.message016') }}
                     </el-button>
                     <el-button
                       v-if="!row.current"
@@ -143,10 +154,12 @@
                       @click="handleRevoke(row)"
                       :loading="revokingIds.has(row.id)"
                     >
-                      撤销
+                      {{ t('ui.devices.message017') }}
                     </el-button>
-                    <el-tooltip v-else content="无法撤销当前会话" placement="top">
-                      <el-button text type="info" size="small" disabled> 撤销 </el-button>
+                    <el-tooltip v-else :content="t('ui.devices.message018')" placement="top">
+                      <el-button text type="info" size="small" disabled>
+                        {{ t('ui.devices.message017') }}
+                      </el-button>
                     </el-tooltip>
                   </template>
                 </el-table-column>
@@ -157,56 +170,65 @@
       </el-col>
     </el-row>
 
-    <el-dialog v-model="detailsVisible" title="会话详情" width="520px" align-center>
+    <el-dialog
+      v-model="detailsVisible"
+      :title="t('ui.devices.message019')"
+      width="520px"
+      align-center
+    >
       <el-descriptions :column="1" border>
-        <el-descriptions-item label="客户端">
-          {{ getClientKind(detailsSession) === 'desktop-app'
-            ? '桌面端'
-            : getClientKind(detailsSession) === 'mobile-app'
-              ? '移动端'
-              : '浏览器' }}
+        <el-descriptions-item :label="t('ui.devices.message020')">
+          {{
+            getClientKind(detailsSession) === 'desktop-app'
+              ? t('ui.devices.message007')
+              : getClientKind(detailsSession) === 'mobile-app'
+                ? t('ui.devices.message008')
+                : t('ui.devices.message021')
+          }}
         </el-descriptions-item>
-        <el-descriptions-item label="登录设备">
+        <el-descriptions-item :label="t('ui.devices.message022')">
           {{ detailsSession ? getClientDisplayName(detailsSession) : '-' }}
         </el-descriptions-item>
-        <el-descriptions-item label="登录设备版本">
+        <el-descriptions-item :label="t('ui.devices.message023')">
           {{ getClientVersion(detailsSession) || '-' }}
         </el-descriptions-item>
-        <el-descriptions-item label="系统">
+        <el-descriptions-item :label="t('ui.devices.message024')">
           {{ getSystemDisplayName(detailsSession) }}
         </el-descriptions-item>
-        <el-descriptions-item label="系统版本">
+        <el-descriptions-item :label="t('ui.devices.message025')">
           {{ getSystemVersion(detailsSession) || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="IP">
           {{ detailsSession?.ipAddress || '-' }}
         </el-descriptions-item>
-        <el-descriptions-item label="位置">
-          {{ detailsSession?.ipLocation || '未知' }}
+        <el-descriptions-item :label="t('ui.accountRecoveryCard.message015')">
+          {{ detailsSession?.ipLocation || t('ui.devices.message010') }}
         </el-descriptions-item>
-        <el-descriptions-item label="最近活动">
+        <el-descriptions-item :label="t('ui.devices.message026')">
           {{ detailsSession?.lastSeenAt ? formatLastSeen(detailsSession.lastSeenAt) : '-' }}
         </el-descriptions-item>
       </el-descriptions>
       <template #footer>
-        <el-button @click="detailsVisible = false">关闭</el-button>
+        <el-button @click="detailsVisible = false">{{
+          t('ui.accountRecoveryCard.message017')
+        }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 危险区域 -->
     <el-row :gutter="16" class="row-gap">
       <el-col :xs="24">
-        <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
+        <DangerZoneCard :title="t('ui.devices.message027')" :icon="WarningFilled">
           <div class="danger-zone-item">
             <div class="danger-zone-item-left">
-              <div class="danger-zone-item-title">从所有设备退出登录</div>
+              <div class="danger-zone-item-title">{{ t('ui.devices.message028') }}</div>
               <p class="danger-zone-item-desc">
-                这将撤销您在所有设备上的登录状态，包括当前设备。您需要重新登录才能继续使用。
+                {{ t('ui.devices.message029') }}
               </p>
             </div>
             <div class="danger-zone-item-right">
               <el-button type="danger" plain @click="handleLogoutAll" :loading="logoutAllLoading">
-                退出所有设备
+                {{ t('ui.devices.message030') }}
               </el-button>
             </div>
           </div>
@@ -217,8 +239,11 @@
 </template>
 
 <script setup lang="ts">
+import { localizedMessageBox } from '@/utils/localizedMessageBox'
+import { intlLocale, relativeTime, t, uiMessage } from '@/i18n'
+
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Monitor, Cellphone, Refresh, WarningFilled } from '@element-plus/icons-vue'
 import { getSessions, revokeSession, logoutAll, type SessionItem } from '@/api/auth'
 import { useRouter } from 'vue-router'
@@ -241,7 +266,7 @@ const loadSessions = async () => {
     sessions.value = await getSessions()
   } catch (error) {
     console.error('Failed to load sessions:', error)
-    ElMessage.error('加载会话列表失败')
+    ElMessage.error(t('ui.devices.message031'))
   } finally {
     loading.value = false
   }
@@ -250,16 +275,20 @@ const loadSessions = async () => {
 // 撤销会话
 const handleRevoke = async (session: SessionItem) => {
   try {
-    await ElMessageBox.confirm(`确定要撤销此会话吗？该设备将被强制登出。`, '确认撤销', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await localizedMessageBox.confirm(
+      uiMessage('ui.devices.message032'),
+      uiMessage('ui.devices.message033'),
+      {
+        confirmButtonText: uiMessage('ui.devices.message034'),
+        cancelButtonText: uiMessage('ui.addPasskey.message009'),
+        type: 'warning',
+      },
+    )
 
     revokingIds.value.add(session.id)
     try {
       await revokeSession(session.id)
-      ElMessage.success('会话已撤销')
+      ElMessage.success(t('ui.devices.message035'))
       await loadSessions()
     } finally {
       revokingIds.value.delete(session.id)
@@ -267,7 +296,7 @@ const handleRevoke = async (session: SessionItem) => {
   } catch (error) {
     if (error !== 'cancel') {
       console.error('Failed to revoke session:', error)
-      ElMessage.error('撤销会话失败')
+      ElMessage.error(t('ui.devices.message036'))
       revokingIds.value.delete(session.id)
     }
   }
@@ -302,7 +331,7 @@ const getBrowserDisplayName = (session: SessionItem | null | undefined) => {
   if (raw.includes('chrome')) return 'Chrome'
   if (raw.includes('safari')) return 'Safari'
   if (raw.includes('ie') || raw.includes('trident')) return 'Internet Explorer'
-  return session?.browser || '未知浏览器'
+  return session?.browser || t('ui.devices.message037')
 }
 
 const getBrowserVersion = (session: SessionItem | null | undefined) => {
@@ -334,9 +363,9 @@ const getSystemDisplayName = (session: SessionItem | null | undefined) => {
   if (ua.includes('mac os') || ua.includes('macintosh') || ua.includes('mac')) return 'macOS'
   if (ua.includes('linux') || ua.includes('x11')) return 'Linux'
   if (ua.includes('cros') || ua.includes('chromeos')) return 'ChromeOS'
-  if (getClientKind(session) === 'desktop-app') return '桌面端'
-  if (getClientKind(session) === 'mobile-app') return '移动端'
-  return session?.deviceType || '未知设备'
+  if (getClientKind(session) === 'desktop-app') return t('ui.devices.message007')
+  if (getClientKind(session) === 'mobile-app') return t('ui.devices.message008')
+  return session?.deviceType || t('ui.devices.message038')
 }
 
 const getSystemVersion = (session: SessionItem | null | undefined) => {
@@ -366,7 +395,12 @@ const getBrowserLogoClass = (session: SessionItem) => {
   if (value.includes('firefox')) return 'fa-brands fa-firefox'
   if (value.includes('opera') || value.includes('opr/')) return 'fa-brands fa-opera'
   // Safari UA 里也可能带 Chrome，所以尽量先排除 Chrome/Edge/Opera
-  if (value.includes('safari') && !value.includes('chrome') && !value.includes('edg/') && !value.includes('opr/')) {
+  if (
+    value.includes('safari') &&
+    !value.includes('chrome') &&
+    !value.includes('edg/') &&
+    !value.includes('opr/')
+  ) {
     return 'fa-brands fa-safari'
   }
   if (value.includes('chrome')) return 'fa-brands fa-chrome'
@@ -379,15 +413,17 @@ const getSystemLogoClass = (session: SessionItem) => {
   if (device.includes('windows')) return 'fa-brands fa-windows'
   if (device.includes('android')) return 'fa-brands fa-android'
   // macOS / iPhone / iPad 统一用 Apple
-  if (device.includes('iphone') || device.includes('ipad') || device.includes('ios')) return 'fa-brands fa-apple'
-  if (device.includes('mac os') || device.includes('macintosh') || device.includes('mac')) return 'fa-brands fa-apple'
+  if (device.includes('iphone') || device.includes('ipad') || device.includes('ios'))
+    return 'fa-brands fa-apple'
+  if (device.includes('mac os') || device.includes('macintosh') || device.includes('mac'))
+    return 'fa-brands fa-apple'
   return null
 }
 
 const getClientDisplayName = (session: SessionItem) => {
   const kind = getClientKind(session)
-  if (kind === 'desktop-app') return '桌面端'
-  if (kind === 'mobile-app') return '移动端'
+  if (kind === 'desktop-app') return t('ui.devices.message007')
+  if (kind === 'mobile-app') return t('ui.devices.message008')
   return getBrowserDisplayName(session)
 }
 
@@ -398,7 +434,8 @@ const getClientVersion = (session: SessionItem | null | undefined) => {
 
   const ua = session.userAgent || ''
   if (kind === 'desktop-app') {
-    const m = ua.match(/KsuserAuthDesktop\/([0-9.]+)/i) || ua.match(/KsuserAuthDesktop\s+([0-9.]+)/i)
+    const m =
+      ua.match(/KsuserAuthDesktop\/([0-9.]+)/i) || ua.match(/KsuserAuthDesktop\s+([0-9.]+)/i)
     return m?.[1] || null
   }
   if (kind === 'mobile-app') {
@@ -417,12 +454,12 @@ const formatLastSeen = (lastSeenAt: string) => {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes} 分钟前`
-  if (hours < 24) return `${hours} 小时前`
-  if (days < 7) return `${days} 天前`
+  if (minutes < 1) return t('ui.devices.message039')
+  if (minutes < 60) return relativeTime(-minutes, 'minute')
+  if (hours < 24) return relativeTime(-hours, 'hour')
+  if (days < 7) return relativeTime(-days, 'day')
 
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(intlLocale.value, {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -438,12 +475,12 @@ const sortByLastSeen = (a: SessionItem, b: SessionItem) => {
 // 从所有设备退出登录
 const handleLogoutAll = async () => {
   try {
-    await ElMessageBox.confirm(
-      '确定要从所有设备退出登录吗？这将撤销您在所有设备上的登录状态，包括当前设备。',
-      '确认退出',
+    await localizedMessageBox.confirm(
+      uiMessage('ui.devices.message043'),
+      uiMessage('ui.devices.message044'),
       {
-        confirmButtonText: '确定退出',
-        cancelButtonText: '取消',
+        confirmButtonText: uiMessage('ui.devices.message045'),
+        cancelButtonText: uiMessage('ui.addPasskey.message009'),
         type: 'warning',
         distinguishCancelAndClose: true,
       },
@@ -453,14 +490,14 @@ const handleLogoutAll = async () => {
     try {
       await logoutAll()
       clearAuthSession()
-      ElMessage.success('已从所有设备退出登录')
+      ElMessage.success(t('ui.devices.message046'))
       // 延迟跳转，让用户看到成功消息
       setTimeout(() => {
         router.replace('/login')
       }, 1000)
     } catch (error) {
       console.error('Failed to logout all:', error)
-      ElMessage.error('退出失败，请重试')
+      ElMessage.error(t('ui.devices.message047'))
       logoutAllLoading.value = false
     }
   } catch (_error) {
@@ -686,5 +723,4 @@ onMounted(() => {
     display: none;
   }
 }
-
 </style>

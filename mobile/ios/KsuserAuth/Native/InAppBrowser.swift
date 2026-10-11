@@ -7,6 +7,7 @@ struct BrowserPage: Identifiable {
 }
 
 struct SafariPresenter: UIViewControllerRepresentable {
+    @Environment(\.locale) private var localizationLocale
     @Binding var page: BrowserPage?
 
     func makeUIViewController(context: Context) -> SafariPresenterController { SafariPresenterController() }
@@ -70,6 +71,7 @@ struct SafariPresenter: UIViewControllerRepresentable {
 }
 
 private struct InAppBrowserModifier: ViewModifier {
+    @Environment(\.locale) private var localizationLocale
     @State private var page: BrowserPage?
 
     func body(content: Content) -> some View {
@@ -86,6 +88,7 @@ private struct InAppBrowserModifier: ViewModifier {
 
 // Each navigation presentation owns its browser, including screens already in a sheet.
 struct AppNavigationStack<Content: View>: View {
+    @Environment(\.locale) private var localizationLocale
     private let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
 

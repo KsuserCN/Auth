@@ -2,10 +2,20 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">使用偏好</h1>
-        <p class="page-subtitle">自定义界面外观和通知偏好</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message015') }}</h1>
+        <p class="page-subtitle">{{ t('ui.preferences.message001') }}</p>
       </div>
     </div>
+
+    <el-row :gutter="16" class="language-row">
+      <el-col :xs="24">
+        <el-card class="card" shadow="never">
+          <div class="card-title">{{ t('language.title') }}</div>
+          <p class="card-desc">{{ t('language.description') }}</p>
+          <LanguageSelector />
+        </el-card>
+      </el-col>
+    </el-row>
 
     <el-row :gutter="16">
       <el-col :xs="24">
@@ -14,13 +24,18 @@
             <el-icon>
               <Setting />
             </el-icon>
-            <span>色彩主题</span>
+            <span>{{ t('ui.preferences.message002') }}</span>
           </div>
-          <p class="card-desc">为当前设备选择您偏好的色彩主题</p>
+          <p class="card-desc">{{ t('ui.preferences.message003') }}</p>
 
           <div class="theme-grid">
-            <div v-for="option in themeOptions" :key="option.value" class="theme-option"
-              :class="{ active: themeMode === option.value }" @click="themeMode = option.value">
+            <div
+              v-for="option in themeOptions"
+              :key="option.value"
+              class="theme-option"
+              :class="{ active: themeMode === option.value }"
+              @click="themeMode = option.value"
+            >
               <div class="option-inner">
                 <div class="preview-container">
                   <div class="preview" :class="`preview-${option.value}`">
@@ -58,15 +73,15 @@
             <el-icon>
               <Setting />
             </el-icon>
-            <span>通知设置</span>
+            <span>{{ t('ui.preferences.message004') }}</span>
           </div>
-          <p class="card-desc">管理邮件通知偏好</p>
+          <p class="card-desc">{{ t('ui.preferences.message005') }}</p>
 
           <div class="toggle-list">
             <div class="toggle-item">
               <div class="toggle-left">
-                <span class="toggle-title">日常新闻推送邮件</span>
-                <span class="toggle-desc">定期接收精选资讯和更新</span>
+                <span class="toggle-title">{{ t('ui.preferences.message006') }}</span>
+                <span class="toggle-desc">{{ t('ui.preferences.message007') }}</span>
               </div>
               <el-switch v-model="dailyNewsEmailEnabled" />
             </div>
@@ -78,36 +93,33 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { useStorage } from '@vueuse/core'
-import { onMounted, ref, watch } from 'vue'
-import {
-  Monitor,
-  Sunny,
-  Moon,
-  Setting,
-  Check
-} from '@element-plus/icons-vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import LanguageSelector from '@/components/LanguageSelector.vue'
+import { Monitor, Sunny, Moon, Setting, Check } from '@element-plus/icons-vue'
 import { getUserInfo, updateUserSetting } from '@/api/auth'
 
 const themeMode = useStorage<string>('theme-mode', 'system')
 
-const themeOptions = [
+const themeOptions = computed(() => [
   {
     value: 'system',
-    label: '跟随浏览器',
-    icon: Monitor
+    label: t('ui.mainLayout.message005'),
+    icon: Monitor,
   },
   {
     value: 'light',
-    label: '浅色',
-    icon: Sunny
+    label: t('ui.preferences.message008'),
+    icon: Sunny,
   },
   {
     value: 'dark',
-    label: '深色',
-    icon: Moon
-  }
-]
+    label: t('ui.preferences.message009'),
+    icon: Moon,
+  },
+])
 const dailyNewsEmailEnabled = ref(false)
 const settingsReady = ref(false)
 const settingsUpdating = ref(false)
@@ -179,6 +191,10 @@ watch(dailyNewsEmailEnabled, async (value, prev) => {
   color: var(--el-text-color-secondary);
 }
 
+.language-row {
+  margin-bottom: 16px;
+}
+
 .row-gap {
   margin-top: 16px;
 }
@@ -225,7 +241,11 @@ watch(dailyNewsEmailEnabled, async (value, prev) => {
 }
 
 .theme-option {
-  --theme-active-bg: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-bg-color) 100%);
+  --theme-active-bg: linear-gradient(
+    135deg,
+    var(--el-color-primary-light-9) 0%,
+    var(--el-bg-color) 100%
+  );
   --theme-active-ring: var(--el-color-primary-light-9);
   position: relative;
   cursor: pointer;

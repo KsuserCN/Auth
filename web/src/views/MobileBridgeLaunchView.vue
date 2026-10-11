@@ -1,13 +1,15 @@
 <template>
   <div class="bridge-launch">
     <div class="bridge-launch-card">
-      <h1>正在尝试打开 Ksuser App</h1>
-      <p>如果没有自动切换到 App，页面会返回登录页并保留当前登录请求。</p>
+      <h1>{{ t('ui.mobileBridgeLaunch.message001') }}</h1>
+      <p>{{ t('ui.mobileBridgeLaunch.message002') }}</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 
@@ -18,16 +20,20 @@ const isTrustedReturnUrl = (value: string): boolean => {
     const url = new URL(value)
     const hostname = url.hostname.toLowerCase()
     return (
-      url.protocol === 'https:' &&
-      (hostname === 'auth.ksuser.cn' || hostname === 'www.ksuser.cn' || hostname.endsWith('.ksuser.cn'))
-    ) || (url.protocol === 'http:' && hostname === 'localhost')
+      (url.protocol === 'https:' &&
+        (hostname === 'auth.ksuser.cn' ||
+          hostname === 'www.ksuser.cn' ||
+          hostname.endsWith('.ksuser.cn'))) ||
+      (url.protocol === 'http:' && hostname === 'localhost')
+    )
   } catch {
     return false
   }
 }
 
 onMounted(() => {
-  const challengeId = typeof route.query.challengeId === 'string' ? route.query.challengeId.trim() : ''
+  const challengeId =
+    typeof route.query.challengeId === 'string' ? route.query.challengeId.trim() : ''
   const returnUrl = typeof route.query.returnUrl === 'string' ? route.query.returnUrl.trim() : ''
 
   let fallback = `${window.location.origin}/login?mobileBridgeFallback=1`

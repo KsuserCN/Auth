@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">安全设置</h1>
-        <p class="page-subtitle">管理账户防护、验证方式和安全提醒</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message011') }}</h1>
+        <p class="page-subtitle">{{ t('ui.security.message001') }}</p>
       </div>
     </div>
 
@@ -14,35 +14,39 @@
             <el-icon>
               <Lock />
             </el-icon>
-            <span>两步验证</span>
+            <span>{{ t('ui.security.message002') }}</span>
           </div>
           <div class="security-list">
             <div class="security-item">
               <div class="item-left">
                 <div class="item-header">
-                  <span class="item-title">邮箱验证码</span>
+                  <span class="item-title">{{
+                    t('ui.sensitiveVerificationDialog.message025')
+                  }}</span>
                 </div>
-                <p class="item-desc">使用发送到您邮箱的验证码进行两步验证</p>
+                <p class="item-desc">{{ t('ui.security.message003') }}</p>
               </div>
               <div class="item-right">
-                <el-tag type="success">已启用</el-tag>
-                <el-button plain size="small">管理</el-button>
+                <el-tag type="success">{{ t('ui.loginOptions.message030') }}</el-tag>
+                <el-button plain size="small">{{ t('ui.security.message004') }}</el-button>
               </div>
             </div>
             <el-divider />
             <div class="security-item">
               <div class="item-left">
                 <div class="item-header">
-                  <span class="item-title">通行密钥(Passkey)</span>
+                  <span class="item-title">{{ t('ui.security.message005') }}</span>
                 </div>
-                <p class="item-desc">使用生物识别或设备密码进行两步验证</p>
+                <p class="item-desc">{{ t('ui.security.message006') }}</p>
               </div>
               <div class="item-right">
-                <el-tag v-if="passkeyLoading" type="info">检测中</el-tag>
-                <el-tag v-else-if="passkeyEnabled" type="success">已启用</el-tag>
-                <el-tag v-else type="info">未启用</el-tag>
+                <el-tag v-if="passkeyLoading" type="info">{{ t('ui.security.message007') }}</el-tag>
+                <el-tag v-else-if="passkeyEnabled" type="success">{{
+                  t('ui.loginOptions.message030')
+                }}</el-tag>
+                <el-tag v-else type="info">{{ t('ui.loginOptions.message031') }}</el-tag>
                 <el-button type="primary" plain size="small" @click="goToLoginOptions">
-                  {{ passkeyEnabled ? '管理' : '前往设置' }}
+                  {{ passkeyEnabled ? t('ui.security.message004') : t('ui.security.message008') }}
                 </el-button>
               </div>
             </div>
@@ -50,23 +54,24 @@
             <div class="security-item">
               <div class="item-left">
                 <div class="item-header">
-                  <span class="item-title">身份验证器(Authenticator)</span>
+                  <span class="item-title">{{ t('ui.security.message009') }}</span>
                 </div>
-                <p class="item-desc">使用身份验证器生成的动态验证码进行两步验证</p>
+                <p class="item-desc">{{ t('ui.security.message010') }}</p>
               </div>
               <div class="item-right">
-                <el-tag v-if="totpLoading" type="info">检测中</el-tag>
-                <el-tag v-else-if="totpEnabled" type="success">已启用</el-tag>
-                <el-tag v-else type="info">未启用</el-tag>
+                <el-tag v-if="totpLoading" type="info">{{ t('ui.security.message007') }}</el-tag>
+                <el-tag v-else-if="totpEnabled" type="success">{{
+                  t('ui.loginOptions.message030')
+                }}</el-tag>
+                <el-tag v-else type="info">{{ t('ui.loginOptions.message031') }}</el-tag>
                 <el-button type="primary" plain size="small" @click="goToLoginOptions">
-                  {{ totpEnabled ? '管理' : '前往设置' }}
+                  {{ totpEnabled ? t('ui.security.message004') : t('ui.security.message008') }}
                 </el-button>
               </div>
             </div>
           </div>
         </el-card>
       </el-col>
-
     </el-row>
 
     <el-row :gutter="16" class="row-gap">
@@ -76,27 +81,27 @@
             <el-icon>
               <Key />
             </el-icon>
-            <span>安全开关</span>
+            <span>{{ t('ui.security.message011') }}</span>
           </div>
           <div class="toggle-list">
             <div class="toggle-item">
               <div class="toggle-left">
-                <span class="toggle-title">开启 MFA</span>
-                <span class="toggle-desc">登录时启用多因素验证</span>
+                <span class="toggle-title">{{ t('ui.security.message012') }}</span>
+                <span class="toggle-desc">{{ t('ui.security.message013') }}</span>
               </div>
               <el-switch v-model="mfaEnabled" />
             </div>
             <div class="toggle-item">
               <div class="toggle-left">
-                <span class="toggle-title">开启异地登录检测</span>
-                <span class="toggle-desc">检测异常地点登录并提醒</span>
+                <span class="toggle-title">{{ t('ui.security.message014') }}</span>
+                <span class="toggle-desc">{{ t('ui.security.message015') }}</span>
               </div>
               <el-switch v-model="geoLoginEnabled" />
             </div>
             <div class="toggle-item">
               <div class="toggle-left">
-                <span class="toggle-title">敏感操作邮件提醒</span>
-                <span class="toggle-desc">敏感操作时向邮箱发送通知</span>
+                <span class="toggle-title">{{ t('ui.security.message016') }}</span>
+                <span class="toggle-desc">{{ t('ui.security.message017') }}</span>
               </div>
               <el-switch v-model="sensitiveEmailEnabled" />
             </div>
@@ -105,28 +110,40 @@
           <div class="preference-list">
             <div class="preference-item">
               <div class="toggle-left">
-                <span class="toggle-title">登录 MFA 偏好</span>
-                <span class="toggle-desc">仅在开启 MFA 时生效，默认优先跳转该方式</span>
+                <span class="toggle-title">{{ t('ui.security.message018') }}</span>
+                <span class="toggle-desc">{{ t('ui.security.message019') }}</span>
               </div>
-              <el-select v-model="preferredMfaMethod" placeholder="选择登录 MFA 偏好"
-                :disabled="!mfaEnabled || settingsUpdating" class="preference-select"
-                @change="handlePreferredMfaMethodChange">
+              <el-select
+                v-model="preferredMfaMethod"
+                :placeholder="t('ui.security.message020')"
+                :disabled="!mfaEnabled || settingsUpdating"
+                class="preference-select"
+                @change="handlePreferredMfaMethodChange"
+              >
                 <el-option label="Passkey" value="passkey" :disabled="!passkeyEnabled" />
                 <el-option label="TOTP" value="totp" :disabled="!totpEnabled" />
                 <el-option v-if="appleBound" label="Apple" value="apple" />
-                <el-option label="手机扫码" value="qr" />
+                <el-option :label="t('ui.security.message021')" value="qr" />
               </el-select>
             </div>
 
             <div class="preference-item">
               <div class="toggle-left">
-                <span class="toggle-title">敏感操作验证偏好</span>
-                <span class="toggle-desc">仅影响默认验证入口，仍可手动切换其他方式</span>
+                <span class="toggle-title">{{ t('ui.security.message022') }}</span>
+                <span class="toggle-desc">{{ t('ui.security.message023') }}</span>
               </div>
-              <el-select v-model="preferredSensitiveMethod" placeholder="选择敏感验证偏好" :disabled="settingsUpdating"
-                class="preference-select" @change="handlePreferredSensitiveMethodChange">
-                <el-option label="密码" value="password" />
-                <el-option label="邮箱验证码" value="email-code" />
+              <el-select
+                v-model="preferredSensitiveMethod"
+                :placeholder="t('ui.security.message024')"
+                :disabled="settingsUpdating"
+                class="preference-select"
+                @change="handlePreferredSensitiveMethodChange"
+              >
+                <el-option :label="t('ui.loginOptions.message004')" value="password" />
+                <el-option
+                  :label="t('ui.sensitiveVerificationDialog.message025')"
+                  value="email-code"
+                />
                 <el-option label="Passkey" value="passkey" :disabled="!passkeyEnabled" />
                 <el-option label="TOTP" value="totp" :disabled="!totpEnabled" />
               </el-select>
@@ -144,7 +161,7 @@
               <el-icon>
                 <Lock />
               </el-icon>
-              <span>自适应连续认证引擎</span>
+              <span>{{ t('ui.security.message025') }}</span>
             </div>
             <div class="title-actions">
               <el-tag
@@ -152,10 +169,16 @@
                 :type="getAdaptiveRiskTagType(adaptiveAuthStatus.riskLevel)"
                 effect="plain"
               >
-                {{ getAdaptiveRiskLabel(adaptiveAuthStatus.riskLevel) }}风险 {{ adaptiveAuthStatus.riskScore }}
+                {{ getAdaptiveRiskLabel(adaptiveAuthStatus.riskLevel)
+                }}{{ t('ui.security.message026') }} {{ adaptiveAuthStatus.riskScore }}
               </el-tag>
-              <el-button text size="small" :loading="adaptiveAuthLoading" @click="loadAdaptiveAuthStatus">
-                刷新
+              <el-button
+                text
+                size="small"
+                :loading="adaptiveAuthLoading"
+                @click="loadAdaptiveAuthStatus"
+              >
+                {{ t('ui.devices.message002') }}
               </el-button>
             </div>
           </div>
@@ -164,13 +187,23 @@
             <div class="adaptive-auth-summary">
               <div class="adaptive-auth-main">
                 <span class="adaptive-auth-title">
-                  {{ adaptiveAuthStatus.requiresStepUp ? '建议立即补做验证' : '当前会话可信度稳定' }}
+                  {{
+                    adaptiveAuthStatus.requiresStepUp
+                      ? t('ui.security.message027')
+                      : t('ui.security.message028')
+                  }}
                 </span>
-                <p class="adaptive-auth-desc">{{ resolveApiResult({ errorCode: adaptiveAuthStatus.recommendedActionCode }) }}</p>
+                <p class="adaptive-auth-desc">
+                  {{ resolveApiResult({ errorCode: adaptiveAuthStatus.recommendedActionCode }) }}
+                </p>
               </div>
               <div class="adaptive-auth-actions">
                 <el-tag :type="adaptiveAuthStatus.trusted ? 'success' : 'warning'">
-                  {{ adaptiveAuthStatus.trusted ? '已信任' : '待提升' }}
+                  {{
+                    adaptiveAuthStatus.trusted
+                      ? t('ui.security.message029')
+                      : t('ui.security.message030')
+                  }}
                 </el-tag>
                 <el-tag
                   :type="getPolicyDecisionTagType(adaptiveAuthStatus.policyDecision)"
@@ -184,15 +217,27 @@
                   :disabled="adaptiveAuthStatus.sensitiveVerified"
                   @click="openAdaptiveStepUpDialog"
                 >
-                  {{ adaptiveAuthStatus.sensitiveVerified ? '已完成验证' : '立即验证' }}
+                  {{
+                    adaptiveAuthStatus.sensitiveVerified
+                      ? t('ui.security.message031')
+                      : t('ui.security.message032')
+                  }}
                 </el-button>
               </div>
             </div>
 
             <el-alert
               v-if="adaptiveAuthStatus.multiEndpointAlert"
-              :title="adaptiveAuthStatus.alertTitleCode ? resolveApiResult({ errorCode: adaptiveAuthStatus.alertTitleCode }) : '风险告警'"
-              :description="adaptiveAuthStatus.alertMessageCode ? resolveApiResult({ errorCode: adaptiveAuthStatus.alertMessageCode }) : '检测到风险信号，请尽快处理'"
+              :title="
+                adaptiveAuthStatus.alertTitleCode
+                  ? resolveApiResult({ errorCode: adaptiveAuthStatus.alertTitleCode })
+                  : t('ui.security.message033')
+              "
+              :description="
+                adaptiveAuthStatus.alertMessageCode
+                  ? resolveApiResult({ errorCode: adaptiveAuthStatus.alertMessageCode })
+                  : t('ui.security.message034')
+              "
               :type="adaptiveAuthStatus.alertLevel === 'high' ? 'error' : 'warning'"
               show-icon
               :closable="false"
@@ -201,46 +246,65 @@
 
             <div class="adaptive-auth-metrics">
               <div class="adaptive-auth-metric">
-                <span class="metric-label">敏感验证状态</span>
+                <span class="metric-label">{{ t('ui.security.message035') }}</span>
                 <span class="metric-value">
-                  {{ adaptiveAuthStatus.sensitiveVerified ? `有效 ${adaptiveAuthStatus.sensitiveVerificationRemainingSeconds} 秒` : '未验证' }}
+                  {{
+                    adaptiveAuthStatus.sensitiveVerified
+                      ? t('ui.security.message036', {
+                          arg0: adaptiveAuthStatus.sensitiveVerificationRemainingSeconds,
+                        })
+                      : t('ui.security.message037')
+                  }}
                 </span>
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">会话年龄</span>
-                <span class="metric-value">{{ formatDuration(adaptiveAuthStatus.authAgeSeconds) }}</span>
+                <span class="metric-label">{{ t('ui.security.message038') }}</span>
+                <span class="metric-value">{{
+                  formatDuration(adaptiveAuthStatus.authAgeSeconds)
+                }}</span>
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">空闲时长</span>
-                <span class="metric-value">{{ formatDuration(adaptiveAuthStatus.idleSeconds) }}</span>
+                <span class="metric-label">{{ t('ui.security.message039') }}</span>
+                <span class="metric-value">{{
+                  formatDuration(adaptiveAuthStatus.idleSeconds)
+                }}</span>
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">当前环境</span>
-                <span class="metric-value">{{ adaptiveAuthStatus.currentLocation || '未知位置' }} / {{ adaptiveAuthStatus.deviceType || '未知设备' }}</span>
+                <span class="metric-label">{{ t('ui.security.message040') }}</span>
+                <span class="metric-value"
+                  >{{
+                    adaptiveAuthStatus.currentLocation || t('ui.accountRecoveryCard.message016')
+                  }}
+                  / {{ adaptiveAuthStatus.deviceType || t('ui.devices.message038') }}</span
+                >
               </div>
             </div>
 
             <div v-if="adaptiveMetrics" class="adaptive-auth-metrics adaptive-auth-metrics--engine">
               <div class="adaptive-auth-metric">
-                <span class="metric-label">策略评估量（7天）</span>
+                <span class="metric-label">{{ t('ui.security.message041') }}</span>
                 <span class="metric-value">{{ adaptiveMetrics.totalEvaluations }}</span>
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">拦截率</span>
-                <span class="metric-value">{{ adaptiveMetrics.interceptRatePercent.toFixed(2) }}%</span>
+                <span class="metric-label">{{ t('ui.security.message042') }}</span>
+                <span class="metric-value"
+                  >{{ adaptiveMetrics.interceptRatePercent.toFixed(2) }}%</span
+                >
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">误报率</span>
-                <span class="metric-value">{{ adaptiveMetrics.falsePositiveRatePercent.toFixed(2) }}%</span>
+                <span class="metric-label">{{ t('ui.security.message043') }}</span>
+                <span class="metric-value"
+                  >{{ adaptiveMetrics.falsePositiveRatePercent.toFixed(2) }}%</span
+                >
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">平均验证时延</span>
+                <span class="metric-label">{{ t('ui.security.message044') }}</span>
                 <span class="metric-value">{{ adaptiveMetrics.avgVerificationLatencyMs }}ms</span>
               </div>
             </div>
 
             <div class="adaptive-auth-reasons">
-              <span class="metric-label">风险信号</span>
+              <span class="metric-label">{{ t('ui.security.message045') }}</span>
               <div class="adaptive-auth-chip-list">
                 <el-tag
                   v-for="(reason, index) in adaptiveAuthStatus.reasonCodes"
@@ -275,39 +339,85 @@
               <el-icon>
                 <Document />
               </el-icon>
-              <span>近期敏感操作</span>
+              <span>{{ t('ui.security.message046') }}</span>
             </div>
             <div class="title-actions">
               <el-tag v-if="sensitiveLogsTotal" type="info" effect="plain">
-                共 {{ sensitiveLogsTotal }} 条
+                {{ t('ui.security.message047') }} {{ sensitiveLogsTotal }}
+                {{ t('ui.security.message048') }}
               </el-tag>
-              <el-button text size="small" :loading="sensitiveLogsLoading" @click="loadSensitiveLogs">
-                刷新
+              <el-button
+                text
+                size="small"
+                :loading="sensitiveLogsLoading"
+                @click="loadSensitiveLogs"
+              >
+                {{ t('ui.devices.message002') }}
               </el-button>
             </div>
           </div>
 
           <!-- 查询表单 -->
-          <div style="margin-bottom: 12px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
-            <el-select v-model="query.operationType" placeholder="操作类型" clearable style="width:180px">
-              <el-option v-for="(label, key) in operationTypeLabels" :key="key" :label="label" :value="key" />
+          <div
+            style="
+              margin-bottom: 12px;
+              display: flex;
+              gap: 12px;
+              align-items: center;
+              flex-wrap: wrap;
+            "
+          >
+            <el-select
+              v-model="query.operationType"
+              :placeholder="t('ui.security.message049')"
+              clearable
+              style="width: 180px"
+            >
+              <el-option
+                v-for="(label, key) in operationTypeLabels"
+                :key="key"
+                :label="label"
+                :value="key"
+              />
             </el-select>
 
-            <el-select v-model="query.result" placeholder="结果" clearable style="width:140px">
-              <el-option label="成功" value="SUCCESS" />
-              <el-option label="失败" value="FAILURE" />
+            <el-select
+              v-model="query.result"
+              :placeholder="t('ui.security.message050')"
+              clearable
+              style="width: 140px"
+            >
+              <el-option :label="t('ui.security.message051')" value="SUCCESS" />
+              <el-option :label="t('ui.desktopPasskeyBridge.message010')" value="FAILURE" />
             </el-select>
 
-            <el-date-picker v-model="dateRange" type="daterange" range-separator="至" start-placeholder="开始日期"
-              end-placeholder="结束日期" value-format="yyyy-MM-dd" unlink-panels style="width:320px" />
+            <el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              :range-separator="t('ui.security.message052')"
+              :start-placeholder="t('ui.security.message053')"
+              :end-placeholder="t('ui.security.message054')"
+              value-format="yyyy-MM-dd"
+              unlink-panels
+              style="width: 320px"
+            />
 
-            <el-button type="primary" @click="applyQuery">查询</el-button>
-            <el-button @click="resetQuery">重置</el-button>
+            <el-button type="primary" @click="applyQuery">{{
+              t('ui.security.message055')
+            }}</el-button>
+            <el-button @click="resetQuery">{{ t('ui.security.message056') }}</el-button>
           </div>
 
-          <el-table :data="sensitiveLogs" class="modern-table" size="small"
-            :empty-text="sensitiveLogsLoading ? '加载中...' : '暂无记录'" @sort-change="handleSortChange">
-            <el-table-column label="操作" min-width="180">
+          <el-table
+            :data="sensitiveLogs"
+            class="modern-table"
+            size="small"
+            :empty-text="
+              sensitiveLogsLoading ? t('ui.security.message057') : t('ui.security.message058')
+            "
+            @sort-change="handleSortChange"
+          >
+            <el-table-column :label="t('ui.devices.message015')" min-width="180">
               <template #default="{ row }">
                 <div class="log-primary">
                   <span class="log-title">{{ getOperationTitle(row.operationType) }}</span>
@@ -322,96 +432,120 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="结果" min-width="120">
+            <el-table-column :label="t('ui.security.message050')" min-width="120">
               <template #default="{ row }">
                 <div class="log-secondary">
                   <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
-                    {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
+                    {{
+                      row.result === 'SUCCESS'
+                        ? t('ui.security.message051')
+                        : t('ui.desktopPasskeyBridge.message010')
+                    }}
                   </el-tag>
                   <span v-if="row.result === 'FAILURE'" class="log-sub">
-                    {{ row.failureReason || '未知原因' }}
+                    {{ resolveAuditReason(row.failureReason) || t('ui.security.message059') }}
                   </span>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="位置 / IP" min-width="160">
+            <el-table-column :label="t('ui.security.message060')" min-width="160">
               <template #default="{ row }">
                 <div class="log-secondary">
-                  <span>{{ row.ipLocation || '未知位置' }}</span>
+                  <span>{{ row.ipLocation || t('ui.accountRecoveryCard.message016') }}</span>
                   <span class="log-sub">{{ row.ipAddress }}</span>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="设备" min-width="160">
+            <el-table-column :label="t('ui.devices.message006')" min-width="160">
               <template #default="{ row }">
                 <div class="log-secondary">
                   <span class="log-device">
-                    <i :class="getDeviceIconClass(row.deviceType)" class="log-device-icon" aria-hidden="true"></i>
-                    {{ row.deviceType || '未知设备' }}
+                    <i
+                      :class="getDeviceIconClass(row.deviceType)"
+                      class="log-device-icon"
+                      aria-hidden="true"
+                    ></i>
+                    {{ row.deviceType || t('ui.devices.message038') }}
                   </span>
                   <span class="log-sub log-browser">
-                    <i :class="getBrowserIconClass(row.browser)" class="log-browser-icon" aria-hidden="true"></i>
-                    {{ row.browser || '未知浏览器' }}
+                    <i
+                      :class="getBrowserIconClass(row.browser)"
+                      class="log-browser-icon"
+                      aria-hidden="true"
+                    ></i>
+                    {{ row.browser || t('ui.devices.message037') }}
                   </span>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column label="风险" min-width="100" align="center">
+            <el-table-column :label="t('ui.security.message026')" min-width="100" align="center">
               <template #default="{ row }">
                 <el-tag :type="getRiskTagType(row.riskScore)" size="small" effect="plain">
                   {{ row.riskScore }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="时间" min-width="160">
+            <el-table-column :label="t('ui.security.message061')" min-width="160">
               <template #default="{ row }">
                 {{ formatSensitiveTime(row.createdAt) }}
               </template>
             </el-table-column>
           </el-table>
 
-          <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-            <el-pagination background :page-size="query.pageSize" :current-page="query.page" :total="sensitiveLogsTotal"
-              layout="total, sizes, prev, pager, next, jumper" :page-sizes="[6, 12, 24, 48]"
-              @current-change="handlePageChange" @size-change="handlePageSizeChange" />
+          <div style="margin-top: 12px; display: flex; justify-content: flex-end">
+            <el-pagination
+              background
+              :page-size="query.pageSize"
+              :current-page="query.page"
+              :total="sensitiveLogsTotal"
+              layout="total, sizes, prev, pager, next, jumper"
+              :page-sizes="[6, 12, 24, 48]"
+              @current-change="handlePageChange"
+              @size-change="handlePageSizeChange"
+            />
           </div>
         </el-card>
       </el-col>
     </el-row>
 
-	    <el-row :gutter="16" class="row-gap">
-	      <el-col :xs="24">
-	        <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
-	          <div class="danger-zone-item">
-	            <div class="danger-zone-item-left">
-	              <div class="danger-zone-item-title danger">注销账号</div>
-	              <p class="danger-zone-item-desc">永久删除您的账号和所有相关数据。此操作不可逆转。</p>
-	            </div>
-	            <div class="danger-zone-item-right">
-	              <el-button type="danger" plain size="small" @click="handleDeleteAccount">注销</el-button>
-	            </div>
-	          </div>
-	        </DangerZoneCard>
-	      </el-col>
-	    </el-row>
+    <el-row :gutter="16" class="row-gap">
+      <el-col :xs="24">
+        <DangerZoneCard :title="t('ui.devices.message027')" :icon="WarningFilled">
+          <div class="danger-zone-item">
+            <div class="danger-zone-item-left">
+              <div class="danger-zone-item-title danger">
+                {{ t('ui.deleteAccount.message001') }}
+              </div>
+              <p class="danger-zone-item-desc">{{ t('ui.security.message062') }}</p>
+            </div>
+            <div class="danger-zone-item-right">
+              <el-button type="danger" plain size="small" @click="handleDeleteAccount">{{
+                t('ui.security.message063')
+              }}</el-button>
+            </div>
+          </div>
+        </DangerZoneCard>
+      </el-col>
+    </el-row>
 
-    <SensitiveVerificationDialog v-model="sensitiveDialogVisible" @success="handleSensitiveVerificationSuccess"
-      @cancel="handleSensitiveVerificationCancel" />
+    <SensitiveVerificationDialog
+      v-model="sensitiveDialogVisible"
+      @success="handleSensitiveVerificationSuccess"
+      @cancel="handleSensitiveVerificationCancel"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { resolveApiResult } from '@/utils/apiResult'
+import { computed } from 'vue'
+
+import { intlLocale, durationUnit, t } from '@/i18n'
+
+import { resolveApiResult, resolveAuditReason } from '@/utils/apiResult'
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-	import {
-	  Key,
-	  Lock,
-	  Delete,
-	  Document,
-	  WarningFilled,
-	} from '@element-plus/icons-vue'
+import { Key, Lock, Delete, Document, WarningFilled } from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
   getAppleStatus,
@@ -428,8 +562,8 @@ import {
   type SensitiveLoginMethod,
   type SensitiveOperationType,
 } from '@/api/auth'
-	import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
-	import DangerZoneCard from '@/components/DangerZoneCard.vue'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+import DangerZoneCard from '@/components/DangerZoneCard.vue'
 import AccountRecoveryCard from '@/components/AccountRecoveryCard.vue'
 
 const router = useRouter()
@@ -440,9 +574,13 @@ const passkeyLoading = ref(true)
 const totpLoading = ref(true)
 const mfaEnabled = ref(false)
 const preferredMfaMethod = ref<'totp' | 'passkey' | 'qr'>('totp')
-const preferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp' | 'apple'>('password')
+const preferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp' | 'apple'>(
+  'password',
+)
 const committedPreferredMfaMethod = ref<'totp' | 'passkey' | 'qr'>('totp')
-const committedPreferredSensitiveMethod = ref<'password' | 'email-code' | 'passkey' | 'totp' | 'apple'>('password')
+const committedPreferredSensitiveMethod = ref<
+  'password' | 'email-code' | 'passkey' | 'totp' | 'apple'
+>('password')
 const appleBound = ref(false)
 const geoLoginEnabled = ref(false)
 const sensitiveEmailEnabled = ref(false)
@@ -467,7 +605,16 @@ const sensitiveDialogVisible = ref(false)
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 
 // 查询与分页/排序状态
-const query = ref<{ page: number; pageSize: number; startDate?: string; endDate?: string; operationType?: string | null; result?: string | null; sortBy?: string | null; sortOrder?: 'asc' | 'desc' | null }>({
+const query = ref<{
+  page: number
+  pageSize: number
+  startDate?: string
+  endDate?: string
+  operationType?: string | null
+  result?: string | null
+  sortBy?: string | null
+  sortOrder?: 'asc' | 'desc' | null
+}>({
   page: 1,
   pageSize: 6,
   startDate: undefined,
@@ -480,48 +627,48 @@ const query = ref<{ page: number; pageSize: number; startDate?: string; endDate?
 
 const dateRange = ref<string[] | null>(null)
 
-const operationTypeLabels: Record<SensitiveOperationType, string> = {
-  REGISTER: '注册',
-  LOGIN: '登录',
-  SENSITIVE_VERIFY: '敏感验证',
-  ADAPTIVE_POLICY: '风控策略编排',
-  CHANGE_PASSWORD: '修改密码',
-  CHANGE_EMAIL: '修改邮箱',
-  ADD_PASSKEY: '新增 Passkey',
-  DELETE_PASSKEY: '删除 Passkey',
-  ENABLE_TOTP: '启用 TOTP',
-  DISABLE_TOTP: '禁用 TOTP',
-}
+const operationTypeLabels = computed<Record<SensitiveOperationType, string>>(() => ({
+  REGISTER: t('ui.security.message064'),
+  LOGIN: t('ui.login.message001'),
+  SENSITIVE_VERIFY: t('ui.security.message065'),
+  ADAPTIVE_POLICY: t('ui.security.message066'),
+  CHANGE_PASSWORD: t('ui.changePassword.message001'),
+  CHANGE_EMAIL: t('ui.changeEmail.message012'),
+  ADD_PASSKEY: t('ui.security.message067'),
+  DELETE_PASSKEY: t('ui.security.message068'),
+  ENABLE_TOTP: t('ui.loginOptions.message028'),
+  DISABLE_TOTP: t('ui.loginOptions.message029'),
+}))
 
-const loginMethodLabels: Record<SensitiveLoginMethod, string> = {
-  PASSWORD: '密码登录',
-  PASSWORD_MFA: '密码+二步验证',
-  EMAIL: '验证码登录',
-  EMAIL_CODE: '验证码登录',
-  EMAIL_CODE_MFA: '验证码+二步验证',
-  PASSKEY: 'Passkey登录',
-  PASSKEY_MFA: 'Passkey+二步验证',
-  QR: '扫码登录',
-  QR_MFA: '扫码+二步验证',
+const loginMethodLabels = computed<Record<SensitiveLoginMethod, string>>(() => ({
+  PASSWORD: t('ui.security.message069'),
+  PASSWORD_MFA: t('ui.security.message070'),
+  EMAIL: t('ui.security.message071'),
+  EMAIL_CODE: t('ui.security.message071'),
+  EMAIL_CODE_MFA: t('ui.security.message072'),
+  PASSKEY: t('ui.security.message073'),
+  PASSKEY_MFA: t('ui.security.message074'),
+  QR: t('ui.security.message075'),
+  QR_MFA: t('ui.security.message076'),
   QQ: 'QQ',
   GITHUB: 'GitHub',
   MICROSOFT: 'Microsoft',
   GOOGLE: 'Google',
-  WECHAT: '微信',
-  WEIXIN: '微信',
+  WECHAT: t('ui.loginOptions.message049'),
+  WEIXIN: t('ui.loginOptions.message049'),
   MFA: 'MFA',
-  BRIDGE: '桥接登录',
-  BRIDGE_FROM_DESKTOP: '电脑端桥接',
-  BRIDGE_FROM_WEB: '网页端桥接',
-  BRIDGE_TO_MOBILE: '桥接到手机端',
-  ACCOUNT_RECOVERY: '账号恢复',
-}
+  BRIDGE: t('ui.security.message077'),
+  BRIDGE_FROM_DESKTOP: t('ui.security.message078'),
+  BRIDGE_FROM_WEB: t('ui.security.message079'),
+  BRIDGE_TO_MOBILE: t('ui.security.message080'),
+  ACCOUNT_RECOVERY: t('ui.accountRecoveryCard.message001'),
+}))
 
 const formatSensitiveTime = (value?: string | null) => {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', {
+  return date.toLocaleString(intlLocale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -531,7 +678,7 @@ const formatSensitiveTime = (value?: string | null) => {
 }
 
 const getOperationLabel = (op: unknown) => {
-  return operationTypeLabels[(op as SensitiveOperationType)] || String(op ?? '-')
+  return operationTypeLabels.value[op as SensitiveOperationType] || String(op ?? '-')
 }
 
 const normalizeLoginTokenLabel = (token: string) => {
@@ -539,29 +686,27 @@ const normalizeLoginTokenLabel = (token: string) => {
   if (!key) return ''
   if (key === 'PASSKEY') return 'Passkey'
   if (key === 'MFA') return 'MFA'
-  if (key === 'PASSWORD') return '密码'
-  if (key === 'EMAIL') return '验证码'
-  if (key === 'EMAIL_CODE') return '验证码'
+  if (key === 'PASSWORD') return t('ui.loginOptions.message004')
+  if (key === 'EMAIL') return t('ui.security.message081')
+  if (key === 'EMAIL_CODE') return t('ui.security.message081')
   if (key === 'TOTP') return 'TOTP'
-  if (key === 'QR') return '扫码'
+  if (key === 'QR') return t('ui.security.message082')
   if (key === 'GOOGLE') return 'Google'
   if (key === 'GITHUB') return 'GitHub'
   if (key === 'MICROSOFT') return 'Microsoft'
   if (key === 'QQ') return 'QQ'
-  if (key === 'WECHAT' || key === 'WEIXIN') return '微信'
-  if (key === 'BRIDGE') return '桥接登录'
-  if (key === 'BRIDGE_FROM_DESKTOP') return '电脑端桥接'
-  if (key === 'BRIDGE_FROM_WEB') return '网页端桥接'
-  if (key === 'BRIDGE_TO_MOBILE') return '桥接到手机端'
-  if (key === 'ACCOUNT_RECOVERY') return '账号恢复'
+  if (key === 'WECHAT' || key === 'WEIXIN') return t('ui.loginOptions.message049')
+  if (key === 'BRIDGE') return t('ui.security.message077')
+  if (key === 'BRIDGE_FROM_DESKTOP') return t('ui.security.message078')
+  if (key === 'BRIDGE_FROM_WEB') return t('ui.security.message079')
+  if (key === 'BRIDGE_TO_MOBILE') return t('ui.security.message080')
+  if (key === 'ACCOUNT_RECOVERY') return t('ui.accountRecoveryCard.message001')
   return token.trim()
 }
 
 const getLoginMethodTags = (row: SensitiveLogItem): string[] => {
   const fromArray = Array.isArray(row.loginMethods)
-    ? row.loginMethods
-      .map((item) => normalizeLoginTokenLabel(String(item)))
-      .filter(Boolean)
+    ? row.loginMethods.map((item) => normalizeLoginTokenLabel(String(item))).filter(Boolean)
     : []
   if (fromArray.length > 0) {
     return [...new Set(fromArray)]
@@ -577,7 +722,7 @@ const getLoginMethodTags = (row: SensitiveLogItem): string[] => {
   const normalized = raw.toUpperCase()
 
   // Old backend format: "PASSKEY_MFA"
-  if (normalized in loginMethodLabels) {
+  if (normalized in loginMethodLabels.value) {
     const tokens: string[] = []
     if (normalized.endsWith('_MFA')) {
       tokens.push(normalized.slice(0, -4))
@@ -602,10 +747,10 @@ const getLoginMethodTags = (row: SensitiveLogItem): string[] => {
 
 const getOperationTitle = (op: unknown) => {
   const key = String(op ?? '').toUpperCase()
-  if (key === 'LOGIN') return '登录'
-  if (key === 'REGISTER') return '注册'
-  if (key === 'ADAPTIVE_POLICY') return '风控编排'
-  return '敏感操作'
+  if (key === 'LOGIN') return t('ui.login.message001')
+  if (key === 'REGISTER') return t('ui.security.message064')
+  if (key === 'ADAPTIVE_POLICY') return t('ui.security.message083')
+  return t('ui.security.message084')
 }
 
 const getOperationTags = (row: SensitiveLogItem): string[] => {
@@ -630,15 +775,15 @@ const getAdaptiveRiskTagType = (level: AdaptiveAuthStatus['riskLevel']) => {
 }
 
 const getAdaptiveRiskLabel = (level: AdaptiveAuthStatus['riskLevel']) => {
-  if (level === 'high') return '高'
-  if (level === 'medium') return '中'
-  return '低'
+  if (level === 'high') return t('ui.home.message016')
+  if (level === 'medium') return t('ui.home.message017')
+  return t('ui.home.message018')
 }
 
 const getPolicyDecisionLabel = (decision?: AdaptiveAuthStatus['policyDecision']) => {
-  if (decision === 'FREEZE') return '冻结会话'
-  if (decision === 'STEP_UP') return '强制补验'
-  return '放行'
+  if (decision === 'FREEZE') return t('ui.security.message085')
+  if (decision === 'STEP_UP') return t('ui.security.message086')
+  return t('ui.security.message087')
 }
 
 const getPolicyDecisionTagType = (decision?: AdaptiveAuthStatus['policyDecision']) => {
@@ -649,10 +794,10 @@ const getPolicyDecisionTagType = (decision?: AdaptiveAuthStatus['policyDecision'
 
 const formatDuration = (seconds?: number | null) => {
   const total = Math.max(Number(seconds || 0), 0)
-  if (total < 60) return `${total} 秒`
-  if (total < 3600) return `${Math.floor(total / 60)} 分钟`
-  if (total < 86400) return `${Math.floor(total / 3600)} 小时`
-  return `${Math.floor(total / 86400)} 天`
+  if (total < 60) return durationUnit(total, 'second')
+  if (total < 3600) return durationUnit(Math.floor(total / 60), 'minute')
+  if (total < 86400) return durationUnit(Math.floor(total / 3600), 'hour')
+  return durationUnit(Math.floor(total / 86400), 'day')
 }
 
 const getDeviceIconClass = (deviceType?: string | null) => {
@@ -732,7 +877,9 @@ const loadAdaptiveAuthStatus = async () => {
 }
 
 onMounted(async () => {
-  appleBound.value = await getAppleStatus().then((result) => result.enabled).catch(() => false)
+  appleBound.value = await getAppleStatus()
+    .then((result) => result.enabled)
+    .catch(() => false)
   try {
     passkeyLoading.value = true
     const passkeys = await getPasskeyList()
@@ -785,7 +932,16 @@ const applyQuery = () => {
 }
 
 const resetQuery = () => {
-  query.value = { page: 1, pageSize: 6, startDate: undefined, endDate: undefined, operationType: undefined, result: undefined, sortBy: undefined, sortOrder: undefined }
+  query.value = {
+    page: 1,
+    pageSize: 6,
+    startDate: undefined,
+    endDate: undefined,
+    operationType: undefined,
+    result: undefined,
+    sortBy: undefined,
+    sortOrder: undefined,
+  }
   dateRange.value = null
   loadSensitiveLogs()
 }
@@ -804,12 +960,17 @@ const handlePageSizeChange = (size: number) => {
 const handleSortChange = (payload: { prop: string; order: string }) => {
   if (!payload || !payload.prop) return
   query.value.sortBy = payload.prop
-  query.value.sortOrder = payload.order === 'ascending' ? 'asc' : payload.order === 'descending' ? 'desc' : undefined
+  query.value.sortOrder =
+    payload.order === 'ascending' ? 'asc' : payload.order === 'descending' ? 'desc' : undefined
   query.value.page = 1
   loadSensitiveLogs()
 }
 
-const updateSetting = async (field: 'mfaEnabled' | 'detectUnusualLogin' | 'notifySensitiveActionEmail', value: boolean, rollback: () => void) => {
+const updateSetting = async (
+  field: 'mfaEnabled' | 'detectUnusualLogin' | 'notifySensitiveActionEmail',
+  value: boolean,
+  rollback: () => void,
+) => {
   if (settingsRollbackGuard.value[field]) {
     settingsRollbackGuard.value[field] = false
     return
@@ -836,7 +997,7 @@ const updateStringSetting = async (
   settingsUpdating.value = true
   try {
     await updateUserSetting({ field, stringValue })
-    ElMessage.success('偏好设置已更新')
+    ElMessage.success(t('ui.security.message092'))
     return true
   } catch (error) {
     console.error('Update preference failed:', error)
@@ -849,7 +1010,7 @@ const updateStringSetting = async (
 
 const handlePreferredMfaMethodChange = async (value: 'totp' | 'passkey' | 'qr') => {
   if (!mfaEnabled.value) {
-    ElMessage.warning('请先开启 MFA')
+    ElMessage.warning(t('ui.security.message093'))
     return
   }
 
@@ -875,15 +1036,21 @@ const handlePreferredSensitiveMethodChange = async (
 }
 
 watch(mfaEnabled, async (value, prev) => {
-  await updateSetting('mfaEnabled', value, () => { mfaEnabled.value = prev })
+  await updateSetting('mfaEnabled', value, () => {
+    mfaEnabled.value = prev
+  })
 })
 
 watch(geoLoginEnabled, async (value, prev) => {
-  await updateSetting('detectUnusualLogin', value, () => { geoLoginEnabled.value = prev })
+  await updateSetting('detectUnusualLogin', value, () => {
+    geoLoginEnabled.value = prev
+  })
 })
 
 watch(sensitiveEmailEnabled, async (value, prev) => {
-  await updateSetting('notifySensitiveActionEmail', value, () => { sensitiveEmailEnabled.value = prev })
+  await updateSetting('notifySensitiveActionEmail', value, () => {
+    sensitiveEmailEnabled.value = prev
+  })
 })
 
 const goToLoginOptions = () => {
@@ -908,12 +1075,12 @@ const runWithSensitiveVerification = async (action: () => Promise<void>) => {
       return
     }
 
-    ElMessage.info('需要先完成身份验证')
+    ElMessage.info(t('ui.accountRecoveryCard.message020'))
     pendingSensitiveAction = action
     sensitiveDialogVisible.value = true
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
-    ElMessage.info('需要先完成身份验证')
+    ElMessage.info(t('ui.accountRecoveryCard.message020'))
     pendingSensitiveAction = action
     sensitiveDialogVisible.value = true
   }
@@ -970,7 +1137,6 @@ const openAdaptiveStepUpDialog = () => {
   background: var(--el-bg-color);
 }
 
-
 .card-title {
   display: flex;
   align-items: center;
@@ -997,12 +1163,10 @@ const openAdaptiveStepUpDialog = () => {
   gap: 8px;
 }
 
-
 .security-list {
   display: flex;
   flex-direction: column;
 }
-
 
 .security-item {
   padding: 16px 0;
@@ -1010,7 +1174,6 @@ const openAdaptiveStepUpDialog = () => {
   align-items: center;
   justify-content: space-between;
 }
-
 
 .item-left {
   flex: 1;
@@ -1035,7 +1198,6 @@ const openAdaptiveStepUpDialog = () => {
   font-weight: 500;
   color: var(--el-text-color-primary);
 }
-
 
 .item-desc {
   margin: 0;
@@ -1073,7 +1235,10 @@ const openAdaptiveStepUpDialog = () => {
   border: 1px solid var(--el-border-color-light);
   border-radius: 12px;
   background: var(--el-fill-color-lighter);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .toggle-item {
@@ -1084,7 +1249,10 @@ const openAdaptiveStepUpDialog = () => {
   border: 1px solid var(--el-border-color-light);
   border-radius: 12px;
   background: var(--el-fill-color-lighter);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .toggle-item:hover,
@@ -1328,7 +1496,6 @@ const openAdaptiveStepUpDialog = () => {
 }
 
 @media (max-width: 768px) {
-
   .toggle-item,
   .preference-item {
     align-items: flex-start;

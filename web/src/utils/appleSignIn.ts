@@ -1,3 +1,4 @@
+import { LocalizedError } from '@/i18n'
 import { createAppleChallenge, submitAppleCredential, verifyAppleSensitive } from '@/api/auth'
 import type { AppleLoginResponse } from '@/api/auth'
 
@@ -26,10 +27,14 @@ const loadAppleID = (): Promise<AppleIDApi> => {
   if (!scriptPromise) {
     scriptPromise = new Promise<AppleIDApi>((resolve, reject) => {
       const script = document.createElement('script')
-      script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
+      script.src =
+        'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js'
       script.async = true
-      script.onload = () => window.AppleID ? resolve(window.AppleID) : reject(new Error('Apple 登录组件加载失败'))
-      script.onerror = () => reject(new Error('Apple 登录组件加载失败'))
+      script.onload = () =>
+        window.AppleID
+          ? resolve(window.AppleID)
+          : reject(new LocalizedError('ui.appleSignIn.message001'))
+      script.onerror = () => reject(new LocalizedError('ui.appleSignIn.message001'))
       document.head.appendChild(script)
     }).catch((error) => {
       scriptPromise = null
@@ -48,7 +53,7 @@ export const prepareAppleSignIn = async (): Promise<void> => {
 const authorizeWithApple = async (purpose: 'login' | 'bind' | 'sensitive') => {
   const clientId = import.meta.env.VITE_APPLE_CLIENT_ID?.trim()
   const redirectURI = import.meta.env.VITE_APPLE_REDIRECT_URI?.trim()
-  if (!clientId || !redirectURI) throw new Error('Apple 网页登录尚未配置')
+  if (!clientId || !redirectURI) throw new LocalizedError('ui.appleSignIn.message002')
 
   const appleID = await loadAppleID()
   const challenge = await createAppleChallenge(purpose)
@@ -64,7 +69,7 @@ const authorizeWithApple = async (purpose: 'login' | 'bind' | 'sensitive') => {
   const result = await appleID.auth.signIn()
   const authorization = result.authorization
   if (!authorization?.code || !authorization.id_token || authorization.state !== challenge.state) {
-    throw new Error('Apple 授权信息不完整或状态校验失败，请重试')
+    throw new LocalizedError('ui.appleSignIn.message003')
   }
   return {
     challengeId: challenge.challengeId,

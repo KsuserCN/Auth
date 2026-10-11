@@ -2,8 +2,8 @@
   <div>
     <div class="content-header">
       <div>
-        <h1 class="page-title">登录方式</h1>
-        <p class="page-subtitle">管理密码、Passkey、TOTP 和第三方登录绑定</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message012') }}</h1>
+        <p class="page-subtitle">{{ t('ui.loginOptions.message001') }}</p>
       </div>
     </div>
 
@@ -14,7 +14,7 @@
             <el-icon>
               <Lock />
             </el-icon>
-            <span>账户信息</span>
+            <span>{{ t('ui.loginOptions.message002') }}</span>
           </div>
           <div class="info-list">
             <!-- 邮箱 -->
@@ -23,7 +23,7 @@
                 <el-icon class="row-icon">
                   <Message />
                 </el-icon>
-                <span class="row-label">邮箱</span>
+                <span class="row-label">{{ t('ui.loginOptions.message003') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">{{ userEmail }}</span>
@@ -35,12 +35,16 @@
             </div>
 
             <!-- 密码 -->
-            <div class="info-row" :class="{ loading: passwordLoading }" @click="handleChangePassword">
+            <div
+              class="info-row"
+              :class="{ loading: passwordLoading }"
+              @click="handleChangePassword"
+            >
               <div class="row-left">
                 <el-icon class="row-icon">
                   <Key />
                 </el-icon>
-                <span class="row-label">密码</span>
+                <span class="row-label">{{ t('ui.loginOptions.message004') }}</span>
               </div>
               <div class="row-right">
                 <span class="row-value">••••••••</span>
@@ -53,35 +57,57 @@
           </div>
         </el-card>
       </el-col>
-  </el-row>
+    </el-row>
 
-  <el-row :gutter="16" class="row-gap">
+    <el-row :gutter="16" class="row-gap">
       <el-col :xs="24" :lg="24">
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon>
               <Share />
             </el-icon>
-            <span>第三方账号登录绑定</span>
+            <span>{{ t('ui.loginOptions.message005') }}</span>
           </div>
           <div class="oauth-list">
             <div v-for="provider in oauthProviders" :key="provider.key" class="oauth-item">
               <div class="oauth-left">
                 <i class="oauth-icon" :class="provider.iconClass" aria-hidden="true"></i>
                 <div class="oauth-meta">
-                  <span class="oauth-name">{{ provider.label }}</span>
+                  <span class="oauth-name">{{ providerLabel(provider) }}</span>
                   <span class="oauth-last-login">
-                    {{ provider.lastLoginAt ? `最近登录：${formatDateTime(provider.lastLoginAt)}` : '暂无登录记录' }}
+                    {{
+                      provider.lastLoginAt
+                        ? t('ui.loginOptions.message006', {
+                            arg0: formatDateTime(provider.lastLoginAt),
+                          })
+                        : t('ui.loginOptions.message007')
+                    }}
                   </span>
                 </div>
               </div>
               <div class="oauth-right">
-                <el-tag v-if="provider.bound" type="success" size="small" class="oauth-status">已绑定</el-tag>
-                <el-tag v-else type="info" size="small" class="oauth-status">未绑定</el-tag>
-                <el-tag v-if="!provider.supported" size="small" class="oauth-status">暂不支持</el-tag>
-                <el-button v-if="provider.supported" text :type="provider.bound ? 'danger' : 'primary'" size="small"
-                  :loading="provider.loading" @click="handleProviderAction(provider)">
-                  {{ provider.bound ? '解绑' : '绑定' }}
+                <el-tag v-if="provider.bound" type="success" size="small" class="oauth-status">{{
+                  t('ui.loginOptions.message008')
+                }}</el-tag>
+                <el-tag v-else type="info" size="small" class="oauth-status">{{
+                  t('ui.loginOptions.message009')
+                }}</el-tag>
+                <el-tag v-if="!provider.supported" size="small" class="oauth-status">{{
+                  t('ui.loginOptions.message010')
+                }}</el-tag>
+                <el-button
+                  v-if="provider.supported"
+                  text
+                  :type="provider.bound ? 'danger' : 'primary'"
+                  size="small"
+                  :loading="provider.loading"
+                  @click="handleProviderAction(provider)"
+                >
+                  {{
+                    provider.bound
+                      ? t('ui.loginOptions.message011')
+                      : t('ui.loginOptions.message012')
+                  }}
                 </el-button>
               </div>
             </div>
@@ -97,10 +123,16 @@
             <el-icon>
               <Cpu />
             </el-icon>
-            <span>通行密钥(Passkey) 管理</span>
-            <el-button type="primary" plain size="small" @click="handleAddPasskey" :loading="addLoading"
-              style="margin-left: auto">
-              添加 Passkey
+            <span>{{ t('ui.loginOptions.message013') }}</span>
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              @click="handleAddPasskey"
+              :loading="addLoading"
+              style="margin-left: auto"
+            >
+              {{ t('ui.addPasskey.message001') }}
             </el-button>
           </div>
           <div v-if="passkeyLoading" class="panel-skeleton">
@@ -119,8 +151,8 @@
             </div>
           </div>
           <div v-else-if="passkeyList.length === 0" class="passkey-empty">
-            <p>您还没有添加任何 Passkey</p>
-            <p class="empty-desc">Passkey 可以让您使用生物识别或安全密钥快速登录</p>
+            <p>{{ t('ui.loginOptions.message014') }}</p>
+            <p class="empty-desc">{{ t('ui.loginOptions.message015') }}</p>
           </div>
           <div v-else class="passkey-list">
             <div v-for="passkey in passkeyList" :key="passkey.id" class="passkey-item">
@@ -131,25 +163,41 @@
                 <div class="passkey-info">
                   <div class="passkey-name">
                     {{ passkey.name }}
-                    <el-tag v-for="transport in getTransportTags(passkey.transports)" :key="transport.value"
-                      :type="transport.type" size="small" style="margin-left: 6px">
+                    <el-tag
+                      v-for="transport in getTransportTags(passkey.transports)"
+                      :key="transport.value"
+                      :type="transport.type"
+                      size="small"
+                      style="margin-left: 6px"
+                    >
                       {{ transport.label }}
                     </el-tag>
                   </div>
                   <div class="passkey-meta">
-                    <span v-if="passkey.lastUsedAt">最后使用: {{ formatDate(passkey.lastUsedAt) }}</span>
-                    <span v-else>从未使用</span>
+                    <span v-if="passkey.lastUsedAt"
+                      >{{ t('ui.loginOptions.message016') }}
+                      {{ formatDate(passkey.lastUsedAt) }}</span
+                    >
+                    <span v-else>{{ t('ui.loginOptions.message017') }}</span>
                     <span class="separator">•</span>
-                    <span>创建于: {{ formatDate(passkey.createdAt) }}</span>
+                    <span
+                      >{{ t('ui.loginOptions.message018') }}
+                      {{ formatDate(passkey.createdAt) }}</span
+                    >
                   </div>
                 </div>
               </div>
               <div class="passkey-actions">
                 <el-button text size="small" @click="handleRenamePasskey(passkey.id, passkey.name)">
-                  重命名
+                  {{ t('ui.loginOptions.message019') }}
                 </el-button>
-                <el-button text type="danger" size="small" @click="handleDeletePasskey(passkey.id, passkey.name)">
-                  删除
+                <el-button
+                  text
+                  type="danger"
+                  size="small"
+                  @click="handleDeletePasskey(passkey.id, passkey.name)"
+                >
+                  {{ t('ui.loginOptions.message020') }}
                 </el-button>
               </div>
             </div>
@@ -167,9 +215,14 @@
           <el-icon>
             <Lock />
           </el-icon>
-          <span>身份验证器(Authenticator) 管理</span>
-          <el-tag class="totp-header-tag" :type="totpEnabled ? 'success' : 'info'" size="small" effect="light">
-            {{ totpEnabled ? '已开启防护' : '未开启防护' }}
+          <span>{{ t('ui.loginOptions.message021') }}</span>
+          <el-tag
+            class="totp-header-tag"
+            :type="totpEnabled ? 'success' : 'info'"
+            size="small"
+            effect="light"
+          >
+            {{ totpEnabled ? t('ui.loginOptions.message022') : t('ui.loginOptions.message023') }}
           </el-tag>
         </div>
         <div v-if="!totpStatusFetched" class="totp-skeleton">
@@ -192,39 +245,47 @@
               </el-icon>
             </div>
             <div class="totp-hero-content">
-              <h3 class="totp-hero-title">{{ totpEnabled ? '账户防护已开启' : '立即开启双因素认证' }}</h3>
+              <h3 class="totp-hero-title">
+                {{
+                  totpEnabled ? t('ui.loginOptions.message024') : t('ui.loginOptions.message025')
+                }}
+              </h3>
               <p class="totp-hero-desc">
                 {{
-                  totpEnabled
-                    ? '登录时将额外验证动态码，账户安全性更高。'
-                    : '使用身份验证器应用生成动态码，为账户增加一道关键防线。'
+                  totpEnabled ? t('ui.loginOptions.message026') : t('ui.loginOptions.message027')
                 }}
               </p>
             </div>
             <div class="totp-hero-action">
               <el-button v-if="!totpEnabled" type="primary" size="small" @click="handleEnableTotp">
-                启用 TOTP
+                {{ t('ui.loginOptions.message028') }}
               </el-button>
               <el-button v-else type="danger" plain size="small" @click="handleDisableTotp">
-                禁用 TOTP
+                {{ t('ui.loginOptions.message029') }}
               </el-button>
             </div>
           </div>
 
           <div class="totp-metrics">
             <div class="totp-metric-item">
-              <div class="totp-metric-label">状态</div>
+              <div class="totp-metric-label">{{ t('ui.devices.message012') }}</div>
               <div class="totp-metric-value">
-                <el-tag v-if="totpEnabled" type="success" size="small" effect="dark">已启用</el-tag>
-                <el-tag v-else type="info" size="small" effect="light">未启用</el-tag>
+                <el-tag v-if="totpEnabled" type="success" size="small" effect="dark">{{
+                  t('ui.loginOptions.message030')
+                }}</el-tag>
+                <el-tag v-else type="info" size="small" effect="light">{{
+                  t('ui.loginOptions.message031')
+                }}</el-tag>
               </div>
             </div>
             <div v-if="totpEnabled" class="totp-metric-item">
-              <div class="totp-metric-label">剩余恢复码</div>
+              <div class="totp-metric-label">{{ t('ui.loginOptions.message032') }}</div>
               <div class="totp-metric-value recovery-count-wrap">
-                <span class="totp-recovery-count">{{ recoveryCodesCount }} 个</span>
+                <span class="totp-recovery-count"
+                  >{{ recoveryCodesCount }} {{ t('ui.loginOptions.message033') }}</span
+                >
                 <el-tag v-if="recoveryCodesCount < 3" type="warning" size="small" effect="light">
-                  即将用完
+                  {{ t('ui.loginOptions.message034') }}
                 </el-tag>
               </div>
             </div>
@@ -233,22 +294,29 @@
           <div v-if="totpEnabled" class="totp-quick-actions">
             <div class="totp-action-item">
               <div class="totp-action-info">
-                <div class="totp-action-title">查看恢复码</div>
-                <div class="totp-action-desc">用于设备丢失或无法获取动态码时登录账户。</div>
+                <div class="totp-action-title">{{ t('ui.loginOptions.message035') }}</div>
+                <div class="totp-action-desc">{{ t('ui.loginOptions.message036') }}</div>
               </div>
               <div class="totp-action-buttons">
-                <el-button text size="small" @click="handleViewRecoveryCodes">查看恢复码</el-button>
+                <el-button text size="small" @click="handleViewRecoveryCodes">{{
+                  t('ui.loginOptions.message035')
+                }}</el-button>
               </div>
             </div>
             <div class="totp-action-item">
               <div class="totp-action-info">
-                <div class="totp-action-title">刷新恢复码</div>
-                <div class="totp-action-desc">旧恢复码会立即失效，请在生成后立刻保存新恢复码。</div>
+                <div class="totp-action-title">{{ t('ui.loginOptions.message037') }}</div>
+                <div class="totp-action-desc">{{ t('ui.loginOptions.message038') }}</div>
               </div>
               <div class="totp-action-buttons">
-                <el-button text type="warning" size="small" @click="handleRegenerateRecoveryCodes"
-                  :disabled="recoveryCodesCount >= 10">
-                  生成新恢复码
+                <el-button
+                  text
+                  type="warning"
+                  size="small"
+                  @click="handleRegenerateRecoveryCodes"
+                  :disabled="recoveryCodesCount >= 10"
+                >
+                  {{ t('ui.loginOptions.message039') }}
                 </el-button>
               </div>
             </div>
@@ -259,18 +327,32 @@
   </el-row>
 
   <!-- 恢复码列表弹窗 -->
-  <el-dialog v-model="showRecoveryCodesDialog" title="恢复码列表" width="420px">
+  <el-dialog
+    v-model="showRecoveryCodesDialog"
+    :title="t('ui.loginOptions.message040')"
+    width="420px"
+  >
     <div v-if="recoveryCodesLoading" class="dialog-skeleton">
       <el-skeleton-item variant="text" class="dialog-skeleton-alert" />
       <div class="dialog-skeleton-grid">
-        <el-skeleton-item v-for="index in 8" :key="index" variant="text" class="dialog-skeleton-code" />
+        <el-skeleton-item
+          v-for="index in 8"
+          :key="index"
+          variant="text"
+          class="dialog-skeleton-code"
+        />
       </div>
     </div>
     <div v-else>
-      <el-alert title="请妥善保管您的恢复码，每个码只能使用一次" type="warning" :closable="false" style="margin-bottom: 16px" />
+      <el-alert
+        :title="t('ui.loginOptions.message041')"
+        type="warning"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
       <div v-if="recoveryCodesList.length === 0" class="passkey-empty">
-        <p>没有可用的恢复码</p>
-        <p class="empty-desc">所有恢复码都已使用，请重新生成</p>
+        <p>{{ t('ui.loginOptions.message042') }}</p>
+        <p class="empty-desc">{{ t('ui.loginOptions.message043') }}</p>
       </div>
       <div v-else>
         <div class="recovery-codes-grid">
@@ -278,39 +360,66 @@
             {{ code }}
           </div>
         </div>
-        <div style="margin-top: 16px; display: flex; gap: 8px;">
-          <el-button size="small" @click="copyRecoveryCodes(recoveryCodesList)">复制恢复码</el-button>
-          <el-button size="small" @click="downloadRecoveryCodes(recoveryCodesList)">下载恢复码</el-button>
+        <div style="margin-top: 16px; display: flex; gap: 8px">
+          <el-button size="small" @click="copyRecoveryCodes(recoveryCodesList)">{{
+            t('ui.loginOptions.message044')
+          }}</el-button>
+          <el-button size="small" @click="downloadRecoveryCodes(recoveryCodesList)">{{
+            t('ui.loginOptions.message045')
+          }}</el-button>
         </div>
       </div>
     </div>
     <template #footer>
-      <el-button @click="showRecoveryCodesDialog = false">关闭</el-button>
+      <el-button @click="showRecoveryCodesDialog = false">{{
+        t('ui.accountRecoveryCard.message017')
+      }}</el-button>
     </template>
   </el-dialog>
 
   <!-- 新恢复码弹窗 -->
-  <el-dialog v-model="showRegenerateDialog" title="新的恢复码" width="450px" :close-on-click-modal="false">
+  <el-dialog
+    v-model="showRegenerateDialog"
+    :title="t('ui.loginOptions.message046')"
+    width="450px"
+    :close-on-click-modal="false"
+  >
     <div v-if="regenerateLoading" class="dialog-skeleton">
       <el-skeleton-item variant="text" class="dialog-skeleton-alert" />
       <div class="dialog-skeleton-grid">
-        <el-skeleton-item v-for="index in 8" :key="index" variant="text" class="dialog-skeleton-code" />
+        <el-skeleton-item
+          v-for="index in 8"
+          :key="index"
+          variant="text"
+          class="dialog-skeleton-code"
+        />
       </div>
     </div>
     <div v-else>
-      <el-alert title="新的恢复码已生成！请立即保存，关闭后将无法再次查看完整的恢复码。" type="success" :closable="false" style="margin-bottom: 16px" />
+      <el-alert
+        :title="t('ui.loginOptions.message047')"
+        type="success"
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
       <div class="recovery-codes-grid">
         <div v-for="code in newRecoveryCodes" :key="code" class="recovery-code-item">
           {{ code }}
         </div>
       </div>
-      <div style="margin-top: 16px; display: flex; gap: 8px;">
-        <el-button @click="copyRecoveryCodes(newRecoveryCodes)">复制恢复码</el-button>
-        <el-button @click="downloadRecoveryCodes(newRecoveryCodes)">下载恢复码</el-button>
+      <div style="margin-top: 16px; display: flex; gap: 8px">
+        <el-button @click="copyRecoveryCodes(newRecoveryCodes)">{{
+          t('ui.loginOptions.message044')
+        }}</el-button>
+        <el-button @click="downloadRecoveryCodes(newRecoveryCodes)">{{
+          t('ui.loginOptions.message045')
+        }}</el-button>
       </div>
     </div>
     <template #footer>
-      <el-button type="primary" @click="showRegenerateDialog = false">已保存，关闭</el-button>
+      <el-button type="primary" @click="showRegenerateDialog = false">{{
+        t('ui.loginOptions.message048')
+      }}</el-button>
     </template>
   </el-dialog>
 
@@ -323,18 +432,14 @@
 </template>
 
 <script setup lang="ts">
+import { localizedMessageBox } from '@/utils/localizedMessageBox'
+import { intlLocale, relativeTime, t, LocalizedError, uiMessage } from '@/i18n'
+
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import {
-  Key,
-  Lock,
-  Message,
-  ArrowRight,
-  Cpu,
-  Share,
-} from '@element-plus/icons-vue'
+import { Key, Lock, Message, ArrowRight, Cpu, Share } from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
   getPasskeyList,
@@ -357,9 +462,7 @@ import {
   type OAuthAccountStatusItem,
 } from '@/api/auth'
 import { prepareAppleSignIn, signInWithApple } from '@/utils/appleSignIn'
-import {
-  isWebAuthnSupported,
-} from '@/utils/webauthn'
+import { isWebAuthnSupported } from '@/utils/webauthn'
 import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const router = useRouter()
@@ -378,12 +481,59 @@ type OAuthProviderItem = {
   loading: boolean
 }
 
+const providerLabel = (provider: OAuthProviderItem) =>
+  provider.key === 'wechat'
+    ? t('ui.loginOptions.message049')
+    : provider.key === 'microsoft'
+      ? t('ui.loginOptions.message050')
+      : provider.label
+
 const oauthProviders = ref<OAuthProviderItem[]>([
-  { key: 'wechat', label: '微信', iconClass: 'fa-brands fa-weixin', supported: false, bound: false, lastLoginAt: null, loading: false },
-  { key: 'qq', label: 'QQ', iconClass: 'fa-brands fa-qq', supported: true, bound: false, lastLoginAt: null, loading: false },
-  { key: 'apple', label: 'Apple', iconClass: 'fa-brands fa-apple', supported: true, bound: false, lastLoginAt: null, loading: false },
-  { key: 'microsoft', label: '微软', iconClass: 'fa-brands fa-microsoft', supported: true, bound: false, lastLoginAt: null, loading: false },
-  { key: 'google', label: 'Google', iconClass: 'fa-brands fa-google', supported: true, bound: false, lastLoginAt: null, loading: false },
+  {
+    key: 'wechat',
+    label: t('ui.loginOptions.message049'),
+    iconClass: 'fa-brands fa-weixin',
+    supported: false,
+    bound: false,
+    lastLoginAt: null,
+    loading: false,
+  },
+  {
+    key: 'qq',
+    label: 'QQ',
+    iconClass: 'fa-brands fa-qq',
+    supported: true,
+    bound: false,
+    lastLoginAt: null,
+    loading: false,
+  },
+  {
+    key: 'apple',
+    label: 'Apple',
+    iconClass: 'fa-brands fa-apple',
+    supported: true,
+    bound: false,
+    lastLoginAt: null,
+    loading: false,
+  },
+  {
+    key: 'microsoft',
+    label: t('ui.loginOptions.message050'),
+    iconClass: 'fa-brands fa-microsoft',
+    supported: true,
+    bound: false,
+    lastLoginAt: null,
+    loading: false,
+  },
+  {
+    key: 'google',
+    label: 'Google',
+    iconClass: 'fa-brands fa-google',
+    supported: true,
+    bound: false,
+    lastLoginAt: null,
+    loading: false,
+  },
 ])
 
 // Passkey 相关状态
@@ -419,7 +569,6 @@ onMounted(async () => {
   }
 
   await fetchTotpStatus()
-
 })
 
 const loadOAuthStatus = async () => {
@@ -468,7 +617,7 @@ const fetchTotpStatus = async () => {
     recoveryCodesCount.value = data.recoveryCodesCount
     totpStatusFetched.value = true
   } catch (error) {
-    console.error('获取 TOTP 状态失败:', error)
+    console.error(t('ui.loginOptions.message051'), error)
     totpStatusFetched.value = true
   }
 }
@@ -480,17 +629,17 @@ const formatDate = (dateStr: string) => {
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
 
   if (days === 0) {
-    return '今天'
+    return t('ui.loginOptions.message052')
   } else if (days === 1) {
-    return '昨天'
+    return t('ui.loginOptions.message053')
   } else if (days < 7) {
-    return `${days} 天前`
+    return relativeTime(-days, 'day')
   } else if (days < 30) {
-    return `${Math.floor(days / 7)} 周前`
+    return relativeTime(-Math.floor(days / 7), 'week')
   } else if (days < 365) {
-    return `${Math.floor(days / 30)} 个月前`
+    return relativeTime(-Math.floor(days / 30), 'month')
   } else {
-    return `${Math.floor(days / 365)} 年前`
+    return relativeTime(-Math.floor(days / 365), 'year')
   }
 }
 
@@ -498,10 +647,10 @@ const formatDateTime = (dateStr: string) => {
   const date = new Date(dateStr)
 
   if (Number.isNaN(date.getTime())) {
-    return '时间未知'
+    return t('ui.loginOptions.message057')
   }
 
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(intlLocale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -511,19 +660,20 @@ const formatDateTime = (dateStr: string) => {
 }
 
 const getTransportTags = (transports: string) => {
-  const transportMap: Record<string, { label: string; type: 'success' | 'info' | 'warning' | '' }> = {
-    internal: { label: '本设备', type: 'success' },
-    hybrid: { label: '跨设备', type: 'info' },
-    usb: { label: 'USB', type: '' },
-    nfc: { label: 'NFC', type: '' },
-    ble: { label: '蓝牙', type: '' },
-  }
+  const transportMap: Record<string, { label: string; type: 'success' | 'info' | 'warning' | '' }> =
+    {
+      internal: { label: t('ui.loginOptions.message058'), type: 'success' },
+      hybrid: { label: t('ui.loginOptions.message059'), type: 'info' },
+      usb: { label: 'USB', type: '' },
+      nfc: { label: 'NFC', type: '' },
+      ble: { label: t('ui.loginOptions.message060'), type: '' },
+    }
 
   return transports
     .split(',')
-    .map(t => t.trim())
-    .filter(t => t in transportMap)
-    .map(t => ({ value: t, ...transportMap[t] }))
+    .map((t) => t.trim())
+    .filter((t) => t in transportMap)
+    .map((t) => ({ value: t, ...transportMap[t] }))
 }
 
 const handleAddPasskey = async () => {
@@ -543,26 +693,28 @@ const handleAddPasskey = async () => {
 
 const handleRenamePasskey = async (id: number, currentName: string) => {
   try {
-    const { value: newName } = await ElMessageBox.prompt('请输入新的 Passkey 名称', '重命名 Passkey', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      inputValue: currentName,
-      inputPlaceholder: '例如：我的 MacBook Pro',
-      inputValidator: (value) => {
-        if (!value || value.trim().length === 0) {
-          return '请输入 Passkey 名称'
-        }
-        if (value.trim().length > 50) {
-          return '名称不能超过50个字符'
-        }
-        return true
-      },
-    }).catch(() => ({ value: null }))
+    const { value: newName } = await localizedMessageBox
+      .prompt(uiMessage('ui.loginOptions.message061'), uiMessage('ui.loginOptions.message062'), {
+        confirmButtonText: uiMessage('ui.devices.message034'),
+        cancelButtonText: uiMessage('ui.addPasskey.message009'),
+        inputValue: currentName,
+        inputPlaceholder: uiMessage('ui.addPasskey.message013'),
+        inputValidator: (value) => {
+          if (!value || value.trim().length === 0) {
+            return t('ui.addPasskey.message016')
+          }
+          if (value.trim().length > 50) {
+            return t('ui.loginOptions.message063')
+          }
+          return true
+        },
+      })
+      .catch(() => ({ value: null }))
 
     if (!newName || newName.trim() === currentName) return
 
     await renamePasskey(id, newName.trim())
-    ElMessage.success('Passkey 重命名成功')
+    ElMessage.success(t('ui.loginOptions.message064'))
 
     // 重新加载列表
     await loadPasskeyList()
@@ -573,14 +725,18 @@ const handleRenamePasskey = async (id: number, currentName: string) => {
 
 const handleDeletePasskey = async (id: number, name: string) => {
   try {
-    await ElMessageBox.confirm(`确定要删除 Passkey "${name}" 吗？`, '删除确认', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning',
-    })
+    await localizedMessageBox.confirm(
+      uiMessage('ui.loginOptions.message065', { arg0: name }),
+      uiMessage('ui.loginOptions.message066'),
+      {
+        confirmButtonText: uiMessage('ui.devices.message034'),
+        cancelButtonText: uiMessage('ui.addPasskey.message009'),
+        type: 'warning',
+      },
+    )
 
     await deletePasskey(id)
-    ElMessage.success('Passkey 已删除')
+    ElMessage.success(t('ui.loginOptions.message067'))
 
     // 重新加载列表
     await loadPasskeyList()
@@ -635,13 +791,13 @@ const runWithSensitiveVerification = async (
       return
     }
 
-    ElMessage.info('需要验证身份')
+    ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
     pendingSensitiveAction = action
     sensitiveDialogDisableQr.value = disableQrMethod
     sensitiveDialogVisible.value = true
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
-    ElMessage.info('需要验证身份')
+    ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
     pendingSensitiveAction = action
     sensitiveDialogDisableQr.value = disableQrMethod
     sensitiveDialogVisible.value = true
@@ -679,8 +835,8 @@ const handleViewRecoveryCodes = async () => {
     try {
       recoveryCodesList.value = await getRecoveryCodes()
     } catch (error) {
-      console.error('获取回复码失败:', error)
-      ElMessage.error('获取恢复码失败')
+      console.error(t('ui.loginOptions.message068'), error)
+      ElMessage.error(t('ui.loginOptions.message069'))
       showRecoveryCodesDialog.value = false
     } finally {
       recoveryCodesLoading.value = false
@@ -691,25 +847,25 @@ const handleViewRecoveryCodes = async () => {
 const handleRegenerateRecoveryCodes = async () => {
   await runWithSensitiveVerification(async () => {
     try {
-      await ElMessageBox.confirm(
-        '重新生成恢复码会删除所有旧的恢复码。请确保您已保存新的恢复码。',
-        '确认重新生成',
+      await localizedMessageBox.confirm(
+        uiMessage('ui.loginOptions.message070'),
+        uiMessage('ui.loginOptions.message071'),
         {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
+          confirmButtonText: uiMessage('ui.devices.message034'),
+          cancelButtonText: uiMessage('ui.addPasskey.message009'),
           type: 'warning',
-        }
+        },
       )
 
       regenerateLoading.value = true
       showRegenerateDialog.value = true
       try {
         newRecoveryCodes.value = await regenerateRecoveryCodes()
-        ElMessage.success('恢复码已重新生成')
+        ElMessage.success(t('ui.loginOptions.message072'))
         await fetchTotpStatus()
       } catch (error) {
-        console.error('重新生成回复码失败:', error)
-        ElMessage.error('重新生成失败')
+        console.error(t('ui.loginOptions.message073'), error)
+        ElMessage.error(t('ui.loginOptions.message074'))
         showRegenerateDialog.value = false
       } finally {
         regenerateLoading.value = false
@@ -723,23 +879,23 @@ const handleRegenerateRecoveryCodes = async () => {
 const handleDisableTotp = async () => {
   await runWithSensitiveVerification(async () => {
     try {
-      await ElMessageBox.confirm(
-        '禁用 TOTP 后，您将无法使用双因素认证。是否继续？',
-        '确认禁用',
+      await localizedMessageBox.confirm(
+        uiMessage('ui.loginOptions.message075'),
+        uiMessage('ui.loginOptions.message076'),
         {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
+          confirmButtonText: uiMessage('ui.devices.message034'),
+          cancelButtonText: uiMessage('ui.addPasskey.message009'),
           type: 'warning',
-        }
+        },
       )
 
       await disableTotp()
-      ElMessage.success('TOTP 已禁用')
+      ElMessage.success(t('ui.loginOptions.message077'))
       await fetchTotpStatus()
     } catch (error) {
       if (error !== 'cancel') {
-        console.error('禁用 TOTP 失败:', error)
-        ElMessage.error('禁用失败')
+        console.error(t('ui.loginOptions.message078'), error)
+        ElMessage.error(t('ui.loginOptions.message079'))
       }
     }
   })
@@ -747,17 +903,22 @@ const handleDisableTotp = async () => {
 
 const copyRecoveryCodes = (codes: string[]) => {
   const text = codes.join('\n')
-  navigator.clipboard.writeText(text).then(() => {
-    ElMessage.success('已复制到剪贴板')
-  }).catch(() => {
-    ElMessage.error('复制失败')
-  })
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      ElMessage.success(t('ui.loginOptions.message080'))
+    })
+    .catch(() => {
+      ElMessage.error(t('ui.loginOptions.message081'))
+    })
 }
 
 const downloadRecoveryCodes = (codes: string[]) => {
-  const text = 'TOTP 恢复码\n' +
-    new Date().toLocaleString() + '\n' +
-    '每个码只能使用一次\n\n' +
+  const text =
+    t('ui.loginOptions.message082') +
+    new Date().toLocaleString(intlLocale.value) +
+    '\n' +
+    t('ui.loginOptions.message083') +
     codes.join('\n')
 
   const blob = new Blob([text], { type: 'text/plain' })
@@ -804,7 +965,7 @@ const handleQQBind = async (provider: OAuthProviderItem) => {
     window.location.href = buildQQAuthorizationUrl(state)
   } catch (error) {
     console.error('QQ bind failed:', error)
-    ElMessage.error('QQ 绑定跳转失败，请重试')
+    ElMessage.error(t('ui.loginOptions.message084'))
     provider.loading = false
   }
 }
@@ -813,11 +974,15 @@ const handleQQUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
   await runWithSensitiveVerification(async () => {
     try {
-      await ElMessageBox.confirm('解绑后您将无法使用 QQ 快速登录，是否继续？', '确认解绑', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
+      await localizedMessageBox.confirm(
+        uiMessage('ui.loginOptions.message085'),
+        uiMessage('ui.loginOptions.message086'),
+        {
+          confirmButtonText: uiMessage('ui.devices.message034'),
+          cancelButtonText: uiMessage('ui.addPasskey.message009'),
+          type: 'warning',
+        },
+      )
     } catch {
       return
     }
@@ -827,13 +992,13 @@ const handleQQUnbind = async (provider: OAuthProviderItem) => {
       await unbindQQ()
       provider.bound = false
       provider.lastLoginAt = null
-      ElMessage.success('QQ 解绑成功')
+      ElMessage.success(t('ui.loginOptions.message087'))
 
       // 与服务端状态对齐
       await loadOAuthStatus()
     } catch (error) {
       console.error('QQ unbind failed:', error)
-      ElMessage.error('QQ 解绑失败，请稍后重试')
+      ElMessage.error(t('ui.loginOptions.message088'))
     } finally {
       provider.loading = false
     }
@@ -845,12 +1010,12 @@ const handleAppleBind = async (provider: OAuthProviderItem) => {
     provider.loading = true
     try {
       const result = await signInWithApple('bind')
-      if (!result.oauthBindToken) throw new Error('Apple 绑定票据缺失，请重新授权')
+      if (!result.oauthBindToken) throw new LocalizedError('ui.loginOptions.message089')
       await bindPendingApple(result.oauthBindToken)
-      ElMessage.success('Apple 绑定成功')
+      ElMessage.success(t('ui.loginOptions.message090'))
       await loadOAuthStatus()
     } catch (error: unknown) {
-      ElMessage.error(error instanceof Error ? error.message : 'Apple 绑定失败，请重试')
+      ElMessage.error(error instanceof Error ? error.message : t('ui.appleRegister.message030'))
     } finally {
       provider.loading = false
     }
@@ -860,17 +1025,25 @@ const handleAppleBind = async (provider: OAuthProviderItem) => {
 const handleAppleUnbind = async (provider: OAuthProviderItem) => {
   await runWithSensitiveVerification(async () => {
     try {
-      await ElMessageBox.confirm('解绑后您将无法使用 Apple 登录，是否继续？', '确认解绑', {
-        confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
-      })
-    } catch { return }
+      await localizedMessageBox.confirm(
+        uiMessage('ui.loginOptions.message091'),
+        uiMessage('ui.loginOptions.message086'),
+        {
+          confirmButtonText: uiMessage('ui.devices.message034'),
+          cancelButtonText: uiMessage('ui.addPasskey.message009'),
+          type: 'warning',
+        },
+      )
+    } catch {
+      return
+    }
     provider.loading = true
     try {
       await unbindApple()
-      ElMessage.success('Apple 解绑成功')
+      ElMessage.success(t('ui.loginOptions.message092'))
       await loadOAuthStatus()
     } catch (error: unknown) {
-      ElMessage.error(error instanceof Error ? error.message : 'Apple 解绑失败，请重试')
+      ElMessage.error(error instanceof Error ? error.message : t('ui.loginOptions.message093'))
     } finally {
       provider.loading = false
     }
@@ -892,7 +1065,7 @@ const handleMicrosoftBind = async (provider: OAuthProviderItem) => {
     window.location.href = buildMicrosoftAuthorizationUrl(state, codeChallenge)
   } catch (error) {
     console.error('Microsoft bind failed:', error)
-    ElMessage.error('Microsoft 绑定跳转失败，请重试')
+    ElMessage.error(t('ui.loginOptions.message094'))
     provider.loading = false
   }
 }
@@ -901,11 +1074,15 @@ const handleMicrosoftUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
   await runWithSensitiveVerification(async () => {
     try {
-      await ElMessageBox.confirm('解绑后您将无法使用 Microsoft 快速登录，是否继续？', '确认解绑', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
+      await localizedMessageBox.confirm(
+        uiMessage('ui.loginOptions.message095'),
+        uiMessage('ui.loginOptions.message086'),
+        {
+          confirmButtonText: uiMessage('ui.devices.message034'),
+          cancelButtonText: uiMessage('ui.addPasskey.message009'),
+          type: 'warning',
+        },
+      )
     } catch {
       return
     }
@@ -915,12 +1092,12 @@ const handleMicrosoftUnbind = async (provider: OAuthProviderItem) => {
       await unbindMicrosoft()
       provider.bound = false
       provider.lastLoginAt = null
-      ElMessage.success('Microsoft 解绑成功')
+      ElMessage.success(t('ui.loginOptions.message096'))
 
       await loadOAuthStatus()
     } catch (error) {
       console.error('Microsoft unbind failed:', error)
-      ElMessage.error('Microsoft 解绑失败，请稍后重试')
+      ElMessage.error(t('ui.loginOptions.message097'))
     } finally {
       provider.loading = false
     }
@@ -940,7 +1117,7 @@ const handleGoogleBind = async (provider: OAuthProviderItem) => {
     window.location.href = buildGoogleAuthorizationUrl(state)
   } catch (error) {
     console.error('Google bind failed:', error)
-    ElMessage.error('Google 绑定跳转失败，请重试')
+    ElMessage.error(t('ui.loginOptions.message098'))
     provider.loading = false
   }
 }
@@ -949,11 +1126,15 @@ const handleGoogleUnbind = async (provider: OAuthProviderItem) => {
   if (provider.loading) return
   await runWithSensitiveVerification(async () => {
     try {
-      await ElMessageBox.confirm('解绑后您将无法使用 Google 快速登录，是否继续？', '确认解绑', {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning',
-      })
+      await localizedMessageBox.confirm(
+        uiMessage('ui.loginOptions.message099'),
+        uiMessage('ui.loginOptions.message086'),
+        {
+          confirmButtonText: uiMessage('ui.devices.message034'),
+          cancelButtonText: uiMessage('ui.addPasskey.message009'),
+          type: 'warning',
+        },
+      )
     } catch {
       return
     }
@@ -963,12 +1144,12 @@ const handleGoogleUnbind = async (provider: OAuthProviderItem) => {
       await unbindGoogle()
       provider.bound = false
       provider.lastLoginAt = null
-      ElMessage.success('Google 解绑成功')
+      ElMessage.success(t('ui.loginOptions.message100'))
 
       await loadOAuthStatus()
     } catch (error) {
       console.error('Google unbind failed:', error)
-      ElMessage.error('Google 解绑失败，请稍后重试')
+      ElMessage.error(t('ui.loginOptions.message101'))
     } finally {
       provider.loading = false
     }
@@ -1014,7 +1195,7 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
     return
   }
 
-  ElMessage.info(`${provider.label} 暂不支持`)
+  ElMessage.info(t('ui.loginOptions.message102', { arg0: providerLabel(provider) }))
 }
 </script>
 
@@ -1358,13 +1539,21 @@ const handleProviderAction = async (provider: OAuthProviderItem) => {
   border-radius: 12px;
   border: 1px solid var(--el-border-color-light);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--el-color-primary) 10%, transparent), transparent 58%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--el-color-primary) 10%, transparent),
+      transparent 58%
+    ),
     var(--el-fill-color-light);
 }
 
 .totp-hero.enabled {
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--el-color-success) 12%, transparent), transparent 58%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--el-color-success) 12%, transparent),
+      transparent 58%
+    ),
     var(--el-fill-color-light);
 }
 

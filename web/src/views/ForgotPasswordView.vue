@@ -5,43 +5,51 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">账号恢复</h1>
+        <h1 class="login-title">{{ t('ui.accountRecoveryCard.message001') }}</h1>
         <p class="login-description">
-          使用另一台已登录设备为当前设备背书。恢复成功后会立即重置密码，并撤销旧会话。
+          {{ t('ui.forgotPassword.message001') }}
         </p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Monitor />
             </el-icon>
-            <span class="feature-text">已登录设备先完成敏感验证</span>
+            <span class="feature-text">{{ t('ui.forgotPassword.message002') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Connection />
             </el-icon>
-            <span class="feature-text">新设备扫码或输入恢复码进入</span>
+            <span class="feature-text">{{ t('ui.forgotPassword.message003') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Key />
             </el-icon>
-            <span class="feature-text">设置新密码并自动签发新会话</span>
+            <span class="feature-text">{{ t('ui.forgotPassword.message004') }}</span>
           </div>
         </div>
       </div>
 
       <div class="login-right">
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in">
+        <Transition
+          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in"
+        >
           <div v-if="step === 'recovery-code'" key="recovery-code" class="step-container">
-            <h2 class="step-title">输入恢复码</h2>
-            <p class="step-subtitle">请在另一台已登录设备中发起“账号恢复”，然后扫码或输入恢复码</p>
+            <h2 class="step-title">{{ t('ui.forgotPassword.message005') }}</h2>
+            <p class="step-subtitle">{{ t('ui.forgotPassword.message006') }}</p>
 
-            <el-form ref="recoveryFormRef" :model="recoveryInput" :rules="recoveryRules" label-position="top">
+            <el-form
+              ref="recoveryFormRef"
+              :model="recoveryInput"
+              :rules="recoveryRules"
+              label-position="top"
+            >
               <el-form-item prop="recoveryCode">
                 <el-input
                   v-model="recoveryInput.recoveryCode"
-                  placeholder="输入一次性恢复码"
+                  :placeholder="t('ui.forgotPassword.message007')"
                   @keyup.enter="loadRecoveryContext"
                   autofocus
                 />
@@ -51,53 +59,88 @@
             <div class="qr-entry-card">
               <div class="qr-entry-header">
                 <div>
-                  <div class="qr-entry-title">使用手机扫码背书</div>
+                  <div class="qr-entry-title">{{ t('ui.forgotPassword.message008') }}</div>
                   <p class="qr-entry-desc">
-                    如果你的 Android 客户端已登录，可在手机端打开“安全”页后扫码，为当前恢复请求直接背书。
+                    {{ t('ui.forgotPassword.message009') }}
                   </p>
                 </div>
                 <el-button :loading="qrRecoveryLoading" @click="handleInitQrRecovery">
-                  {{ qrRecoveryImage ? '刷新二维码' : '生成二维码' }}
+                  {{
+                    qrRecoveryImage
+                      ? t('ui.mobileBridgeQrSidebarAction.message006')
+                      : t('ui.forgotPassword.message010')
+                  }}
                 </el-button>
               </div>
 
               <div v-if="qrRecoveryImage" class="qr-recovery-panel">
-                <img :src="qrRecoveryImage" alt="手机扫码背书二维码" class="qr-recovery-image" />
+                <img
+                  :src="qrRecoveryImage"
+                  :alt="t('ui.forgotPassword.message011')"
+                  class="qr-recovery-image"
+                />
                 <div class="qr-recovery-meta">
-                  <span>剩余有效期：{{ Math.max(qrRecoveryExpiresInSeconds, 0) }} 秒</span>
-                  <span>手机端扫码确认后，当前页面会自动回填恢复码。</span>
+                  <span
+                    >{{ t('ui.accountRecoveryCard.message009')
+                    }}{{ Math.max(qrRecoveryExpiresInSeconds, 0) }}
+                    {{ t('ui.accountRecoveryCard.message010') }}</span
+                  >
+                  <span>{{ t('ui.forgotPassword.message012') }}</span>
                 </div>
               </div>
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="goToLogin">返回登录</el-button>
+              <el-button class="back-btn" @click="goToLogin">{{
+                t('ui.appleRegister.message015')
+              }}</el-button>
               <el-button class="next-btn" :loading="recoveryLoading" @click="loadRecoveryContext">
-                确认恢复授权
+                {{ t('ui.forgotPassword.message013') }}
               </el-button>
             </div>
           </div>
 
           <div v-else-if="step === 'new-password'" key="new-password" class="step-container">
-            <h2 class="step-title">设置新密码</h2>
-            <p class="step-subtitle">恢复授权已确认，请设置一个新的安全密码</p>
+            <h2 class="step-title">{{ t('ui.changePassword.message006') }}</h2>
+            <p class="step-subtitle">{{ t('ui.forgotPassword.message014') }}</p>
 
             <div v-if="recoveryStatus" class="recovery-context-card">
-              <div class="context-title">当前恢复对象</div>
-              <div class="context-account">{{ recoveryStatus.username }} · {{ recoveryStatus.maskedEmail }}</div>
+              <div class="context-title">{{ t('ui.forgotPassword.message015') }}</div>
+              <div class="context-account">
+                {{ recoveryStatus.username }} · {{ recoveryStatus.maskedEmail }}
+              </div>
               <div class="context-meta">
-                <span>背书设备：{{ recoveryStatus.sponsorClientName || '已登录设备' }}</span>
-                <span>位置：{{ recoveryStatus.sponsorIpLocation || '未知位置' }}</span>
-                <span>剩余有效期：{{ Math.max(recoveryStatus.expiresInSeconds, 0) }} 秒</span>
+                <span
+                  >{{ t('ui.forgotPassword.message016')
+                  }}{{
+                    recoveryStatus.sponsorClientName || t('ui.forgotPassword.message017')
+                  }}</span
+                >
+                <span
+                  >{{ t('ui.forgotPassword.message018')
+                  }}{{
+                    recoveryStatus.sponsorIpLocation || t('ui.accountRecoveryCard.message016')
+                  }}</span
+                >
+                <span
+                  >{{ t('ui.accountRecoveryCard.message009')
+                  }}{{ Math.max(recoveryStatus.expiresInSeconds, 0) }}
+                  {{ t('ui.accountRecoveryCard.message010') }}</span
+                >
               </div>
             </div>
 
-            <el-form ref="newPasswordFormRef" :model="passwordInput" :rules="newPasswordRules" label-position="top">
+            <el-form
+              ref="newPasswordFormRef"
+              :model="passwordInput"
+              :rules="newPasswordRules"
+              label-position="top"
+            >
               <el-form-item prop="newPassword">
                 <el-input
                   v-model="passwordInput.newPassword"
                   type="password"
-                  placeholder="输入新密码"
+                  :placeholder="t('ui.changePassword.message007')"
                   show-password
                   autocomplete="new-password"
                   @keyup.enter="goToConfirmStep"
@@ -107,7 +150,7 @@
             </el-form>
 
             <div class="password-requirements">
-              <div class="requirement-title">密码要求：</div>
+              <div class="requirement-title">{{ t('ui.changePassword.message008') }}</div>
               <div
                 v-for="(item, index) in requirementItems"
                 :key="index"
@@ -123,21 +166,30 @@
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToRecoveryCode">返回</el-button>
-              <el-button class="next-btn" @click="goToConfirmStep">下一步</el-button>
+              <el-button class="back-btn" @click="backToRecoveryCode">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
+              <el-button class="next-btn" @click="goToConfirmStep">{{
+                t('ui.changePassword.message009')
+              }}</el-button>
             </div>
           </div>
 
           <div v-else key="confirm-password" class="step-container">
-            <h2 class="step-title">确认新密码</h2>
-            <p class="step-subtitle">请再次输入新密码以完成恢复</p>
+            <h2 class="step-title">{{ t('ui.changePassword.message010') }}</h2>
+            <p class="step-subtitle">{{ t('ui.forgotPassword.message019') }}</p>
 
-            <el-form ref="confirmPasswordFormRef" :model="passwordInput" :rules="confirmPasswordRules" label-position="top">
+            <el-form
+              ref="confirmPasswordFormRef"
+              :model="passwordInput"
+              :rules="confirmPasswordRules"
+              label-position="top"
+            >
               <el-form-item prop="confirmPassword">
                 <el-input
                   v-model="passwordInput.confirmPassword"
                   type="password"
-                  placeholder="再次输入新密码"
+                  :placeholder="t('ui.changePassword.message012')"
                   show-password
                   autocomplete="new-password"
                   @keyup.enter="handleSubmit"
@@ -147,9 +199,11 @@
             </el-form>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToNewPassword">返回</el-button>
+              <el-button class="back-btn" @click="backToNewPassword">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
               <el-button class="next-btn" :loading="submitLoading" @click="handleSubmit">
-                完成恢复
+                {{ t('ui.forgotPassword.message020') }}
               </el-button>
             </div>
           </div>
@@ -160,6 +214,8 @@
 </template>
 
 <script setup lang="ts">
+import { t, LocalizedError } from '@/i18n'
+
 import { resolveApiResult } from '@/utils/apiResult'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
@@ -167,13 +223,7 @@ import QRCode from 'qrcode'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  CircleCheck,
-  CircleClose,
-  Connection,
-  Key,
-  Monitor,
-} from '@element-plus/icons-vue'
+import { CircleCheck, CircleClose, Connection, Key, Monitor } from '@element-plus/icons-vue'
 import {
   completeAccountRecovery,
   getAccountRecoveryStatus,
@@ -289,11 +339,11 @@ const syncRecoveryCodeQuery = (recoveryCode?: string) => {
 const validateRecoveryCode = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   const normalized = (value || '').trim()
   if (!normalized) {
-    callback(new Error('请输入恢复码'))
+    callback(new LocalizedError('ui.forgotPassword.message021'))
     return
   }
   if (!/^[A-Za-z0-9_-]{16,}$/.test(normalized)) {
-    callback(new Error('恢复码格式不正确'))
+    callback(new LocalizedError('ui.forgotPassword.message022'))
     return
   }
   callback()
@@ -303,27 +353,36 @@ const validatePassword = (_rule: unknown, value: string, callback: (error?: Erro
   const req = passwordRequirement.value
 
   if (value === '') {
-    callback(new Error('请输入新密码'))
+    callback(new LocalizedError('ui.changePassword.message013'))
   } else if (value.length < req.minLength || value.length > req.maxLength) {
-    callback(new Error(`密码长度必须在${req.minLength}-${req.maxLength}个字符之间`))
+    callback(
+      new LocalizedError('ui.changePassword.message014', {
+        arg0: req.minLength,
+        arg1: req.maxLength,
+      }),
+    )
   } else if (req.requireUppercase && !/[A-Z]/.test(value)) {
-    callback(new Error('密码必须包含至少一个大写字母'))
+    callback(new LocalizedError('ui.changePassword.message015'))
   } else if (req.requireLowercase && !/[a-z]/.test(value)) {
-    callback(new Error('密码必须包含至少一个小写字母'))
+    callback(new LocalizedError('ui.changePassword.message016'))
   } else if (req.requireDigits && !/\d/.test(value)) {
-    callback(new Error('密码必须包含至少一个数字'))
+    callback(new LocalizedError('ui.changePassword.message017'))
   } else if (req.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
-    callback(new Error('密码必须包含至少一个特殊字符'))
+    callback(new LocalizedError('ui.changePassword.message018'))
   } else {
     callback()
   }
 }
 
-const validateConfirmPassword = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+const validateConfirmPassword = (
+  _rule: unknown,
+  value: string,
+  callback: (error?: Error) => void,
+) => {
   if (value === '') {
-    callback(new Error('请再次输入新密码'))
+    callback(new LocalizedError('ui.changePassword.message019'))
   } else if (value !== passwordInput.value.newPassword) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new LocalizedError('ui.changePassword.message020'))
   } else {
     callback()
   }
@@ -358,22 +417,22 @@ const requirementItems = computed(() => {
   const req = passwordRequirement.value
   const items = [
     {
-      text: `${req.minLength}-${req.maxLength}个字符`,
+      text: t('ui.changePassword.message021', { arg0: req.minLength, arg1: req.maxLength }),
       met: requirements.value.length,
     },
   ]
 
   if (req.requireUppercase) {
-    items.push({ text: '至少一个大写字母', met: requirements.value.hasUpperCase })
+    items.push({ text: t('ui.changePassword.message022'), met: requirements.value.hasUpperCase })
   }
   if (req.requireLowercase) {
-    items.push({ text: '至少一个小写字母', met: requirements.value.hasLowerCase })
+    items.push({ text: t('ui.changePassword.message023'), met: requirements.value.hasLowerCase })
   }
   if (req.requireDigits) {
-    items.push({ text: '至少一个数字', met: requirements.value.hasNumber })
+    items.push({ text: t('ui.changePassword.message024'), met: requirements.value.hasNumber })
   }
   if (req.requireSpecialChars) {
-    items.push({ text: '至少一个特殊字符', met: requirements.value.hasSpecialChar })
+    items.push({ text: t('ui.changePassword.message025'), met: requirements.value.hasSpecialChar })
   }
 
   return items
@@ -392,7 +451,7 @@ const loadRecoveryContext = async () => {
     recoveryInput.value.recoveryCode = normalized
     syncRecoveryCodeQuery(normalized)
     updateStep('new-password')
-    ElMessage.success('恢复授权已确认')
+    ElMessage.success(t('ui.forgotPassword.message023'))
   } catch (error) {
     console.error('Load recovery context failed:', error)
   } finally {
@@ -402,11 +461,11 @@ const loadRecoveryContext = async () => {
 
 const handleQrRecoveryApproved = async (status: QrChallengeStatusResponse) => {
   if (!status.recoveryCode) {
-    ElMessage.error('手机扫码背书结果无效，请刷新二维码后重试')
+    ElMessage.error(t('ui.forgotPassword.message024'))
     return
   }
   recoveryInput.value.recoveryCode = status.recoveryCode.trim()
-  ElMessage.success('手机扫码背书已通过')
+  ElMessage.success(t('ui.forgotPassword.message025'))
   await loadRecoveryContext()
 }
 
@@ -429,11 +488,11 @@ const pollRecoveryQrStatus = async () => {
     }
 
     if (status.status === 'rejected') {
-      ElMessage.error('手机扫码背书已被拒绝，请刷新二维码后重试')
+      ElMessage.error(t('ui.forgotPassword.message026'))
       return
     }
 
-    ElMessage.warning('扫码背书二维码已过期，请重新生成')
+    ElMessage.warning(t('ui.forgotPassword.message027'))
   } catch (error) {
     clearQrRecoveryPolling()
     console.error('Poll account recovery QR status failed:', error)
@@ -462,7 +521,7 @@ const handleInitQrRecovery = async () => {
     startQrRecoveryPolling()
   } catch (error) {
     console.error('Init account recovery QR failed:', error)
-    ElMessage.error('生成手机扫码背书二维码失败，请重试')
+    ElMessage.error(t('ui.forgotPassword.message028'))
   } finally {
     qrRecoveryLoading.value = false
   }
@@ -502,7 +561,7 @@ const handleSubmit = async () => {
     })
 
     storeAuthSession(result.accessToken, result.user)
-    ElMessage.success('账号恢复成功，已登录到当前设备')
+    ElMessage.success(t('ui.forgotPassword.message029'))
     await router.push('/home/overview')
   } catch (error) {
     console.error('Complete account recovery failed:', error)
@@ -512,8 +571,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  const apiBaseUrl =
-    typeof route.query.apiBaseUrl === 'string' ? route.query.apiBaseUrl.trim() : ''
+  const apiBaseUrl = typeof route.query.apiBaseUrl === 'string' ? route.query.apiBaseUrl.trim() : ''
   if (apiBaseUrl) {
     setRequestBaseUrl(apiBaseUrl)
   }
@@ -524,7 +582,8 @@ onMounted(async () => {
     console.error('Failed to get password requirement:', error)
   }
 
-  const queryCode = typeof route.query.recoveryCode === 'string' ? route.query.recoveryCode.trim() : ''
+  const queryCode =
+    typeof route.query.recoveryCode === 'string' ? route.query.recoveryCode.trim() : ''
   if (queryCode) {
     recoveryInput.value.recoveryCode = queryCode
     await loadRecoveryContext()

@@ -15,6 +15,7 @@ import cn.ksuser.api.service.*;
 import cn.ksuser.api.util.JwtUtil;
 import cn.ksuser.api.util.EncryptionUtil;
 import cn.ksuser.api.util.SensitiveLogUtil;
+import cn.ksuser.api.util.ClientLanguage;
 import jakarta.mail.MessagingException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -268,16 +269,6 @@ public class AuthController {
 
         // 生成并保存验证码
         String code = verificationCodeService.generateCode();
-        String action;
-        if ("register".equals(type)) {
-            action = "注册账号";
-        } else if ("login".equals(type)) {
-            action = "登录账号";
-        } else if ("change-email".equals(type)) {
-            action = "更改邮箱";
-        } else {
-            action = "敏感操作验证";
-        }
         
         // 为敏感操作验证使用单独的 type 存储
         if ("sensitive-verification".equals(type)) {
@@ -288,7 +279,8 @@ public class AuthController {
 
         // 发送邮件
         try {
-            emailService.sendVerificationCode(email, code, action);
+            emailService.sendVerificationCode(email, code, type,
+                ClientLanguage.fromAcceptLanguage(request.getHeader("Accept-Language")));
         } catch (MessagingException | UnsupportedEncodingException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, ApiResultCode.AUTH_015));

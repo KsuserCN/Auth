@@ -8,10 +8,15 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
+import cn.ksuser.api.util.ClientLanguage;
 
 import java.io.UnsupportedEncodingException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.text.MessageFormat;
+import java.util.Map;
+import java.util.ResourceBundle;
+import java.util.stream.Collectors;
 
 @Service
 public class EmailService {
@@ -33,21 +38,34 @@ public class EmailService {
      * 发送验证码邮件
      * @param toEmail 收件人邮箱
      * @param code 验证码
-     * @param action 操作类型（注册、重置密码等）
+     * @param type 固定验证码用途（register/login/change-email/sensitive-verification）
+     * @param language 发起请求的客户端当前语言
      * @throws MessagingException 邮件发送异常
      */
-    public void sendVerificationCode(String toEmail, String code, String action) throws MessagingException, UnsupportedEncodingException {
+    public void sendVerificationCode(String toEmail, String code, String type, ClientLanguage language) throws MessagingException, UnsupportedEncodingException {
+        ClientLanguage effectiveLanguage = language == null ? ClientLanguage.SIMPLIFIED_CHINESE : language;
+        String actionKey = switch (type) {
+            case "register", "login", "change-email", "sensitive-verification" -> "action." + type;
+            default -> throw new IllegalArgumentException("Unsupported verification code type");
+        };
+        ResourceBundle bundle = ResourceBundle.getBundle("mail.verification", effectiveLanguage.locale(),
+            ResourceBundle.Control.getNoFallbackControl(ResourceBundle.Control.FORMAT_PROPERTIES));
+        Map<String, String> copy = bundle.keySet().stream()
+            .collect(Collectors.toUnmodifiableMap(key -> key, bundle::getString));
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
         helper.setFrom(fromEmail, "Ksuser CAS");
         helper.setTo(toEmail);
-        helper.setSubject("验证码 - Ksuser CAS");
+        helper.setSubject(copy.get("subject"));
 
         // 准备模板变量
-        Context context = new Context();
-        context.setVariable("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy年MM月dd日 HH:mm:ss")));
-        context.setVariable("action", action);
+        Context context = new Context(effectiveLanguage.locale());
+        String time = LocalDateTime.now().format(DateTimeFormatter.ofPattern(copy.get("timeFormat"), effectiveLanguage.locale()));
+        context.setVariable("language", effectiveLanguage.tag());
+        context.setVariable("copy", copy);
+        context.setVariable("requestDescription", new MessageFormat(copy.get("request"), effectiveLanguage.locale())
+            .format(new Object[]{time, copy.get(actionKey)}));
         context.setVariable("code", code);
 
         // 渲染HTML模板

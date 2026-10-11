@@ -6,70 +6,94 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">添加 Passkey</h1>
-        <p class="login-description">使用生物识别或安全密钥快速登录</p>
+        <h1 class="login-title">{{ t('ui.addPasskey.message001') }}</h1>
+        <p class="login-description">{{ t('ui.addPasskey.message002') }}</p>
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lock />
             </el-icon>
-            <span class="feature-text">高度安全</span>
+            <span class="feature-text">{{ t('ui.addPasskey.message003') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lightning />
             </el-icon>
-            <span class="feature-text">快速验证</span>
+            <span class="feature-text">{{ t('ui.addPasskey.message004') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Key />
             </el-icon>
-            <span class="feature-text">便捷登录</span>
+            <span class="feature-text">{{ t('ui.addPasskey.message005') }}</span>
           </div>
         </div>
       </div>
 
       <!-- 右侧：表单内容 -->
       <div class="login-right">
-        <Transition :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'" mode="out-in">
+        <Transition
+          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          mode="out-in"
+        >
           <!-- 第一步：创建凭证 -->
           <div v-if="step === 'create-credential'" class="step-container" key="create-credential">
-            <h2 class="step-title">创建 Passkey</h2>
-            <p class="step-subtitle">按照浏览器提示完成 Passkey 创建</p>
+            <h2 class="step-title">{{ t('ui.addPasskey.message006') }}</h2>
+            <p class="step-subtitle">{{ t('ui.addPasskey.message007') }}</p>
 
             <div class="passkey-hint">
-              <p>Passkey 使用您设备上的生物识别（如指纹或面部识别）进行身份验证，安全且快速。</p>
+              <p>{{ t('ui.addPasskey.message008') }}</p>
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="handleCancel">取消</el-button>
-              <el-button class="next-btn" @click="handleCreateCredential" :loading="creatingCredential">
-                {{ creatingCredential ? '创建中...' : '创建 Passkey' }}
+              <el-button class="back-btn" @click="handleCancel">{{
+                t('ui.addPasskey.message009')
+              }}</el-button>
+              <el-button
+                class="next-btn"
+                @click="handleCreateCredential"
+                :loading="creatingCredential"
+              >
+                {{
+                  creatingCredential ? t('ui.addPasskey.message010') : t('ui.addPasskey.message006')
+                }}
               </el-button>
             </div>
           </div>
 
           <!-- 第二步：输入名称 -->
           <div v-else-if="step === 'name-input'" class="step-container" key="name-input">
-            <h2 class="step-title">设置 Passkey 名称</h2>
-            <p class="step-subtitle">为您的 Passkey 取一个便于识别的名称</p>
+            <h2 class="step-title">{{ t('ui.addPasskey.message011') }}</h2>
+            <p class="step-subtitle">{{ t('ui.addPasskey.message012') }}</p>
 
-            <el-form ref="nameFormRef" :model="passkeyInput" :rules="nameRules" label-position="top">
+            <el-form
+              ref="nameFormRef"
+              :model="passkeyInput"
+              :rules="nameRules"
+              label-position="top"
+            >
               <el-form-item prop="name">
-                <el-input v-model="passkeyInput.name" placeholder="例如：我的 MacBook Pro" maxlength="50" show-word-limit
-                  @keyup.enter="handleSubmit" autofocus />
+                <el-input
+                  v-model="passkeyInput.name"
+                  :placeholder="t('ui.addPasskey.message013')"
+                  maxlength="50"
+                  show-word-limit
+                  @keyup.enter="handleSubmit"
+                  autofocus
+                />
               </el-form-item>
             </el-form>
 
             <div class="name-hint">
-              <p>一个清晰的名称可以帮助您在拥有多个 Passkey 时快速识别。</p>
+              <p>{{ t('ui.addPasskey.message014') }}</p>
             </div>
 
             <div class="step-actions">
-              <el-button class="back-btn" @click="backToCreate">返回</el-button>
+              <el-button class="back-btn" @click="backToCreate">{{
+                t('ui.sensitiveVerificationDialog.message007')
+              }}</el-button>
               <el-button class="next-btn" @click="handleSubmit" :loading="submitLoading">
-                完成
+                {{ t('ui.addPasskey.message015') }}
               </el-button>
             </div>
           </div>
@@ -80,17 +104,22 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
+import { t, LocalizedError } from '@/i18n'
+
 import { ref, onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { Lock, Lightning, Key } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { getPasskeyRegistrationOptions, verifyPasskeyRegistration } from '@/api/auth'
 import {
-  getPasskeyRegistrationOptions,
-  verifyPasskeyRegistration,
-} from '@/api/auth'
-import { isWebAuthnSupported, createPasskeyCredential, extractRegistrationData } from '@/utils/webauthn'
+  isWebAuthnSupported,
+  createPasskeyCredential,
+  extractRegistrationData,
+} from '@/utils/webauthn'
 
 const router = useRouter()
 
@@ -114,7 +143,7 @@ const updateStep = (newStep: 'create-credential' | 'name-input') => {
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
-  valueLight: 'light'
+  valueLight: 'light',
 })
 
 // Passkey 输入
@@ -122,12 +151,12 @@ const passkeyInput = ref({
   name: '',
 })
 
-const nameRules: FormRules = {
+const nameRules = computed<FormRules>(() => ({
   name: [
-    { required: true, message: '请输入 Passkey 名称', trigger: 'blur' },
-    { min: 1, max: 50, message: '名称长度应为1-50个字符', trigger: 'blur' },
+    { required: true, message: t('ui.addPasskey.message016'), trigger: 'blur' },
+    { min: 1, max: 50, message: t('ui.addPasskey.message017'), trigger: 'blur' },
   ],
-}
+}))
 
 // 加载状态
 const creatingCredential = ref(false)
@@ -138,7 +167,7 @@ let credentialData: PublicKeyCredential | null = null
 
 onMounted(async () => {
   if (!isWebAuthnSupported()) {
-    ElMessage.error('当前浏览器不支持 Passkey')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message051'))
     router.back()
   }
 })
@@ -159,13 +188,13 @@ const handleCreateCredential = async () => {
     const credential = await createPasskeyCredential(options)
 
     if (!credential) {
-      throw new Error('未创建凭证')
+      throw new LocalizedError('ui.addPasskey.message018')
     }
 
     // 3. 存储凭证数据供第二步使用
     credentialData = credential
 
-    ElMessage.success('Passkey 创建成功，请输入名称')
+    ElMessage.success(t('ui.addPasskey.message019'))
 
     // 4. 进入第二步
     updateStep('name-input')
@@ -173,22 +202,22 @@ const handleCreateCredential = async () => {
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.name === 'NotAllowedError') {
-        ElMessage.error('用户取消了操作')
+        ElMessage.error(t('ui.addPasskey.message020'))
         return
       }
       if (error.name === 'NotSupportedError') {
-        ElMessage.error('浏览器不支持该操作')
+        ElMessage.error(t('ui.addPasskey.message021'))
         return
       }
       if (error.name === 'SecurityError') {
-        ElMessage.error('安全错误，请检查网络连接')
+        ElMessage.error(t('ui.addPasskey.message022'))
         return
       }
       console.error('Create passkey failed:', error)
-      ElMessage.error(error.message || 'Passkey 创建失败')
+      ElMessage.error(error.message || t('ui.addPasskey.message023'))
     } else {
       console.error('Create passkey failed:', error)
-      ElMessage.error('Passkey 创建失败')
+      ElMessage.error(t('ui.addPasskey.message023'))
     }
   } finally {
     creatingCredential.value = false
@@ -201,7 +230,7 @@ const handleSubmit = async () => {
     submitLoading.value = true
 
     if (!credentialData) {
-      throw new Error('凭证数据丢失')
+      throw new LocalizedError('ui.addPasskey.message024')
     }
 
     // 1. 提取注册数据
@@ -213,17 +242,17 @@ const handleSubmit = async () => {
       passkeyName: passkeyInput.value.name.trim(),
     })
 
-    ElMessage.success('Passkey 添加成功')
+    ElMessage.success(t('ui.addPasskey.message025'))
 
     // 3. 返回登录选项页面
     router.push('/home/login-options')
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error('Register passkey failed:', error)
-      ElMessage.error(error.message || 'Passkey 注册失败')
+      ElMessage.error(error.message || t('ui.addPasskey.message026'))
     } else {
       console.error('Register passkey failed:', error)
-      ElMessage.error('Passkey 注册失败')
+      ElMessage.error(t('ui.addPasskey.message026'))
     }
   } finally {
     submitLoading.value = false

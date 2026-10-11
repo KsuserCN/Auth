@@ -1,0 +1,815 @@
+{
+  "@@locale": "zh",
+  "ksuserSecurity": "Ksuser安全",
+  "dataRefreshed": "数据刷新完成",
+  "signInPageRefreshed": "登录页数据已刷新",
+  "checkingTheTerms": "正在检查使用协议...",
+  "beforeYouBegin": "开始使用前请确认",
+  "beforeInstallingAndUsingThisAppFor": "首次安装并使用本应用前，请阅读并同意以下协议和清单。未同意前将无法继续登录或使用桌面端功能。",
+  "termsOfService": "服务条款",
+  "privacyPolicy": "隐私政策",
+  "thirdPartyDataSharingDisclosure": "第三方信息共享清单",
+  "iHaveReadAndAgreeToThe": "我已阅读并同意以上服务条款、隐私政策和第三方信息共享清单",
+  "saving": "正在保存...",
+  "agreeAndContinue": "同意并继续",
+  "minimizeToSystemTray": "收起到托盘",
+  "minimizeToMenuBar": "收起到菜单栏",
+  "couldNotMinimizeTheWindow": "窗口收起失败",
+  "thisDeviceDoesNotSupportLocalAuthentication": "当前设备不支持系统本地认证",
+  "verifyYourIdentityBeforeDisplayingTheMobile": "请先完成身份验证后再展示手机登录二维码",
+  "mobileQrSignIn": "手机扫码登录",
+  "generatingQrCode": "正在生成二维码...",
+  "expiresInSeconds": "剩余有效期：{arg0} 秒",
+  "@expiresInSeconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "thisQrCodeCanOnlyBeUsed": "二维码一次性有效，过期后请刷新。",
+  "close": "关闭",
+  "refreshQrCode": "刷新二维码",
+  "accountRecoveryAuthorization": "账号恢复授权",
+  "generatingRecoveryQrCode": "正在生成恢复二维码...",
+  "authorizingDevice": "背书设备：{arg0}",
+  "@authorizingDevice": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "thisDesktopApp": "当前桌面端",
+  "location": "位置：{arg0}",
+  "@location": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "unknownLocation": "未知位置",
+  "generatingRecoveryCode": "恢复码生成中...",
+  "openTheRecoveryPageOnAnotherDevice": "请在另一台设备打开网页恢复页后扫码，或手动输入上面的恢复码。恢复成功后旧会话会自动失效。",
+  "recoveryCodeCopied": "恢复码已复制",
+  "copyRecoveryCode": "复制恢复码",
+  "openRecoveryPage": "打开网页恢复页",
+  "refreshing": "刷新中...",
+  "refreshAuthorization": "刷新授权",
+  "invalidQrSignInResultPleaseTry": "扫码登录结果无效，请重试",
+  "qrRequestRejectedRefreshTheQrCode": "扫码请求已被拒绝，请刷新二维码后重试",
+  "qrCodeExpiredPleaseRefreshIt": "二维码已过期，请刷新二维码",
+  "qrSignIn": "二维码登录",
+  "scanWithASignedInMobileApp": "请使用已登录的手机端扫描二维码，授权当前桌面端登录。",
+  "ifMfaIsEnabledCompleteTheRemaining": "若账号开启了 MFA，扫码后还需在桌面端完成其他 MFA 验证。",
+  "version": "版本 {arg0} ({arg1})",
+  "@version": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "settings": "设置",
+  "appearance": "外观",
+  "followSystem": "跟随系统",
+  "light": "浅色",
+  "dark": "深色",
+  "localPreferences": "本地调试",
+  "compactLayout": "紧凑布局",
+  "reduceSpacingToDisplayMoreContentOn": "压缩控件间距，便于桌面联调时查看更多内容",
+  "reduceMotion": "减少动画",
+  "reduceAnimationsWhenChangingThemesAndOpening": "切换主题和弹窗时尽量减少动画效果",
+  "about": "关于",
+  "privacyPolicy2": "隐私协议",
+  "restoreDefaults": "恢复默认",
+  "done": "完成",
+  "desktopUnifiedAuthenticationClient": "桌面统一认证客户端",
+  "theme": "主题模式：{arg0}",
+  "@theme": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "localPreferences2": "本地调试：{arg0}{arg1}",
+  "@localPreferences2": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "compactLayout2": "紧凑布局，",
+  "standardAnimations": "标准动画",
+  "system": "系统",
+  "verification": "验证",
+  "useTheNativePasskeyServiceFor": "将直接调用 {arg0} 系统原生 Passkey 完成{arg1}。",
+  "@useTheNativePasskeyServiceFor": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "nativePasskeysAreNotEnabledOnThis": "当前设备未启用 {arg0} 原生 Passkey。",
+  "@nativePasskeysAreNotEnabledOnThis": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "nativePasskeysAreNotSupportedOnThis": "当前平台暂不支持原生 Passkey",
+  "noPasskeyCredentialWasReceived": "未获取到 Passkey 凭证",
+  "passkeyVerificationFailed": "Passkey 验证失败",
+  "noPasskeyCredentialWasCreated": "未创建 Passkey 凭证",
+  "couldNotCreatePasskey": "Passkey 创建失败",
+  "signInWithAppleIsOnlyAvailable": "Apple 登录仅在 macOS 上提供",
+  "noMacosSignInWithAppleConfiguration": "未获取到 macOS Apple 登录配置",
+  "couldNotReadTheSignInWith": "无法读取 Apple 登录配置",
+  "appleDidNotReturnCompleteSignIn": "Apple 未返回完整的登录凭据",
+  "signInWithAppleCanceled": "已取消 Apple 登录",
+  "signInWithAppleFailedPleaseTry": "Apple 登录失败，请重试",
+  "localAuthenticationIsNotSupportedOnThis": "当前平台暂不支持系统本地认证",
+  "localAuthenticationFailed": "本地认证未通过",
+  "systemAuthenticationCanceled": "用户取消了系统身份验证",
+  "windowsHelloPinOrAnotherSystemAuthentication": "当前设备未启用 Windows Hello、PIN 或其他系统身份验证方式",
+  "windowsAuthenticationFailed": "Windows 系统身份验证失败",
+  "localAuthenticationCanceled": "用户取消了本地认证",
+  "localAuthenticationFailed2": "本地认证失败",
+  "processingAuthentication": "正在处理认证请求...",
+  "syncingDesktopData": "正在同步桌面数据...",
+  "processing": "正在处理中...",
+  "couldNotLoadAuthorizedAppsPleaseTry": "加载已授权应用失败，请稍后重试",
+  "signingIn": "正在登录...",
+  "sendingSignInCode": "正在发送登录验证码...",
+  "signingInWithApple": "正在使用 Apple 登录...",
+  "incompleteAppleSignInChallengePleaseTry": "Apple 登录挑战信息不完整，请重试",
+  "linkYourAccountOnTheWebOr": "需前往网页端或移动端绑定账号之后才可以使用该第三方登录",
+  "verifyingAdditionalAuthentication": "正在验证二次认证...",
+  "waitingForPasskeyMfaVerification": "正在等待 Passkey 完成二次验证...",
+  "theBrowserDidNotReturnASign": "浏览器未返回登录结果",
+  "loadingPasswordRequirements": "正在加载密码规则...",
+  "sendingRegistrationCode": "正在发送注册验证码...",
+  "creatingAccount": "正在创建账户...",
+  "couldNotLoadDesktopData": "加载桌面数据失败",
+  "refreshingActivityLogs": "正在刷新敏感日志...",
+  "refreshingOnlineDevices": "正在刷新在线设备...",
+  "refreshingPasskeys": "正在刷新 Passkey 列表...",
+  "refreshingTotpStatus": "正在刷新 TOTP 状态...",
+  "refreshingContinuousAuthenticationStatus": "正在刷新连续认证状态...",
+  "savingSettings": "正在保存设置...",
+  "savingProfile": "正在保存资料...",
+  "uploadingAvatar": "正在上传头像...",
+  "checkingVerificationStatus": "正在检查验证状态...",
+  "checkingContinuousAuthenticationStatus": "正在检查连续认证状态...",
+  "sendingVerificationEmail": "正在发送验证邮件...",
+  "verifyingIdentity": "正在验证身份...",
+  "noUsableBrowserPasskeyBridgeUrlIs": "当前环境未配置可用的 Passkey 浏览器桥接地址",
+  "passkeysAreNotSupportedOnThisPlatform": "当前平台暂不支持 Passkey",
+  "waitingForPasskeySignIn": "正在等待 Passkey 登录...",
+  "waitingForPasskeyVerification": "正在等待 Passkey 验证...",
+  "theBrowserDidNotCompleteVerificationFor": "浏览器未完成敏感验证",
+  "waitingForPasskeyRegistration": "正在等待 Passkey 登记...",
+  "theBrowserDidNotCompletePasskeyRegistration": "浏览器未完成 Passkey 登记",
+  "thisEnvironmentPreventsALocalCallbackPort": "当前环境禁止创建本地回调端口，无法使用浏览器 Passkey 桥接。",
+  "checkNetworkInboundPermissionsOrEnableNative": "请检查系统网络入站权限，或在 macOS 上启用原生 Passkey。",
+  "couldNotCreateTheLocalPasskeyCallback": "无法创建本地 Passkey 回调服务：{arg0}",
+  "@couldNotCreateTheLocalPasskeyCallback": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sendingEmailVerificationCode": "正在发送邮箱验证码...",
+  "updatingEmail": "正在更新邮箱...",
+  "updatingPassword": "正在更新密码...",
+  "revokingSession": "正在撤销会话...",
+  "signingOutAllDevices": "正在退出所有设备...",
+  "renamingPasskey": "正在重命名 Passkey...",
+  "deletingPasskey": "正在删除 Passkey...",
+  "gettingTotpConfiguration": "正在获取 TOTP 配置...",
+  "enablingTotp": "正在启用 TOTP...",
+  "loadingRecoveryCodes": "正在加载恢复码...",
+  "generatingNewRecoveryCodes": "正在生成新的恢复码...",
+  "disablingTotp": "正在关闭 TOTP...",
+  "signingOut": "正在退出登录...",
+  "generatingCrossDeviceSignInTicket": "正在生成跨端登录票据...",
+  "thisDesktopAppIsNotSignedIn": "当前桌面端尚未登录",
+  "generatingAccountRecoveryAuthorization": "正在生成账号恢复授权...",
+  "syncingWebSignInStatus": "正在同步网页登录状态...",
+  "crossDeviceSignInFailedNoAccess": "跨端登录失败，未获取到 accessToken",
+  "networkConnectionFailed": "网络连接失败：{arg0}",
+  "@networkConnectionFailed": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "avatarUploadFailed": "头像上传失败：{arg0}",
+  "@avatarUploadFailed": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotConnectTo": "无法连接到 {arg0}：{arg1}",
+  "@couldNotConnectTo": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "tlsHandshakeFailedPleaseCheckTheServer": "TLS 握手失败，请检查服务证书",
+  "requestTimedOutPleaseTryAgainLater": "请求超时，请稍后重试",
+  "theServerReturnedUnreadableData": "服务返回了无法解析的数据",
+  "authenticationExpiredPleaseSignInAgain": "认证已失效，请重新登录",
+  "couldNotRefreshTheToken": "刷新 Token 失败",
+  "enterYourEmailAddressFirst": "请先输入邮箱地址",
+  "enterYourPassword": "请输入密码",
+  "enterADigitVerificationCode": "请输入 6 位验证码",
+  "signedIn": "登录成功",
+  "firstVerificationCompletedContinueWithAdditionalVerification": "第一步验证成功，请继续完成二次验证",
+  "verificationCodeSent": "验证码已发送",
+  "additionalVerificationCompleted": "二次验证通过",
+  "enterADigitAuthenticatorCode": "请输入 6 位动态码",
+  "enterARecoveryCode": "请输入恢复码",
+  "signedInWithPasskey": "Passkey 登录成功",
+  "passkeyVerifiedContinueWithAdditionalVerification": "Passkey 验证成功，请继续完成二次验证",
+  "signedInWithApple": "Apple 登录成功",
+  "appleVerifiedContinueWithAdditionalVerification": "Apple 验证成功，请继续完成二次验证",
+  "signedInWithQrCode": "扫码登录成功",
+  "qrCodeVerifiedContinueWithAdditionalVerification": "扫码验证成功，请继续完成二次验证",
+  "signIn": "登录",
+  "signInToKsuserSecurityToManage": "登录 Ksuser 安全中心，继续管理你的账户与设备。",
+  "password": "密码",
+  "emailCode": "邮箱验证码",
+  "emailAddress": "邮箱地址",
+  "digitEmailCode": "6 位邮箱验证码",
+  "sendCode": "发送验证码",
+  "otherSignInMethods": "其他登录方式",
+  "signInWithApple": "使用 Apple 登录",
+  "qrSignIn2": "扫码登录",
+  "newToKsuserRegisterOnTheWeb": "还没有账号？前往网页端注册",
+  "accountSecurityConsole": "账户安全控制台",
+  "workspace": "工作台",
+  "accountOverview": "账号总览",
+  "accountProfile": "账号资料",
+  "securitySettings": "安全设置",
+  "deviceManagement": "设备管理",
+  "activityLogs": "操作日志",
+  "accessAuthorization": "访问授权",
+  "crossDeviceAccess": "跨端联通",
+  "openTheWebAppAndSignIn": "打开网页端并自动登录",
+  "openingTheWebApp": "正在打开网页端...",
+  "webAppOpenedAndSignedInAutomatically": "已在浏览器打开网页端并自动登录",
+  "syncWebSignInToDesktop": "通过网页登录同步回桌面端",
+  "openingWebSignIn": "正在打开网页登录页...",
+  "webSignInOpenedYourSessionWill": "已打开网页登录页；网页登录成功后会自动同步回桌面端",
+  "openWebApp": "打开网页端",
+  "syncWebSignIn": "网页登录同步",
+  "accountActions": "账户操作",
+  "signOut": "退出登录",
+  "desktopDataRefreshed": "桌面数据已刷新",
+  "refresh": "刷新",
+  "profileSummary": "资料摘要",
+  "yourAccountAtAGlance": "账户资料一览",
+  "fullName": "真实姓名",
+  "notProvided": "未填写",
+  "region": "地区",
+  "gender": "性别",
+  "profileUpdated": "资料更新时间",
+  "signInMethods": "登录方式",
+  "availableAuthenticationMethods": "当前可用的认证方式",
+  "recentDeviceActivity": "近期设备活动",
+  "recentDevicesAndSessions": "最近登录的设备与会话",
+  "noDeviceActivityYet": "暂无设备活动",
+  "recentSensitiveActions": "近期敏感操作",
+  "recentAccountSecurityActivity": "账户安全相关的最近记录",
+  "noSensitiveActionsYet": "暂无敏感操作记录",
+  "accountIdentity": "账户身份",
+  "securityScore": "安全评分",
+  "totpProtectionEnabled": "已启用 TOTP 防护",
+  "enableTotpProtection": "建议开启 TOTP 防护",
+  "onlineDevices": "在线设备",
+  "devicesOnline": "{arg0} 台当前在线",
+  "@devicesOnline": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "activityLogs2": "敏感日志",
+  "recentAccountSecurityActions": "近期账户安全操作",
+  "authorizedApps": "已授权应用",
+  "viewThirdPartyAppsThatCanAccess": "查看可访问您账号信息的第三方应用及授权范围。",
+  "apps": "{arg0} 个应用",
+  "@apps": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "authorizationInformationIsCurrentlyUnavailable": "暂时无法获取授权信息",
+  "retry": "重试",
+  "noAuthorizedAppsYet": "还没有授权应用",
+  "thirdPartyAppsYouAuthorizeWillAppear": "您确认授权的第三方应用会显示在这里。",
+  "aboutAuthorization": "授权说明",
+  "youCanManageThirdPartyAppsOn": "您可以随时在网页端访问授权页面管理第三方应用。",
+  "afterYouRevokeAccessTheAppCan": "撤销授权后，该应用将无法继续使用现有授权访问您的账户信息。",
+  "revokeAccessFor": "取消「{arg0}」的授权？",
+  "@revokeAccessFor": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "theAppWillNoLongerBeAble": "取消后，该应用将无法继续访问您已授权的账号信息。若再次使用，需要重新确认授权。",
+  "keepAccess": "保留授权",
+  "revokeAccess": "确认取消",
+  "accessRevokedFor": "已取消「{arg0}」的授权",
+  "@accessRevokedFor": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "oneTimeAccess": "单次授权",
+  "noExpiration": "长期有效",
+  "expires": "有效期至 {arg0}",
+  "@expires": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "developer": "开发者：{arg0}",
+  "@developer": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "contact": "联系信息：{arg0}",
+  "@contact": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "lastUsed": "最近使用 {arg0}",
+  "@lastUsed": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "revokeAccess2": "取消授权",
+  "timeLimitedAccess": "限时授权",
+  "permanentAccess": "永久授权",
+  "accountIdentifier": "账号标识",
+  "basicProfile": "基本资料",
+  "email": "邮箱",
+  "phoneNumber": "手机号",
+  "images": "图片",
+  "chooseAvatar": "选择头像",
+  "imageMustBeNoLargerThanMb": "图片大小不能超过 3MB",
+  "onlyJpgPngWebpOrGifImages": "仅支持 JPG、PNG、WebP 或 GIF 图片",
+  "avatarUpdated": "头像已更新",
+  "personalInformation": "个人信息",
+  "keepYourBasicProfileAccurateAndComplete": "维护您的基础资料，让账号信息保持准确、完整。",
+  "clickToChangeAvatar": "点击更换头像",
+  "clickToChangeAvatarJpgPngWebp": "点击头像更换 · JPG、PNG、WebP 或 GIF · 最大 3MB",
+  "changeAvatar": "更换头像",
+  "username": "用户名",
+  "changeUsername": "修改用户名",
+  "extendedProfile": "扩展资料",
+  "viewAndEditYourPersonalInformation": "在这里查看与修改你的个人信息",
+  "changeFullName": "修改真实姓名",
+  "selectGender": "选择性别",
+  "male": "男",
+  "female": "女",
+  "preferNotToSay": "保密",
+  "dateOfBirth": "出生日期",
+  "changeDateOfBirth": "修改出生日期",
+  "changeRegion": "修改地区",
+  "bio": "简介",
+  "changeBio": "修改简介",
+  "securityOptions": "安全开关",
+  "manageYourAccountSecurityPreferences": "在这里管理你的账号安全偏好",
+  "enableMfa": "启用 MFA",
+  "addASecondVerificationStepWhenSigning": "登录时增加第二道验证。",
+  "mfaEnabled": "已开启 MFA",
+  "mfaDisabled": "已关闭 MFA",
+  "unusualLocationDetection": "异地登录检测",
+  "getAlertsWhenASignInComes": "发现异常位置登录时提醒。",
+  "unusualLocationDetectionEnabled": "已开启异地登录检测",
+  "unusualLocationDetectionDisabled": "已关闭异地登录检测",
+  "sensitiveActionEmails": "敏感操作邮件提醒",
+  "getNotificationsForPasswordEmailAndOther": "修改密码、邮箱等操作发送通知。",
+  "notificationsEnabled": "已开启提醒",
+  "notificationsDisabled": "已关闭提醒",
+  "subscribeToEmails": "订阅通知邮件",
+  "receiveProductUpdatesAndSystemAnnouncements": "接收产品更新和系统消息。",
+  "emailSubscriptionUpdated": "已更新邮件订阅",
+  "emailSubscriptionDisabled": "已关闭邮件订阅",
+  "signInMfaPreferencesUpdated": "登录 MFA 偏好已更新",
+  "signInMfaPreferences": "登录 MFA 偏好",
+  "sensitiveActionVerificationPreferencesUpdated": "敏感操作验证偏好已更新",
+  "sensitiveActionVerificationPreferences": "敏感操作验证偏好",
+  "authenticationMethods": "身份验证能力",
+  "configureVerificationMethods": "配置验证方式",
+  "passwordSignIn": "密码登录",
+  "enabled": "已启用",
+  "emailCodeSignIn": "邮箱验证码登录",
+  "notConfigured": "未配置",
+  "itemCount": "{arg0} 个",
+  "@itemCount": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "disabled": "未启用",
+  "changeEmail": "修改邮箱",
+  "changePassword": "修改密码",
+  "authorizeAccountRecovery": "发起账号恢复",
+  "generateAOneTimeRecoveryQrCode": "为另一台设备生成 5 分钟有效的一次性恢复二维码和恢复码，恢复成功后旧会话会自动撤销。",
+  "adaptiveContinuousAuthentication": "自适应连续认证引擎",
+  "useSessionContextRiskSignalsAndRecent": "根据当前会话环境、风险信号和最近验证状态动态判断是否需要 step-up。",
+  "totpManagement": "TOTP 管理",
+  "manageYourAuthenticatorCodes": "在这里管理你的一次性验证码",
+  "passkeys": "Passkey 列表",
+  "useNativePasskeysForSignInAnd": "使用系统原生 Passkey 完成登录与敏感验证",
+  "passkeyAdded": "Passkey 已添加",
+  "addPasskey": "新增 Passkey",
+  "noPasskeysRegisteredYet": "当前没有已登记的 Passkey。",
+  "onlineSessions": "在线会话",
+  "manageYourSignInAndOnlineActivity": "管理您的登录与在线信息",
+  "allSessions": "全部会话",
+  "thisDevice": "当前设备",
+  "sessionsRefreshed": "会话已刷新",
+  "refreshList": "刷新列表",
+  "noOnlineSessions": "没有在线会话",
+  "sessionsWillAppearHereWhenYouSign": "登录其他设备后，会话信息会显示在这里。",
+  "dangerZone": "危险操作",
+  "signOutOfAllDevicesIncludingThe": "对应网页端的“退出所有设备”。",
+  "thisRevokesAllSessionsIncludingThisDevice": "这会撤销所有会话，包括当前设备。AccessToken 失效后需要重新登录。",
+  "signOutAllDevices": "确认退出所有设备",
+  "thisDesktopSessionWillAlsoExpireImmediately": "当前桌面会话也会立即失效。",
+  "cancel": "取消",
+  "signOut2": "确认退出",
+  "signedOutAllDevices": "已退出所有设备",
+  "signOutAllDevices2": "退出所有设备",
+  "theSessionEnvironmentIsStableNoAdditional": "当前会话环境稳定，未发现额外风险信号",
+  "additionalVerificationIsRecommended": "建议立即补做验证",
+  "sessionTrustIsStable": "当前会话可信度稳定",
+  "risk": "{arg0}风险 {arg1}",
+  "@risk": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "policyFreezeSession": "策略：冻结会话",
+  "policyRequireVerification": "策略：强制补验",
+  "policyAllow": "策略：放行",
+  "continuousAuthenticationStatusUpdated": "连续认证状态已更新",
+  "verified": "已完成验证",
+  "verifyNow": "立即验证",
+  "riskAlert": "风险告警",
+  "riskSignalsDetectedPleaseTakeActionSoon": "检测到风险信号，请尽快处理",
+  "alertExpiresInSeconds": "告警剩余有效期：{arg0} 秒",
+  "@alertExpiresInSeconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sensitiveActionVerification": "敏感验证状态",
+  "validForSeconds": "有效 {arg0} 秒",
+  "@validForSeconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "notVerified": "未验证",
+  "sessionAge": "会话年龄",
+  "idleTime": "空闲时长",
+  "currentEnvironment": "当前环境",
+  "unknownDevice": "未知设备",
+  "riskSignals": "风险信号",
+  "viewSensitiveAccountActionsAndVerificationRecords": "在这里查看账号敏感操作和验证记录",
+  "filterActivity": "筛选记录",
+  "reset": "重置",
+  "actionType": "操作类型",
+  "register": "注册",
+  "enableTotp": "启用 TOTP",
+  "disableTotp": "禁用 TOTP",
+  "result": "执行结果",
+  "success": "成功",
+  "failure": "失败",
+  "searching": "查询中",
+  "searchRecords": "查询记录",
+  "searchResults": "查询结果",
+  "records": "{arg0} 条记录",
+  "@records": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "noMatchingRecords": "没有匹配的记录",
+  "changeTheActionTypeOrResultAnd": "调整操作类型或执行结果后重新查询。",
+  "additionalVerification": "二次验证",
+  "currentChallenge": "当前挑战：{arg0}",
+  "@currentChallenge": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "authenticatorCode": "动态码",
+  "recoveryCode": "恢复码",
+  "passkeyUnavailable": "Passkey 不可用",
+  "digitAuthenticatorCode": "6 位动态码",
+  "useAPasskeyForAdditionalVerification": "使用 Passkey 完成二次验证",
+  "passkeyIsCurrentlyUnavailable": "Passkey 当前不可用",
+  "verifyWithPasskey": "使用 Passkey 验证",
+  "completeMfaVerification": "完成 MFA 验证",
+  "securityScoreSyncedDevicesAndLogs": "当前安全评分 {arg0}%，已同步 {arg1} 台设备和 {arg2} 条日志。",
+  "@securityScoreSyncedDevicesAndLogs": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "edit": "编辑",
+  "totpEnabled": "TOTP 已启用",
+  "totpIsNotEnabled": "TOTP 尚未启用",
+  "recoveryCodesRemaining": "恢复码剩余 {arg0} 个",
+  "@recoveryCodesRemaining": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "registerWithTheQrCodeOrSecret": "可通过二维码或密钥完成注册。",
+  "totpDisabled": "TOTP 已关闭",
+  "disable": "禁用",
+  "enable": "启用",
+  "recoveryCodes": "恢复码列表",
+  "viewRecoveryCodes": "查看恢复码",
+  "newRecoveryCodes": "新恢复码",
+  "regenerateRecoveryCodes": "重新生成恢复码",
+  "created": "创建于 {arg0}",
+  "@created": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "neverUsed": "从未使用",
+  "renamePasskey": "重命名 Passkey",
+  "rename": "重命名",
+  "deletePasskey": "删除 Passkey",
+  "delete": "确认删除 {arg0}？",
+  "@delete": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "delete2": "删除",
+  "passkeyDeleted": "Passkey 已删除",
+  "current": "当前",
+  "online": "在线",
+  "offline": "离线",
+  "active": "活跃 {arg0}",
+  "@active": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionRevoked": "会话已撤销",
+  "revoke": "撤销",
+  "risk2": "风险 {arg0}",
+  "@risk2": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyYourIdentityFirst": "需要先完成身份验证",
+  "invalidQrVerificationResultRefreshTheQr": "扫码验证结果无效，请刷新二维码后重试",
+  "verified2": "验证成功",
+  "qrRequestRejectedPleaseRefreshTheQr": "扫码请求已被拒绝，请刷新二维码",
+  "enterYourSignInPassword": "请输入登录密码",
+  "enterADigitEmailCode": "请输入 6 位邮箱验证码",
+  "scanTheQrCodeWithYourPhone": "请使用手机扫码完成验证",
+  "openingTheNativePasskeyService": "即将调用 {arg0} 系统 Passkey",
+  "@openingTheNativePasskeyService": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sensitiveActionVerification2": "敏感操作验证",
+  "verifyYourIdentityToContinueWithThis": "请先验证身份后继续执行当前操作。",
+  "signInPassword": "登录密码",
+  "passkeyVerificationAvailable": "Passkey 验证已接入",
+  "verifying": "验证中...",
+  "save": "保存",
+  "saved": "已保存",
+  "newEmail": "新邮箱",
+  "verificationCode": "验证码",
+  "emailUpdated": "邮箱已更新",
+  "saving2": "保存中...",
+  "newPassword": "新密码",
+  "passwordUpdated": "密码已更新",
+  "scanTheQrCodeOrEnterThe": "扫描二维码或手动录入密钥，然后输入身份验证器生成的 6 位动态码。",
+  "initialRecoveryCodes": "初始恢复码",
+  "saveYourRecoveryCodes": "请保存恢复码",
+  "enabling": "启用中...",
+  "confirmAndEnable": "确认启用",
+  "couldNotGenerateQrCodePleaseRefresh": "二维码生成失败，请刷新",
+  "qrVerification": "扫码验证",
+  "enterYourCurrentSignInPasswordTo": "输入当前登录密码完成验证。",
+  "sendAOneTimeCodeToYour": "向当前绑定邮箱发送一次性验证码。",
+  "enterTheDigitCodeGeneratedByYour": "输入身份验证器生成的 6 位动态码。",
+  "scanWithYourSignedInMobileApp": "使用已登录手机端扫码确认当前敏感操作。",
+  "viewAccountStatusSignInMethodsAnd": "查看桌面端的账号状态、登录方式和近期活动。",
+  "manageYourAccountProfileAndExtendedInformation": "管理账户资料与扩展信息。",
+  "configureMfaTotpPasskeysAndSensitiveAction": "配置 MFA、TOTP、Passkey 和敏感验证偏好。",
+  "viewOnlineDevicesSessionsAndTheirCurrent": "查看在线设备、登录会话和当前状态。",
+  "filterSensitiveActionsAndVerificationRecords": "筛选查看敏感操作与验证记录。",
+  "viewThirdPartyAppsAuthorizedToAccess": "查看已授权访问您账号信息的第三方应用。",
+  "desktopApp": "桌面端",
+  "mobileApp": "移动端",
+  "unknownBrowser": "未知浏览器",
+  "passwordMfa": "密码 + 二步验证",
+  "codeSignIn": "验证码登录",
+  "codeMfa": "验证码 + 二步验证",
+  "passkeySignIn": "Passkey 登录",
+  "passkeyMfa": "Passkey + 二步验证",
+  "qrCodeMfa": "扫码 + 二步验证",
+  "bridgeSignIn": "桥接登录",
+  "desktopBridge": "电脑端桥接",
+  "webBridge": "网页端桥接",
+  "mobileBridge": "桥接到手机端",
+  "accountRecovery": "账号恢复",
+  "generalAction": "通用操作",
+  "high": "高",
+  "medium": "中",
+  "low": "低",
+  "seconds": "{arg0} 秒",
+  "@seconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "minutes": "{arg0} 分钟",
+  "@minutes": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "hours": "{arg0} 小时",
+  "@hours": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "days": "{arg0} 天",
+  "@days": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "justNow": "刚刚",
+  "minutesAgo": "{arg0} 分钟前",
+  "@minutesAgo": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{arg0} 小时前",
+  "@hoursAgo": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{arg0} 天前",
+  "@daysAgo": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "invalidDataFormat": "数据格式错误",
+  "unnamedApp": "未命名应用",
+  "passwordMustBeBetweenAndCharactersLong": "密码长度必须在 {arg0}-{arg1} 个字符之间",
+  "@passwordMustBeBetweenAndCharactersLong": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "passwordMustContainAtLeastOneUppercase": "密码必须包含至少一个大写字母",
+  "passwordMustContainAtLeastOneLowercase": "密码必须包含至少一个小写字母",
+  "passwordMustContainAtLeastOneDigit": "密码必须包含至少一个数字",
+  "passwordMustContainAtLeastOneSpecial": "密码必须包含至少一个特殊字符",
+  "timedOutWaitingForTheBrowserResult": "等待浏览器回传结果超时",
+  "browserBridgeStateVerificationFailed": "浏览器桥接状态校验失败",
+  "theBrowserDidNotCompleteThePasskey": "浏览器未完成 Passkey 操作",
+  "theDesktopAppReceivedThePasskeyResult": "桌面端已收到 Passkey 结果，可以关闭当前页面。",
+  "hActionCompletedHPPP": "<h2>操作已完成</h2><p>{arg0}</p><p>现在可以回到桌面端。</p></body></html>",
+  "@hActionCompletedHPPP": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "theDesktopAppDidNotReceiveA": "桌面端未收到有效结果。",
+  "hActionFailedHPPP": "<h2>操作失败</h2><p>{arg0}</p><p>请返回桌面端重试。</p></body></html>",
+  "@hActionFailedHPPP": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotOpenTheExternalBrowser": "无法打开外部浏览器",
+  "language": "语言",
+  "languageSettingExplanation": "默认使用设备语言，也可以为此设备选择语言。",
+  "languageSaveFailed": "无法保存语言偏好，重启应用后可能恢复默认。"
+}

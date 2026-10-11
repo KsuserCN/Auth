@@ -13,28 +13,32 @@
         v-if="errorMessage"
         type="error"
         :closable="false"
-        :title="errorMessage"
+        :title="renderMessage(errorMessage)"
         show-icon
       />
 
       <div v-else-if="completed" class="result-block success">
         <el-icon><CircleCheckFilled /></el-icon>
-        <span>{{ successMessage }}</span>
+        <span>{{ renderMessage(successMessage) }}</span>
       </div>
 
       <div v-else-if="needsTotp" class="totp-panel">
         <p class="panel-hint">
-          当前账号还需要完成一次 MFA 验证。浏览器桥接页会直接把结果回传给桌面应用。
+          {{ t('ui.desktopPasskeyBridge.message001') }}
         </p>
 
-        <div class="mode-switch" role="tablist" aria-label="验证码类型选择">
+        <div
+          class="mode-switch"
+          role="tablist"
+          :aria-label="t('ui.desktopPasskeyBridge.message002')"
+        >
           <button
             type="button"
             class="mode-chip"
             :class="{ active: totpMode === 'totp' }"
             @click="setTotpMode('totp')"
           >
-            动态码
+            {{ t('ui.sensitiveVerificationDialog.message020') }}
           </button>
           <button
             type="button"
@@ -42,21 +46,29 @@
             :class="{ active: totpMode === 'recovery' }"
             @click="setTotpMode('recovery')"
           >
-            恢复码
+            {{ t('ui.sensitiveVerificationDialog.message021') }}
           </button>
         </div>
 
         <el-input
           v-model="totpInput"
-          :placeholder="totpMode === 'totp' ? '输入 6 位动态码' : '输入 8 位恢复码'"
+          :placeholder="
+            totpMode === 'totp'
+              ? t('ui.desktopPasskeyBridge.message003')
+              : t('ui.desktopPasskeyBridge.message004')
+          "
           :maxlength="totpMode === 'totp' ? 6 : 8"
           @input="handleTotpInput"
           @keyup.enter="submitTotp"
         />
 
         <div class="panel-actions">
-          <el-button @click="retry" :disabled="busy">重新开始</el-button>
-          <el-button type="primary" @click="submitTotp" :loading="busy">完成验证</el-button>
+          <el-button @click="retry" :disabled="busy">{{
+            t('ui.desktopPasskeyBridge.message005')
+          }}</el-button>
+          <el-button type="primary" @click="submitTotp" :loading="busy">{{
+            t('ui.desktopPasskeyBridge.message006')
+          }}</el-button>
         </div>
       </div>
 
@@ -76,14 +88,19 @@
       </div>
 
       <div class="bridge-footer">
-        <el-button v-if="showRetryButton" @click="retry" :disabled="busy">重试</el-button>
-        <span>完成后桌面端会自动继续，无需手动复制 Token。</span>
+        <el-button v-if="showRetryButton" @click="retry" :disabled="busy">{{
+          t('ui.desktopPasskeyBridge.message007')
+        }}</el-button>
+        <span>{{ t('ui.desktopPasskeyBridge.message008') }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { localizedError } from '@/utils/apiResult'
+import { t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
+
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -145,18 +162,18 @@ const accessToken = ref('')
 const previousAccessToken = ref<string | null>(null)
 const busy = ref(false)
 const completed = ref(false)
-const successMessage = ref('验证已完成，桌面端会自动继续。')
-const errorMessage = ref('')
+const successMessage = ref<LocalizedMessage>(uiMessage('ui.desktopPasskeyBridge.message009'))
+const errorMessage = ref<LocalizedMessage>('')
 const totpInput = ref('')
 const totpMode = ref<TotpMode>('totp')
 const pendingMfaChallenge = ref<MFAChallenge | null>(null)
 
 const needsTotp = computed(() => pendingMfaChallenge.value !== null)
 const statusLabel = computed(() => {
-  if (errorMessage.value) return '失败'
-  if (completed.value) return '已完成'
-  if (needsTotp.value) return '等待输入'
-  return '处理中'
+  if (errorMessage.value) return t('ui.desktopPasskeyBridge.message010')
+  if (completed.value) return t('ui.desktopPasskeyBridge.message011')
+  if (needsTotp.value) return t('ui.desktopPasskeyBridge.message012')
+  return t('ui.desktopPasskeyBridge.message013')
 })
 const statusTagType = computed(() => {
   if (errorMessage.value) return 'danger'
@@ -167,49 +184,49 @@ const statusTagType = computed(() => {
 const title = computed(() => {
   switch (mode.value) {
     case 'mfa':
-      return '桌面端 Passkey MFA'
+      return t('ui.desktopPasskeyBridge.message014')
     case 'sensitive':
-      return '桌面端敏感操作验证'
+      return t('ui.desktopPasskeyBridge.message015')
     case 'register':
-      return '桌面端新增 Passkey'
+      return t('ui.desktopPasskeyBridge.message016')
     default:
-      return '桌面端 Passkey 登录'
+      return t('ui.desktopPasskeyBridge.message017')
   }
 })
 const subtitle = computed(() => {
   switch (mode.value) {
     case 'mfa':
-      return '当前浏览器负责完成 WebAuthn MFA，然后把结果回传给桌面应用。'
+      return t('ui.desktopPasskeyBridge.message018')
     case 'sensitive':
-      return '当前浏览器负责完成敏感操作的 Passkey 验证，然后返回桌面应用。'
+      return t('ui.desktopPasskeyBridge.message019')
     case 'register':
-      return '当前浏览器负责创建并登记 Passkey，完成后桌面端会自动刷新列表。'
+      return t('ui.desktopPasskeyBridge.message020')
     default:
-      return '当前浏览器负责完成 WebAuthn 登录，然后把结果回传给桌面应用。'
+      return t('ui.desktopPasskeyBridge.message021')
   }
 })
 const pendingTitle = computed(() => {
   switch (mode.value) {
     case 'mfa':
-      return '正在完成二次验证'
+      return t('ui.desktopPasskeyBridge.message022')
     case 'sensitive':
-      return '正在等待 Passkey 验证'
+      return t('ui.desktopPasskeyBridge.message023')
     case 'register':
-      return '正在创建新的 Passkey'
+      return t('ui.desktopPasskeyBridge.message024')
     default:
-      return '正在等待 Passkey 登录'
+      return t('ui.desktopPasskeyBridge.message025')
   }
 })
 const pendingDescription = computed(() => {
   switch (mode.value) {
     case 'mfa':
-      return '如果系统弹出了浏览器或安全密钥提示，请按提示完成验证。'
+      return t('ui.desktopPasskeyBridge.message026')
     case 'sensitive':
-      return '验证完成后，桌面端会继续执行刚才的敏感操作。'
+      return t('ui.desktopPasskeyBridge.message027')
     case 'register':
-      return '如果系统弹出了浏览器或安全密钥提示，请按提示创建并保存新的 Passkey。'
+      return t('ui.desktopPasskeyBridge.message028')
     default:
-      return '如果系统弹出了浏览器或安全密钥提示，请按提示完成登录。'
+      return t('ui.desktopPasskeyBridge.message029')
   }
 })
 const showRetryButton = computed(() => !completed.value && !busy.value)
@@ -301,7 +318,7 @@ const createDesktopTransferCode = async (nextAccessToken: string): Promise<strin
 }
 
 const failWithResult = async (result: ApiError) => {
-  errorMessage.value = result.message
+  errorMessage.value = { render: () => result.message }
   try {
     await callbackToDesktop({
       status: 'error',
@@ -340,7 +357,7 @@ const handleLoginResponse = async (response: LoginResponse | MFAChallenge) => {
     }
 
     if (methods.includes('totp')) {
-      ElMessage.info('还需要完成一次 TOTP 验证')
+      ElMessage.info(t('ui.desktopPasskeyBridge.message030'))
       return
     }
 
@@ -353,7 +370,7 @@ const handleLoginResponse = async (response: LoginResponse | MFAChallenge) => {
     transferCode,
     errorCode: 'REQUEST_SUCCESS',
   })
-  successMessage.value = 'Passkey 登录成功，桌面端会自动进入工作台。'
+  successMessage.value = uiMessage('ui.desktopPasskeyBridge.message031')
   restoreAccessToken()
 }
 
@@ -404,7 +421,7 @@ const runPasskeyMfa = async (challengeId: string) => {
     transferCode,
     errorCode: 'REQUEST_SUCCESS',
   })
-  successMessage.value = 'Passkey 二次验证成功，桌面端会自动继续登录。'
+  successMessage.value = uiMessage('ui.desktopPasskeyBridge.message032')
   restoreAccessToken()
 }
 
@@ -427,7 +444,7 @@ const runSensitiveVerification = async () => {
     verified: true,
     errorCode: 'REQUEST_SUCCESS',
   })
-  successMessage.value = '敏感操作验证成功，可以直接返回桌面端。'
+  successMessage.value = uiMessage('ui.desktopPasskeyBridge.message033')
   restoreAccessToken()
 }
 
@@ -451,7 +468,7 @@ const runRegistration = async () => {
     registered: true,
     errorCode: 'REQUEST_SUCCESS',
   })
-  successMessage.value = 'Passkey 已添加，桌面端会自动刷新列表。'
+  successMessage.value = uiMessage('ui.desktopPasskeyBridge.message034')
   restoreAccessToken()
 }
 
@@ -462,11 +479,11 @@ const submitTotp = async () => {
 
   const normalized = totpInput.value.trim()
   if (totpMode.value === 'totp' && !/^[0-9]{6}$/.test(normalized)) {
-    ElMessage.error('请输入 6 位动态码')
+    ElMessage.error(t('ui.desktopPasskeyBridge.message035'))
     return
   }
   if (totpMode.value === 'recovery' && !/^[A-Z]{8}$/.test(normalized.toUpperCase())) {
-    ElMessage.error('请输入 8 位大写恢复码')
+    ElMessage.error(t('ui.desktopPasskeyBridge.message036'))
     return
   }
 
@@ -489,9 +506,9 @@ const submitTotp = async () => {
       transferCode,
       errorCode: 'REQUEST_SUCCESS',
     })
-    successMessage.value = 'MFA 验证成功，桌面端会自动继续登录。'
+    successMessage.value = uiMessage('ui.desktopPasskeyBridge.message037')
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : 'MFA 验证失败'
+    errorMessage.value = localizedError(error, 'ui.desktopPasskeyBridge.message038')
   } finally {
     busy.value = false
   }
@@ -585,11 +602,11 @@ onMounted(async () => {
   sanitizeUrl()
 
   if (!callbackUrl.value || !state.value) {
-    errorMessage.value = '桌面端回调参数缺失'
+    errorMessage.value = uiMessage('ui.desktopPasskeyBridge.message039')
     return
   }
   if (!isLoopbackCallback(callbackUrl.value)) {
-    errorMessage.value = '非法回调地址，桥接页已拒绝继续执行'
+    errorMessage.value = uiMessage('ui.desktopPasskeyBridge.message040')
     return
   }
 
@@ -759,5 +776,4 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 12px;
 }
-
 </style>

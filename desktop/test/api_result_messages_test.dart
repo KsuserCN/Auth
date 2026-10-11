@@ -6,8 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ksuser_auth_desktop/api_result_messages.dart';
 import 'package:ksuser_auth_desktop/generated/api_result_codes.dart';
 import 'package:ksuser_auth_desktop/main.dart';
+import 'package:ksuser_auth_desktop/i18n.dart';
 
 void main() {
+  setUp(() {
+    desktopLocaleController = DesktopLocaleController(
+      preference: DesktopLanguage.simplifiedChinese,
+    );
+  });
   test('HTTP fallback categories follow the shared client contract', () {
     const Map<int, String> expectedCodes = <int, String>{
       100: 'REQUEST_FAILED',

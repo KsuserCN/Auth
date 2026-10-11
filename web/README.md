@@ -80,3 +80,13 @@ npm run test:e2e -- --debug
 ```sh
 npm run lint
 ```
+
+### 界面语言（i18n）
+
+Web 支持简体中文（`zh-Hans`）与英语（`en`）。首次打开默认跟随浏览器首选语言：中文语言标签显示简体中文，其他语言显示英语。登录前可在页面右上角切换，登录后可在「使用偏好 → 界面语言」设置；支持随时恢复「跟随浏览器」。选择只保存在当前浏览器，刷新页面、退出登录后仍保留，不与账号或其他设备同步。
+
+`src/i18n/index.ts` 管理语言与实时切换，`zh-Hans.json` / `en.json` 提供完整 UI 文案。新增文案使用稳定键与具名参数，通过 `t(key, params)` 在模板、computed 或操作执行时渲染。表单规则、菜单与选项使用 computed，避免在 setup 中保存已翻译文案。需要保留的状态提示使用 `uiMessage` 描述符并在显示时调用 `renderMessage`；客户端错误使用 `LocalizedError`，API 错误保留 `errorCode` / `params` / 状态并动态解析。业务值、用户内容、协议字段与未知历史审计原文保持原值。确认与输入弹窗使用 `localizedMessageBox` 并传入描述符，已打开的弹窗实时更新文案且保留输入。
+
+API 结果文案来自仓库根目录 `shared/api-result-codes.json`（`message` / `messageEn`），修改后运行 `npm run generate:api-codes`。请求的 `Accept-Language`、Element Plus 组件语言、HTML `lang`、时间展示与恢复码下载说明均跟随当前有效语言。注销账户的界面确认短语会翻译，提交时仍使用后端规定的固定确认 token。
+
+验证：`npm --prefix web run test:unit -- --run`、`npm --prefix web run type-check` 与 `npm --prefix web run build`。本地化测试检查两份资源键/参数完整性、浏览器语言与跨标签页变更、实时切换不丢失表单、API 结果回退与固定注销 token。

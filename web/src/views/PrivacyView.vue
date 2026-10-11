@@ -2,15 +2,23 @@
   <div class="privacy-page">
     <div class="content-header">
       <div>
-        <h1 class="page-title">访问授权</h1>
-        <p class="page-subtitle">管理已授权应用及其可访问的账号信息</p>
+        <h1 class="page-title">{{ t('ui.mainLayout.message014') }}</h1>
+        <p class="page-subtitle">{{ t('ui.privacy.message001') }}</p>
       </div>
     </div>
 
-    <el-alert v-if="!canCreateApps" type="info" :closable="false" show-icon class="app-access-banner">
-      想为您自己的应用接入授权？请
-      <a href="https://www.ksuser.cn/#/contact" target="_blank" rel="noopener noreferrer">联系我们</a>
-      进行个人/企业认证
+    <el-alert
+      v-if="!canCreateApps"
+      type="info"
+      :closable="false"
+      show-icon
+      class="app-access-banner"
+    >
+      {{ t('ui.privacy.message002') }}
+      <a href="https://www.ksuser.cn/#/contact" target="_blank" rel="noopener noreferrer">{{
+        t('ui.privacy.message003')
+      }}</a>
+      {{ t('ui.privacy.message004') }}
     </el-alert>
 
     <div v-if="loading" class="overview-grid">
@@ -24,15 +32,23 @@
     </div>
     <div v-else class="overview-grid">
       <el-card class="overview-card" shadow="never">
-        <div class="overview-card-head"><span class="overview-icon internal"><el-icon><Monitor /></el-icon></span><span class="overview-label">Ksuser 应用</span></div>
+        <div class="overview-card-head">
+          <span class="overview-icon internal"
+            ><el-icon><Monitor /></el-icon></span
+          ><span class="overview-label">{{ t('ui.privacy.message005') }}</span>
+        </div>
         <div class="overview-value">{{ ssoApps.length }}</div>
-        <div class="overview-desc">Ksuser内部应用，用于证明您的身份</div>
+        <div class="overview-desc">{{ t('ui.privacy.message006') }}</div>
       </el-card>
 
       <el-card class="overview-card" shadow="never">
-        <div class="overview-card-head"><span class="overview-icon external"><el-icon><Share /></el-icon></span><span class="overview-label">第三方应用</span></div>
+        <div class="overview-card-head">
+          <span class="overview-icon external"
+            ><el-icon><Share /></el-icon></span
+          ><span class="overview-label">{{ t('ui.privacy.message007') }}</span>
+        </div>
         <div class="overview-value">{{ oauthApps.length }}</div>
-        <div class="overview-desc">第三方外部应用，用于第三方网站登录</div>
+        <div class="overview-desc">{{ t('ui.privacy.message008') }}</div>
       </el-card>
     </div>
 
@@ -69,15 +85,24 @@
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon><Monitor /></el-icon>
-            <span>Ksuser 应用</span>
+            <span>{{ t('ui.privacy.message005') }}</span>
             <el-tag class="app-count" size="small" effect="plain">{{ ssoApps.length }}</el-tag>
           </div>
-          <p class="card-desc">已授权后再次发起同范围授权时会自动回调</p>
+          <p class="card-desc">{{ t('ui.privacy.message009') }}</p>
 
           <div class="list-toolbar">
-            <el-input v-if="ssoApps.length > PAGE_SIZE" v-model="ssoSearch" class="app-search"
-              placeholder="搜索应用名称或 Client ID" clearable :prefix-icon="Search" @input="ssoPage = 1" />
-            <span v-if="ssoApps.length" class="list-count">{{ filteredSsoApps.length }} 个应用</span>
+            <el-input
+              v-if="ssoApps.length > PAGE_SIZE"
+              v-model="ssoSearch"
+              class="app-search"
+              :placeholder="t('ui.privacy.message010')"
+              clearable
+              :prefix-icon="Search"
+              @input="ssoPage = 1"
+            />
+            <span v-if="ssoApps.length" class="list-count"
+              >{{ filteredSsoApps.length }} {{ t('ui.privacy.message011') }}</span
+            >
           </div>
           <div v-if="pagedSsoApps.length" class="app-list">
             <div v-for="app in pagedSsoApps" :key="app.clientId" class="app-item">
@@ -95,25 +120,34 @@
                     <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
                     <el-tag size="small" effect="plain">{{ grantModeLabel(app.grantMode) }}</el-tag>
                   </div>
-                  <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
+                  <div class="app-meta">
+                    {{ t('ui.privacy.message012') }}{{ formatDateTime(app.lastAuthorizedAt) }}
+                  </div>
                   <div v-if="app.grantMode === 'TIME_LIMITED' && app.expiresAt" class="app-meta">
-                    授权有效期至：{{ formatDateTime(app.expiresAt) }}
+                    {{ t('ui.privacy.message013') }}{{ formatDateTime(app.expiresAt) }}
                   </div>
                 </div>
               </div>
 
               <div class="app-actions">
-                <el-button size="small" @click="openSsoDetailDialog(app.clientId)">详情</el-button>
+                <el-button size="small" @click="openSsoDetailDialog(app.clientId)">{{
+                  t('ui.devices.message016')
+                }}</el-button>
                 <el-popconfirm
-                  title="撤销该 Ksuser 应用授权？"
-                  description="撤销后，下次登录该应用需要重新确认授权。"
-                  confirm-button-text="撤销"
-                  cancel-button-text="取消"
+                  :title="t('ui.privacy.message014')"
+                  :description="t('ui.privacy.message015')"
+                  :confirm-button-text="t('ui.devices.message017')"
+                  :cancel-button-text="t('ui.addPasskey.message009')"
                   @confirm="handleRevokeSso(app.clientId)"
                 >
                   <template #reference>
-                    <el-button type="danger" plain size="small" :loading="revokingId === `sso:${app.clientId}`">
-                      撤销
+                    <el-button
+                      type="danger"
+                      plain
+                      size="small"
+                      :loading="revokingId === `sso:${app.clientId}`"
+                    >
+                      {{ t('ui.devices.message017') }}
                     </el-button>
                   </template>
                 </el-popconfirm>
@@ -121,10 +155,20 @@
             </div>
           </div>
 
-          <el-empty v-else :description="ssoApps.length ? '没有找到匹配的应用' : '暂无已授权的 Ksuser 应用'" />
-          <el-pagination v-if="filteredSsoApps.length > PAGE_SIZE" v-model:current-page="ssoPage"
-            class="app-pagination" :page-size="PAGE_SIZE" :total="filteredSsoApps.length"
-            layout="prev, pager, next" small background />
+          <el-empty
+            v-else
+            :description="ssoApps.length ? t('ui.privacy.message016') : t('ui.privacy.message017')"
+          />
+          <el-pagination
+            v-if="filteredSsoApps.length > PAGE_SIZE"
+            v-model:current-page="ssoPage"
+            class="app-pagination"
+            :page-size="PAGE_SIZE"
+            :total="filteredSsoApps.length"
+            layout="prev, pager, next"
+            small
+            background
+          />
         </el-card>
       </el-col>
 
@@ -132,15 +176,24 @@
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon><Share /></el-icon>
-            <span>第三方应用</span>
+            <span>{{ t('ui.privacy.message007') }}</span>
             <el-tag class="app-count" size="small" effect="plain">{{ oauthApps.length }}</el-tag>
           </div>
-          <p class="card-desc">这些应用通过 Ksuser OAuth2.0 访问您的公开资料，撤销后将无法继续使用现有授权</p>
+          <p class="card-desc">{{ t('ui.privacy.message018') }}</p>
 
           <div class="list-toolbar">
-            <el-input v-if="oauthApps.length > PAGE_SIZE" v-model="oauthSearch" class="app-search"
-              placeholder="搜索应用名称或开发者" clearable :prefix-icon="Search" @input="oauthPage = 1" />
-            <span v-if="oauthApps.length" class="list-count">{{ filteredOauthApps.length }} 个应用</span>
+            <el-input
+              v-if="oauthApps.length > PAGE_SIZE"
+              v-model="oauthSearch"
+              class="app-search"
+              :placeholder="t('ui.privacy.message019')"
+              clearable
+              :prefix-icon="Search"
+              @input="oauthPage = 1"
+            />
+            <span v-if="oauthApps.length" class="list-count"
+              >{{ filteredOauthApps.length }} {{ t('ui.privacy.message011') }}</span
+            >
           </div>
           <div v-if="pagedOauthApps.length" class="app-list">
             <div v-for="app in pagedOauthApps" :key="app.appId" class="app-item">
@@ -155,7 +208,9 @@
                 <div class="app-info">
                   <div class="app-name-row">
                     <span class="app-name">{{ app.appName }}</span>
-                    <el-tag size="small" type="info" effect="plain">{{ creatorNameLabel(app.creatorName) }}</el-tag>
+                    <el-tag size="small" type="info" effect="plain">{{
+                      creatorNameLabel(app.creatorName)
+                    }}</el-tag>
                     <el-tag size="small" effect="plain">{{ grantModeLabel(app.grantMode) }}</el-tag>
                     <el-tag
                       v-if="app.creatorVerificationType"
@@ -166,25 +221,34 @@
                       {{ verificationLabel(app.creatorVerificationType) }}
                     </el-tag>
                   </div>
-                  <div class="app-meta">最近授权：{{ formatDateTime(app.lastAuthorizedAt) }}</div>
+                  <div class="app-meta">
+                    {{ t('ui.privacy.message012') }}{{ formatDateTime(app.lastAuthorizedAt) }}
+                  </div>
                   <div v-if="app.grantMode === 'TIME_LIMITED' && app.expiresAt" class="app-meta">
-                    授权有效期至：{{ formatDateTime(app.expiresAt) }}
+                    {{ t('ui.privacy.message013') }}{{ formatDateTime(app.expiresAt) }}
                   </div>
                 </div>
               </div>
 
               <div class="app-actions">
-                <el-button size="small" @click="openOauthDetailDialog(app.appId)">详情</el-button>
+                <el-button size="small" @click="openOauthDetailDialog(app.appId)">{{
+                  t('ui.devices.message016')
+                }}</el-button>
                 <el-popconfirm
-                  title="撤销该第三方应用授权？"
-                  description="撤销后，该应用需要重新请求授权才能再次访问您的账号信息。"
-                  confirm-button-text="撤销"
-                  cancel-button-text="取消"
+                  :title="t('ui.privacy.message020')"
+                  :description="t('ui.privacy.message021')"
+                  :confirm-button-text="t('ui.devices.message017')"
+                  :cancel-button-text="t('ui.addPasskey.message009')"
                   @confirm="handleRevokeOauth(app.appId)"
                 >
                   <template #reference>
-                    <el-button type="danger" plain size="small" :loading="revokingId === `oauth:${app.appId}`">
-                      撤销
+                    <el-button
+                      type="danger"
+                      plain
+                      size="small"
+                      :loading="revokingId === `oauth:${app.appId}`"
+                    >
+                      {{ t('ui.devices.message017') }}
                     </el-button>
                   </template>
                 </el-popconfirm>
@@ -192,10 +256,22 @@
             </div>
           </div>
 
-          <el-empty v-else :description="oauthApps.length ? '没有找到匹配的应用' : '暂无已授权的第三方应用'" />
-          <el-pagination v-if="filteredOauthApps.length > PAGE_SIZE" v-model:current-page="oauthPage"
-            class="app-pagination" :page-size="PAGE_SIZE" :total="filteredOauthApps.length"
-            layout="prev, pager, next" small background />
+          <el-empty
+            v-else
+            :description="
+              oauthApps.length ? t('ui.privacy.message016') : t('ui.privacy.message022')
+            "
+          />
+          <el-pagination
+            v-if="filteredOauthApps.length > PAGE_SIZE"
+            v-model:current-page="oauthPage"
+            class="app-pagination"
+            :page-size="PAGE_SIZE"
+            :total="filteredOauthApps.length"
+            layout="prev, pager, next"
+            small
+            background
+          />
         </el-card>
       </el-col>
     </el-row>
@@ -203,7 +279,7 @@
     <el-dialog
       v-model="ssoDetailDialogVisible"
       class="detail-dialog"
-      title="应用详情"
+      :title="t('ui.privacy.message023')"
       width="720px"
       @closed="resetSsoDetailDialog"
     >
@@ -213,31 +289,41 @@
             <el-avatar
               :size="56"
               :src="ssoDetailApp.logoUrl"
-              :class="['app-avatar', 'detail-avatar', { 'app-avatar--image': !!ssoDetailApp.logoUrl }]"
+              :class="[
+                'app-avatar',
+                'detail-avatar',
+                { 'app-avatar--image': !!ssoDetailApp.logoUrl },
+              ]"
             >
               {{ ssoDetailApp.clientName.slice(0, 1).toUpperCase() }}
             </el-avatar>
             <div>
               <div class="detail-name">{{ ssoDetailApp.clientName }}</div>
-              <div class="detail-sub">最近授权：{{ formatDateTime(ssoDetailApp.lastAuthorizedAt) }}</div>
+              <div class="detail-sub">
+                {{ t('ui.privacy.message012') }}{{ formatDateTime(ssoDetailApp.lastAuthorizedAt) }}
+              </div>
             </div>
           </div>
           <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
         </div>
 
         <el-descriptions class="detail-desc" :column="1" border>
-          <el-descriptions-item label="网站">{{ extractWebsite(ssoDetailApp.redirectUri) }}</el-descriptions-item>
-          <el-descriptions-item label="首次授权">{{ formatDateTime(ssoDetailApp.authorizedAt) }}</el-descriptions-item>
-          <el-descriptions-item label="授权方式">
+          <el-descriptions-item :label="t('ui.privacy.message024')">{{
+            extractWebsite(ssoDetailApp.redirectUri)
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ui.privacy.message025')">{{
+            formatDateTime(ssoDetailApp.authorizedAt)
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ui.oAuthAuthorize.message019')">
             {{ grantModeLabel(ssoDetailApp.grantMode) }}
           </el-descriptions-item>
           <el-descriptions-item
             v-if="ssoDetailApp.grantMode === 'TIME_LIMITED' && ssoDetailApp.expiresAt"
-            label="授权有效期至"
+            :label="t('ui.privacy.message026')"
           >
             {{ formatDateTime(ssoDetailApp.expiresAt) }}
           </el-descriptions-item>
-          <el-descriptions-item label="权限范围">
+          <el-descriptions-item :label="t('ui.openPlatform.message037')">
             <div class="scope-list">
               <el-tag
                 v-for="scope in ssoDetailApp.scopes"
@@ -251,13 +337,13 @@
           </el-descriptions-item>
         </el-descriptions>
       </div>
-      <el-empty v-else description="应用不存在或已被撤销" />
+      <el-empty v-else :description="t('ui.privacy.message027')" />
     </el-dialog>
 
     <el-dialog
       v-model="oauthDetailDialogVisible"
       class="detail-dialog"
-      title="应用详情"
+      :title="t('ui.privacy.message023')"
       width="720px"
       @closed="resetOauthDetailDialog"
     >
@@ -267,13 +353,20 @@
             <el-avatar
               :size="56"
               :src="oauthDetailApp.logoUrl"
-              :class="['app-avatar', 'detail-avatar', { 'app-avatar--image': !!oauthDetailApp.logoUrl }]"
+              :class="[
+                'app-avatar',
+                'detail-avatar',
+                { 'app-avatar--image': !!oauthDetailApp.logoUrl },
+              ]"
             >
               {{ oauthDetailApp.appName.slice(0, 1).toUpperCase() }}
             </el-avatar>
             <div>
               <div class="detail-name">{{ oauthDetailApp.appName }}</div>
-              <div class="detail-sub">最近授权：{{ formatDateTime(oauthDetailApp.lastAuthorizedAt) }}</div>
+              <div class="detail-sub">
+                {{ t('ui.privacy.message012')
+                }}{{ formatDateTime(oauthDetailApp.lastAuthorizedAt) }}
+              </div>
             </div>
           </div>
           <div class="detail-tags">
@@ -292,19 +385,25 @@
         </div>
 
         <el-descriptions class="detail-desc" :column="1" border>
-          <el-descriptions-item label="网站">{{ extractWebsite(oauthDetailApp.redirectUri) }}</el-descriptions-item>
-          <el-descriptions-item label="开发者">{{ oauthDetailApp.contactInfo }}</el-descriptions-item>
-          <el-descriptions-item label="首次授权">{{ formatDateTime(oauthDetailApp.authorizedAt) }}</el-descriptions-item>
-          <el-descriptions-item label="授权方式">
+          <el-descriptions-item :label="t('ui.privacy.message024')">{{
+            extractWebsite(oauthDetailApp.redirectUri)
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ui.privacy.message028')">{{
+            oauthDetailApp.contactInfo
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ui.privacy.message025')">{{
+            formatDateTime(oauthDetailApp.authorizedAt)
+          }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ui.oAuthAuthorize.message019')">
             {{ grantModeLabel(oauthDetailApp.grantMode) }}
           </el-descriptions-item>
           <el-descriptions-item
             v-if="oauthDetailApp.grantMode === 'TIME_LIMITED' && oauthDetailApp.expiresAt"
-            label="授权有效期至"
+            :label="t('ui.privacy.message026')"
           >
             {{ formatDateTime(oauthDetailApp.expiresAt) }}
           </el-descriptions-item>
-          <el-descriptions-item label="权限范围">
+          <el-descriptions-item :label="t('ui.openPlatform.message037')">
             <div class="scope-list">
               <el-tag
                 v-for="scope in oauthDetailApp.scopes"
@@ -318,60 +417,60 @@
           </el-descriptions-item>
         </el-descriptions>
       </div>
-      <el-empty v-else description="应用不存在或已被撤销" />
+      <el-empty v-else :description="t('ui.privacy.message027')" />
     </el-dialog>
 
-	    <el-card class="card data-card" shadow="never">
-	      <div class="card-title">
-	        <el-icon><Download /></el-icon>
-	        <span>数据管理</span>
-	      </div>
-      <p class="card-desc">导出或删除您的账户数据</p>
+    <el-card class="card data-card" shadow="never">
+      <div class="card-title">
+        <el-icon><Download /></el-icon>
+        <span>{{ t('ui.privacy.message029') }}</span>
+      </div>
+      <p class="card-desc">{{ t('ui.privacy.message030') }}</p>
 
       <div class="data-actions">
         <el-alert
-          title="数据安全"
+          :title="t('ui.privacy.message031')"
           type="warning"
-          description="请妥善保管已导出的数据，不要与他人分享。"
+          :description="t('ui.privacy.message032')"
           :closable="false"
           class="action-alert"
         />
 
-	        <div class="action-item">
-	          <div class="action-info">
-	            <div class="action-title">下载您的数据</div>
-	            <div class="action-desc">获取您账户的完整数据备份（JSON 格式）</div>
-	          </div>
-	          <el-button type="primary" plain :loading="downloading" @click="handleDownloadData">
-	            下载
-	          </el-button>
-	        </div>
-	      </div>
-	    </el-card>
+        <div class="action-item">
+          <div class="action-info">
+            <div class="action-title">{{ t('ui.privacy.message033') }}</div>
+            <div class="action-desc">{{ t('ui.privacy.message034') }}</div>
+          </div>
+          <el-button type="primary" plain :loading="downloading" @click="handleDownloadData">
+            {{ t('ui.privacy.message035') }}
+          </el-button>
+        </div>
+      </div>
+    </el-card>
 
-	    <div class="danger-zone-section">
-	      <DangerZoneCard title="危险操作区域" :icon="WarningFilled">
-	        <div class="danger-zone-item">
-	          <div class="danger-zone-item-left">
-	            <div class="danger-zone-item-title danger">删除账户</div>
-	            <p class="danger-zone-item-desc">删除后所有数据将被永久清除，此操作无法撤销。</p>
-	          </div>
-	          <div class="danger-zone-item-right">
-	            <el-popconfirm
-	              title="确认删除账户？"
-	              description="删除后所有数据将被永久清除，此操作无法撤销。"
-	              confirm-button-text="我已理解，删除"
-	              cancel-button-text="取消"
-	              @confirm="handleDeleteAccount"
-	            >
-	              <template #reference>
-	                <el-button type="danger" plain>删除</el-button>
-	              </template>
-	            </el-popconfirm>
-	          </div>
-	        </div>
-	      </DangerZoneCard>
-	    </div>
+    <div class="danger-zone-section">
+      <DangerZoneCard :title="t('ui.devices.message027')" :icon="WarningFilled">
+        <div class="danger-zone-item">
+          <div class="danger-zone-item-left">
+            <div class="danger-zone-item-title danger">{{ t('ui.privacy.message036') }}</div>
+            <p class="danger-zone-item-desc">{{ t('ui.privacy.message037') }}</p>
+          </div>
+          <div class="danger-zone-item-right">
+            <el-popconfirm
+              :title="t('ui.privacy.message038')"
+              :description="t('ui.privacy.message037')"
+              :confirm-button-text="t('ui.privacy.message039')"
+              :cancel-button-text="t('ui.addPasskey.message009')"
+              @confirm="handleDeleteAccount"
+            >
+              <template #reference>
+                <el-button type="danger" plain>{{ t('ui.loginOptions.message020') }}</el-button>
+              </template>
+            </el-popconfirm>
+          </div>
+        </div>
+      </DangerZoneCard>
+    </div>
 
     <SensitiveVerificationDialog
       v-model="sensitiveDialogVisible"
@@ -382,9 +481,11 @@
 </template>
 
 <script setup lang="ts">
-	import { computed, onMounted, ref } from 'vue'
-	import { ElMessage } from 'element-plus'
-	import { Download, Monitor, Search, Share, WarningFilled } from '@element-plus/icons-vue'
+import { intlLocale, t } from '@/i18n'
+
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Download, Monitor, Search, Share, WarningFilled } from '@element-plus/icons-vue'
 import type { VerificationType } from '@/api/auth'
 import {
   getOAuth2Authorizations,
@@ -403,8 +504,8 @@ import { checkSensitiveVerification } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { downloadPrivacyExportFile, fetchPrivacyExportData } from '@/api/privacyExport'
-	import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
-	import DangerZoneCard from '@/components/DangerZoneCard.vue'
+import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+import DangerZoneCard from '@/components/DangerZoneCard.vue'
 
 const loading = ref(false)
 const { user } = storeToRefs(useUserStore())
@@ -423,7 +524,9 @@ const filteredOauthApps = computed(() => {
   const query = oauthSearch.value.trim().toLocaleLowerCase()
   if (!query) return oauthApps.value
   return oauthApps.value.filter((app) =>
-    `${app.appName} ${app.creatorName ?? ''} ${app.contactInfo ?? ''}`.toLocaleLowerCase().includes(query),
+    `${app.appName} ${app.creatorName ?? ''} ${app.contactInfo ?? ''}`
+      .toLocaleLowerCase()
+      .includes(query),
   )
 })
 const filteredSsoApps = computed(() => {
@@ -433,8 +536,12 @@ const filteredSsoApps = computed(() => {
     `${app.clientName} ${app.clientId}`.toLocaleLowerCase().includes(query),
   )
 })
-const pagedOauthApps = computed(() => filteredOauthApps.value.slice((oauthPage.value - 1) * PAGE_SIZE, oauthPage.value * PAGE_SIZE))
-const pagedSsoApps = computed(() => filteredSsoApps.value.slice((ssoPage.value - 1) * PAGE_SIZE, ssoPage.value * PAGE_SIZE))
+const pagedOauthApps = computed(() =>
+  filteredOauthApps.value.slice((oauthPage.value - 1) * PAGE_SIZE, oauthPage.value * PAGE_SIZE),
+)
+const pagedSsoApps = computed(() =>
+  filteredSsoApps.value.slice((ssoPage.value - 1) * PAGE_SIZE, ssoPage.value * PAGE_SIZE),
+)
 const downloading = ref(false)
 const sensitiveDialogVisible = ref(false)
 const ssoDetailDialogVisible = ref(false)
@@ -444,14 +551,14 @@ const oauthDetailAppId = ref('')
 let pendingSensitiveAction: (() => Promise<void>) | null = null
 
 const oauthScopeLabel = (scope: OAuth2Scope) => {
-  if (scope === 'email') return '邮箱地址'
-  return '昵称与头像'
+  if (scope === 'email') return t('ui.login.message011')
+  return t('ui.openPlatform.message050')
 }
 
 const ssoScopeLabel = (scope: SSOScope) => {
-  if (scope === 'openid') return '基础身份标识'
-  if (scope === 'email') return '邮箱地址'
-  return '昵称与头像'
+  if (scope === 'openid') return t('ui.openPlatform.message062')
+  if (scope === 'email') return t('ui.login.message011')
+  return t('ui.openPlatform.message050')
 }
 
 const creatorNameLabel = (value?: string) => {
@@ -460,16 +567,16 @@ const creatorNameLabel = (value?: string) => {
 }
 
 const grantModeLabel = (mode?: AuthorizationGrantMode) => {
-  if (mode === 'ONE_TIME') return '一次性'
-  if (mode === 'TIME_LIMITED') return '限时'
-  return '长期'
+  if (mode === 'ONE_TIME') return t('ui.privacy.message040')
+  if (mode === 'TIME_LIMITED') return t('ui.privacy.message041')
+  return t('ui.privacy.message042')
 }
 
 const verificationLabel = (type?: VerificationType) => {
-  if (type === 'admin') return '管理员'
-  if (type === 'enterprise') return '企业认证'
-  if (type === 'personal') return '个人认证'
-  return '未认证'
+  if (type === 'admin') return t('ui.mainLayout.message017')
+  if (type === 'enterprise') return t('ui.mainLayout.message018')
+  if (type === 'personal') return t('ui.mainLayout.message019')
+  return t('ui.openPlatform.message070')
 }
 
 const verificationTagType = (type?: VerificationType) => {
@@ -483,7 +590,7 @@ const formatDateTime = (value: string) => {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(intlLocale.value, {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -540,8 +647,14 @@ const loadAuthorizations = async () => {
     const [oauth, sso] = await Promise.all([getOAuth2Authorizations(), getSSOAuthorizations()])
     oauthApps.value = oauth
     ssoApps.value = sso
-    ssoPage.value = Math.min(ssoPage.value, Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)))
-    oauthPage.value = Math.min(oauthPage.value, Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)))
+    ssoPage.value = Math.min(
+      ssoPage.value,
+      Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)),
+    )
+    oauthPage.value = Math.min(
+      oauthPage.value,
+      Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)),
+    )
     if (ssoDetailDialogVisible.value && ssoDetailClientId.value && !ssoDetailApp.value) {
       resetSsoDetailDialog()
       ssoDetailDialogVisible.value = false
@@ -551,7 +664,7 @@ const loadAuthorizations = async () => {
       oauthDetailDialogVisible.value = false
     }
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '加载授权应用失败')
+    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message043'))
   } finally {
     loading.value = false
   }
@@ -562,10 +675,13 @@ const handleRevokeOauth = async (appId: string) => {
   try {
     await revokeOAuth2Authorization(appId)
     oauthApps.value = oauthApps.value.filter((item) => item.appId !== appId)
-    oauthPage.value = Math.min(oauthPage.value, Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)))
-    ElMessage.success('第三方应用授权已撤销')
+    oauthPage.value = Math.min(
+      oauthPage.value,
+      Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)),
+    )
+    ElMessage.success(t('ui.privacy.message044'))
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '撤销第三方应用失败')
+    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message045'))
   } finally {
     revokingId.value = ''
   }
@@ -576,10 +692,13 @@ const handleRevokeSso = async (clientId: string) => {
   try {
     await revokeSSOAuthorization(clientId)
     ssoApps.value = ssoApps.value.filter((item) => item.clientId !== clientId)
-    ssoPage.value = Math.min(ssoPage.value, Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)))
-    ElMessage.success('Ksuser 应用授权已撤销')
+    ssoPage.value = Math.min(
+      ssoPage.value,
+      Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)),
+    )
+    ElMessage.success(t('ui.privacy.message046'))
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '撤销 Ksuser 应用失败')
+    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message047'))
   } finally {
     revokingId.value = ''
   }
@@ -595,11 +714,11 @@ const runWithSensitiveVerification = async (action: () => Promise<void>) => {
 
     pendingSensitiveAction = action
     sensitiveDialogVisible.value = true
-    ElMessage.info('需要验证身份')
+    ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
   } catch (error) {
     pendingSensitiveAction = action
     sensitiveDialogVisible.value = true
-    ElMessage.info('需要验证身份')
+    ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
   }
 }
 
@@ -608,9 +727,9 @@ const executeDataDownload = async () => {
   try {
     const payload = await fetchPrivacyExportData()
     downloadPrivacyExportFile(payload)
-    ElMessage.success('数据已下载')
+    ElMessage.success(t('ui.privacy.message048'))
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '导出失败，请稍后重试')
+    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message049'))
   } finally {
     downloading.value = false
   }
@@ -629,7 +748,7 @@ const handleSensitiveVerificationSuccess = async () => {
   try {
     await action()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '执行失败，请稍后重试')
+    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message050'))
   }
 }
 
@@ -638,7 +757,7 @@ const handleSensitiveVerificationCancel = () => {
 }
 
 const handleDeleteAccount = () => {
-  ElMessage.warning('账户删除功能需要额外验证，请查收您的邮件')
+  ElMessage.warning(t('ui.privacy.message051'))
 }
 
 onMounted(() => {
@@ -707,7 +826,10 @@ onMounted(() => {
 .overview-card {
   position: relative;
   overflow: hidden;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .overview-card:hover {
@@ -949,7 +1071,10 @@ onMounted(() => {
   border: 1px solid var(--el-border-color-light);
   border-radius: 14px;
   background: var(--privacy-item-bg);
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .app-item:hover {

@@ -4,15 +4,14 @@
       <el-icon>
         <RefreshRight />
       </el-icon>
-      <span>账号恢复</span>
+      <span>{{ t('ui.accountRecoveryCard.message001') }}</span>
     </div>
 
     <div class="summary-row">
       <div class="summary-copy">
-        <div class="summary-title">让当前已登录设备为新设备背书</div>
+        <div class="summary-title">{{ t('ui.accountRecoveryCard.message002') }}</div>
         <p class="summary-desc">
-          忘记密码时，可先在本设备完成一次敏感验证，再生成一个 5 分钟内有效的一次性恢复二维码。
-          新设备通过扫码或输入恢复码即可重置密码，并自动撤销旧会话。
+          {{ t('ui.accountRecoveryCard.message003') }}
         </p>
       </div>
       <el-button
@@ -22,49 +21,67 @@
         :loading="issueLoading || refreshLoading"
         @click="handleIssue"
       >
-        发起恢复授权
+        {{ t('ui.accountRecoveryCard.message004') }}
       </el-button>
     </div>
   </el-card>
 
   <el-dialog
     v-model="dialogVisible"
-    title="账号恢复授权"
+    :title="t('ui.accountRecoveryCard.message005')"
     width="460px"
     @closed="handleDialogClosed"
   >
     <div class="recovery-panel">
-      <img v-if="qrImage" :src="qrImage" alt="账号恢复二维码" class="qr-image" />
-      <div v-else class="qr-placeholder">正在生成恢复二维码...</div>
+      <img
+        v-if="qrImage"
+        :src="qrImage"
+        :alt="t('ui.accountRecoveryCard.message006')"
+        class="qr-image"
+      />
+      <div v-else class="qr-placeholder">{{ t('ui.accountRecoveryCard.message007') }}</div>
 
       <div class="account-chip">
-        <strong>{{ ticket?.username || '当前账号' }}</strong>
+        <strong>{{ ticket?.username || t('ui.accountRecoveryCard.message008') }}</strong>
         <span>{{ ticket?.maskedEmail }}</span>
       </div>
 
-      <p class="meta">剩余有效期：{{ Math.max(expiresInSeconds, 0) }} 秒</p>
-      <p class="tip">请在新设备打开“忘记密码”页面扫码，或手动输入下面的恢复码。</p>
+      <p class="meta">
+        {{ t('ui.accountRecoveryCard.message009') }}{{ Math.max(expiresInSeconds, 0) }}
+        {{ t('ui.accountRecoveryCard.message010') }}
+      </p>
+      <p class="tip">{{ t('ui.accountRecoveryCard.message011') }}</p>
 
       <div class="code-row">
         <el-input readonly :model-value="ticket?.recoveryCode || ''" />
-        <el-button @click="copyRecoveryCode">复制</el-button>
+        <el-button @click="copyRecoveryCode">{{
+          t('ui.accountRecoveryCard.message012')
+        }}</el-button>
       </div>
 
       <div class="detail-grid" v-if="ticket">
         <div class="detail-item">
-          <span class="label">背书设备</span>
-          <span class="value">{{ ticket.sponsorClientName || '当前设备' }}</span>
+          <span class="label">{{ t('ui.accountRecoveryCard.message013') }}</span>
+          <span class="value">{{
+            ticket.sponsorClientName || t('ui.accountRecoveryCard.message014')
+          }}</span>
         </div>
         <div class="detail-item">
-          <span class="label">位置</span>
-          <span class="value">{{ ticket.sponsorIpLocation || '未知位置' }}</span>
+          <span class="label">{{ t('ui.accountRecoveryCard.message015') }}</span>
+          <span class="value">{{
+            ticket.sponsorIpLocation || t('ui.accountRecoveryCard.message016')
+          }}</span>
         </div>
       </div>
     </div>
 
     <template #footer>
-      <el-button @click="dialogVisible = false">关闭</el-button>
-      <el-button type="primary" :loading="refreshLoading" @click="refreshTicket">刷新授权</el-button>
+      <el-button @click="dialogVisible = false">{{
+        t('ui.accountRecoveryCard.message017')
+      }}</el-button>
+      <el-button type="primary" :loading="refreshLoading" @click="refreshTicket">{{
+        t('ui.accountRecoveryCard.message018')
+      }}</el-button>
     </template>
   </el-dialog>
 
@@ -77,11 +94,17 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { onBeforeUnmount, ref } from 'vue'
 import QRCode from 'qrcode'
 import { ElMessage } from 'element-plus'
 import { RefreshRight } from '@element-plus/icons-vue'
-import { checkSensitiveVerification, issueAccountRecoveryTicket, type AccountRecoveryTicketResponse } from '@/api/auth'
+import {
+  checkSensitiveVerification,
+  issueAccountRecoveryTicket,
+  type AccountRecoveryTicketResponse,
+} from '@/api/auth'
 import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 
 const dialogVisible = ref(false)
@@ -138,7 +161,7 @@ const refreshTicket = async () => {
   refreshLoading.value = true
   try {
     await fetchTicket()
-    ElMessage.success('恢复授权已刷新')
+    ElMessage.success(t('ui.accountRecoveryCard.message019'))
   } finally {
     refreshLoading.value = false
   }
@@ -152,12 +175,12 @@ const runWithSensitiveVerification = async (action: () => Promise<void>) => {
       return
     }
 
-    ElMessage.info('需要先完成身份验证')
+    ElMessage.info(t('ui.accountRecoveryCard.message020'))
     pendingAction = action
     sensitiveDialogVisible.value = true
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
-    ElMessage.info('需要先完成身份验证')
+    ElMessage.info(t('ui.accountRecoveryCard.message020'))
     pendingAction = action
     sensitiveDialogVisible.value = true
   }
@@ -172,7 +195,7 @@ const handleIssue = async () => {
   try {
     await runWithSensitiveVerification(async () => {
       await fetchTicket()
-      ElMessage.success('恢复授权已生成')
+      ElMessage.success(t('ui.accountRecoveryCard.message021'))
     })
   } finally {
     issueLoading.value = false
@@ -202,10 +225,10 @@ const copyRecoveryCode = async () => {
 
   try {
     await navigator.clipboard.writeText(ticket.value.recoveryCode)
-    ElMessage.success('恢复码已复制')
+    ElMessage.success(t('ui.accountRecoveryCard.message022'))
   } catch (error) {
     console.error('Copy recovery code failed:', error)
-    ElMessage.error('复制失败，请手动复制')
+    ElMessage.error(t('ui.accountRecoveryCard.message023'))
   }
 }
 

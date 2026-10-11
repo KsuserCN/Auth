@@ -4,7 +4,7 @@ import UIKit
 enum AppTheme: String, CaseIterable, Identifiable {
     case system, light, dark
     var id: String { rawValue }
-    var title: String { switch self { case .system: "跟随系统"; case .light: "浅色"; case .dark: "深色" } }
+    var title: String { switch self { case .system: L10n.text("跟随系统"); case .light: L10n.text("浅色"); case .dark: L10n.text("深色") } }
     var colorScheme: ColorScheme? { switch self { case .system: nil; case .light: .light; case .dark: .dark } }
 }
 
@@ -58,6 +58,7 @@ struct LoginProviderButtonStyle: ButtonStyle {
 }
 
 struct LoginProviderLabel: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     var icon: String? = nil
     var imageAsset: String? = nil
@@ -81,6 +82,7 @@ struct LoginProviderLabel: View {
 }
 
 struct AsyncLoginProviderButton: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     var icon: String? = nil
     var imageAsset: String? = nil
@@ -104,6 +106,7 @@ struct AsyncLoginProviderButton: View {
 }
 
 struct LoadingStatusBanner: View {
+    @Environment(\.locale) private var localizationLocale
     let activity: LoadingActivity
     @State private var isVisible = false
 
@@ -114,9 +117,9 @@ struct LoadingStatusBanner: View {
                     HStack(spacing: 12) {
                         ProgressView().tint(Brand.gold).accessibilityHidden(true)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(activity.message ?? "正在加载…").font(.subheadline.weight(.medium))
+                            Text(activity.message ?? L10n.text("正在加载…")).font(.subheadline.weight(.medium))
                             if context.date.timeIntervalSince(activity.startedAt) >= 8 {
-                                Text("仍在处理中，请稍候…").font(.caption).foregroundStyle(.secondary)
+                                Text(L10n.text("仍在处理中，请稍候…")).font(.caption).foregroundStyle(.secondary)
                             }
                         }.fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -140,6 +143,7 @@ struct LoadingStatusBanner: View {
 }
 
 struct StatusMessageBanner: View {
+    @Environment(\.locale) private var localizationLocale
     let message: String
     var isError = false
     let dismiss: () -> Void
@@ -162,7 +166,7 @@ struct StatusMessageBanner: View {
                     .frame(width: 24, height: 24)
                     .background(Color.primary.opacity(0.06), in: Circle())
                     .frame(width: 44, height: 44).contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityLabel("关闭提示")
+            }.buttonStyle(.plain).accessibilityLabel(L10n.text("关闭提示"))
                 .accessibilityIdentifier("dismissStatusBanner")
         }
         .padding(.leading, 14).padding(.trailing, 4).padding(.vertical, 8)
@@ -174,6 +178,7 @@ struct StatusMessageBanner: View {
 }
 
 struct ServiceUnavailableOverlay: View {
+    @Environment(\.locale) private var localizationLocale
     var body: some View {
         ZStack {
             Color(uiColor: .systemBackground).ignoresSafeArea()
@@ -182,16 +187,16 @@ struct ServiceUnavailableOverlay: View {
                     .font(.system(size: 48, weight: .regular))
                     .foregroundStyle(Brand.danger)
                     .accessibilityHidden(true)
-                Text("当前服务不可用")
+                Text(L10n.text("当前服务不可用"))
                     .font(.title2.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("这可能是您的网络或我们的服务出现问题")
+                Text(L10n.text("这可能是您的网络或我们的服务出现问题"))
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("正在自动重试…")
+                    Text(L10n.text("正在自动重试…"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -209,6 +214,7 @@ struct ServiceUnavailableOverlay: View {
 }
 
 struct AppCard<Content: View>: View {
+    @Environment(\.locale) private var localizationLocale
     private let content: Content
     init(@ViewBuilder content: () -> Content) { self.content = content() }
     var body: some View {
@@ -219,6 +225,7 @@ struct AppCard<Content: View>: View {
 }
 
 struct CardHeader: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     var subtitle: String? = nil
     var icon: String? = nil
@@ -234,6 +241,7 @@ struct CardHeader: View {
 }
 
 struct PageScroll<Content: View>: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     private let content: Content
     private let maxWidth: CGFloat
@@ -265,7 +273,7 @@ struct PageScroll<Content: View>: View {
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("完成输入") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                    Button(L10n.text("完成输入")) { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                         .accessibilityIdentifier("keyboardDone")
                 }
             }
@@ -273,6 +281,7 @@ struct PageScroll<Content: View>: View {
 }
 
 private struct SensitiveVerificationModifier: ViewModifier {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     @State private var presentedRequestID: UUID?
     var enabled: Bool
@@ -290,6 +299,7 @@ extension View {
 }
 
 struct ActionRow: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     let title: String
     let icon: String
@@ -312,6 +322,7 @@ struct ActionRow: View {
 }
 
 struct AvatarView: View {
+    @Environment(\.locale) private var localizationLocale
     var url: String?
     let name: String
     var size: CGFloat = 64
@@ -323,11 +334,12 @@ struct AvatarView: View {
                 Brand.subtleGold
                 Text(String(name.prefix(1)).uppercased()).font(.system(size: size * 0.4, weight: .semibold)).foregroundStyle(Brand.gold)
             }
-        }.frame(width: size, height: size).clipShape(Circle()).accessibilityLabel("\(name) 的头像")
+        }.frame(width: size, height: size).clipShape(Circle()).accessibilityLabel(L10n.format("{0} 的头像", [String(describing: name)]))
     }
 }
 
 struct InfoRow: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     let value: String
     var body: some View {
@@ -339,6 +351,7 @@ struct InfoRow: View {
 }
 
 struct ScrollableDateText: View {
+    @Environment(\.locale) private var localizationLocale
     let value: String?
 
     var body: some View {
@@ -350,6 +363,7 @@ struct ScrollableDateText: View {
 }
 
 struct DateInfoRow: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     let value: String?
 
@@ -362,6 +376,7 @@ struct DateInfoRow: View {
 }
 
 struct StatusPill: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     var positive = true
     var body: some View {
@@ -373,6 +388,7 @@ struct StatusPill: View {
 }
 
 struct AsyncActionButton: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(\.colorScheme) private var colorScheme
     @State private var isPerforming = false
     let title: String
@@ -397,6 +413,7 @@ struct AsyncActionButton: View {
 }
 
 struct FormField: View {
+    @Environment(\.locale) private var localizationLocale
     let title: String
     @Binding var text: String
     var secure = false
@@ -416,6 +433,7 @@ struct FormField: View {
 }
 
 struct AdaptivePicker<Selection: Hashable, Content: View>: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     @Binding var selection: Selection
@@ -432,33 +450,54 @@ struct AdaptivePicker<Selection: Hashable, Content: View>: View {
 }
 
 struct LocalQRView: View {
+    @Environment(\.locale) private var localizationLocale
     let value: String
     var body: some View {
         if let image = LocalQRCode.image(from: value) {
             Image(uiImage: image).interpolation(.none).resizable().scaledToFit()
                 .padding(14).background(.white, in: RoundedRectangle(cornerRadius: 16))
-                .frame(maxWidth: 260).accessibilityLabel("授权二维码")
+                .frame(maxWidth: 260).accessibilityLabel(L10n.text("授权二维码"))
         }
     }
 }
 
 func displayDate(_ value: String?) -> String {
-    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return "暂无记录" }
+    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return L10n.text("暂无记录") }
+    let output = DateFormatter()
+    output.locale = L10n.locale
+    output.dateStyle = .medium
+    output.timeStyle = .medium
+    // A LocalDate/LocalDateTime is a floating wall clock, not an instant in the device's zone.
+    let localPattern = #"^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?)?$"#
+    let expression = try! NSRegularExpression(pattern: localPattern)
+    if let match = expression.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) {
+        func number(_ index: Int) -> Int? {
+            guard let range = Range(match.range(at: index), in: value) else { return nil }
+            return Int(value[range])
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let components = DateComponents(year: number(1), month: number(2), day: number(3), hour: number(4) ?? 0, minute: number(5) ?? 0, second: number(6) ?? 0)
+        guard let year = components.year, year > 0, let date = calendar.date(from: components) else { return value }
+        let checked = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        guard checked.year == components.year, checked.month == components.month, checked.day == components.day,
+              checked.hour == components.hour, checked.minute == components.minute, checked.second == components.second else { return value }
+        output.calendar = calendar
+        output.timeZone = calendar.timeZone
+        if number(4) == nil { output.timeStyle = .none }
+        return output.string(from: date)
+    }
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     if let date {
-        let output = DateFormatter()
-        output.locale = Locale(identifier: "en_US_POSIX")
-        output.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return output.string(from: date)
     }
-    // LocalDateTime responses have no zone; keep their original wall-clock time.
-    return value.replacingOccurrences(of: #"^(\d{4}-\d{2}-\d{2})[Tt](\d{2}:)"#, with: "$1 $2", options: .regularExpression)
+    return value
 }
 
 func methodLabel(_ value: String) -> String {
-    switch value { case "password": "密码"; case "email-code", "email_code": "邮箱验证码"; case "passkey": "Passkey"; case "totp": "验证器 / 恢复码"; case "apple": "Apple"; case "qq": "QQ"; default: value }
+    switch value { case "password": L10n.text("密码"); case "email-code", "email_code": L10n.text("邮箱验证码"); case "passkey": "Passkey"; case "totp": L10n.text("验证器 / 恢复码"); case "apple": "Apple"; case "qq": "QQ"; default: value }
 }
 
 func validEmail(_ value: String) -> Bool {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useResizeObserver } from '@vueuse/core'
 import { Close } from '@element-plus/icons-vue'
@@ -71,7 +73,12 @@ const handleClose = () => emit('close')
       </div>
     </div>
 
-    <button type="button" class="close-btn" aria-label="关闭公告" @click="handleClose">
+    <button
+      type="button"
+      class="close-btn"
+      :aria-label="t('ui.globalAnnouncementBanner.message001')"
+      @click="handleClose"
+    >
       <el-icon>
         <Close />
       </el-icon>

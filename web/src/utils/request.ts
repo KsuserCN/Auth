@@ -1,3 +1,4 @@
+import { effectiveLocale, t, LocalizedError } from '@/i18n'
 import axios from 'axios'
 import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
@@ -96,12 +97,12 @@ const redirectToLoginAfterRefreshFailures = (): void => {
     persistPostLoginRedirect(currentPath)
     const loginUrl = new URL('/login', window.location.origin)
     loginUrl.searchParams.set('redirect', currentPath)
-    ElMessage.error('登录状态已过期，请重新登录')
+    ElMessage.error(t('ui.request.message001'))
     window.location.replace(`${loginUrl.pathname}${loginUrl.search}${loginUrl.hash}`)
     return
   }
 
-  ElMessage.error('登录状态已过期，请重新登录')
+  ElMessage.error(t('ui.request.message001'))
 }
 
 const recordRefreshFailure = (): void => {
@@ -141,7 +142,9 @@ interface RefreshEvent {
   owner: string
   status: 'success' | 'error'
   accessToken?: string
-  message?: string
+  errorCode?: string
+  params?: Record<string, unknown>
+  errorStatus?: number
   at: number
 }
 
@@ -224,13 +227,13 @@ const waitForRefreshResult = (previousToken: string | null): Promise<string> => 
       resolve(token)
     }
 
-    const rejectWithMessage = (message: string) => {
+    const rejectWithError = (error: Error) => {
       if (settled) {
         return
       }
       settled = true
       cleanup()
-      reject(new Error(message))
+      reject(error)
     }
 
     const inspectSharedRefreshState = () => {
@@ -247,7 +250,12 @@ const waitForRefreshResult = (previousToken: string | null): Promise<string> => 
           return
         }
         if (event.status === 'error') {
-          rejectWithMessage(event.message || '刷新 Token 失败')
+          rejectWithError(
+            new ApiError(
+              { errorCode: event.errorCode || 'SESSION_NOT_AUTHENTICATED', params: event.params },
+              event.errorStatus,
+            ),
+          )
         }
       }
     }
@@ -261,7 +269,7 @@ const waitForRefreshResult = (previousToken: string | null): Promise<string> => 
     window.addEventListener('storage', handleStorage)
     pollTimer = window.setInterval(inspectSharedRefreshState, REFRESH_WAIT_POLL_MS)
     timeoutTimer = window.setTimeout(() => {
-      rejectWithMessage('等待其他标签页刷新登录态超时，请重试')
+      rejectWithError(new LocalizedError('ui.request.message003'))
     }, REFRESH_WAIT_TIMEOUT_MS)
 
     inspectSharedRefreshState()
@@ -291,11 +299,12 @@ const refreshTokenWithCoordination = async (): Promise<string> => {
       })
       return newToken
     } catch (error) {
-      const message = error instanceof Error ? error.message : '刷新 Token 失败'
       publishRefreshEvent({
         owner: refreshOwnerId,
         status: 'error',
-        message,
+        errorCode: error instanceof ApiError ? error.errorCode : 'SESSION_NOT_AUTHENTICATED',
+        params: error instanceof ApiError ? error.params : {},
+        errorStatus: error instanceof ApiError ? error.status : undefined,
         at: Date.now(),
       })
       recordRefreshFailure()
@@ -326,7 +335,7 @@ const refreshToken = async (): Promise<string> => {
       return newToken
     }
 
-    throw new Error('刷新 Token 失败')
+    throw new LocalizedError('ui.request.message002')
   } catch (error) {
     clearAuthSession()
     throw error
@@ -353,6 +362,7 @@ request.interceptors.request.use(
       delete headers['content-type']
     }
 
+    config.headers.set('Accept-Language', effectiveLocale.value)
     const token = getStoredAccessToken()
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
@@ -364,6 +374,7 @@ request.interceptors.request.use(
       try {
         await axios.get(`${getRequestBaseUrl()}/auth/health`, {
           withCredentials: true,
+          headers: { 'Accept-Language': effectiveLocale.value },
         })
       } catch (error) {
         console.warn('Failed to fetch XSRF token from /auth/health:', error)
@@ -418,9 +429,10 @@ request.interceptors.response.use(
     // 网络错误或服务器错误
     if (!error.response) {
       const resultError = new ApiError({
-        errorCode: error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
-          ? 'REQUEST_TIMEOUT'
-          : 'NETWORK_ERROR',
+        errorCode:
+          error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+            ? 'REQUEST_TIMEOUT'
+            : 'NETWORK_ERROR',
       })
       if (!shouldSuppressErrorToast(originalRequest)) {
         ElMessage.error(resultError.message)
@@ -507,7 +519,7 @@ request.interceptors.response.use(
       } catch (refreshError) {
         isRefreshing = false
         const normalizedError =
-          refreshError instanceof Error ? refreshError : new Error('认证已失效，请重新登录')
+          refreshError instanceof Error ? refreshError : new LocalizedError('ui.request.message004')
         onRefreshFailed(normalizedError)
         return Promise.reject(normalizedError)
       }

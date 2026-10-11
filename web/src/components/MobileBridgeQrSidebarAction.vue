@@ -1,6 +1,6 @@
 <template>
   <div class="mobile-bridge-sidebar">
-    <div class="section-label">跨端联通</div>
+    <div class="section-label">{{ t('ui.mobileBridgeQrSidebarAction.message001') }}</div>
     <el-button
       class="bridge-btn"
       type="primary"
@@ -9,13 +9,13 @@
       @click="handleOpenMobileBridgeQr"
     >
       <el-icon><Iphone /></el-icon>
-      <span>手机扫码登录</span>
+      <span>{{ t('ui.mobileBridgeQrSidebarAction.message002') }}</span>
     </el-button>
   </div>
 
   <el-dialog
     v-model="mobileBridgeQrVisible"
-    title="手机扫码登录"
+    :title="t('ui.mobileBridgeQrSidebarAction.message002')"
     width="420px"
     @closed="handleMobileBridgeQrDialogClosed"
   >
@@ -23,17 +23,25 @@
       <img
         v-if="mobileBridgeQrImage"
         :src="mobileBridgeQrImage"
-        alt="手机扫码登录二维码"
+        :alt="t('ui.mobileBridgeQrSidebarAction.message003')"
         class="mobile-bridge-qr-image"
       />
-      <div v-else class="mobile-bridge-qr-placeholder">正在生成二维码...</div>
-      <p class="mobile-bridge-qr-meta">剩余有效期：{{ Math.max(mobileBridgeQrExpiresInSeconds, 0) }} 秒</p>
-      <p class="mobile-bridge-qr-tip">二维码一次性有效，过期后请刷新。</p>
+      <div v-else class="mobile-bridge-qr-placeholder">
+        {{ t('ui.mobileBridgeQrSidebarAction.message004') }}
+      </div>
+      <p class="mobile-bridge-qr-meta">
+        {{ t('ui.accountRecoveryCard.message009')
+        }}{{ Math.max(mobileBridgeQrExpiresInSeconds, 0) }}
+        {{ t('ui.accountRecoveryCard.message010') }}
+      </p>
+      <p class="mobile-bridge-qr-tip">{{ t('ui.mobileBridgeQrSidebarAction.message005') }}</p>
     </div>
     <template #footer>
-      <el-button @click="mobileBridgeQrVisible = false">关闭</el-button>
+      <el-button @click="mobileBridgeQrVisible = false">{{
+        t('ui.accountRecoveryCard.message017')
+      }}</el-button>
       <el-button type="primary" :loading="mobileBridgeQrRefreshing" @click="refreshMobileBridgeQr">
-        刷新二维码
+        {{ t('ui.mobileBridgeQrSidebarAction.message006') }}
       </el-button>
     </template>
   </el-dialog>
@@ -47,6 +55,8 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { onBeforeUnmount, ref } from 'vue'
 import QRCode from 'qrcode'
 import { ElMessage } from 'element-plus'
@@ -127,13 +137,13 @@ const runWithSensitiveVerification = async (
       return
     }
 
-    ElMessage.info('需要验证身份')
+    ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
     pendingSensitiveAction = action
     sensitiveDialogDisableQr.value = disableQrMethod
     sensitiveDialogVisible.value = true
   } catch (error) {
     console.error('Check sensitive verification failed:', error)
-    ElMessage.info('需要验证身份')
+    ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
     pendingSensitiveAction = action
     sensitiveDialogDisableQr.value = disableQrMethod
     sensitiveDialogVisible.value = true
@@ -175,7 +185,10 @@ const tryPasskeySensitiveVerificationForBridge = async (): Promise<boolean> => {
     if (!credential) {
       return false
     }
-    await verifyPasskeySensitiveOperation(options.challengeId, extractAuthenticationData(credential))
+    await verifyPasskeySensitiveOperation(
+      options.challengeId,
+      extractAuthenticationData(credential),
+    )
     return true
   } catch (error) {
     console.warn('Passkey sensitive verification failed, fallback to dialog:', error)
@@ -193,14 +206,14 @@ const handleOpenMobileBridgeQr = async () => {
     const passkeyVerified = await tryPasskeySensitiveVerificationForBridge()
     if (passkeyVerified) {
       await issueMobileBridgeQr()
-      ElMessage.success('二维码已生成')
+      ElMessage.success(t('ui.mobileBridgeQrSidebarAction.message008'))
       return
     }
 
     await runWithSensitiveVerification(
       async () => {
         await issueMobileBridgeQr()
-        ElMessage.success('二维码已生成')
+        ElMessage.success(t('ui.mobileBridgeQrSidebarAction.message008'))
       },
       { disableQrMethod: true },
     )

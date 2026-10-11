@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ksuser_auth_desktop/main.dart';
+import 'package:ksuser_auth_desktop/i18n.dart';
+import 'package:ksuser_auth_desktop/l10n/generated/app_localizations.dart';
 
 void main() {
+  setUp(() {
+    desktopLocaleController = DesktopLocaleController(
+      preference: DesktopLanguage.simplifiedChinese,
+    );
+  });
   AppController buildController({bool agreementsAccepted = true}) {
     return AppController(
       KsuserApiClient(baseUrl: 'http://localhost:8000'),
@@ -18,7 +25,12 @@ void main() {
     final AppController controller = buildController(agreementsAccepted: false);
 
     await tester.pumpWidget(
-      MaterialApp(home: DesktopRoot(controller: controller)),
+      MaterialApp(
+        locale: desktopLocaleController.locale,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: DesktopRoot(controller: controller),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -35,15 +47,17 @@ void main() {
     final AppController controller = buildController();
 
     await tester.pumpWidget(
-      MaterialApp(home: DesktopRoot(controller: controller)),
+      MaterialApp(
+        locale: desktopLocaleController.locale,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: DesktopRoot(controller: controller),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text(kDesktopAppName), findsOneWidget);
-    expect(
-      find.widgetWithText(OutlinedButton, '扫码登录'),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(OutlinedButton, '扫码登录'), findsOneWidget);
   });
 
   testWidgets('desktop workspace renders with sidebar content', (
@@ -103,7 +117,12 @@ void main() {
     });
 
     await tester.pumpWidget(
-      MaterialApp(home: DesktopWorkspace(controller: controller)),
+      MaterialApp(
+        locale: desktopLocaleController.locale,
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        home: DesktopWorkspace(controller: controller),
+      ),
     );
     await tester.pumpAndSettle();
 

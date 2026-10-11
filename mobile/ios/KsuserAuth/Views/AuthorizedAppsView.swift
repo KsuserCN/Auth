@@ -1,22 +1,23 @@
 import SwiftUI
 
 struct AuthorizedAppsView: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
     @State private var ksuserApps: [KsuserAuthorizedApp] = []
     @State private var thirdPartyApps: [ThirdPartyAuthorizedApp] = []
     @State private var isLoading = false
     @State private var hasLoaded = false
-    @State private var loadError: String?
+    @State private var loadError: LocalizedMessage?
     @State private var authorizationRevision = 0
 
     var body: some View {
         PageScroll {
             AppCard {
-                CardHeader(title: "访问授权", subtitle: "查看哪些应用可以使用你的 Ksuser 账号信息", icon: "person.crop.circle.badge.checkmark")
+                CardHeader(title: L10n.text("访问授权"), subtitle: L10n.text("查看哪些应用可以使用你的 Ksuser 账号信息"), icon: "person.crop.circle.badge.checkmark")
                 if hasLoaded {
                     HStack(spacing: 12) {
-                        countLabel("Ksuser 应用", count: ksuserApps.count)
-                        countLabel("第三方应用", count: thirdPartyApps.count)
+                        countLabel(L10n.text("Ksuser 应用"), count: ksuserApps.count)
+                        countLabel(L10n.text("第三方应用"), count: thirdPartyApps.count)
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -24,23 +25,23 @@ struct AuthorizedAppsView: View {
 
             if let loadError {
                 AppCard {
-                    Label(loadError, systemImage: "exclamationmark.circle")
+                    Label(loadError.rendered, systemImage: "exclamationmark.circle")
                         .foregroundStyle(Brand.danger)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button("重试") { Task { await loadAuthorizations() } }
+                    Button(L10n.text("重试")) { Task { await loadAuthorizations() } }
                         .disabled(isLoading)
                 }
             }
 
             if !hasLoaded && isLoading {
-                ProgressView("正在加载授权应用…")
+                ProgressView(L10n.text("正在加载授权应用…"))
                     .frame(maxWidth: .infinity)
                     .padding(36)
             } else if hasLoaded {
                 AppCard {
-                    CardHeader(title: "Ksuser 应用", subtitle: "已授权的 Ksuser 内部应用", icon: "square.stack.3d.up")
+                    CardHeader(title: L10n.text("Ksuser 应用"), subtitle: L10n.text("已授权的 Ksuser 内部应用"), icon: "square.stack.3d.up")
                     if ksuserApps.isEmpty {
-                        emptyState("暂无已授权的 Ksuser 应用")
+                        emptyState(L10n.text("暂无已授权的 Ksuser 应用"))
                     } else {
                         ForEach(ksuserApps) { app in
                             NavigationLink {
@@ -63,9 +64,9 @@ struct AuthorizedAppsView: View {
                 }
 
                 AppCard {
-                    CardHeader(title: "第三方应用", subtitle: "已通过 Ksuser 登录并获得授权的外部应用", icon: "square.on.square")
+                    CardHeader(title: L10n.text("第三方应用"), subtitle: L10n.text("已通过 Ksuser 登录并获得授权的外部应用"), icon: "square.on.square")
                     if thirdPartyApps.isEmpty {
-                        emptyState("暂无已授权的第三方应用")
+                        emptyState(L10n.text("暂无已授权的第三方应用"))
                     } else {
                         ForEach(thirdPartyApps) { app in
                             NavigationLink {
@@ -88,7 +89,7 @@ struct AuthorizedAppsView: View {
                 }
             }
         }
-        .navigationTitle("授权应用")
+        .navigationTitle(L10n.text("授权应用"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await loadAuthorizations() }
         .task(id: model.user?.uuid) {
@@ -132,12 +133,13 @@ struct AuthorizedAppsView: View {
             loadError = nil
         } catch {
             guard accountID == model.user?.uuid, revision == authorizationRevision else { return }
-            loadError = error.localizedDescription
+            loadError = LocalizedMessage(error: error)
         }
     }
 }
 
 private struct AuthorizedAppRow: View {
+    @Environment(\.locale) private var localizationLocale
     let name: String
     let logoURL: String?
     let lastAuthorizedAt: String?
@@ -148,7 +150,7 @@ private struct AuthorizedAppRow: View {
             AvatarView(url: logoURL, name: name, size: 44)
             VStack(alignment: .leading, spacing: 4) {
                 Text(name).font(.body.weight(.medium)).foregroundStyle(.primary)
-                Text("最近授权：\(displayDate(lastAuthorizedAt))")
+                Text(L10n.format("最近授权：{0}", [String(describing: displayDate(lastAuthorizedAt))]))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 6)
@@ -183,6 +185,7 @@ private enum AuthorizedAppRecord {
 }
 
 private struct AuthorizedAppDetailView: View {
+    @Environment(\.locale) private var localizationLocale
     @Environment(\.dismiss) private var dismiss
     @State private var showRevokeConfirmation = false
     @State private var isRevoking = false
@@ -196,37 +199,37 @@ private struct AuthorizedAppDetailView: View {
                     AvatarView(url: record.logoURL, name: record.name, size: 56)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(record.name).font(.title3.weight(.semibold))
-                        Text(record.isKsuser ? "Ksuser 应用" : "第三方应用")
+                        Text(record.isKsuser ? L10n.text("Ksuser 应用") : L10n.text("第三方应用"))
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
-                InfoRow(title: "网站", value: website(from: record.redirectURI))
+                InfoRow(title: L10n.text("网站"), value: website(from: record.redirectURI))
                 if let creator = record.creatorName, !creator.isEmpty {
-                    InfoRow(title: "开发者", value: creator)
+                    InfoRow(title: L10n.text("开发者"), value: creator)
                 }
                 if let verification = record.creatorVerificationType, !verification.isEmpty {
-                    InfoRow(title: "开发者认证", value: verificationLabel(verification))
+                    InfoRow(title: L10n.text("开发者认证"), value: verificationLabel(verification))
                 }
                 if let contact = record.contactInfo, !contact.isEmpty {
-                    InfoRow(title: "联系信息", value: contact)
+                    InfoRow(title: L10n.text("联系信息"), value: contact)
                 }
             }
 
             AppCard {
-                CardHeader(title: "授权信息", icon: "checkmark.shield")
-                DateInfoRow(title: "首次授权", value: record.authorizedAt)
-                DateInfoRow(title: "最近授权", value: record.lastAuthorizedAt)
-                InfoRow(title: "授权方式", value: authorizationGrantModeLabel(record.grantMode))
+                CardHeader(title: L10n.text("授权信息"), icon: "checkmark.shield")
+                DateInfoRow(title: L10n.text("首次授权"), value: record.authorizedAt)
+                DateInfoRow(title: L10n.text("最近授权"), value: record.lastAuthorizedAt)
+                InfoRow(title: L10n.text("授权方式"), value: authorizationGrantModeLabel(record.grantMode))
                 if record.grantMode == "TIME_LIMITED", record.expiresAt != nil {
-                    DateInfoRow(title: "有效期至", value: record.expiresAt)
+                    DateInfoRow(title: L10n.text("有效期至"), value: record.expiresAt)
                 }
             }
 
             AppCard {
-                CardHeader(title: "权限范围", subtitle: "此应用获准读取以下账号信息", icon: "person.text.rectangle")
+                CardHeader(title: L10n.text("权限范围"), subtitle: L10n.text("此应用获准读取以下账号信息"), icon: "person.text.rectangle")
                 if record.scopes.isEmpty {
-                    Text("未提供权限范围").font(.subheadline).foregroundStyle(.secondary)
+                    Text(L10n.text("未提供权限范围")).font(.subheadline).foregroundStyle(.secondary)
                 } else {
                     ForEach(record.scopes, id: \.self) { scope in
                         Label(scopeLabel(scope), systemImage: "checkmark.circle.fill")
@@ -237,15 +240,15 @@ private struct AuthorizedAppDetailView: View {
             }
 
             AppCard {
-                CardHeader(title: "撤销授权", subtitle: "撤销后，该应用需要重新请求授权才能访问你的账号信息。", icon: "hand.raised")
-                Button("撤销授权", role: .destructive) { showRevokeConfirmation = true }
+                CardHeader(title: L10n.text("撤销授权"), subtitle: L10n.text("撤销后，该应用需要重新请求授权才能访问你的账号信息。"), icon: "hand.raised")
+                Button(L10n.text("撤销授权"), role: .destructive) { showRevokeConfirmation = true }
                     .buttonStyle(.borderedProminent)
                     .tint(Brand.danger)
                     .frame(minHeight: 44)
                     .disabled(isRevoking)
                     .accessibilityIdentifier("revokeAuthorizationButton")
-                    .confirmationDialog("撤销「\(record.name)」的授权？", isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
-                        Button("撤销授权", role: .destructive) {
+                    .confirmationDialog(L10n.format("撤销「{0}」的授权？", [String(describing: record.name)]), isPresented: $showRevokeConfirmation, titleVisibility: .visible) {
+                        Button(L10n.text("撤销授权"), role: .destructive) {
                             Task {
                                 guard !isRevoking else { return }
                                 isRevoking = true
@@ -255,11 +258,11 @@ private struct AuthorizedAppDetailView: View {
                         }
                         .accessibilityIdentifier("confirmRevokeAuthorization")
                     } message: {
-                        Text("撤销后，该应用需要重新请求授权才能访问你的账号信息。")
+                        Text(L10n.text("撤销后，该应用需要重新请求授权才能访问你的账号信息。"))
                     }
             }
         }
-        .navigationTitle("应用详情")
+        .navigationTitle(L10n.text("应用详情"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -267,33 +270,33 @@ private struct AuthorizedAppDetailView: View {
         guard let redirectURI,
               let components = URLComponents(string: redirectURI),
               ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
-              let host = components.host, !host.isEmpty else { return "未提供" }
+              let host = components.host, !host.isEmpty else { return L10n.text("未提供") }
         return host
     }
 
     private func scopeLabel(_ scope: String) -> String {
         switch scope {
-        case "openid": "基础身份标识"
-        case "profile": "昵称与头像"
-        case "email": "邮箱地址"
+        case "openid": L10n.text("基础身份标识")
+        case "profile": L10n.text("昵称与头像")
+        case "email": L10n.text("邮箱地址")
         default: scope
         }
     }
 
     private func verificationLabel(_ verification: String) -> String {
         switch verification {
-        case "admin": "管理员"
-        case "enterprise": "企业认证"
-        case "personal": "个人认证"
-        default: "未认证"
+        case "admin": L10n.text("管理员")
+        case "enterprise": L10n.text("企业认证")
+        case "personal": L10n.text("个人认证")
+        default: L10n.text("未认证")
         }
     }
 }
 
 private func authorizationGrantModeLabel(_ mode: String) -> String {
     switch mode {
-    case "ONE_TIME": "一次性"
-    case "TIME_LIMITED": "限时"
-    default: "长期"
+    case "ONE_TIME": L10n.text("一次性")
+    case "TIME_LIMITED": L10n.text("限时")
+    default: L10n.text("长期")
     }
 }

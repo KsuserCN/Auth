@@ -4,10 +4,7 @@ import FlutterMacOS
 import LocalAuthentication
 
 class MainFlutterWindow: NSWindow {
-  private let appDisplayName =
-    (Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String) ??
-    (Bundle.main.object(forInfoDictionaryKey: kCFBundleNameKey as String) as? String) ??
-    "Ksuser安全"
+  private var appDisplayName: String { desktopNativeText("Ksuser安全") }
   private var passkeyBridge: PasskeyBridge?
   private var appleLoginBridge: AppleLoginBridge?
   private var appMenuBridge: AppMenuBridge?
@@ -74,7 +71,7 @@ private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegat
     switch call.method {
     case "clientId":
       guard let clientId = Bundle.main.bundleIdentifier, !clientId.isEmpty else {
-        result(FlutterError(code: "client_id_unavailable", message: "未配置 macOS Apple 登录 Client ID", details: nil))
+        result(FlutterError(code: "client_id_unavailable", message: desktopNativeText("未配置 macOS Apple 登录 Client ID"), details: nil))
         return
       }
       result(clientId)
@@ -87,7 +84,7 @@ private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegat
 
   private func startSignIn(_ arguments: Any?, result: @escaping FlutterResult) {
     guard pendingResult == nil else {
-      result(FlutterError(code: "busy", message: "已有进行中的 Apple 登录请求", details: nil))
+      result(FlutterError(code: "busy", message: desktopNativeText("已有进行中的 Apple 登录请求"), details: nil))
       return
     }
     guard
@@ -95,11 +92,11 @@ private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegat
       let nonce = arguments["nonce"] as? String, !nonce.isEmpty,
       let state = arguments["state"] as? String, !state.isEmpty
     else {
-      result(FlutterError(code: "bad_args", message: "Apple 登录 challenge 参数缺失", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("Apple 登录 challenge 参数缺失"), details: nil))
       return
     }
     guard let window = windowProvider() else {
-      result(FlutterError(code: "window_unavailable", message: "请返回应用后重新发起 Apple 登录", details: nil))
+      result(FlutterError(code: "window_unavailable", message: desktopNativeText("请返回应用后重新发起 Apple 登录"), details: nil))
       return
     }
 
@@ -127,7 +124,7 @@ private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegat
     didCompleteWithAuthorization authorization: ASAuthorization
   ) {
     guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
-      complete(error: FlutterError(code: "invalid_credential", message: "Apple 返回的登录凭据无效", details: nil))
+      complete(error: FlutterError(code: "invalid_credential", message: desktopNativeText("Apple 返回的登录凭据无效"), details: nil))
       return
     }
     guard
@@ -138,7 +135,7 @@ private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegat
       !identityToken.isEmpty,
       !authorizationCode.isEmpty
     else {
-      complete(error: FlutterError(code: "invalid_credential", message: "Apple 返回的登录信息不完整或 state 校验失败", details: nil))
+      complete(error: FlutterError(code: "invalid_credential", message: desktopNativeText("Apple 返回的登录信息不完整或 state 校验失败"), details: nil))
       return
     }
 
@@ -159,7 +156,7 @@ private final class AppleLoginBridge: NSObject, ASAuthorizationControllerDelegat
   func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
     let code = (error as NSError).code
     if code == ASAuthorizationError.canceled.rawValue {
-      complete(error: FlutterError(code: "cancelled", message: "已取消 Apple 登录", details: nil))
+      complete(error: FlutterError(code: "cancelled", message: desktopNativeText("已取消 Apple 登录"), details: nil))
       return
     }
     complete(error: FlutterError(code: "failed", message: error.localizedDescription, details: nil))
@@ -193,7 +190,7 @@ private final class MenuBarBridge {
     switch call.method {
     case "updateState":
       guard let arguments = call.arguments as? [String: Any] else {
-        result(FlutterError(code: "bad_args", message: "菜单栏状态参数缺失", details: nil))
+        result(FlutterError(code: "bad_args", message: desktopNativeText("菜单栏状态参数缺失"), details: nil))
         return
       }
       let authenticated = arguments["authenticated"] as? Bool ?? false
@@ -201,13 +198,14 @@ private final class MenuBarBridge {
       DispatchQueue.main.async {
         (NSApp.delegate as? AppDelegate)?.updateMenuBarState(
           authenticated: authenticated,
-          displayName: displayName
+          displayName: displayName,
+          locale: arguments["locale"] as? String
         )
         result(true)
       }
     case "showMessage":
       guard let arguments = call.arguments as? [String: Any] else {
-        result(FlutterError(code: "bad_args", message: "菜单栏提示参数缺失", details: nil))
+        result(FlutterError(code: "bad_args", message: desktopNativeText("菜单栏提示参数缺失"), details: nil))
         return
       }
       let message = arguments["message"] as? String ?? ""
@@ -248,7 +246,7 @@ private final class WindowControlBridge {
           result(
             FlutterError(
               code: "window_unavailable",
-              message: "当前未找到可收起的窗口",
+              message: desktopNativeText("当前未找到可收起的窗口"),
               details: nil
             )
           )
@@ -294,8 +292,8 @@ private final class LocalAuthBridge {
       let normalizedReason = (arguments?["reason"] as? String)?
         .trimmingCharacters(in: .whitespacesAndNewlines)
       let reason = (normalizedReason?.isEmpty == false)
-        ? (normalizedReason ?? "请先验证身份")
-        : "请先验证身份"
+        ? (normalizedReason ?? desktopNativeText("请先验证身份"))
+        : desktopNativeText("请先验证身份")
       authenticate(reason: reason, result: result)
     default:
       result(FlutterMethodNotImplemented)
@@ -312,7 +310,7 @@ private final class LocalAuthBridge {
     let context = LAContext()
     var error: NSError?
     guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-      let message = error?.localizedDescription ?? "当前设备不支持本地认证"
+      let message = error?.localizedDescription ?? desktopNativeText("当前设备不支持本地认证")
       result(FlutterError(code: "not_available", message: message, details: nil))
       return
     }
@@ -328,14 +326,14 @@ private final class LocalAuthBridge {
           if nsError.code == LAError.userCancel.rawValue
             || nsError.code == LAError.systemCancel.rawValue
             || nsError.code == LAError.appCancel.rawValue {
-            result(FlutterError(code: "canceled", message: "用户取消了本地认证", details: nil))
+            result(FlutterError(code: "canceled", message: desktopNativeText("用户取消了本地认证"), details: nil))
             return
           }
           result(FlutterError(code: "failed", message: nsError.localizedDescription, details: nil))
           return
         }
 
-        result(FlutterError(code: "failed", message: "本地认证失败", details: nil))
+        result(FlutterError(code: "failed", message: desktopNativeText("本地认证失败"), details: nil))
       }
     }
   }
@@ -381,7 +379,7 @@ private final class PasskeyBridge: NSObject {
       result(
         FlutterError(
           code: "unsupported_os",
-          message: "Passkey 需要 macOS 13.5 或更高版本",
+          message: desktopNativeText("Passkey 需要 macOS 13.5 或更高版本"),
           details: nil
         )
       )
@@ -392,7 +390,7 @@ private final class PasskeyBridge: NSObject {
       result(
         FlutterError(
           code: "busy",
-          message: "已有进行中的 Passkey 请求",
+          message: desktopNativeText("已有进行中的 Passkey 请求"),
           details: nil
         )
       )
@@ -400,30 +398,30 @@ private final class PasskeyBridge: NSObject {
     }
 
     guard let args = arguments as? [String: Any] else {
-      result(FlutterError(code: "bad_args", message: "Passkey 参数缺失", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("Passkey 参数缺失"), details: nil))
       return
     }
 
     guard let challenge = args["challenge"] as? String, !challenge.isEmpty else {
-      result(FlutterError(code: "bad_args", message: "challenge 不能为空", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("challenge 不能为空"), details: nil))
       return
     }
     guard let rpId = args["rpId"] as? String, !rpId.isEmpty else {
-      result(FlutterError(code: "bad_args", message: "rpId 不能为空", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("rpId 不能为空"), details: nil))
       return
     }
     guard let origin = args["origin"] as? String, !origin.isEmpty else {
       result(
         FlutterError(
           code: "bad_args",
-          message: "Passkey origin 未配置，请检查 FLUTTER_PASSKEY_ORIGIN",
+          message: desktopNativeText("Passkey origin 未配置，请检查 FLUTTER_PASSKEY_ORIGIN"),
           details: nil
         )
       )
       return
     }
     guard let challengeData = Data.fromBase64OrBase64URL(challenge) else {
-      result(FlutterError(code: "bad_args", message: "challenge 格式无效", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("challenge 格式无效"), details: nil))
       return
     }
 
@@ -455,7 +453,7 @@ private final class PasskeyBridge: NSObject {
       result(
         FlutterError(
           code: "unsupported_os",
-          message: "Passkey 需要 macOS 13.5 或更高版本",
+          message: desktopNativeText("Passkey 需要 macOS 13.5 或更高版本"),
           details: nil
         )
       )
@@ -466,7 +464,7 @@ private final class PasskeyBridge: NSObject {
       result(
         FlutterError(
           code: "busy",
-          message: "已有进行中的 Passkey 请求",
+          message: desktopNativeText("已有进行中的 Passkey 请求"),
           details: nil
         )
       )
@@ -474,38 +472,38 @@ private final class PasskeyBridge: NSObject {
     }
 
     guard let args = arguments as? [String: Any] else {
-      result(FlutterError(code: "bad_args", message: "Passkey 参数缺失", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("Passkey 参数缺失"), details: nil))
       return
     }
 
     guard let challenge = args["challenge"] as? String, !challenge.isEmpty else {
-      result(FlutterError(code: "bad_args", message: "challenge 不能为空", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("challenge 不能为空"), details: nil))
       return
     }
     guard let rpId = args["rpId"] as? String, !rpId.isEmpty else {
-      result(FlutterError(code: "bad_args", message: "rpId 不能为空", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("rpId 不能为空"), details: nil))
       return
     }
     guard let origin = args["origin"] as? String, !origin.isEmpty else {
       result(
         FlutterError(
           code: "bad_args",
-          message: "Passkey origin 未配置，请检查 FLUTTER_PASSKEY_ORIGIN",
+          message: desktopNativeText("Passkey origin 未配置，请检查 FLUTTER_PASSKEY_ORIGIN"),
           details: nil
         )
       )
       return
     }
     guard let userId = args["userId"] as? String, !userId.isEmpty else {
-      result(FlutterError(code: "bad_args", message: "userId 不能为空", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("userId 不能为空"), details: nil))
       return
     }
     guard let challengeData = Data.fromBase64OrBase64URL(challenge) else {
-      result(FlutterError(code: "bad_args", message: "challenge 格式无效", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("challenge 格式无效"), details: nil))
       return
     }
     guard let userIdData = Data.fromBase64OrBase64URL(userId) else {
-      result(FlutterError(code: "bad_args", message: "userId 格式无效", details: nil))
+      result(FlutterError(code: "bad_args", message: desktopNativeText("userId 格式无效"), details: nil))
       return
     }
 
@@ -689,7 +687,7 @@ private final class PasskeyAssertionCoordinator: NSObject,
       completion(
         FlutterError(
           code: "invalid_credential",
-          message: "未获取到有效的 Passkey 断言",
+          message: desktopNativeText("未获取到有效的 Passkey 断言"),
           details: nil
         )
       )
@@ -716,18 +714,18 @@ private final class PasskeyAssertionCoordinator: NSObject,
       let code = ASAuthorizationError.Code(rawValue: nsError.code)
     {
       if code == .canceled {
-        message = "用户取消了 Passkey 验证"
+        message = desktopNativeText("用户取消了 Passkey 验证")
       } else if code == .invalidResponse {
-        message = "Passkey 返回了无效响应"
+        message = desktopNativeText("Passkey 返回了无效响应")
       } else if code == .notHandled {
-        message = "系统未处理当前 Passkey 请求"
+        message = desktopNativeText("系统未处理当前 Passkey 请求")
       } else if code == .notInteractive {
-        message = "系统当前无法展示 Passkey 验证界面"
+        message = desktopNativeText("系统当前无法展示 Passkey 验证界面")
       } else {
-        message = nsError.localizedDescription.isEmpty ? "Passkey 验证失败" : nsError.localizedDescription
+        message = nsError.localizedDescription.isEmpty ? desktopNativeText("Passkey 验证失败") : nsError.localizedDescription
       }
     } else {
-      message = nsError.localizedDescription.isEmpty ? "Passkey 验证失败" : nsError.localizedDescription
+      message = nsError.localizedDescription.isEmpty ? desktopNativeText("Passkey 验证失败") : nsError.localizedDescription
     }
 
     completion(FlutterError(code: "authorization_failed", message: message, details: nil))
@@ -819,7 +817,7 @@ private final class PasskeyRegistrationCoordinator: NSObject,
       completion(
         FlutterError(
           code: "invalid_credential",
-          message: "未获取到有效的 Passkey 注册凭证",
+          message: desktopNativeText("未获取到有效的 Passkey 注册凭证"),
           details: nil
         )
       )
@@ -846,18 +844,18 @@ private final class PasskeyRegistrationCoordinator: NSObject,
       let code = ASAuthorizationError.Code(rawValue: nsError.code)
     {
       if code == .canceled {
-        message = "用户取消了 Passkey 创建"
+        message = desktopNativeText("用户取消了 Passkey 创建")
       } else if code == .invalidResponse {
-        message = "Passkey 返回了无效注册响应"
+        message = desktopNativeText("Passkey 返回了无效注册响应")
       } else if code == .notHandled {
-        message = "系统未处理当前 Passkey 创建请求"
+        message = desktopNativeText("系统未处理当前 Passkey 创建请求")
       } else if code == .notInteractive {
-        message = "系统当前无法展示 Passkey 创建界面"
+        message = desktopNativeText("系统当前无法展示 Passkey 创建界面")
       } else {
-        message = nsError.localizedDescription.isEmpty ? "Passkey 创建失败" : nsError.localizedDescription
+        message = nsError.localizedDescription.isEmpty ? desktopNativeText("Passkey 创建失败") : nsError.localizedDescription
       }
     } else {
-      message = nsError.localizedDescription.isEmpty ? "Passkey 创建失败" : nsError.localizedDescription
+      message = nsError.localizedDescription.isEmpty ? desktopNativeText("Passkey 创建失败") : nsError.localizedDescription
     }
 
     completion(FlutterError(code: "authorization_failed", message: message, details: nil))

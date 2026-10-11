@@ -6,9 +6,10 @@ import UserNotifications
 enum SecurityPushMode: String, CaseIterable, Identifiable, Sendable {
     case all = "ALL", loginAndAbnormal = "LOGIN_AND_ABNORMAL", off = "OFF"
     var id: String { rawValue }
-    var title: String {
+    var titleKey: String {
         switch self { case .all: "全部敏感操作"; case .loginAndAbnormal: "仅登录或异常请求"; case .off: "不推送" }
     }
+    var title: String { L10n.text(titleKey) }
 }
 
 struct PushRegistrationResponse: Decodable, Sendable { let enabled: Bool }
@@ -39,9 +40,10 @@ struct PushRegistrationResponse: Decodable, Sendable { let enabled: Bool }
 @MainActor @Observable final class PushNotificationManager {
     private(set) var mode: SecurityPushMode = .all
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    private(set) var statusMessage = "登录后接收账号安全提醒"
+    private var statusNotice: LocalizedMessage = "登录后接收账号安全提醒"
     private(set) var isSyncing = false
     @ObservationIgnored private let client: APIClient
+    var statusMessage: String { statusNotice.rendered }
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let nativeEnabled: Bool
     @ObservationIgnored private let system: any PushNotificationSystem
@@ -56,7 +58,7 @@ struct PushRegistrationResponse: Decodable, Sendable { let enabled: Bool }
 
     func signOut() {
         generation += 1; accountID = nil; isSyncing = false
-        statusMessage = "登录后接收账号安全提醒"
+        statusNotice = "登录后接收账号安全提醒"
         guard nativeEnabled else { return }
         system.disable()
     }
@@ -78,7 +80,7 @@ struct PushRegistrationResponse: Decodable, Sendable { let enabled: Bool }
         await enqueueSync(requestPermission: true)
     }
 
-    func registrationFailed() { statusMessage = "无法注册系统推送，请检查网络后重新打开应用" }
+    func registrationFailed() { statusNotice = "无法注册系统推送，请检查网络后重新打开应用" }
 
     private func preferenceKey(_ accountID: String) -> String { "securityPushMode.\(accountID)" }
 
@@ -114,21 +116,21 @@ struct PushRegistrationResponse: Decodable, Sendable { let enabled: Bool }
                 system.disable()
                 let _: EmptyPayload = try await client.request("/auth/push/device", method: "DELETE")
                 guard generation == expectedGeneration else { return }
-                statusMessage = mode == .off ? "此设备已关闭推送" : "系统通知未开启，请在 iOS 设置中允许通知"
+                statusNotice = mode == .off ? "此设备已关闭推送" : "系统通知未开启，请在 iOS 设置中允许通知"
                 return
             }
             // Always ask APNs for the current token, including at launch; do not persist device tokens.
             system.register(accountID: accountID)
-            guard let token = system.deviceToken else { statusMessage = "正在注册系统推送…"; return }
+            guard let token = system.deviceToken else { statusNotice = "正在注册系统推送…"; return }
             let response: PushRegistrationResponse = try await client.request("/auth/push/device", method: "POST", body: [
                 "deviceToken": .string(token), "environment": .string(Self.apnsEnvironment), "mode": .string(mode.rawValue)
             ])
             guard generation == expectedGeneration else { return }
-            statusMessage = response.enabled ? "已开启：\(mode.title)" : "推送偏好已保存，服务端尚未启用推送"
+            statusNotice = response.enabled ? "已开启：\(LocalizedMessage(key: mode.titleKey))" : "推送偏好已保存，服务端尚未启用推送"
         } catch {
             guard generation == expectedGeneration else { return }
             if let apiError = error as? APIError, apiError.isUnauthorized { signOut(); return }
-            statusMessage = "推送设置待同步：\(error.localizedDescription)"
+            statusNotice = "推送设置待同步：\(LocalizedMessage(error: error))"
         }
     }
 

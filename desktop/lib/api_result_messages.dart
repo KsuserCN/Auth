@@ -1,13 +1,19 @@
 import 'generated/api_result_codes.dart';
+import 'i18n.dart';
 
 /// Resolves API outcomes using the shared catalog, never server-provided text.
 String resolveApiResultMessage({
   String? errorCode,
   Map<String, dynamic> params = const <String, dynamic>{},
   int? statusCode,
+  String? languageTag,
 }) {
-  final String fallback = apiResultMessages[apiFallbackResultCode(statusCode)]!;
-  final String template = apiResultMessages[errorCode] ?? fallback;
+  final Map<String, String> messages =
+      apiResultMessagesByLocale[languageTag ??
+          desktopLocaleController.languageTag] ??
+      apiResultMessagesByLocale['en']!;
+  final String fallback = messages[apiFallbackResultCode(statusCode)]!;
+  final String template = messages[errorCode] ?? fallback;
   final RegExp placeholders = RegExp(r'\{([A-Za-z0-9_]+)\}');
   for (final Match match in placeholders.allMatches(template)) {
     final dynamic value = params[match.group(1)];

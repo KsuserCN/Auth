@@ -1,3 +1,4 @@
+import { LocalizedError } from '@/i18n'
 import {
   createMobileBridgeChallenge,
   getMobileBridgeStatus,
@@ -72,7 +73,7 @@ export const launchMobileBridgeApp = (appLink: string): void => {
   if (isIOSMobileBridgeSupported()) {
     const challengeId = new URL(appLink).searchParams.get('challengeId')
     if (!challengeId || !/^[A-Za-z0-9_-]{32}$/.test(challengeId)) {
-      throw new Error('App 登录请求无效，请重新发起')
+      throw new LocalizedError('ui.mobileBridge.message001')
     }
     window.location.assign(buildIOSMobileBridgeAppUrl(challengeId))
     return

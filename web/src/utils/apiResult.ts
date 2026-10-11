@@ -1,4 +1,5 @@
-import { apiResultMessages } from '@/generated/apiResultCodes'
+import { effectiveLocale, uiMessage, t, LocalizedError, type MessageDescriptor } from '@/i18n'
+import { apiResultMessages, apiResultMessagesByLocale } from '@/generated/apiResultCodes'
 
 export interface ApiResultPayload {
   errorCode?: string
@@ -24,16 +25,20 @@ const fallbackCode = (status?: number): string => {
 
 /** Resolve only locally maintained copy; server-provided text is never displayed. */
 export const resolveApiResult = (payload?: ApiResultPayload | null, status?: number): string => {
+  const apiResultMessages = apiResultMessagesByLocale[effectiveLocale.value]
   const resultCode = typeof payload?.errorCode === 'string' ? payload.errorCode : undefined
   const template =
     (resultCode && Object.prototype.hasOwnProperty.call(apiResultMessages, resultCode)
       ? apiResultMessages[resultCode]
-      : undefined) || apiResultMessages[fallbackCode(status ?? payload?.code)] || '请求失败，请重试'
+      : undefined) ||
+    apiResultMessages[fallbackCode(status ?? payload?.code)] ||
+    t('ui.apiResult.message001')
 
   let invalidParams = false
   const message = template.replace(/\{([a-zA-Z0-9_]+)\}/g, (_placeholder: string, key: string) => {
     const params = payload?.params
-    const value = params && Object.prototype.hasOwnProperty.call(params, key) ? params[key] : undefined
+    const value =
+      params && Object.prototype.hasOwnProperty.call(params, key) ? params[key] : undefined
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       return String(value)
     }
@@ -41,7 +46,7 @@ export const resolveApiResult = (payload?: ApiResultPayload | null, status?: num
     return ''
   })
   return invalidParams
-    ? apiResultMessages[fallbackCode(status ?? payload?.code)] || '请求失败，请重试'
+    ? apiResultMessages[fallbackCode(status ?? payload?.code)] || t('ui.apiResult.message001')
     : message
 }
 
@@ -54,10 +59,15 @@ export class ApiError extends Error {
     super(resolveApiResult(payload, status))
     this.name = 'ApiError'
     this.status = status ?? payload?.code
-    this.errorCode = typeof payload?.errorCode === 'string' && payload.errorCode
-      ? payload.errorCode
-      : fallbackCode(this.status)
+    this.errorCode =
+      typeof payload?.errorCode === 'string' && payload.errorCode
+        ? payload.errorCode
+        : fallbackCode(this.status)
     this.params = payload?.params || {}
+    Object.defineProperty(this, 'message', {
+      configurable: true,
+      get: () => resolveApiResult({ errorCode: this.errorCode, params: this.params }, this.status),
+    })
   }
 }
 
@@ -76,3 +86,11 @@ export const resolveAuditReason = (reason: string | null): string | null =>
   reason && Object.prototype.hasOwnProperty.call(apiResultMessages, reason)
     ? resolveApiResult({ errorCode: reason })
     : reason
+
+/** Preserve detailed API results while a view retains an error through language changes. */
+export const localizedError = (error: unknown, fallbackKey: string): MessageDescriptor | string =>
+  error instanceof ApiError || error instanceof LocalizedError
+    ? { render: () => error.message }
+    : error instanceof Error && error.message
+      ? error.message
+      : uiMessage(fallbackKey)

@@ -1,0 +1,815 @@
+{
+  "@@locale": "en",
+  "ksuserSecurity": "Ksuser Security",
+  "dataRefreshed": "Data refreshed",
+  "signInPageRefreshed": "Sign-in page refreshed",
+  "checkingTheTerms": "Checking the terms...",
+  "beforeYouBegin": "Before you begin",
+  "beforeInstallingAndUsingThisAppFor": "Before installing and using this app for the first time, please read and accept the following agreements and disclosures. You must accept them to sign in or use the desktop app.",
+  "termsOfService": "Terms of Service",
+  "privacyPolicy": "Privacy Policy",
+  "thirdPartyDataSharingDisclosure": "Third-party Data Sharing Disclosure",
+  "iHaveReadAndAgreeToThe": "I have read and agree to the Terms of Service, Privacy Policy, and Third-party Data Sharing Disclosure",
+  "saving": "Saving...",
+  "agreeAndContinue": "Agree and continue",
+  "minimizeToSystemTray": "Minimize to system tray",
+  "minimizeToMenuBar": "Minimize to menu bar",
+  "couldNotMinimizeTheWindow": "Could not minimize the window",
+  "thisDeviceDoesNotSupportLocalAuthentication": "This device does not support local authentication",
+  "verifyYourIdentityBeforeDisplayingTheMobile": "Verify your identity before displaying the mobile sign-in QR code",
+  "mobileQrSignIn": "Mobile QR sign-in",
+  "generatingQrCode": "Generating QR code...",
+  "expiresInSeconds": "Expires in {arg0} seconds",
+  "@expiresInSeconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "thisQrCodeCanOnlyBeUsed": "This QR code can only be used once. Refresh it after it expires.",
+  "close": "Close",
+  "refreshQrCode": "Refresh QR code",
+  "accountRecoveryAuthorization": "Account recovery authorization",
+  "generatingRecoveryQrCode": "Generating recovery QR code...",
+  "authorizingDevice": "Authorizing device: {arg0}",
+  "@authorizingDevice": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "thisDesktopApp": "This desktop app",
+  "location": "Location: {arg0}",
+  "@location": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "unknownLocation": "Unknown location",
+  "generatingRecoveryCode": "Generating recovery code...",
+  "openTheRecoveryPageOnAnotherDevice": "Open the recovery page on another device and scan the QR code or enter the recovery code above. Existing sessions will expire after successful recovery.",
+  "recoveryCodeCopied": "Recovery code copied",
+  "copyRecoveryCode": "Copy recovery code",
+  "openRecoveryPage": "Open recovery page",
+  "refreshing": "Refreshing...",
+  "refreshAuthorization": "Refresh authorization",
+  "invalidQrSignInResultPleaseTry": "Invalid QR sign-in result. Please try again",
+  "qrRequestRejectedRefreshTheQrCode": "QR request rejected. Refresh the QR code and try again",
+  "qrCodeExpiredPleaseRefreshIt": "QR code expired. Please refresh it",
+  "qrSignIn": "QR sign-in",
+  "scanWithASignedInMobileApp": "Scan with a signed-in mobile app to authorize sign-in on this desktop app.",
+  "ifMfaIsEnabledCompleteTheRemaining": "If MFA is enabled, complete the remaining MFA verification on this desktop app after scanning.",
+  "version": "Version {arg0} ({arg1})",
+  "@version": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "settings": "Settings",
+  "appearance": "Appearance",
+  "followSystem": "Follow system",
+  "light": "Light",
+  "dark": "Dark",
+  "localPreferences": "Local preferences",
+  "compactLayout": "Compact layout",
+  "reduceSpacingToDisplayMoreContentOn": "Reduce spacing to display more content on desktop",
+  "reduceMotion": "Reduce motion",
+  "reduceAnimationsWhenChangingThemesAndOpening": "Reduce animations when changing themes and opening dialogs",
+  "about": "About",
+  "privacyPolicy2": "Privacy Policy",
+  "restoreDefaults": "Restore defaults",
+  "done": "Done",
+  "desktopUnifiedAuthenticationClient": "Desktop unified authentication client",
+  "theme": "Theme: {arg0}",
+  "@theme": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "localPreferences2": "Local preferences: {arg0}{arg1}",
+  "@localPreferences2": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "compactLayout2": "Compact layout, ",
+  "standardAnimations": "Standard animations",
+  "system": "System",
+  "verification": "verification",
+  "useTheNativePasskeyServiceFor": "Use the native {arg0} passkey service for {arg1}.",
+  "@useTheNativePasskeyServiceFor": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "nativePasskeysAreNotEnabledOnThis": "Native {arg0} passkeys are not enabled on this device.",
+  "@nativePasskeysAreNotEnabledOnThis": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "nativePasskeysAreNotSupportedOnThis": "Native passkeys are not supported on this platform",
+  "noPasskeyCredentialWasReceived": "No passkey credential was received",
+  "passkeyVerificationFailed": "Passkey verification failed",
+  "noPasskeyCredentialWasCreated": "No passkey credential was created",
+  "couldNotCreatePasskey": "Could not create passkey",
+  "signInWithAppleIsOnlyAvailable": "Sign in with Apple is only available on macOS",
+  "noMacosSignInWithAppleConfiguration": "No macOS Sign in with Apple configuration was received",
+  "couldNotReadTheSignInWith": "Could not read the Sign in with Apple configuration",
+  "appleDidNotReturnCompleteSignIn": "Apple did not return complete sign-in credentials",
+  "signInWithAppleCanceled": "Sign in with Apple canceled",
+  "signInWithAppleFailedPleaseTry": "Sign in with Apple failed. Please try again",
+  "localAuthenticationIsNotSupportedOnThis": "Local authentication is not supported on this platform",
+  "localAuthenticationFailed": "Local authentication failed",
+  "systemAuthenticationCanceled": "System authentication canceled",
+  "windowsHelloPinOrAnotherSystemAuthentication": "Windows Hello, PIN, or another system authentication method is not enabled on this device",
+  "windowsAuthenticationFailed": "Windows authentication failed",
+  "localAuthenticationCanceled": "Local authentication canceled",
+  "localAuthenticationFailed2": "Local authentication failed",
+  "processingAuthentication": "Processing authentication...",
+  "syncingDesktopData": "Syncing desktop data...",
+  "processing": "Processing...",
+  "couldNotLoadAuthorizedAppsPleaseTry": "Could not load authorized apps. Please try again later",
+  "signingIn": "Signing in...",
+  "sendingSignInCode": "Sending sign-in code...",
+  "signingInWithApple": "Signing in with Apple...",
+  "incompleteAppleSignInChallengePleaseTry": "Incomplete Apple sign-in challenge. Please try again",
+  "linkYourAccountOnTheWebOr": "Link your account on the web or mobile app before using this sign-in provider",
+  "verifyingAdditionalAuthentication": "Verifying additional authentication...",
+  "waitingForPasskeyMfaVerification": "Waiting for passkey MFA verification...",
+  "theBrowserDidNotReturnASign": "The browser did not return a sign-in result",
+  "loadingPasswordRequirements": "Loading password requirements...",
+  "sendingRegistrationCode": "Sending registration code...",
+  "creatingAccount": "Creating account...",
+  "couldNotLoadDesktopData": "Could not load desktop data",
+  "refreshingActivityLogs": "Refreshing activity logs...",
+  "refreshingOnlineDevices": "Refreshing online devices...",
+  "refreshingPasskeys": "Refreshing passkeys...",
+  "refreshingTotpStatus": "Refreshing TOTP status...",
+  "refreshingContinuousAuthenticationStatus": "Refreshing continuous authentication status...",
+  "savingSettings": "Saving settings...",
+  "savingProfile": "Saving profile...",
+  "uploadingAvatar": "Uploading avatar...",
+  "checkingVerificationStatus": "Checking verification status...",
+  "checkingContinuousAuthenticationStatus": "Checking continuous authentication status...",
+  "sendingVerificationEmail": "Sending verification email...",
+  "verifyingIdentity": "Verifying identity...",
+  "noUsableBrowserPasskeyBridgeUrlIs": "No usable browser passkey bridge URL is configured for this environment",
+  "passkeysAreNotSupportedOnThisPlatform": "Passkeys are not supported on this platform",
+  "waitingForPasskeySignIn": "Waiting for passkey sign-in...",
+  "waitingForPasskeyVerification": "Waiting for passkey verification...",
+  "theBrowserDidNotCompleteVerificationFor": "The browser did not complete verification for the sensitive action",
+  "waitingForPasskeyRegistration": "Waiting for passkey registration...",
+  "theBrowserDidNotCompletePasskeyRegistration": "The browser did not complete passkey registration",
+  "thisEnvironmentPreventsALocalCallbackPort": "This environment prevents a local callback port from being created. The browser passkey bridge is unavailable.",
+  "checkNetworkInboundPermissionsOrEnableNative": "Check network inbound permissions or enable native passkeys on macOS.",
+  "couldNotCreateTheLocalPasskeyCallback": "Could not create the local passkey callback server: {arg0}",
+  "@couldNotCreateTheLocalPasskeyCallback": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sendingEmailVerificationCode": "Sending email verification code...",
+  "updatingEmail": "Updating email...",
+  "updatingPassword": "Updating password...",
+  "revokingSession": "Revoking session...",
+  "signingOutAllDevices": "Signing out all devices...",
+  "renamingPasskey": "Renaming passkey...",
+  "deletingPasskey": "Deleting passkey...",
+  "gettingTotpConfiguration": "Getting TOTP configuration...",
+  "enablingTotp": "Enabling TOTP...",
+  "loadingRecoveryCodes": "Loading recovery codes...",
+  "generatingNewRecoveryCodes": "Generating new recovery codes...",
+  "disablingTotp": "Disabling TOTP...",
+  "signingOut": "Signing out...",
+  "generatingCrossDeviceSignInTicket": "Generating cross-device sign-in ticket...",
+  "thisDesktopAppIsNotSignedIn": "This desktop app is not signed in",
+  "generatingAccountRecoveryAuthorization": "Generating account recovery authorization...",
+  "syncingWebSignInStatus": "Syncing web sign-in status...",
+  "crossDeviceSignInFailedNoAccess": "Cross-device sign-in failed. No access token was received",
+  "networkConnectionFailed": "Network connection failed: {arg0}",
+  "@networkConnectionFailed": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "avatarUploadFailed": "Avatar upload failed: {arg0}",
+  "@avatarUploadFailed": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotConnectTo": "Could not connect to {arg0}: {arg1}",
+  "@couldNotConnectTo": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "tlsHandshakeFailedPleaseCheckTheServer": "TLS handshake failed. Please check the server certificate",
+  "requestTimedOutPleaseTryAgainLater": "Request timed out. Please try again later",
+  "theServerReturnedUnreadableData": "The server returned unreadable data",
+  "authenticationExpiredPleaseSignInAgain": "Authentication expired. Please sign in again",
+  "couldNotRefreshTheToken": "Could not refresh the token",
+  "enterYourEmailAddressFirst": "Enter your email address first",
+  "enterYourPassword": "Enter your password",
+  "enterADigitVerificationCode": "Enter a 6-digit verification code",
+  "signedIn": "Signed in",
+  "firstVerificationCompletedContinueWithAdditionalVerification": "First verification completed. Continue with additional verification",
+  "verificationCodeSent": "Verification code sent",
+  "additionalVerificationCompleted": "Additional verification completed",
+  "enterADigitAuthenticatorCode": "Enter a 6-digit authenticator code",
+  "enterARecoveryCode": "Enter a recovery code",
+  "signedInWithPasskey": "Signed in with passkey",
+  "passkeyVerifiedContinueWithAdditionalVerification": "Passkey verified. Continue with additional verification",
+  "signedInWithApple": "Signed in with Apple",
+  "appleVerifiedContinueWithAdditionalVerification": "Apple verified. Continue with additional verification",
+  "signedInWithQrCode": "Signed in with QR code",
+  "qrCodeVerifiedContinueWithAdditionalVerification": "QR code verified. Continue with additional verification",
+  "signIn": "Sign in",
+  "signInToKsuserSecurityToManage": "Sign in to Ksuser Security to manage your account and devices.",
+  "password": "Password",
+  "emailCode": "Email code",
+  "emailAddress": "Email address",
+  "digitEmailCode": "6-digit email code",
+  "sendCode": "Send code",
+  "otherSignInMethods": "Other sign-in methods",
+  "signInWithApple": "Sign in with Apple",
+  "qrSignIn2": "QR sign-in",
+  "newToKsuserRegisterOnTheWeb": "New to Ksuser? Register on the web",
+  "accountSecurityConsole": "Account security console",
+  "workspace": "Workspace",
+  "accountOverview": "Account overview",
+  "accountProfile": "Account profile",
+  "securitySettings": "Security settings",
+  "deviceManagement": "Device management",
+  "activityLogs": "Activity logs",
+  "accessAuthorization": "Access authorization",
+  "crossDeviceAccess": "Cross-device access",
+  "openTheWebAppAndSignIn": "Open the web app and sign in automatically",
+  "openingTheWebApp": "Opening the web app...",
+  "webAppOpenedAndSignedInAutomatically": "Web app opened and signed in automatically",
+  "syncWebSignInToDesktop": "Sync web sign-in to desktop",
+  "openingWebSignIn": "Opening web sign-in...",
+  "webSignInOpenedYourSessionWill": "Web sign-in opened. Your session will sync to desktop after you sign in",
+  "openWebApp": "Open web app",
+  "syncWebSignIn": "Sync web sign-in",
+  "accountActions": "Account actions",
+  "signOut": "Sign out",
+  "desktopDataRefreshed": "Desktop data refreshed",
+  "refresh": "Refresh",
+  "profileSummary": "Profile summary",
+  "yourAccountAtAGlance": "Your account at a glance",
+  "fullName": "Full name",
+  "notProvided": "Not provided",
+  "region": "Region",
+  "gender": "Gender",
+  "profileUpdated": "Profile updated",
+  "signInMethods": "Sign-in methods",
+  "availableAuthenticationMethods": "Available authentication methods",
+  "recentDeviceActivity": "Recent device activity",
+  "recentDevicesAndSessions": "Recent devices and sessions",
+  "noDeviceActivityYet": "No device activity yet",
+  "recentSensitiveActions": "Recent sensitive actions",
+  "recentAccountSecurityActivity": "Recent account security activity",
+  "noSensitiveActionsYet": "No sensitive actions yet",
+  "accountIdentity": "Account identity",
+  "securityScore": "Security score",
+  "totpProtectionEnabled": "TOTP protection enabled",
+  "enableTotpProtection": "Enable TOTP protection",
+  "onlineDevices": "Online devices",
+  "devicesOnline": "{arg0, plural, one{1 device online} other{{arg0} devices online}}",
+  "@devicesOnline": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "activityLogs2": "Activity logs",
+  "recentAccountSecurityActions": "Recent account security actions",
+  "authorizedApps": "Authorized apps",
+  "viewThirdPartyAppsThatCanAccess": "View third-party apps that can access your account and their permissions.",
+  "apps": "{arg0, plural, one{1 app} other{{arg0} apps}}",
+  "@apps": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "authorizationInformationIsCurrentlyUnavailable": "Authorization information is currently unavailable",
+  "retry": "Retry",
+  "noAuthorizedAppsYet": "No authorized apps yet",
+  "thirdPartyAppsYouAuthorizeWillAppear": "Third-party apps you authorize will appear here.",
+  "aboutAuthorization": "About authorization",
+  "youCanManageThirdPartyAppsOn": "You can manage third-party apps on the web authorization page at any time.",
+  "afterYouRevokeAccessTheAppCan": "After you revoke access, the app can no longer use its existing authorization to access your account.",
+  "revokeAccessFor": "Revoke access for {arg0}?",
+  "@revokeAccessFor": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "theAppWillNoLongerBeAble": "The app will no longer be able to access the account information you authorized. Using it again requires a new authorization.",
+  "keepAccess": "Keep access",
+  "revokeAccess": "Revoke access",
+  "accessRevokedFor": "Access revoked for {arg0}",
+  "@accessRevokedFor": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "oneTimeAccess": "One-time access",
+  "noExpiration": "No expiration",
+  "expires": "Expires {arg0}",
+  "@expires": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "developer": "Developer: {arg0}",
+  "@developer": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "contact": "Contact: {arg0}",
+  "@contact": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "lastUsed": "Last used {arg0}",
+  "@lastUsed": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "revokeAccess2": "Revoke access",
+  "timeLimitedAccess": "Time-limited access",
+  "permanentAccess": "Permanent access",
+  "accountIdentifier": "Account identifier",
+  "basicProfile": "Basic profile",
+  "email": "Email",
+  "phoneNumber": "Phone number",
+  "images": "Images",
+  "chooseAvatar": "Choose avatar",
+  "imageMustBeNoLargerThanMb": "Image must be no larger than 3 MB",
+  "onlyJpgPngWebpOrGifImages": "Only JPG, PNG, WebP, or GIF images are supported",
+  "avatarUpdated": "Avatar updated",
+  "personalInformation": "Personal information",
+  "keepYourBasicProfileAccurateAndComplete": "Keep your basic profile accurate and complete.",
+  "clickToChangeAvatar": "Click to change avatar",
+  "clickToChangeAvatarJpgPngWebp": "Click to change avatar · JPG, PNG, WebP, or GIF · Up to 3 MB",
+  "changeAvatar": "Change avatar",
+  "username": "Username",
+  "changeUsername": "Change username",
+  "extendedProfile": "Extended profile",
+  "viewAndEditYourPersonalInformation": "View and edit your personal information",
+  "changeFullName": "Change full name",
+  "selectGender": "Select gender",
+  "male": "Male",
+  "female": "Female",
+  "preferNotToSay": "Prefer not to say",
+  "dateOfBirth": "Date of birth",
+  "changeDateOfBirth": "Change date of birth",
+  "changeRegion": "Change region",
+  "bio": "Bio",
+  "changeBio": "Change bio",
+  "securityOptions": "Security options",
+  "manageYourAccountSecurityPreferences": "Manage your account security preferences",
+  "enableMfa": "Enable MFA",
+  "addASecondVerificationStepWhenSigning": "Add a second verification step when signing in.",
+  "mfaEnabled": "MFA enabled",
+  "mfaDisabled": "MFA disabled",
+  "unusualLocationDetection": "Unusual location detection",
+  "getAlertsWhenASignInComes": "Get alerts when a sign-in comes from an unusual location.",
+  "unusualLocationDetectionEnabled": "Unusual location detection enabled",
+  "unusualLocationDetectionDisabled": "Unusual location detection disabled",
+  "sensitiveActionEmails": "Sensitive action emails",
+  "getNotificationsForPasswordEmailAndOther": "Get notifications for password, email, and other sensitive changes.",
+  "notificationsEnabled": "Notifications enabled",
+  "notificationsDisabled": "Notifications disabled",
+  "subscribeToEmails": "Subscribe to emails",
+  "receiveProductUpdatesAndSystemAnnouncements": "Receive product updates and system announcements.",
+  "emailSubscriptionUpdated": "Email subscription updated",
+  "emailSubscriptionDisabled": "Email subscription disabled",
+  "signInMfaPreferencesUpdated": "Sign-in MFA preferences updated",
+  "signInMfaPreferences": "Sign-in MFA preferences",
+  "sensitiveActionVerificationPreferencesUpdated": "Sensitive action verification preferences updated",
+  "sensitiveActionVerificationPreferences": "Sensitive action verification preferences",
+  "authenticationMethods": "Authentication methods",
+  "configureVerificationMethods": "Configure verification methods",
+  "passwordSignIn": "Password sign-in",
+  "enabled": "Enabled",
+  "emailCodeSignIn": "Email code sign-in",
+  "notConfigured": "Not configured",
+  "itemCount": "{arg0}",
+  "@itemCount": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "disabled": "Disabled",
+  "changeEmail": "Change email",
+  "changePassword": "Change password",
+  "authorizeAccountRecovery": "Authorize account recovery",
+  "generateAOneTimeRecoveryQrCode": "Generate a one-time recovery QR code and recovery code for another device, valid for 5 minutes. Existing sessions will be revoked after successful recovery.",
+  "adaptiveContinuousAuthentication": "Adaptive continuous authentication",
+  "useSessionContextRiskSignalsAndRecent": "Use session context, risk signals, and recent verification to determine whether additional verification is needed.",
+  "totpManagement": "TOTP management",
+  "manageYourAuthenticatorCodes": "Manage your authenticator codes",
+  "passkeys": "Passkeys",
+  "useNativePasskeysForSignInAnd": "Use native passkeys for sign-in and sensitive action verification",
+  "passkeyAdded": "Passkey added",
+  "addPasskey": "Add passkey",
+  "noPasskeysRegisteredYet": "No passkeys registered yet.",
+  "onlineSessions": "Online sessions",
+  "manageYourSignInAndOnlineActivity": "Manage your sign-in and online activity",
+  "allSessions": "All sessions",
+  "thisDevice": "This device",
+  "sessionsRefreshed": "Sessions refreshed",
+  "refreshList": "Refresh list",
+  "noOnlineSessions": "No online sessions",
+  "sessionsWillAppearHereWhenYouSign": "Sessions will appear here when you sign in on other devices.",
+  "dangerZone": "Danger zone",
+  "signOutOfAllDevicesIncludingThe": "Sign out of all devices, including the web app.",
+  "thisRevokesAllSessionsIncludingThisDevice": "This revokes all sessions, including this device. You will need to sign in again after the access token expires.",
+  "signOutAllDevices": "Sign out all devices?",
+  "thisDesktopSessionWillAlsoExpireImmediately": "This desktop session will also expire immediately.",
+  "cancel": "Cancel",
+  "signOut2": "Sign out",
+  "signedOutAllDevices": "Signed out all devices",
+  "signOutAllDevices2": "Sign out all devices",
+  "theSessionEnvironmentIsStableNoAdditional": "The session environment is stable. No additional risk signals were detected",
+  "additionalVerificationIsRecommended": "Additional verification is recommended",
+  "sessionTrustIsStable": "Session trust is stable",
+  "risk": "{arg0} risk {arg1}",
+  "@risk": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "policyFreezeSession": "Policy: freeze session",
+  "policyRequireVerification": "Policy: require verification",
+  "policyAllow": "Policy: allow",
+  "continuousAuthenticationStatusUpdated": "Continuous authentication status updated",
+  "verified": "Verified",
+  "verifyNow": "Verify now",
+  "riskAlert": "Risk alert",
+  "riskSignalsDetectedPleaseTakeActionSoon": "Risk signals detected. Please take action soon",
+  "alertExpiresInSeconds": "Alert expires in {arg0} seconds",
+  "@alertExpiresInSeconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sensitiveActionVerification": "Sensitive action verification",
+  "validForSeconds": "Valid for {arg0} seconds",
+  "@validForSeconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "notVerified": "Not verified",
+  "sessionAge": "Session age",
+  "idleTime": "Idle time",
+  "currentEnvironment": "Current environment",
+  "unknownDevice": "Unknown device",
+  "riskSignals": "Risk signals",
+  "viewSensitiveAccountActionsAndVerificationRecords": "View sensitive account actions and verification records",
+  "filterActivity": "Filter activity",
+  "reset": "Reset",
+  "actionType": "Action type",
+  "register": "Register",
+  "enableTotp": "Enable TOTP",
+  "disableTotp": "Disable TOTP",
+  "result": "Result",
+  "success": "Success",
+  "failure": "Failure",
+  "searching": "Searching",
+  "searchRecords": "Search records",
+  "searchResults": "Search results",
+  "records": "{arg0, plural, one{1 record} other{{arg0} records}}",
+  "@records": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "noMatchingRecords": "No matching records",
+  "changeTheActionTypeOrResultAnd": "Change the action type or result and search again.",
+  "additionalVerification": "Additional verification",
+  "currentChallenge": "Current challenge: {arg0}",
+  "@currentChallenge": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "authenticatorCode": "Authenticator code",
+  "recoveryCode": "Recovery code",
+  "passkeyUnavailable": "Passkey unavailable",
+  "digitAuthenticatorCode": "6-digit authenticator code",
+  "useAPasskeyForAdditionalVerification": "Use a passkey for additional verification",
+  "passkeyIsCurrentlyUnavailable": "Passkey is currently unavailable",
+  "verifyWithPasskey": "Verify with passkey",
+  "completeMfaVerification": "Complete MFA verification",
+  "securityScoreSyncedDevicesAndLogs": "Security score: {arg0}%. Synced {arg1} devices and {arg2} logs.",
+  "@securityScoreSyncedDevicesAndLogs": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      },
+      "arg2": {
+        "type": "String"
+      }
+    }
+  },
+  "edit": "Edit",
+  "totpEnabled": "TOTP enabled",
+  "totpIsNotEnabled": "TOTP is not enabled",
+  "recoveryCodesRemaining": "{arg0, plural, one{1 recovery code remaining} other{{arg0} recovery codes remaining}}",
+  "@recoveryCodesRemaining": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "registerWithTheQrCodeOrSecret": "Register with the QR code or secret key.",
+  "totpDisabled": "TOTP disabled",
+  "disable": "Disable",
+  "enable": "Enable",
+  "recoveryCodes": "Recovery codes",
+  "viewRecoveryCodes": "View recovery codes",
+  "newRecoveryCodes": "New recovery codes",
+  "regenerateRecoveryCodes": "Regenerate recovery codes",
+  "created": "Created {arg0}",
+  "@created": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "neverUsed": "Never used",
+  "renamePasskey": "Rename passkey",
+  "rename": "Rename",
+  "deletePasskey": "Delete passkey",
+  "delete": "Delete {arg0}?",
+  "@delete": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "delete2": "Delete",
+  "passkeyDeleted": "Passkey deleted",
+  "current": "Current",
+  "online": "Online",
+  "offline": "Offline",
+  "active": "Active {arg0}",
+  "@active": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionRevoked": "Session revoked",
+  "revoke": "Revoke",
+  "risk2": "Risk {arg0}",
+  "@risk2": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyYourIdentityFirst": "Verify your identity first",
+  "invalidQrVerificationResultRefreshTheQr": "Invalid QR verification result. Refresh the QR code and try again",
+  "verified2": "Verified",
+  "qrRequestRejectedPleaseRefreshTheQr": "QR request rejected. Please refresh the QR code",
+  "enterYourSignInPassword": "Enter your sign-in password",
+  "enterADigitEmailCode": "Enter a 6-digit email code",
+  "scanTheQrCodeWithYourPhone": "Scan the QR code with your phone to verify",
+  "openingTheNativePasskeyService": "Opening the native {arg0} passkey service",
+  "@openingTheNativePasskeyService": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "sensitiveActionVerification2": "Sensitive action verification",
+  "verifyYourIdentityToContinueWithThis": "Verify your identity to continue with this action.",
+  "signInPassword": "Sign-in password",
+  "passkeyVerificationAvailable": "Passkey verification available",
+  "verifying": "Verifying...",
+  "save": "Save",
+  "saved": "Saved",
+  "newEmail": "New email",
+  "verificationCode": "Verification code",
+  "emailUpdated": "Email updated",
+  "saving2": "Saving...",
+  "newPassword": "New password",
+  "passwordUpdated": "Password updated",
+  "scanTheQrCodeOrEnterThe": "Scan the QR code or enter the secret key manually, then enter the 6-digit code generated by your authenticator.",
+  "initialRecoveryCodes": "Initial recovery codes",
+  "saveYourRecoveryCodes": "Save your recovery codes",
+  "enabling": "Enabling...",
+  "confirmAndEnable": "Confirm and enable",
+  "couldNotGenerateQrCodePleaseRefresh": "Could not generate QR code. Please refresh",
+  "qrVerification": "QR verification",
+  "enterYourCurrentSignInPasswordTo": "Enter your current sign-in password to verify.",
+  "sendAOneTimeCodeToYour": "Send a one-time code to your linked email address.",
+  "enterTheDigitCodeGeneratedByYour": "Enter the 6-digit code generated by your authenticator.",
+  "scanWithYourSignedInMobileApp": "Scan with your signed-in mobile app to confirm this sensitive action.",
+  "viewAccountStatusSignInMethodsAnd": "View account status, sign-in methods, and recent activity on desktop.",
+  "manageYourAccountProfileAndExtendedInformation": "Manage your account profile and extended information.",
+  "configureMfaTotpPasskeysAndSensitiveAction": "Configure MFA, TOTP, passkeys, and sensitive action verification preferences.",
+  "viewOnlineDevicesSessionsAndTheirCurrent": "View online devices, sessions, and their current status.",
+  "filterSensitiveActionsAndVerificationRecords": "Filter sensitive actions and verification records.",
+  "viewThirdPartyAppsAuthorizedToAccess": "View third-party apps authorized to access your account.",
+  "desktopApp": "Desktop app",
+  "mobileApp": "Mobile app",
+  "unknownBrowser": "Unknown browser",
+  "passwordMfa": "Password + MFA",
+  "codeSignIn": "Code sign-in",
+  "codeMfa": "Code + MFA",
+  "passkeySignIn": "Passkey sign-in",
+  "passkeyMfa": "Passkey + MFA",
+  "qrCodeMfa": "QR code + MFA",
+  "bridgeSignIn": "Bridge sign-in",
+  "desktopBridge": "Desktop bridge",
+  "webBridge": "Web bridge",
+  "mobileBridge": "Mobile bridge",
+  "accountRecovery": "Account recovery",
+  "generalAction": "General action",
+  "high": "High",
+  "medium": "Medium",
+  "low": "Low",
+  "seconds": "{arg0, plural, one{1 second} other{{arg0} seconds}}",
+  "@seconds": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "minutes": "{arg0, plural, one{1 minute} other{{arg0} minutes}}",
+  "@minutes": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "hours": "{arg0, plural, one{1 hour} other{{arg0} hours}}",
+  "@hours": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "days": "{arg0, plural, one{1 day} other{{arg0} days}}",
+  "@days": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "justNow": "Just now",
+  "minutesAgo": "{arg0, plural, one{1 minute ago} other{{arg0} minutes ago}}",
+  "@minutesAgo": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{arg0, plural, one{1 hour ago} other{{arg0} hours ago}}",
+  "@hoursAgo": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{arg0, plural, one{1 day ago} other{{arg0} days ago}}",
+  "@daysAgo": {
+    "placeholders": {
+      "arg0": {
+        "type": "int"
+      }
+    }
+  },
+  "invalidDataFormat": "Invalid data format",
+  "unnamedApp": "Unnamed app",
+  "passwordMustBeBetweenAndCharactersLong": "Password must be between {arg0} and {arg1} characters long",
+  "@passwordMustBeBetweenAndCharactersLong": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      },
+      "arg1": {
+        "type": "String"
+      }
+    }
+  },
+  "passwordMustContainAtLeastOneUppercase": "Password must contain at least one uppercase letter",
+  "passwordMustContainAtLeastOneLowercase": "Password must contain at least one lowercase letter",
+  "passwordMustContainAtLeastOneDigit": "Password must contain at least one digit",
+  "passwordMustContainAtLeastOneSpecial": "Password must contain at least one special character",
+  "timedOutWaitingForTheBrowserResult": "Timed out waiting for the browser result",
+  "browserBridgeStateVerificationFailed": "Browser bridge state verification failed",
+  "theBrowserDidNotCompleteThePasskey": "The browser did not complete the passkey operation",
+  "theDesktopAppReceivedThePasskeyResult": "The desktop app received the passkey result. You can close this page.",
+  "hActionCompletedHPPP": "<h2>Action completed</h2><p>{arg0}</p><p>You can return to the desktop app.</p></body></html>",
+  "@hActionCompletedHPPP": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "theDesktopAppDidNotReceiveA": "The desktop app did not receive a valid result.",
+  "hActionFailedHPPP": "<h2>Action failed</h2><p>{arg0}</p><p>Return to the desktop app and try again.</p></body></html>",
+  "@hActionFailedHPPP": {
+    "placeholders": {
+      "arg0": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotOpenTheExternalBrowser": "Could not open the external browser",
+  "language": "Language",
+  "languageSettingExplanation": "Follow your device language or choose a language for this device.",
+  "languageSaveFailed": "Could not save your language preference. It may reset after restarting the app."
+}

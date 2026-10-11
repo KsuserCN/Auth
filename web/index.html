@@ -1,11 +1,23 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ksuser CAS</title>
     <script>
+      // Match the interface locale before loading the application.
+      ;(function () {
+        let preference = 'system'
+        try {
+          preference = localStorage.getItem('ksuser:language-preference') || 'system'
+        } catch {}
+        const firstLanguage = navigator.languages?.[0] || navigator.language || ''
+        document.documentElement.lang =
+          preference === 'zh-Hans' || (preference !== 'en' && /^zh(?:-|$)/i.test(firstLanguage))
+            ? 'zh-Hans'
+            : 'en'
+      })()
       // 立即执行以避免暗黑模式闪烁
       ;(function () {
         const themeMode = localStorage.getItem('theme-mode') || 'system'

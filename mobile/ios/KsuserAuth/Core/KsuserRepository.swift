@@ -165,10 +165,10 @@ extension KsuserRepositoryProviding {
         }
         if envelope.code == 200, let token = data["accessToken"]?.stringValue { return .success(token) }
         if envelope.code == 202, data["needBind"]?.boolValue == true, let bindToken = data["oauthBindToken"]?.stringValue {
-            return .needsOAuth(PendingOAuth(provider: data["provider"]?.stringValue ?? source, bindToken: bindToken, message: envelope.resultMessage, canRegister: data["canRegister"]?.boolValue ?? true, emailConflict: data["emailConflict"]?.boolValue ?? false))
+            return .needsOAuth(PendingOAuth(provider: data["provider"]?.stringValue ?? source, bindToken: bindToken, localizedMessage: envelope.localizedMessage, canRegister: data["canRegister"]?.boolValue ?? true, emailConflict: data["emailConflict"]?.boolValue ?? false))
         }
         if envelope.code == 200 { throw APIError.invalidResponse }
-        throw APIError.server(envelope.code, envelope.resultMessage)
+        throw APIError.server(envelope.code, envelope.localizedMessage)
     }
     private func assertionBody(_ payload: PasskeyAuthenticationPayload) -> [String: JSONValue] {
         ["credentialRawId": .string(payload.credentialRawId), "clientDataJSON": .string(payload.clientDataJSON), "authenticatorData": .string(payload.authenticatorData), "signature": .string(payload.signature)]

@@ -6,12 +6,12 @@
     <div class="callback-card">
       <div class="brand-line">
         <img src="/favicon.ico" alt="Ksuser" class="brand-logo" />
-        <span class="brand-text">Ksuser 统一认证中心</span>
+        <span class="brand-text">{{ t('ui.mainLayout.message001') }}</span>
       </div>
 
       <div class="title-area">
-        <h1 class="title">{{ providerLabel }} 登录授权结果</h1>
-        <p class="subtitle">正在完成身份校验与安全检查，请稍候。</p>
+        <h1 class="title">{{ providerLabel }} {{ t('ui.oAuthQQCallback.message001') }}</h1>
+        <p class="subtitle">{{ t('ui.oAuthQQCallback.message002') }}</p>
       </div>
 
       <div class="state-shell" :class="`state-${state}`">
@@ -23,8 +23,8 @@
               <el-skeleton-item variant="text" class="processing-skeleton-line short" />
             </div>
           </div>
-          <p class="state-title">正在验证身份信息</p>
-          <p class="state-description">系统正在确认授权参数并安全登录您的账号。</p>
+          <p class="state-title">{{ t('ui.oAuthQQCallback.message003') }}</p>
+          <p class="state-description">{{ t('ui.oAuthQQCallback.message004') }}</p>
         </div>
 
         <div v-else-if="state === 'success'" class="state-block success">
@@ -33,22 +33,24 @@
               <CircleCheckFilled />
             </el-icon>
           </div>
-          <p class="state-title">登录成功</p>
-          <p class="state-description">验证通过，正在为您跳转到首页...</p>
+          <p class="state-title">{{ t('ui.login.message103') }}</p>
+          <p class="state-description">{{ t('ui.oAuthQQCallback.message005') }}</p>
         </div>
 
         <div v-else-if="state === 'needBind'" class="state-block need-bind">
-          <p class="state-title">完成账号关联</p>
+          <p class="state-title">{{ t('ui.appleRegister.message006') }}</p>
           <p class="state-description">
-            该 {{ providerLabel }} 账号尚未关联 Ksuser。请选择绑定已有账号，或注册新账号后自动绑定。
+            {{ t('ui.oAuthQQCallback.message006') }} {{ providerLabel }}
+            {{ t('ui.oAuthQQCallback.message007') }}
           </p>
 
           <div class="bind-choice-actions">
             <el-button type="primary" class="wide-action" @click="goToBindLogin">
-              绑定已有 Ksuser 账号
+              {{ t('ui.appleRegister.message009') }}
             </el-button>
             <el-button class="wide-action" @click="goToRegisterBind">
-              注册并绑定 {{ providerLabel }} 账号
+              {{ t('ui.appleRegister.message026') }} {{ providerLabel }}
+              {{ t('ui.oAuthQQCallback.message008') }}
             </el-button>
           </div>
         </div>
@@ -59,34 +61,37 @@
               <CircleCloseFilled />
             </el-icon>
           </div>
-          <p class="state-title">登录失败</p>
-          <p class="state-description">{{ errorMessage }}</p>
+          <p class="state-title">{{ t('ui.oAuthQQCallback.message009') }}</p>
+          <p class="state-description">{{ renderMessage(errorMessage) }}</p>
           <div class="action-row">
             <el-button class="ghost-btn" @click="retryCallback">
               <el-icon>
                 <RefreshRight />
               </el-icon>
-              重试
+              {{ t('ui.desktopPasskeyBridge.message007') }}
             </el-button>
             <el-button type="primary" class="back-btn" @click="goBackToLogin">
               <el-icon>
                 <ArrowLeft />
               </el-icon>
-              返回登录
+              {{ t('ui.appleRegister.message015') }}
             </el-button>
           </div>
         </div>
       </div>
 
       <div class="tip-line">
-        登录异常时请确认浏览器未禁用 Cookie，且 {{ providerLabel }} 授权流程未在多个窗口同时进行。
+        {{ t('ui.oAuthQQCallback.message010') }} {{ providerLabel }}
+        {{ t('ui.oAuthQQCallback.message011') }}
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ApiError, resolveApiResult } from '@/utils/apiResult'
+import { t, uiMessage, renderMessage, type LocalizedMessage, LocalizedError } from '@/i18n'
+
+import { ApiError, localizedError, resolveApiResult } from '@/utils/apiResult'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDark, useStorage } from '@vueuse/core'
@@ -117,7 +122,7 @@ const router = useRouter()
 const route = useRoute()
 
 const state = ref<'processing' | 'success' | 'needBind' | 'error'>('processing')
-const errorMessage = ref<string>('')
+const errorMessage = ref<LocalizedMessage>('')
 const oauthBindToken = ref('')
 const themeMode = useStorage<'light' | 'dark' | 'system'>('theme-mode', 'system')
 const isDark = useDark({
@@ -187,7 +192,7 @@ const parseOAuthState = (rawState: string): ParsedOAuthState => {
   const parts = rawState.split(';')
 
   if (parts.length !== 3) {
-    throw new Error('状态参数格式错误，请重新登录')
+    throw new LocalizedError('ui.oAuthQQCallback.message012')
   }
 
   const verifyToken = parts[0]?.trim()
@@ -195,15 +200,15 @@ const parseOAuthState = (rawState: string): ParsedOAuthState => {
   const env = parts[2]?.trim()
 
   if (!verifyToken) {
-    throw new Error('状态参数校验值缺失，请重新登录')
+    throw new LocalizedError('ui.oAuthQQCallback.message013')
   }
 
   if (operation !== 'login' && operation !== 'bind' && operation !== 'unbind') {
-    throw new Error('状态参数操作类型无效，请重新登录')
+    throw new LocalizedError('ui.oAuthQQCallback.message014')
   }
 
   if (env !== 'dev' && env !== 'prd') {
-    throw new Error('状态参数环境值无效，请重新登录')
+    throw new LocalizedError('ui.oAuthQQCallback.message015')
   }
 
   return {
@@ -242,7 +247,7 @@ const handleCallback = async () => {
 
     // 检查是否获取到 state（无论是否有error都需要）
     if (!returnedState) {
-      throw new Error('未获取到状态参数，请重试')
+      throw new LocalizedError('ui.oAuthQQCallback.message016')
     }
 
     // 解析 state 以检查环境
@@ -259,12 +264,14 @@ const handleCallback = async () => {
 
     // Third-party OAuth errors use local copy, never provider error descriptions.
     if (oauthError) {
-      throw new ApiError({ errorCode: oauthError === 'access_denied' ? 'FORBIDDEN' : 'REQUEST_FAILED' })
+      throw new ApiError({
+        errorCode: oauthError === 'access_denied' ? 'FORBIDDEN' : 'REQUEST_FAILED',
+      })
     }
 
     // 检查是否获取到 code
     if (!code) {
-      throw new Error('未获取到授权码，请重试')
+      throw new LocalizedError('ui.oAuthQQCallback.message017')
     }
 
     // 从 sessionStorage 中读取本地存储的 state
@@ -272,22 +279,22 @@ const handleCallback = async () => {
     const pkceCodeVerifier = sessionStorage.getItem(pkceVerifierStorageKey.value) || undefined
 
     if (provider.value === 'microsoft' && !pkceCodeVerifier) {
-      throw new Error('Microsoft PKCE 校验信息缺失，请返回登录页后重试')
+      throw new LocalizedError('ui.oAuthQQCallback.message018')
     }
 
     // 校验 state 是否一致
     if (!storedState) {
-      throw new Error('本地状态信息丢失，请重新登录')
+      throw new LocalizedError('ui.oAuthQQCallback.message019')
     }
 
     const storedParsedState = parseOAuthState(storedState)
 
     if (storedParsedState.verifyToken !== returnedParsedState.verifyToken) {
-      throw new Error('状态验证失败，可能存在安全风险，请重新登录')
+      throw new LocalizedError('ui.oAuthQQCallback.message020')
     }
 
     if (storedParsedState.operation !== returnedParsedState.operation) {
-      throw new Error('状态操作类型不匹配，请重新发起操作')
+      throw new LocalizedError('ui.oAuthQQCallback.message021')
     }
 
     // 按 state 中的操作类型调用拆分后的回调接口
@@ -307,22 +314,20 @@ const handleCallback = async () => {
       // 情况 1: 需要绑定账号 (HTTP 202，needBind=true)
       if (loginResponse.needBind === true) {
         if (!loginResponse.oauthBindToken) {
-          throw new Error('第三方登录状态缺失，请重新授权')
+          throw new LocalizedError('ui.oAuthQQCallback.message022')
         }
         oauthBindToken.value = loginResponse.oauthBindToken
         if (loginResponse.openid) {
           sessionStorage.setItem(openIdStorageKey.value, loginResponse.openid)
         }
         state.value = 'needBind'
-        ElMessage.warning(
-          resolveApiResult(loginResponse),
-        )
+        ElMessage.warning(resolveApiResult(loginResponse))
         return
       }
 
       // 情况 2: 需要 MFA 验证 (HTTP 201，challengeId 存在)
       if (loginResponse.challengeId) {
-        ElMessage.info('需要进行二步验证')
+        ElMessage.info(t('ui.oAuthQQCallback.message023'))
         router.push({
           path: '/login',
           query: {
@@ -349,8 +354,8 @@ const handleCallback = async () => {
         state.value = 'success'
         ElMessage.success(
           desktopSynced
-            ? `${providerLabel.value} 登录成功，已同步到桌面端`
-            : `${providerLabel.value} 登录成功`,
+            ? t('ui.oAuthQQCallback.message024', { arg0: providerLabel.value })
+            : t('ui.oAuthQQCallback.message025', { arg0: providerLabel.value }),
         )
         setTimeout(() => {
           router.replace(postLoginTarget || '/home/overview')
@@ -358,7 +363,7 @@ const handleCallback = async () => {
         return
       }
 
-      throw new Error(`${providerLabel.value} 登录响应数据异常，请重试`)
+      throw new LocalizedError('ui.oAuthQQCallback.message026', { arg0: providerLabel.value })
     }
 
     if (returnedParsedState.operation === 'bind') {
@@ -390,14 +395,14 @@ const handleCallback = async () => {
     state.value = 'error'
 
     if (error instanceof Error) {
-      errorMessage.value = error.message
+      errorMessage.value = localizedError(error, 'ui.oAuthQQCallback.message027')
       console.error(`OAuth ${providerLabel.value} callback failed:`, error)
     } else {
-      errorMessage.value = '登录失败，请重试'
+      errorMessage.value = uiMessage('ui.oAuthQQCallback.message027')
       console.error(`OAuth ${providerLabel.value} callback failed:`, error)
     }
 
-    ElMessage.error(errorMessage.value)
+    ElMessage.error(renderMessage(errorMessage.value))
   }
 }
 
@@ -421,9 +426,9 @@ const buildOauthBindQuery = () => ({
 
 const goToBindLogin = () => {
   if (!oauthBindToken.value) {
-    ElMessage.error('第三方登录状态已过期，请重新授权')
+    ElMessage.error(t('ui.oAuthQQCallback.message028'))
     state.value = 'error'
-    errorMessage.value = '第三方登录状态已过期，请重新授权'
+    errorMessage.value = uiMessage('ui.oAuthQQCallback.message028')
     return
   }
   router.push({
@@ -434,9 +439,9 @@ const goToBindLogin = () => {
 
 const goToRegisterBind = () => {
   if (!oauthBindToken.value) {
-    ElMessage.error('第三方登录状态已过期，请重新授权')
+    ElMessage.error(t('ui.oAuthQQCallback.message028'))
     state.value = 'error'
-    errorMessage.value = '第三方登录状态已过期，请重新授权'
+    errorMessage.value = uiMessage('ui.oAuthQQCallback.message028')
     return
   }
   router.push({
@@ -744,5 +749,4 @@ onMounted(() => {
     max-width: none;
   }
 }
-
 </style>

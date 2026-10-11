@@ -6,17 +6,20 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/MobileAuthorizationController.java"
-      ]
+      ],
+      "messageEn": "Operation completed"
     },
     "REQUEST_FAILED": {
       "message": "请求失败，请重试",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Request failed. Please try again."
     },
     "BAD_REQUEST": {
       "message": "请求参数不正确",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Invalid request parameters"
     },
     "UNAUTHENTICATED": {
       "message": "未登录或登录状态已失效，请重新登录",
@@ -31,17 +34,20 @@
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java",
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "You are signed out or your session has expired. Please sign in again."
     },
     "FORBIDDEN": {
       "message": "无权限",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "You do not have permission to perform this action"
     },
     "SECURITY_CSRF_INVALID": {
       "message": "安全校验失败，请刷新页面后重试",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Security check failed. Refresh the page and try again."
     },
     "SENSITIVE_VERIFICATION_REQUIRED": {
       "message": "请先完成敏感操作验证",
@@ -51,7 +57,8 @@
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java",
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Verify your identity before continuing"
     },
     "AUTH_MFA_REQUIRED": {
       "message": "需要 MFA 验证",
@@ -60,7 +67,8 @@
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Multi-factor authentication is required"
     },
     "OAUTH_BIND_REQUIRED": {
       "message": "第三方账号尚未绑定，请创建或绑定账号",
@@ -68,29 +76,34 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This third-party account is not linked. Create or link an account."
     },
     "SERVER_ERROR": {
       "message": "服务暂时不可用，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The service is temporarily unavailable. Please try again later."
     },
     "NOT_FOUND": {
       "message": "请求的资源不存在",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The requested resource was not found"
     },
     "METHOD_NOT_ALLOWED": {
       "message": "请求方法不支持",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "This request method is not supported"
     },
     "UNSUPPORTED_MEDIA_TYPE": {
       "message": "不支持的请求类型",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "This content type is not supported"
     },
     "RATE_LIMITED": {
       "message": "请求过于频繁，请稍后重试",
@@ -98,178 +111,212 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Too many requests. Please try again later."
     },
     "REQUEST_CONFLICT": {
       "message": "请求状态冲突，请重试",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The request conflicts with the current state. Please try again."
     },
     "NETWORK_ERROR": {
       "message": "网络连接失败，请检查网络",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Could not connect. Check your network connection."
     },
     "REQUEST_TIMEOUT": {
       "message": "请求超时，请稍后重试",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The request timed out. Please try again later."
     },
     "INVALID_RESPONSE": {
       "message": "服务返回了无法解析的数据",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The service returned an unreadable response"
     },
     "PASSKEY_CANCELLED": {
       "message": "用户取消了当前 Passkey 操作",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The Passkey operation was cancelled"
     },
     "PASSKEY_UNSUPPORTED": {
       "message": "当前浏览器不支持该 Passkey 操作",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Your browser does not support this Passkey operation"
     },
     "PASSKEY_SECURITY_ERROR": {
       "message": "浏览器安全校验失败，请确认当前使用受信任地址",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Browser security check failed. Make sure you are using a trusted address."
     },
     "PASSKEY_CREDENTIAL_UNAVAILABLE": {
       "message": "当前账号没有可用的 Passkey，或 Passkey 状态不正确",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "No usable Passkey is available for this account, or its state is invalid"
     },
     "SESSION_NOT_AUTHENTICATED": {
       "message": "尚未完成登录，请重新登录",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Sign-in is incomplete. Please sign in again."
     },
     "INTERNAL_ERROR": {
       "message": "服务暂时不可用，请稍后重试",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The service is temporarily unavailable. Please try again later."
     },
     "AUTH_USERNAME_EXISTS": {
       "message": "用户名已存在",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "This username is already taken"
     },
     "AUTH_USERNAME_AVAILABLE": {
       "message": "用户名可用",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "This username is available"
     },
     "AUTH_RECOVERY_CODE_INVALID": {
       "message": "恢复码错误或已使用",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The recovery code is incorrect or has already been used"
     },
     "AUTH_VERIFICATION_CODE_INVALID": {
       "message": "验证码错误或已过期",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "The verification code is incorrect or has expired"
     },
     "PASSWORD_REQUIREMENTS_0": {
       "message": "密码强度不足",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak"
     },
     "PASSWORD_REQUIREMENTS_1": {
       "message": "密码强度不足：需包含大写字母",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters"
     },
     "PASSWORD_REQUIREMENTS_2": {
       "message": "密码强度不足：需包含小写字母",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include lowercase letters"
     },
     "PASSWORD_REQUIREMENTS_3": {
       "message": "密码强度不足：需包含大写字母、小写字母",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters and lowercase letters"
     },
     "PASSWORD_REQUIREMENTS_4": {
       "message": "密码强度不足：需包含数字",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include numbers"
     },
     "PASSWORD_REQUIREMENTS_5": {
       "message": "密码强度不足：需包含大写字母、数字",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters and numbers"
     },
     "PASSWORD_REQUIREMENTS_6": {
       "message": "密码强度不足：需包含小写字母、数字",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include lowercase letters and numbers"
     },
     "PASSWORD_REQUIREMENTS_7": {
       "message": "密码强度不足：需包含大写字母、小写字母、数字",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters, lowercase letters and numbers"
     },
     "PASSWORD_REQUIREMENTS_8": {
       "message": "密码强度不足：需包含特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include special characters"
     },
     "PASSWORD_REQUIREMENTS_9": {
       "message": "密码强度不足：需包含大写字母、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters and special characters"
     },
     "PASSWORD_REQUIREMENTS_10": {
       "message": "密码强度不足：需包含小写字母、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include lowercase letters and special characters"
     },
     "PASSWORD_REQUIREMENTS_11": {
       "message": "密码强度不足：需包含大写字母、小写字母、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters, lowercase letters and special characters"
     },
     "PASSWORD_REQUIREMENTS_12": {
       "message": "密码强度不足：需包含数字、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include numbers and special characters"
     },
     "PASSWORD_REQUIREMENTS_13": {
       "message": "密码强度不足：需包含大写字母、数字、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters, numbers and special characters"
     },
     "PASSWORD_REQUIREMENTS_14": {
       "message": "密码强度不足：需包含小写字母、数字、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include lowercase letters, numbers and special characters"
     },
     "PASSWORD_REQUIREMENTS_15": {
       "message": "密码强度不足：需包含大写字母、小写字母、数字、特殊字符",
       "params": [],
-      "sources": []
+      "sources": [],
+      "messageEn": "Password is too weak: include uppercase letters, lowercase letters, numbers and special characters"
     },
     "APPLE_001": {
       "message": "挑战已创建",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Challenge created"
     },
     "APPLE_002": {
       "message": "Apple 绑定成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Apple account linked"
     },
     "APPLE_003": {
       "message": "身份验证成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Identity verified"
     },
     "APPLE_004": {
       "message": "获取成功",
@@ -280,42 +327,48 @@
         "api/src/main/java/cn/ksuser/api/controller/InfoController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Retrieved successfully"
     },
     "APPLE_005": {
       "message": "Apple 解绑成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Apple account unlinked"
     },
     "APPLE_006": {
       "message": "已接收",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Received"
     },
     "APPLE_007": {
       "message": "Apple 登录成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Signed in with Apple"
     },
     "APPLE_008": {
       "message": "Apple 服务尚未配置或暂时不可用，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Apple sign-in is not configured or is temporarily unavailable. Please try again later."
     },
     "APPLE_009": {
       "message": "账号或 Apple 身份已存在，请重新登录或绑定",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "This account or Apple identity already exists. Sign in again or link the account."
     },
     "APPLE_010": {
       "message": "Apple 通知处理暂时失败，请稍后重试",
@@ -323,7 +376,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java",
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Could not process the Apple notification. Please try again later."
     },
     "APPLE_011": {
       "message": "账号不存在",
@@ -331,49 +385,56 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java",
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Account not found"
     },
     "APPLE_012": {
       "message": "会话已失效，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Your session has expired. Please sign in again."
     },
     "APPLE_013": {
       "message": "当前会话已冻结，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Your session has been frozen. Please sign in again."
     },
     "AUTH_001": {
       "message": "服务正常",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Service is available"
     },
     "AUTH_002": {
       "message": "用户名不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Username is required"
     },
     "AUTH_003": {
       "message": "类型不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Type is required"
     },
     "AUTH_004": {
       "message": "类型只能是 register、login、change-email 或 sensitive-verification",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Type must be register, login, change-email or sensitive-verification"
     },
     "AUTH_005": {
       "message": "用户不存在",
@@ -388,91 +449,104 @@
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java",
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java",
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "User not found"
     },
     "AUTH_006": {
       "message": "当前用户未绑定邮箱",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "No email address is linked to the current user"
     },
     "AUTH_007": {
       "message": "邮箱不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Email address is required"
     },
     "AUTH_008": {
       "message": "邮箱格式不正确",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Invalid email address"
     },
     "AUTH_009": {
       "message": "邮箱已被使用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This email address is already in use"
     },
     "AUTH_010": {
       "message": "验证码错误次数过多，该邮箱已被锁定1小时",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many incorrect verification codes. This email address has been locked for 1 hour."
     },
     "AUTH_011": {
       "message": "注册过于频繁，请稍后再试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many registration attempts. Please try again later."
     },
     "AUTH_012": {
       "message": "发送过于频繁，请1分钟后再试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many requests. Please try again in 1 minute."
     },
     "AUTH_013": {
       "message": "发送次数过多，每小时最多发送14次",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many codes sent. The limit is 14 per hour."
     },
     "AUTH_014": {
       "message": "该邮箱发送次数过多，每小时最多发送14次",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many codes sent to this email address. The limit is 14 per hour."
     },
     "AUTH_015": {
       "message": "邮件发送失败，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not send the email. Please try again later."
     },
     "AUTH_016": {
       "message": "验证码已发送",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Verification code sent"
     },
     "AUTH_017": {
       "message": "密码不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Password is required"
     },
     "AUTH_018": {
       "message": "验证码不能为空",
@@ -480,14 +554,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Verification code is required"
     },
     "AUTH_019": {
       "message": "用户名格式不正确（3-20字符，仅字母数字下划线连字符）",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Username must contain 3–20 characters: letters, numbers, underscores or hyphens"
     },
     "AUTH_020": {
       "message": "密码长度必须在{min}-{max}个字符之间",
@@ -497,28 +573,32 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Password must contain between {min} and {max} characters"
     },
     "AUTH_021": {
       "message": "密码过于简单，请使用更复杂的密码",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This password is too simple. Choose a stronger password."
     },
     "AUTH_022": {
       "message": "输入包含非法字符",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Your input contains invalid characters"
     },
     "AUTH_023": {
       "message": "请先获取验证码",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Request a verification code first"
     },
     "AUTH_024": {
       "message": "邮箱不匹配（{count}/5）",
@@ -527,7 +607,8 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Email address does not match ({count}/5)"
     },
     "AUTH_025": {
       "message": "发送验证码的设备与当前设备不匹配（{count}/5）",
@@ -536,7 +617,8 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The device requesting the code does not match the current device ({count}/5)"
     },
     "AUTH_026": {
       "message": "验证码已过期，请重新获取（{count}/5）",
@@ -545,7 +627,8 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The verification code has expired. Request a new code ({count}/5)."
     },
     "AUTH_027": {
       "message": "验证码错误（{count}/5）",
@@ -554,14 +637,16 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Incorrect verification code ({count}/5)"
     },
     "AUTH_028": {
       "message": "邮箱已被注册",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This email address is already registered"
     },
     "AUTH_029": {
       "message": "用户名已存在",
@@ -569,14 +654,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This username is already taken"
     },
     "AUTH_030": {
       "message": "key 不支持",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Unsupported key"
     },
     "AUTH_031": {
       "message": "邮箱已存在",
@@ -584,21 +671,24 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This email address already exists"
     },
     "AUTH_032": {
       "message": "注册成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Account created"
     },
     "AUTH_033": {
       "message": "邮箱未注册或验证码错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This email address is not registered or the verification code is incorrect"
     },
     "AUTH_034": {
       "message": "登录成功",
@@ -606,14 +696,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Signed in"
     },
     "AUTH_035": {
       "message": "登录请求过于频繁，请稍后再试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many sign-in attempts. Please try again later."
     },
     "AUTH_036": {
       "message": "邮箱或密码错误",
@@ -621,70 +713,80 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Incorrect email address or password"
     },
     "AUTH_037": {
       "message": "字段名不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Field name is required"
     },
     "AUTH_038": {
       "message": "不支持的字段名",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Unsupported field name"
     },
     "AUTH_039": {
       "message": "布尔字段 value 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The boolean field value is required"
     },
     "AUTH_040": {
       "message": "偏好字段 stringValue 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The preference field stringValue is required"
     },
     "AUTH_041": {
       "message": "请先启用 MFA 再设置登录MFA优先方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Enable MFA before choosing a preferred sign-in MFA method"
     },
     "AUTH_042": {
       "message": "登录MFA优先方式只能是 totp 或 passkey",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The preferred sign-in MFA method must be totp or passkey"
     },
     "AUTH_043": {
       "message": "当前用户未启用所选 MFA 方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The selected MFA method is not enabled for this user"
     },
     "AUTH_044": {
       "message": "敏感验证优先方式只能是 password、email-code、passkey、totp 或 apple",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The preferred identity verification method must be password, email-code, passkey, totp or apple"
     },
     "AUTH_045": {
       "message": "当前用户不可用所选敏感验证方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The selected identity verification method is not available for this user"
     },
     "AUTH_046": {
       "message": "更新成功",
@@ -693,56 +795,64 @@
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Updated successfully"
     },
     "AUTH_047": {
       "message": "RefreshToken不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Refresh token is missing"
     },
     "AUTH_048": {
       "message": "RefreshToken已失效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The refresh token is no longer valid"
     },
     "AUTH_049": {
       "message": "Token类型无效，应为RefreshToken",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Invalid token type. A refresh token is required."
     },
     "AUTH_050": {
       "message": "RefreshToken无效或已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The refresh token is invalid or has expired"
     },
     "AUTH_051": {
       "message": "刷新成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Session refreshed"
     },
     "AUTH_052": {
       "message": "跨端票据已创建",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Session transfer ticket created"
     },
     "AUTH_053": {
       "message": "跨端票据创建失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not create the session transfer ticket"
     },
     "AUTH_054": {
       "message": "transferCode 不能为空",
@@ -750,105 +860,120 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "transferCode is required"
     },
     "AUTH_055": {
       "message": "target 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "target is required"
     },
     "AUTH_056": {
       "message": "跨端登录成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Signed in on the other device"
     },
     "AUTH_057": {
       "message": "跨端登录失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not sign in on the other device"
     },
     "AUTH_058": {
       "message": "请求体不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Request body is required"
     },
     "AUTH_059": {
       "message": "移动桥接挑战已创建",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Mobile bridge challenge created"
     },
     "AUTH_060": {
       "message": "移动桥接挑战创建失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not create the mobile bridge challenge"
     },
     "AUTH_061": {
       "message": "challengeId 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "challengeId is required"
     },
     "AUTH_062": {
       "message": "网页登录确认成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Web sign-in confirmed"
     },
     "AUTH_063": {
       "message": "网页登录确认失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not confirm web sign-in"
     },
     "AUTH_064": {
       "message": "移动桥接挑战已取消",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Mobile bridge challenge cancelled"
     },
     "AUTH_065": {
       "message": "移动桥接挑战取消失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not cancel the mobile bridge challenge"
     },
     "AUTH_066": {
       "message": "移动桥接挑战已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The mobile bridge challenge has expired"
     },
     "AUTH_067": {
       "message": "获取移动桥接状态失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not retrieve the mobile bridge status"
     },
     "AUTH_068": {
       "message": "当前会话风险过高，已被冻结，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This session has been frozen because its risk is too high. Please sign in again."
     },
     "AUTH_069": {
       "message": "当前登录会话无效，请重新登录后再试",
@@ -856,21 +981,24 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java"
-      ]
+      ],
+      "messageEn": "The current sign-in session is invalid. Sign in again and retry."
     },
     "AUTH_070": {
       "message": "恢复授权已生成",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Recovery authorization created"
     },
     "AUTH_071": {
       "message": "恢复授权生成失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not create the recovery authorization"
     },
     "AUTH_072": {
       "message": "recoveryCode 不能为空",
@@ -878,7 +1006,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java"
-      ]
+      ],
+      "messageEn": "recoveryCode is required"
     },
     "AUTH_073": {
       "message": "恢复授权不存在、已失效或已被使用",
@@ -886,14 +1015,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java"
-      ]
+      ],
+      "messageEn": "The recovery authorization does not exist, has expired or has already been used"
     },
     "AUTH_074": {
       "message": "发起恢复授权的设备已退出登录，请重新发起",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The device that issued this recovery authorization is signed out. Start again."
     },
     "AUTH_075": {
       "message": "查询成功",
@@ -901,35 +1032,40 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Retrieved successfully"
     },
     "AUTH_076": {
       "message": "新密码不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "New password is required"
     },
     "AUTH_077": {
       "message": "恢复授权读取失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not read the recovery authorization"
     },
     "AUTH_078": {
       "message": "账号恢复成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Account recovered"
     },
     "AUTH_079": {
       "message": "账号恢复扫码背书已创建",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "QR endorsement for account recovery created"
     },
     "AUTH_080": {
       "message": "target 只能是 web、desktop 或 mobile",
@@ -937,42 +1073,48 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "target must be web, desktop or mobile"
     },
     "AUTH_081": {
       "message": "二维码挑战已创建",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "QR challenge created"
     },
     "AUTH_082": {
       "message": "mfaChallengeId 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "mfaChallengeId is required"
     },
     "AUTH_083": {
       "message": "mfaChallengeId 无效或已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "mfaChallengeId is invalid or has expired"
     },
     "AUTH_084": {
       "message": "当前 challenge 不允许使用扫码验证",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This challenge does not support QR verification"
     },
     "AUTH_085": {
       "message": "approveCode 或 transferCode 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "approveCode or transferCode is required"
     },
     "AUTH_086": {
       "message": "二维码挑战不存在或已过期",
@@ -980,7 +1122,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/QrChallengeService.java"
-      ]
+      ],
+      "messageEn": "The QR challenge does not exist or has expired"
     },
     "AUTH_087": {
       "message": "跨端票据不存在或已过期",
@@ -988,14 +1131,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "The session transfer ticket does not exist or has expired"
     },
     "AUTH_088": {
       "message": "approveCode 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "approveCode is required"
     },
     "AUTH_089": {
       "message": "二维码挑战状态不可用",
@@ -1003,126 +1148,144 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/QrChallengeService.java"
-      ]
+      ],
+      "messageEn": "The QR challenge is not available in its current state"
     },
     "AUTH_090": {
       "message": "二维码挑战类型无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Invalid QR challenge type"
     },
     "AUTH_091": {
       "message": "当前账号未配置可用的非扫码 MFA 方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This account has no available MFA method other than QR verification"
     },
     "AUTH_092": {
       "message": "二维码挑战用户不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The QR challenge user does not match"
     },
     "AUTH_093": {
       "message": "mfaChallengeId 缺失",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "mfaChallengeId is missing"
     },
     "AUTH_094": {
       "message": "MFA 挑战用户不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The MFA challenge user does not match"
     },
     "AUTH_095": {
       "message": "二维码挑战无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Invalid QR challenge"
     },
     "AUTH_096": {
       "message": "二维码挑战已授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "QR challenge approved"
     },
     "AUTH_097": {
       "message": "二维码挑战授权失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not approve the QR challenge"
     },
     "AUTH_098": {
       "message": "challengeId 与 pollToken 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "challengeId and pollToken are required"
     },
     "AUTH_099": {
       "message": "二维码挑战已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The QR challenge has expired"
     },
     "AUTH_100": {
       "message": "pollToken 无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Invalid pollToken"
     },
     "AUTH_101": {
       "message": "会话不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Session not found"
     },
     "AUTH_102": {
       "message": "会话已失效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The session has expired"
     },
     "AUTH_103": {
       "message": "会话已取消",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The session was cancelled"
     },
     "AUTH_104": {
       "message": "challengeId 和 code 或 recoveryCode 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "challengeId and either code or recoveryCode are required"
     },
     "AUTH_105": {
       "message": "challengeId 无效或已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "challengeId is invalid or has expired"
     },
     "AUTH_106": {
       "message": "当前 challenge 不允许使用 TOTP",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This challenge does not support TOTP"
     },
     "AUTH_107": {
       "message": "TOTP/恢复码校验失败，剩余尝试次数：{remaining}",
@@ -1131,42 +1294,48 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "TOTP or recovery code verification failed. Attempts remaining: {remaining}"
     },
     "AUTH_108": {
       "message": "TOTP/恢复码校验失败次数过多，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many failed TOTP or recovery code attempts. Please sign in again."
     },
     "AUTH_109": {
       "message": "TOTP 验证处理失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not process TOTP verification"
     },
     "AUTH_110": {
       "message": "mfaChallengeId、passkeyChallengeId 及 Passkey 参数不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "mfaChallengeId, passkeyChallengeId and Passkey parameters are required"
     },
     "AUTH_111": {
       "message": "当前 challenge 不允许使用 Passkey",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "This challenge does not support Passkey"
     },
     "AUTH_112": {
       "message": "Passkey 校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey verification failed"
     },
     "AUTH_113": {
       "message": "Passkey 校验失败，剩余尝试次数：{remaining}",
@@ -1175,77 +1344,88 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey verification failed. Attempts remaining: {remaining}"
     },
     "AUTH_114": {
       "message": "Passkey 校验失败次数过多，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Too many failed Passkey attempts. Please sign in again."
     },
     "AUTH_115": {
       "message": "Passkey MFA 验证处理失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not process Passkey MFA verification"
     },
     "AUTH_116": {
       "message": "退出成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Signed out"
     },
     "AUTH_117": {
       "message": "已从所有设备退出登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Signed out of all devices"
     },
     "AUTH_118": {
       "message": "key 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "key is required"
     },
     "AUTH_119": {
       "message": "value 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "value is required"
     },
     "AUTH_120": {
       "message": "用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Username must contain 3–20 characters: letters, numbers, underscores, hyphens or Simplified Chinese characters"
     },
     "AUTH_121": {
       "message": "birthDate 格式不正确，应为 YYYY-MM-DD",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Invalid birthDate. Use YYYY-MM-DD."
     },
     "AUTH_122": {
       "message": "请选择头像文件",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Choose an avatar image"
     },
     "AUTH_123": {
       "message": "头像文件不能超过 3MB",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Avatar images must not exceed 3 MB"
     },
     "AUTH_124": {
       "message": "仅支持图片文件",
@@ -1254,7 +1434,8 @@
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Only image files are supported"
     },
     "AUTH_125": {
       "message": "不支持的图片格式",
@@ -1263,56 +1444,64 @@
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Unsupported image format"
     },
     "AUTH_126": {
       "message": "头像上传成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Avatar uploaded"
     },
     "AUTH_127": {
       "message": "头像上传失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not upload the avatar"
     },
     "AUTH_128": {
       "message": "验证方式不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Verification method is required"
     },
     "AUTH_129": {
       "message": "验证方式只能是 password、email-code、passkey 或 totp",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Verification method must be password, email-code, passkey or totp"
     },
     "AUTH_130": {
       "message": "密码错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Incorrect password"
     },
     "AUTH_131": {
       "message": "验证成功，有效期15分钟",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Identity verified for 15 minutes"
     },
     "AUTH_132": {
       "message": "验证码或恢复码不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Verification code or recovery code is required"
     },
     "AUTH_133": {
       "message": "用户未启用 TOTP",
@@ -1320,133 +1509,152 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP is not enabled for this user"
     },
     "AUTH_134": {
       "message": "TOTP 验证失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "TOTP verification failed"
     },
     "AUTH_135": {
       "message": "Passkey 验证请使用 /auth/passkey/sensitive-verification-options 与 /auth/passkey/sensitive-verification-verify",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Use /auth/passkey/sensitive-verification-options and /auth/passkey/sensitive-verification-verify for Passkey verification"
     },
     "AUTH_136": {
       "message": "未知的验证方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Unknown verification method"
     },
     "AUTH_137": {
       "message": "新邮箱不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "New email address is required"
     },
     "AUTH_138": {
       "message": "邮箱更新成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Email address updated"
     },
     "AUTH_139": {
       "message": "请输入正确的确认文本",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Enter the correct confirmation text"
     },
     "AUTH_140": {
       "message": "账号已注销",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Account deleted"
     },
     "AUTH_141": {
       "message": "密码修改成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Password changed"
     },
     "AUTH_142": {
       "message": "生成注册选项成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey registration options created"
     },
     "AUTH_143": {
       "message": "生成注册选项失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not create Passkey registration options"
     },
     "AUTH_144": {
       "message": "Passkey 注册成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey registered"
     },
     "AUTH_145": {
       "message": "Passkey 注册失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not register the Passkey"
     },
     "AUTH_146": {
       "message": "生成认证选项成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey authentication options created"
     },
     "AUTH_147": {
       "message": "生成认证选项失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not create Passkey authentication options"
     },
     "AUTH_148": {
       "message": "Passkey 验证失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey verification failed"
     },
     "AUTH_149": {
       "message": "Passkey 认证失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey authentication failed"
     },
     "AUTH_150": {
       "message": "生成敏感操作验证选项成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Identity verification options created"
     },
     "AUTH_151": {
       "message": "生成验证选项失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not create verification options"
     },
     "AUTH_152": {
       "message": "敏感操作验证失败",
@@ -1454,49 +1662,56 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "Identity verification failed"
     },
     "AUTH_153": {
       "message": "获取 Passkey 列表失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not retrieve the Passkey list"
     },
     "AUTH_154": {
       "message": "Passkey 删除成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey deleted"
     },
     "AUTH_155": {
       "message": "删除失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not delete the item"
     },
     "AUTH_156": {
       "message": "Passkey 重命名成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Passkey renamed"
     },
     "AUTH_157": {
       "message": "重命名失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "Could not rename the item"
     },
     "OAUTH2_001": {
       "message": "创建成功，请妥善保存 AppSecret",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java"
-      ]
+      ],
+      "messageEn": "Application created. Store your AppSecret securely."
     },
     "OAUTH2_002": {
       "message": "删除成功",
@@ -1504,7 +1719,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Deleted successfully"
     },
     "OAUTH2_003": {
       "message": "请选择 Logo 文件",
@@ -1512,7 +1728,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Choose a logo image"
     },
     "OAUTH2_004": {
       "message": "Logo 文件不能超过 3MB",
@@ -1520,7 +1737,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Logo images must not exceed 3 MB"
     },
     "OAUTH2_005": {
       "message": "Logo 上传成功",
@@ -1528,7 +1746,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Logo uploaded"
     },
     "OAUTH2_006": {
       "message": "Logo 上传失败",
@@ -1536,7 +1755,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Could not upload the logo"
     },
     "OAUTH2_007": {
       "message": "授权成功",
@@ -1544,7 +1764,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Authorization granted"
     },
     "OAUTH2_008": {
       "message": "撤销成功",
@@ -1552,126 +1773,144 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Authorization revoked"
     },
     "OAUTH_001": {
       "message": "QQ 登录成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Signed in with QQ"
     },
     "OAUTH_002": {
       "message": "绑定并登录成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Account linked and signed in"
     },
     "OAUTH_003": {
       "message": "注册并绑定并登录成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Account created, linked and signed in"
     },
     "OAUTH_004": {
       "message": "未绑定 QQ 帐号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No QQ account is linked"
     },
     "OAUTH_005": {
       "message": "无法解绑最后登录方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "You cannot unlink your last sign-in method"
     },
     "OAUTH_006": {
       "message": "解绑成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Account unlinked"
     },
     "OAUTH_007": {
       "message": "参数缺失",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Required parameters are missing"
     },
     "OAUTH_008": {
       "message": "QQ 移动应用 AppId 未配置或不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The QQ mobile app AppId is not configured or does not match"
     },
     "OAUTH_009": {
       "message": "QQ 绑定成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ account linked"
     },
     "OAUTH_010": {
       "message": "QQ 账号已被绑定，请刷新后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This QQ account is already linked. Refresh and try again."
     },
     "OAUTH_011": {
       "message": "code 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "code is required"
     },
     "OAUTH_012": {
       "message": "state 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "state is required"
     },
     "OAUTH_013": {
       "message": "state 格式不正确，需为: 校验参数;操作类型;prd/dev",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Invalid state format. Expected: verification parameter;operation;prd/dev"
     },
     "OAUTH_014": {
       "message": "state 操作类型不支持，仅支持 login/bind/unbind",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The state operation must be login, bind or unbind"
     },
     "OAUTH_015": {
       "message": "state 操作类型与当前接口不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The state operation does not match this endpoint"
     },
     "OAUTH_016": {
       "message": "state 环境标识不支持，仅支持 prd/dev",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The state environment must be prd or dev"
     },
     "OAUTH_017": {
       "message": "QQ redirectUri 未配置",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ redirectUri is not configured"
     },
     "OAUTH_018": {
       "message": "{operation} 操作需要有效登录态",
@@ -1680,105 +1919,120 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The {operation} operation requires a valid signed-in session"
     },
     "OAUTH_019": {
       "message": "当前登录态对应用户不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The user for the current session does not exist"
     },
     "OAUTH_020": {
       "message": "授权码已使用，请重新发起 QQ 登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This authorization code has already been used. Start QQ sign-in again."
     },
     "OAUTH_021": {
       "message": "登录处理中，请勿重复提交",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Sign-in is being processed. Do not submit again."
     },
     "OAUTH_022": {
       "message": "QQ token 接口无响应",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No response from the QQ token endpoint"
     },
     "OAUTH_023": {
       "message": "QQ token 错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ token request failed"
     },
     "OAUTH_024": {
       "message": "未从 QQ 返回 access_token",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ did not return an access_token"
     },
     "OAUTH_025": {
       "message": "QQ me 接口无响应",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No response from the QQ identity endpoint"
     },
     "OAUTH_026": {
       "message": "QQ me 错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ identity request failed"
     },
     "OAUTH_027": {
       "message": "未从 QQ 返回 openid",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ did not return an openid"
     },
     "OAUTH_028": {
       "message": "未从 QQ 返回 unionid，请确认已开通 getUnionId 权限",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ did not return a unionid. Check that getUnionId permission is enabled."
     },
     "OAUTH_029": {
       "message": "bind 操作需要有效登录态",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Linking an account requires a valid signed-in session"
     },
     "OAUTH_030": {
       "message": "unbind 操作需要有效登录态",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Unlinking an account requires a valid signed-in session"
     },
     "OAUTH_031": {
       "message": "未从 QQ 返回可用于解绑校验的 unionid",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ did not return a unionid for unlink verification"
     },
     "OAUTH_032": {
       "message": "当前授权的 QQ 账号与已绑定账号不一致",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The authorized QQ account does not match the linked account"
     },
     "OAUTH_033": {
       "message": "{provider} 账号已被绑定",
@@ -1787,14 +2041,16 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This {provider} account is already linked"
     },
     "OAUTH_034": {
       "message": "注册失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Could not create the account"
     },
     "OAUTH_035": {
       "message": "{provider} 绑定成功",
@@ -1803,315 +2059,360 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "{provider} account linked"
     },
     "OAUTH_036": {
       "message": "state 格式不正确，需为: verifyToken;operation;env",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Invalid state format. Expected: verifyToken;operation;env"
     },
     "OAUTH_037": {
       "message": "GitHub redirectUri 未配置",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub redirectUri is not configured"
     },
     "OAUTH_038": {
       "message": "GitHub redirectUri 非法，请检查后端配置",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Invalid GitHub redirectUri. Check the server configuration."
     },
     "OAUTH_039": {
       "message": "GitHub OAuth 配置缺失",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub OAuth configuration is missing"
     },
     "OAUTH_040": {
       "message": "授权码已使用，请重新发起 GitHub 登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This authorization code has already been used. Start GitHub sign-in again."
     },
     "OAUTH_041": {
       "message": "GitHub token 接口无响应",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No response from the GitHub token endpoint"
     },
     "OAUTH_042": {
       "message": "GitHub token 错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub token request failed"
     },
     "OAUTH_043": {
       "message": "未从 GitHub 返回 access_token",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub did not return an access_token"
     },
     "OAUTH_044": {
       "message": "GitHub user 接口无响应",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No response from the GitHub user endpoint"
     },
     "OAUTH_045": {
       "message": "GitHub user 错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub user request failed"
     },
     "OAUTH_046": {
       "message": "未从 GitHub 返回用户 ID",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub did not return a user ID"
     },
     "OAUTH_047": {
       "message": "当前账号已绑定 GitHub",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This account is already linked to GitHub"
     },
     "OAUTH_048": {
       "message": "该 GitHub 账号已被绑定",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This GitHub account is already linked"
     },
     "OAUTH_049": {
       "message": "GitHub 绑定成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub account linked"
     },
     "OAUTH_050": {
       "message": "state 操作类型不支持，仅支持 login/bind",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The state operation must be login or bind"
     },
     "OAUTH_051": {
       "message": "Google redirectUri 未配置",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google redirectUri is not configured"
     },
     "OAUTH_052": {
       "message": "Google OAuth 配置缺失",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google OAuth configuration is missing"
     },
     "OAUTH_053": {
       "message": "授权码已使用，请重新发起 Google 登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This authorization code has already been used. Start Google sign-in again."
     },
     "OAUTH_054": {
       "message": "Google token 错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google token request failed"
     },
     "OAUTH_055": {
       "message": "Google token 接口无响应",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No response from the Google token endpoint"
     },
     "OAUTH_056": {
       "message": "Google token 错误: invalid_grant（授权码已使用/过期，或 redirect_uri 与授权请求不一致）",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google token request failed: invalid_grant. The code was used or expired, or redirect_uri does not match the authorization request."
     },
     "OAUTH_057": {
       "message": "未从 Google 返回 access_token",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google did not return an access_token"
     },
     "OAUTH_058": {
       "message": "未从 Google 返回用户标识",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google did not return a user identifier"
     },
     "OAUTH_059": {
       "message": "当前账号已绑定 Google",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This account is already linked to Google"
     },
     "OAUTH_060": {
       "message": "该 Google 账号已被绑定",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This Google account is already linked"
     },
     "OAUTH_061": {
       "message": "Google 绑定成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google account linked"
     },
     "OAUTH_062": {
       "message": "未绑定 Google 帐号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No Google account is linked"
     },
     "OAUTH_063": {
       "message": "Google 解绑成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Google account unlinked"
     },
     "OAUTH_064": {
       "message": "codeVerifier 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "codeVerifier is required"
     },
     "OAUTH_065": {
       "message": "Microsoft redirectUri 未配置",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft redirectUri is not configured"
     },
     "OAUTH_066": {
       "message": "Microsoft OAuth client_id 未配置",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft OAuth client_id is not configured"
     },
     "OAUTH_067": {
       "message": "授权码已使用，请重新发起 Microsoft 登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This authorization code has already been used. Start Microsoft sign-in again."
     },
     "OAUTH_068": {
       "message": "Microsoft token 接口无响应",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No response from the Microsoft token endpoint"
     },
     "OAUTH_069": {
       "message": "Microsoft token 错误",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft token request failed"
     },
     "OAUTH_070": {
       "message": "未从 Microsoft 返回 access_token",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft did not return an access_token"
     },
     "OAUTH_071": {
       "message": "未从 Microsoft 返回用户标识",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft did not return a user identifier"
     },
     "OAUTH_072": {
       "message": "当前账号已绑定 Microsoft",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This account is already linked to Microsoft"
     },
     "OAUTH_073": {
       "message": "该 Microsoft 账号已被绑定",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This Microsoft account is already linked"
     },
     "OAUTH_074": {
       "message": "Microsoft 绑定成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft account linked"
     },
     "OAUTH_075": {
       "message": "未绑定 Microsoft 帐号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No Microsoft account is linked"
     },
     "OAUTH_076": {
       "message": "当前授权的 Microsoft 账号与已绑定账号不一致",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "The authorized Microsoft account does not match the linked account"
     },
     "OAUTH_077": {
       "message": "Microsoft 解绑成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Microsoft account unlinked"
     },
     "OAUTH_078": {
       "message": "未绑定 GitHub 帐号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "No GitHub account is linked"
     },
     "OAUTH_079": {
       "message": "GitHub 解绑成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "GitHub account unlinked"
     },
     "OAUTH_080": {
       "message": "当前账号已绑定 {provider}",
@@ -2120,7 +2421,8 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This account is already linked to {provider}"
     },
     "OAUTH_081": {
       "message": "该 {provider} 账号已被绑定",
@@ -2129,245 +2431,280 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "This {provider} account is already linked"
     },
     "OAUTH_082": {
       "message": "QQ openid 校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ openid verification failed"
     },
     "OAUTH_083": {
       "message": "QQ 未返回 unionid，请确认已开通 getUnionId 权限",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ did not return a unionid. Check that getUnionId permission is enabled."
     },
     "OAUTH_084": {
       "message": "QQ unionid 校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ unionid verification failed"
     },
     "OAUTH_085": {
       "message": "QQ AppId 校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ AppId verification failed"
     },
     "OAUTH_086": {
       "message": "不支持的第三方账号类型",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Unsupported third-party account type"
     },
     "OAUTH_087": {
       "message": "第三方登录状态已过期，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Third-party sign-in has expired. Please authorize again."
     },
     "OAUTH_088": {
       "message": "第三方登录状态无效，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Third-party sign-in is invalid. Please authorize again."
     },
     "OAUTH_089": {
       "message": "第三方登录状态缺失，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "Third-party sign-in information is missing. Please authorize again."
     },
     "OAUTH_090": {
       "message": "QQ unionid 缺失，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java"
-      ]
+      ],
+      "messageEn": "QQ unionid is missing. Please authorize again."
     },
     "REQUEST_001": {
       "message": "推送设置已保存",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/PushDeviceController.java"
-      ]
+      ],
+      "messageEn": "Push notification settings saved"
     },
     "REQUEST_002": {
       "message": "此设备已停止接收推送",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/PushDeviceController.java"
-      ]
+      ],
+      "messageEn": "This device will no longer receive push notifications"
     },
     "REQUEST_003": {
       "message": "Access token不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/SensitiveLogController.java"
-      ]
+      ],
+      "messageEn": "Access token is missing"
     },
     "REQUEST_004": {
       "message": "Access token无效或已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/SensitiveLogController.java"
-      ]
+      ],
+      "messageEn": "The access token is invalid or has expired"
     },
     "REQUEST_005": {
       "message": "开始日期格式不正确，请使用 YYYY-MM-DD",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/SensitiveLogController.java"
-      ]
+      ],
+      "messageEn": "Invalid start date. Use YYYY-MM-DD."
     },
     "REQUEST_006": {
       "message": "结束日期格式不正确，请使用 YYYY-MM-DD",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/SensitiveLogController.java"
-      ]
+      ],
+      "messageEn": "Invalid end date. Use YYYY-MM-DD."
     },
     "REQUEST_007": {
       "message": "获取敏感操作日志成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/SensitiveLogController.java"
-      ]
+      ],
+      "messageEn": "Security activity retrieved"
     },
     "SSO_001": {
       "message": "创建成功，请妥善保存 ClientSecret",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
-      ]
+      ],
+      "messageEn": "Client created. Store your ClientSecret securely."
     },
     "TOTP_001": {
       "message": "用户已启用 TOTP",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP is already enabled for this user"
     },
     "TOTP_002": {
       "message": "获取 TOTP 注册选项成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP registration options retrieved"
     },
     "TOTP_003": {
       "message": "生成 TOTP 秘钥失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Could not generate the TOTP secret"
     },
     "TOTP_004": {
       "message": "恢复码不能为空，请使用 registration-options 返回的 recoveryCodes",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Recovery codes are required. Use recoveryCodes returned by registration-options."
     },
     "TOTP_005": {
       "message": "TOTP 未初始化，请先调用 registration-options",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP is not initialized. Request registration-options first."
     },
     "TOTP_006": {
       "message": "待确认秘钥已过期，请重新生成",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "The pending secret has expired. Generate a new secret."
     },
     "TOTP_007": {
       "message": "TOTP 注册成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP enabled"
     },
     "TOTP_008": {
       "message": "验证码无效或已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "The verification code is invalid or has expired"
     },
     "TOTP_009": {
       "message": "TOTP 注册失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Could not enable TOTP"
     },
     "TOTP_010": {
       "message": "TOTP 验证成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP verified"
     },
     "TOTP_011": {
       "message": "使用恢复码验证成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Verified using a recovery code"
     },
     "TOTP_012": {
       "message": "验证失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Verification failed"
     },
     "TOTP_013": {
       "message": "获取 TOTP 状态成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP status retrieved"
     },
     "TOTP_014": {
       "message": "TOTP 禁用成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "TOTP disabled"
     },
     "TOTP_015": {
       "message": "恢复码已重新生成",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Recovery codes regenerated"
     },
     "TOTP_016": {
       "message": "重新生成恢复码失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Could not regenerate recovery codes"
     },
     "TOTP_017": {
       "message": "获取回复码成功",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java"
-      ]
+      ],
+      "messageEn": "Recovery codes retrieved"
     },
     "REQUEST_008": {
       "message": "请求方法不支持: {method}",
@@ -2376,7 +2713,8 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/exception/GlobalExceptionHandler.java"
-      ]
+      ],
+      "messageEn": "Unsupported request method: {method}"
     },
     "REQUEST_009": {
       "message": "不支持的请求类型: {contentType}",
@@ -2385,301 +2723,344 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/exception/GlobalExceptionHandler.java"
-      ]
+      ],
+      "messageEn": "Unsupported content type: {contentType}"
     },
     "RECOVERY_001": {
       "message": "创建恢复授权失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java"
-      ]
+      ],
+      "messageEn": "Could not create the recovery authorization"
     },
     "RECOVERY_002": {
       "message": "读取恢复授权失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java"
-      ]
+      ],
+      "messageEn": "Could not read the recovery authorization"
     },
     "RECOVERY_003": {
       "message": "解析恢复授权失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java"
-      ]
+      ],
+      "messageEn": "Could not parse the recovery authorization"
     },
     "APPLE_014": {
       "message": "Apple 验证用途无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple verification purpose"
     },
     "APPLE_015": {
       "message": "Apple challenge 用途不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "The Apple challenge purpose does not match"
     },
     "APPLE_016": {
       "message": "Apple state 校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Apple state verification failed"
     },
     "APPLE_017": {
       "message": "Apple 授权码身份不一致",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "The Apple authorization code identity does not match"
     },
     "APPLE_018": {
       "message": "请使用当前账号绑定的 Apple 身份进行验证",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Verify using the Apple identity linked to the current account"
     },
     "APPLE_019": {
       "message": "绑定账号不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "The account to link does not exist"
     },
     "APPLE_020": {
       "message": "请先同意服务协议与隐私政策",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Accept the service agreement and privacy policy first"
     },
     "APPLE_021": {
       "message": "此 Apple 身份只能绑定已有账号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "This Apple identity can only be linked to an existing account"
     },
     "APPLE_022": {
       "message": "Apple 身份已绑定，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "This Apple identity is already linked. Please sign in again."
     },
     "APPLE_023": {
       "message": "邮箱已存在，请登录已有账号后绑定",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "This email address already exists. Sign in to the existing account before linking."
     },
     "APPLE_024": {
       "message": "用户名格式无效或已被使用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "This username is invalid or already taken"
     },
     "APPLE_025": {
       "message": "请在登录后重新授权 Apple 以绑定账号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "After signing in, authorize Apple again to link your account"
     },
     "APPLE_026": {
       "message": "此账号或 Apple 身份已绑定",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "This account or Apple identity is already linked"
     },
     "APPLE_027": {
       "message": "尚未绑定 Apple",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "No Apple account is linked"
     },
     "APPLE_028": {
       "message": "请先设置密码、验证邮箱或绑定其他登录方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Set a password, verify your email address or link another sign-in method first"
     },
     "APPLE_029": {
       "message": "Apple 通知格式无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple notification format"
     },
     "APPLE_030": {
       "message": "Apple 通知事件无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple notification event"
     },
     "APPLE_031": {
       "message": "Apple 通知处理暂时不可用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Apple notification processing is temporarily unavailable"
     },
     "APPLE_032": {
       "message": "Apple 通知正在处理中，请重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "The Apple notification is being processed. Please try again."
     },
     "APPLE_033": {
       "message": "Apple 验证会话不匹配，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "The Apple verification session does not match. Please authorize again."
     },
     "APPLE_034": {
       "message": "Apple 验证票据无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple verification ticket"
     },
     "APPLE_035": {
       "message": "Apple 验证已过期或已使用，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Apple verification has expired or was already used. Please authorize again."
     },
     "APPLE_036": {
       "message": "Apple 验证服务暂时不可用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
-      ]
+      ],
+      "messageEn": "Apple verification is temporarily unavailable"
     },
     "APPLE_037": {
       "message": "Apple nonce 校验失败，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Apple nonce verification failed. Please authorize again."
     },
     "APPLE_038": {
       "message": "Apple 身份无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple identity"
     },
     "APPLE_039": {
       "message": "Apple 凭据无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple credentials"
     },
     "APPLE_040": {
       "message": "Apple audience 不受信任",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Untrusted Apple audience"
     },
     "APPLE_041": {
       "message": "Apple JWT 格式无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple JWT format"
     },
     "APPLE_042": {
       "message": "Apple JWT 算法无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple JWT algorithm"
     },
     "APPLE_043": {
       "message": "Apple JWT 声明无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple JWT claims"
     },
     "APPLE_044": {
       "message": "Apple 凭据校验失败，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Apple credential verification failed. Please authorize again."
     },
     "APPLE_045": {
       "message": "Apple key id 无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple key ID"
     },
     "APPLE_046": {
       "message": "Apple 签名密钥未知",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Unknown Apple signing key"
     },
     "APPLE_047": {
       "message": "Apple 授权码缺失",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Apple authorization code is missing"
     },
     "APPLE_048": {
       "message": "Apple 未返回可撤销凭据，请重新授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Apple did not return revocable credentials. Please authorize again."
     },
     "APPLE_049": {
       "message": "Apple 通知签名或 audience 无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple notification signature or audience"
     },
     "APPLE_050": {
       "message": "Apple 服务端私钥配置无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Invalid Apple server private key configuration"
     },
     "APPLE_051": {
       "message": "Apple 服务暂时不可用，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AppleTokenClient.java"
-      ]
+      ],
+      "messageEn": "Apple services are temporarily unavailable. Please try again later."
     },
     "REQUEST_010": {
       "message": "不支持的授权模式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AuthorizationGrantPolicy.java"
-      ]
+      ],
+      "messageEn": "Unsupported authorization mode"
     },
     "REQUEST_011": {
       "message": "限时授权有效期必须在 {min}-{max} 秒之间",
@@ -2689,161 +3070,184 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AuthorizationGrantPolicy.java"
-      ]
+      ],
+      "messageEn": "Temporary authorization must last between {min} and {max} seconds"
     },
     "MOBILE_AUTHORIZATION_001": {
       "message": "授权请求不完整",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "The authorization request is incomplete"
     },
     "MOBILE_AUTHORIZATION_002": {
       "message": "授权请求过长",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "The authorization request is too long"
     },
     "MOBILE_AUTHORIZATION_003": {
       "message": "请先登录后授权",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "Sign in before granting authorization"
     },
     "MOBILE_AUTHORIZATION_004": {
       "message": "授权请求校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "Authorization request verification failed"
     },
     "MOBILE_AUTHORIZATION_005": {
       "message": "网页来源不受信任",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "The web origin is not trusted"
     },
     "MOBILE_AUTHORIZATION_006": {
       "message": "授权请求无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "Invalid authorization request"
     },
     "MOBILE_AUTHORIZATION_007": {
       "message": "请求正在处理中，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "The request is being processed. Please try again later."
     },
     "MOBILE_AUTHORIZATION_008": {
       "message": "授权已提交，请等待结果",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "Authorization submitted. Please wait for the result."
     },
     "MOBILE_AUTHORIZATION_009": {
       "message": "授权请求已完成或过期，请返回网页重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileAuthorizationService.java"
-      ]
+      ],
+      "messageEn": "This authorization request has finished or expired. Return to the web page and try again."
     },
     "MOBILE_BRIDGE_001": {
       "message": "创建移动桥接挑战失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "Could not create the mobile bridge challenge"
     },
     "MOBILE_BRIDGE_002": {
       "message": "读取移动桥接挑战失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "Could not read the mobile bridge challenge"
     },
     "MOBILE_BRIDGE_003": {
       "message": "移动桥接挑战不存在或已过期",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "The mobile bridge challenge does not exist or has expired"
     },
     "MOBILE_BRIDGE_004": {
       "message": "移动桥接挑战已处理",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "The mobile bridge challenge has already been processed"
     },
     "MOBILE_BRIDGE_005": {
       "message": "更新移动桥接挑战失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "Could not update the mobile bridge challenge"
     },
     "MOBILE_BRIDGE_006": {
       "message": "returnUrl 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "returnUrl is required"
     },
     "MOBILE_BRIDGE_007": {
       "message": "returnUrl 格式不正确",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "Invalid returnUrl format"
     },
     "MOBILE_BRIDGE_008": {
       "message": "returnUrl 必须是完整地址",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "returnUrl must be an absolute URL"
     },
     "MOBILE_BRIDGE_009": {
       "message": "returnUrl 仅支持 http 或 https",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "returnUrl only supports http or https"
     },
     "MOBILE_BRIDGE_010": {
       "message": "returnUrl 不在允许的域名白名单中",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
-      ]
+      ],
+      "messageEn": "returnUrl is not in the allowed domain list"
     },
     "OAUTH2_009": {
       "message": "AppID 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "AppID is required"
     },
     "OAUTH2_010": {
       "message": "应用名称不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Application name is required"
     },
     "OAUTH2_011": {
       "message": "联系方式不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Contact information is required"
     },
     "OAUTH2_012": {
       "message": "回调地址不能为空",
@@ -2851,7 +3255,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Redirect URL is required"
     },
     "OAUTH2_013": {
       "message": "每位认证用户最多只能创建 {maxApps} 个 OAuth2 应用",
@@ -2860,7 +3265,8 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Each verified user may create at most {maxApps} OAuth2 applications"
     },
     "OAUTH2_014": {
       "message": "当前仅支持 authorization_code",
@@ -2868,14 +3274,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Only authorization_code is supported"
     },
     "OAUTH2_015": {
       "message": "AppSecret 不正确",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Incorrect AppSecret"
     },
     "OAUTH2_016": {
       "message": "授权码无效、已过期或已使用",
@@ -2883,14 +3291,16 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The authorization code is invalid, expired or already used"
     },
     "OAUTH2_017": {
       "message": "授权码与当前应用或回调地址不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "The authorization code does not match this application or redirect URL"
     },
     "OAUTH2_018": {
       "message": "授权用户不存在",
@@ -2898,7 +3308,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The authorizing user does not exist"
     },
     "OAUTH2_019": {
       "message": "授权已撤销或已过期",
@@ -2906,7 +3317,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Authorization has been revoked or has expired"
     },
     "OAUTH2_020": {
       "message": "Access Token 无效或已过期",
@@ -2914,7 +3326,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The access token is invalid or has expired"
     },
     "OAUTH2_021": {
       "message": "Access Token 对应用户不存在",
@@ -2922,28 +3335,32 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The user associated with this access token does not exist"
     },
     "OAUTH2_022": {
       "message": "仅个人认证、企业认证或管理员账号可以创建 OAuth2 应用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Only individually verified, enterprise-verified or administrator accounts may create OAuth2 applications"
     },
     "OAUTH2_023": {
       "message": "应用不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Application not found"
     },
     "OAUTH2_024": {
       "message": "AppID 不存在或已停用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "AppID does not exist or is disabled"
     },
     "OAUTH2_025": {
       "message": "仅支持 response_type=code",
@@ -2951,28 +3368,32 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Only response_type=code is supported"
     },
     "OAUTH2_026": {
       "message": "redirect_uri 与应用登记信息不一致",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "redirect_uri does not match the application's registered redirect URL"
     },
     "OAUTH2_027": {
       "message": "应用名称长度需在 2-100 个字符之间",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Application names must contain 2–100 characters"
     },
     "OAUTH2_028": {
       "message": "联系方式长度需在 3-120 个字符之间",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Contact information must contain 3–120 characters"
     },
     "OAUTH2_029": {
       "message": "回调地址仅支持 https:// 或 http://localhost",
@@ -2980,7 +3401,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Redirect URLs must use https:// or http://localhost"
     },
     "OAUTH2_030": {
       "message": "回调地址不允许包含 URL fragment",
@@ -2988,7 +3410,8 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Redirect URLs must not contain a URL fragment"
     },
     "OAUTH2_031": {
       "message": "回调地址格式不正确",
@@ -2996,35 +3419,40 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Invalid redirect URL format"
     },
     "OAUTH2_032": {
       "message": "回调地址总长度不能超过 500 个字符",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Redirect URLs must not exceed 500 characters in total"
     },
     "OAUTH2_033": {
       "message": "请求的 scope 超出了应用已登记的权限范围",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "The requested scope exceeds the application's registered permissions"
     },
     "OAUTH2_034": {
       "message": "暂仅支持 profile、email 两种 scope",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Only profile and email scopes are supported"
     },
     "OAUTH2_035": {
       "message": "生成 AppID 失败，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Could not generate AppID. Please try again later."
     },
     "OAUTH2_036": {
       "message": "生成授权码失败",
@@ -3032,154 +3460,176 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Could not generate the authorization code"
     },
     "OAUTH2_037": {
       "message": "生成用户标识失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
-      ]
+      ],
+      "messageEn": "Could not generate the user identifier"
     },
     "PASSKEY_001": {
       "message": "Challenge 已过期或不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "The challenge has expired or does not exist"
     },
     "PASSKEY_002": {
       "message": "Passkey 注册验证失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "Passkey registration verification failed"
     },
     "PASSKEY_003": {
       "message": "AuthenticatorData 缺少 AttestedCredentialData",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "AuthenticatorData is missing AttestedCredentialData"
     },
     "PASSKEY_004": {
       "message": "此 Passkey 已被注册",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "This Passkey is already registered"
     },
     "PASSKEY_005": {
       "message": "Passkey 不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "Passkey not found"
     },
     "PASSKEY_006": {
       "message": "Passkey 认证验证失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "Passkey authentication verification failed"
     },
     "PASSKEY_007": {
       "message": "Passkey 计数异常，可能是克隆的 Passkey",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "The Passkey counter is abnormal. This Passkey may have been cloned."
     },
     "PASSKEY_008": {
       "message": "Passkey 不属于当前用户",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "This Passkey does not belong to the current user"
     },
     "PASSKEY_009": {
       "message": "无权限删除此 Passkey",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "You do not have permission to delete this Passkey"
     },
     "PASSKEY_010": {
       "message": "Passkey 名称不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "Passkey name is required"
     },
     "PASSKEY_011": {
       "message": "Passkey 名称长度不能超过 50 个字符",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "Passkey names must not exceed 50 characters"
     },
     "PASSKEY_012": {
       "message": "无权限修改此 Passkey",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/PasskeyService.java"
-      ]
+      ],
+      "messageEn": "You do not have permission to edit this Passkey"
     },
     "QR_001": {
       "message": "保存二维码挑战失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/QrChallengeService.java"
-      ]
+      ],
+      "messageEn": "Could not save the QR challenge"
     },
     "SESSION_TRANSFER_001": {
       "message": "创建跨端票据失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "Could not create the session transfer ticket"
     },
     "SESSION_TRANSFER_002": {
       "message": "读取跨端票据失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "Could not read the session transfer ticket"
     },
     "SESSION_TRANSFER_003": {
       "message": "跨端票据目标端不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "The session transfer ticket does not match the target platform"
     },
     "SESSION_TRANSFER_004": {
       "message": "跨端票据数据无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "Invalid session transfer ticket data"
     },
     "SESSION_TRANSFER_005": {
       "message": "解析跨端票据失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SessionTransferService.java"
-      ]
+      ],
+      "messageEn": "Could not parse the session transfer ticket"
     },
     "SSO_002": {
       "message": "ClientID 不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "ClientID is required"
     },
     "SSO_003": {
       "message": "客户端名称不能为空",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Client name is required"
     },
     "SSO_004": {
       "message": "当前环境最多只能创建 {maxClients} 个 SSO 内部服务应用",
@@ -3188,357 +3638,408 @@
       ],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "This environment may contain at most {maxClients} internal SSO applications"
     },
     "SSO_005": {
       "message": "ClientSecret 不正确",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Incorrect ClientSecret"
     },
     "SSO_006": {
       "message": "授权码与当前客户端或回调地址不匹配",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The authorization code does not match this client or redirect URL"
     },
     "SSO_007": {
       "message": "只有管理员可以创建或管理 SSO 内部服务应用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Only administrators may create or manage internal SSO applications"
     },
     "SSO_008": {
       "message": "SSO 客户端不存在",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "SSO client not found"
     },
     "SSO_009": {
       "message": "SSO 客户端不存在或已停用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The SSO client does not exist or is disabled"
     },
     "SSO_010": {
       "message": "nonce 长度不能超过 255 个字符",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "nonce must not exceed 255 characters"
     },
     "SSO_011": {
       "message": "当前 SSO 客户端要求必须提供 PKCE 参数",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "This SSO client requires PKCE parameters"
     },
     "SSO_012": {
       "message": "code_challenge 与 code_challenge_method 必须同时提供",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "code_challenge and code_challenge_method must be provided together"
     },
     "SSO_013": {
       "message": "当前仅支持 code_challenge_method=S256",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Only code_challenge_method=S256 is supported"
     },
     "SSO_014": {
       "message": "code_challenge 长度需在 43-128 个字符之间",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "code_challenge must contain 43–128 characters"
     },
     "SSO_015": {
       "message": "缺少 PKCE 校验信息",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "PKCE verification information is missing"
     },
     "SSO_016": {
       "message": "缺少 code_verifier",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "code_verifier is missing"
     },
     "SSO_017": {
       "message": "code_verifier 长度无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Invalid code_verifier length"
     },
     "SSO_018": {
       "message": "PKCE 校验失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "PKCE verification failed"
     },
     "SSO_019": {
       "message": "客户端名称长度需在 2-120 个字符之间",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Client names must contain 2–120 characters"
     },
     "SSO_020": {
       "message": "至少需要配置一个 redirect_uri",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Configure at least one redirect_uri"
     },
     "SSO_021": {
       "message": "redirect_uri 与客户端登记信息不一致",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "redirect_uri does not match the client's registered redirect URL"
     },
     "SSO_022": {
       "message": "SSO 暂仅支持 openid、profile、email",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "SSO only supports openid, profile and email scopes"
     },
     "SSO_023": {
       "message": "SSO 授权请求必须包含 openid",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "SSO authorization requests must include openid"
     },
     "SSO_024": {
       "message": "请求的 scope 超出了客户端登记范围",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "The requested scope exceeds the client's registered permissions"
     },
     "SSO_025": {
       "message": "生成 sub 失败",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Could not generate sub"
     },
     "SSO_026": {
       "message": "生成 ClientID 失败，请稍后重试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
-      ]
+      ],
+      "messageEn": "Could not generate ClientID. Please try again later."
     },
     "REQUEST_UPLOAD_TOO_LARGE": {
       "message": "上传文件过大，请选择较小文件",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/exception/GlobalExceptionHandler.java"
-      ]
+      ],
+      "messageEn": "The file is too large. Choose a smaller file."
     },
     "ADAPTIVE_REASON_SESSION_MISSING": {
       "message": "未找到当前活跃会话",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "No active session was found"
     },
     "ADAPTIVE_REASON_IP_CHANGED": {
       "message": "当前 IP 与会话建立时不一致",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Your current IP address differs from the IP used to start this session"
     },
     "ADAPTIVE_REASON_LOCATION_CHANGED": {
       "message": "当前位置与会话建立位置发生变化",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Your current location differs from the location where this session started"
     },
     "ADAPTIVE_REASON_AGE_THREE_DAYS": {
       "message": "当前会话已持续超过 3 天",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has been active for more than 3 days"
     },
     "ADAPTIVE_REASON_AGE_TWELVE_HOURS": {
       "message": "当前会话已持续超过 12 小时",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has been active for more than 12 hours"
     },
     "ADAPTIVE_REASON_IDLE_TWO_HOURS": {
       "message": "当前会话空闲时间超过 2 小时",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has been idle for more than 2 hours"
     },
     "ADAPTIVE_REASON_IDLE_THIRTY_MINUTES": {
       "message": "当前会话已空闲超过 30 分钟",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has been idle for more than 30 minutes"
     },
     "ADAPTIVE_REASON_RECENT_FAILURES": {
       "message": "24 小时内存在多次失败认证或敏感操作",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Multiple failed sign-ins or sensitive operations occurred in the last 24 hours"
     },
     "ADAPTIVE_REASON_RECENT_HIGH_RISK": {
       "message": "最近一次安全事件风险评分较高",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "The most recent security event had a high risk score"
     },
     "ADAPTIVE_REASON_STABLE": {
       "message": "当前会话环境稳定，未发现需要额外认证的风险信号",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Your session environment is stable. No signals requiring additional verification were found."
     },
     "ADAPTIVE_ACTION_RELOGIN": {
       "message": "当前会话不存在或已失效，请重新登录",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session is missing or has expired. Please sign in again."
     },
     "ADAPTIVE_ACTION_STEP_UP": {
       "message": "建议立即进行一次额外身份验证，再继续执行敏感操作",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Verify your identity again before continuing with sensitive operations"
     },
     "ADAPTIVE_ACTION_VERIFY": {
       "message": "建议先完成一次敏感验证，以提升当前会话信任等级",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Complete identity verification to increase this session’s trust level"
     },
     "ADAPTIVE_ACTION_VERIFIED": {
       "message": "当前会话处于已验证状态，可继续执行敏感操作",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session is verified. You can continue with sensitive operations."
     },
     "ADAPTIVE_ACTION_SAFE": {
       "message": "当前会话风险较低，可继续使用",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has low risk. You can continue using it."
     },
     "ADAPTIVE_ACTION_FROZEN": {
       "message": "当前会话风险极高，系统已冻结会话，请重新登录并完成验证",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has been frozen due to very high risk. Sign in again and complete verification."
     },
     "ADAPTIVE_ACTION_POLICY_STEP_UP": {
       "message": "当前会话风险中等，需完成额外身份验证后继续敏感操作",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has moderate risk. Verify your identity again before continuing with sensitive operations."
     },
     "ADAPTIVE_ALERT_FROZEN_TITLE": {
       "message": "高风险会话已冻结",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "High-risk session frozen"
     },
     "ADAPTIVE_ALERT_FROZEN_MESSAGE": {
       "message": "当前会话已被冻结，请重新登录并完成安全验证",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "This session has been frozen. Sign in again and complete security verification."
     },
     "ADAPTIVE_ALERT_STEP_UP_TITLE": {
       "message": "需要额外身份验证",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Additional identity verification required"
     },
     "ADAPTIVE_ALERT_STEP_UP_MESSAGE": {
       "message": "当前会话出现风险信号，请先完成额外身份验证",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/AdaptiveContinuousAuthService.java"
-      ]
+      ],
+      "messageEn": "Risk signals were detected in this session. Verify your identity before continuing."
     },
     "QR_REJECT_1": {
       "message": "未配置可用的非扫码 MFA 方式",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "No MFA method other than QR verification is available"
     },
     "QR_REJECT_2": {
       "message": "当前登录会话无效",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The current sign-in session is invalid"
     },
     "QR_REJECT_3": {
       "message": "二维码挑战缺少 webIp",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
-      ]
+      ],
+      "messageEn": "The QR challenge is missing webIp"
     },
     "APPLE_BIND_EMAIL_CONFLICT": {
       "message": "邮箱已存在，请登录已有账号后绑定 Apple",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "This email address already exists. Sign in to the existing account before linking Apple."
     },
     "APPLE_BIND_REQUIRED": {
       "message": "请创建账号，或登录已有账号后绑定 Apple",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AppleAuthController.java"
-      ]
+      ],
+      "messageEn": "Create an account, or sign in to an existing account and link Apple."
     },
     "PASSKEY_MFA_UNSUPPORTED": {
       "message": "当前账号需要额外的 MFA 验证，但浏览器桥接页无法继续完成",
       "params": [],
       "sources": [
         "web/src/views/DesktopPasskeyBridgeView.vue"
-      ]
+      ],
+      "messageEn": "This account requires additional MFA verification, which cannot be completed on the browser bridge page"
     }
   }
 }

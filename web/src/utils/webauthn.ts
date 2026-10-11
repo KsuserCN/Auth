@@ -1,3 +1,4 @@
+import { t, LocalizedError } from '@/i18n'
 /**
  * WebAuthn 工具函数
  * 用于处理 Passkey 相关的浏览器 API 调用
@@ -34,7 +35,7 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
  */
 export function base64UrlToArrayBuffer(base64url: string): ArrayBuffer {
   if (!base64url) {
-    throw new Error('base64url 不能为空')
+    throw new LocalizedError('ui.webauthn.message001')
   }
   // 将 Base64URL 转换为标准 Base64
   let base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
@@ -153,7 +154,7 @@ export async function createPasskeyCredential(options: {
 
     return credential
   } catch (error) {
-    console.error('创建 Passkey 失败:', error)
+    console.error(t('ui.webauthn.message002'), error)
     throw error
   }
 }
@@ -177,10 +178,10 @@ export async function getPasskeyCredential(options: {
   try {
     // 验证必事字段
     if (!options.challenge) {
-      throw new Error('challenge 不能为空')
+      throw new LocalizedError('ui.webauthn.message003')
     }
     if (!options.rpId) {
-      throw new Error('rpId 不能为空')
+      throw new LocalizedError('ui.webauthn.message004')
     }
 
     const allowCredentialsData =
@@ -216,7 +217,7 @@ export async function getPasskeyCredential(options: {
 
     return credential
   } catch (error) {
-    console.error('获取 Passkey 失败:', error)
+    console.error(t('ui.webauthn.message005'), error)
     throw error
   }
 }

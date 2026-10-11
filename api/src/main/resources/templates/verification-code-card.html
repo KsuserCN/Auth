@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<html lang="zh-Hans" th:lang="${language}" xmlns:th="http://www.thymeleaf.org">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>验证码 - Ksuser CAS</title>
+    <title th:text="${copy.subject}">验证码 - Ksuser CAS</title>
     <style>
       * {
         margin: 0;
@@ -377,34 +377,34 @@
 
       <!-- 卡片内容 -->
       <div class="card-body">
-        <h2 class="greeting">您好！</h2>
-        <p class="message">我们在<span th:text="${time}"></span>收到了您<span th:text="${action}"></span>的请求。</p>
+        <h2 class="greeting" th:text="${copy.greeting}">您好！</h2>
+        <p class="message" th:text="${requestDescription}"></p>
 
         <!-- 验证码显示 -->
         <div class="code-display">
-          <p class="code-label">您的验证码</p>
+          <p class="code-label" th:text="${copy.codeLabel}">您的验证码</p>
           <div class="code-value" th:text="${code}"></div>
-          <p class="code-hint">请在 10 分钟内使用</p>
+          <p class="code-hint" th:text="${copy.codeHint}">请在 10 分钟内使用</p>
         </div>
 
         <!-- 提示信息 -->
         <div class="info-box">
           <div class="info-title">
             <span class="info-icon">!</span>
-            重要提示
+            <span th:text="${copy.important}">重要提示</span>
           </div>
           <ul class="info-list">
-            <li>此验证码仅可使用一次</li>
-            <li>验证码有效期为 10 分钟</li>
-            <li>请勿将验证码分享给任何人</li>
-            <li>连续输错验证码6次将锁定账户1小时</li>
+            <li th:text="${copy.singleUse}">此验证码仅可使用一次</li>
+            <li th:text="${copy.expiry}">验证码有效期为 10 分钟</li>
+            <li th:text="${copy.doNotShare}">请勿将验证码分享给任何人</li>
+            <li th:text="${copy.lockout}">连续输错验证码6次将锁定账户1小时</li>
           </ul>
         </div>
 
         <div style="text-align: center">
           <span class="security-badge">
             <span class="security-icon"></span>
-            安全加密连接
+            <span th:text="${copy.security}">安全加密连接</span>
           </span>
         </div>
       </div>
@@ -412,11 +412,11 @@
       <!-- 卡片底部 -->
       <div class="card-footer">
         <p class="footer-text">
-          此邮件由系统自动发送，请勿直接回复。<br />
-          如有疑问，请访问我们的帮助中心或联系客服。
+          <span th:text="${copy.automated}">此邮件由系统自动发送，请勿直接回复。</span><br />
+          <span th:text="${copy.help}">如有疑问，请访问我们的帮助中心或联系客服。</span>
         </p>
         <p class="company-name">
-          © 2026 <a href="https://ksuser.cn" class="company-link">Ksuser</a> - 保留所有权利
+          © 2026 <a href="https://ksuser.cn" class="company-link">Ksuser</a> - <span th:text="${copy.rights}">保留所有权利</span>
         </p>
       </div>
     </div>

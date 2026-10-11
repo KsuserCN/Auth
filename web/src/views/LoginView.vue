@@ -6,30 +6,30 @@
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
-        <h1 class="login-title">登录</h1>
-        <p class="login-description">使用多种验证方式登录您的Ksuser账户</p>
+        <h1 class="login-title">{{ t('ui.login.message001') }}</h1>
+        <p class="login-description">{{ t('ui.login.message002') }}</p>
         <div v-if="desktopBridgeHint" class="desktop-login-hint" style="padding-bottom: 16px">
-          当前页面由桌面端拉起。您在网页完成登录后，桌面端会自动同步为已登录状态。
+          {{ t('ui.login.message003') }}
         </div>
-        <br v-if="desktopBridgeHint">
+        <br v-if="desktopBridgeHint" />
         <div class="feature-list">
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lock />
             </el-icon>
-            <span class="feature-text">安全认证</span>
+            <span class="feature-text">{{ t('ui.login.message004') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Lightning />
             </el-icon>
-            <span class="feature-text">快速登录</span>
+            <span class="feature-text">{{ t('ui.login.message005') }}</span>
           </div>
           <div class="feature-item">
             <el-icon class="feature-icon" :size="20">
               <Key />
             </el-icon>
-            <span class="feature-text">多种方式</span>
+            <span class="feature-text">{{ t('ui.login.message006') }}</span>
           </div>
         </div>
       </div>
@@ -59,17 +59,32 @@
             >
               <!-- 第一步：邮箱输入 -->
               <div v-if="step === 'email'" class="step-container" key="email">
-                <h2 class="step-title">{{ route.query.oauthBindProvider ? '登录并绑定已有账号' : '开始登录' }}</h2>
+                <h2 class="step-title">
+                  {{
+                    route.query.oauthBindProvider
+                      ? t('ui.login.message007')
+                      : t('ui.login.message008')
+                  }}
+                </h2>
                 <p class="step-subtitle">
-                  {{ route.query.oauthBindProvider ? '登录您的 Ksuser 账号，继续完成第三方账号绑定' : '输入您的邮箱地址' }}
+                  {{
+                    route.query.oauthBindProvider
+                      ? t('ui.login.message009')
+                      : t('ui.login.message010')
+                  }}
                 </p>
 
-                <el-form ref="emailFormRef" :model="emailInput" :rules="emailRules" label-position="top">
+                <el-form
+                  ref="emailFormRef"
+                  :model="emailInput"
+                  :rules="emailRules"
+                  label-position="top"
+                >
                   <el-form-item prop="email">
                     <el-input
                       v-model="emailInput.email"
                       type="email"
-                      placeholder="邮箱地址"
+                      :placeholder="t('ui.login.message011')"
                       @keyup.enter="goToNextStep"
                       autocomplete="username email"
                       autofocus
@@ -79,22 +94,27 @@
 
                 <div class="step-actions">
                   <el-button class="next-btn" @click="goToNextStep" :loading="validateLoading">
-                    下一步
+                    {{ t('ui.changePassword.message009') }}
                   </el-button>
                 </div>
 
                 <div v-if="!route.query.oauthBindProvider" class="create-account">
-                  还没有账号？<router-link to="/register" class="link">创建账号</router-link>
+                  {{ t('ui.login.message012')
+                  }}<router-link to="/register" class="link">{{
+                    t('ui.login.message013')
+                  }}</router-link>
                 </div>
 
                 <div v-if="desktopBridgeReady" class="desktop-bridge-card">
                   <div class="desktop-bridge-copy">
-                    <div class="desktop-bridge-title">检测到桌面端已登录</div>
+                    <div class="desktop-bridge-title">{{ t('ui.login.message014') }}</div>
                     <div
                       class="desktop-bridge-user"
-                      :title="desktopBridgeUser?.username && desktopBridgeUser?.email
-                        ? `${desktopBridgeUser.username} · ${desktopBridgeUser.email}`
-                        : desktopBridgeUser?.username || desktopBridgeUser?.email || ''"
+                      :title="
+                        desktopBridgeUser?.username && desktopBridgeUser?.email
+                          ? `${desktopBridgeUser.username} · ${desktopBridgeUser.email}`
+                          : desktopBridgeUser?.username || desktopBridgeUser?.email || ''
+                      "
                     >
                       <div class="desktop-bridge-user-name">
                         {{ desktopBridgeUser?.username || desktopBridgeUser?.email }}
@@ -111,32 +131,35 @@
                     @click="handleDesktopBridgeLogin"
                     :loading="desktopBridgeLoginLoading"
                   >
-                    使用桌面端登录
+                    {{ t('ui.login.message015') }}
                   </el-button>
                 </div>
 
-                <div v-if="mobileBridgeAvailable && !iosMobileBridgeAvailable" class="mobile-bridge-card">
+                <div
+                  v-if="mobileBridgeAvailable && !iosMobileBridgeAvailable"
+                  class="mobile-bridge-card"
+                >
                   <div class="mobile-bridge-copy">
                     <div class="mobile-bridge-title">
                       {{
                         mobileBridgeInWeChat
-                          ? '微信内无法直接拉起 App'
+                          ? t('ui.login.message016')
                           : mobileBridgeAwaitingApproval
-                            ? '正在等待 App 确认'
-                            : '使用安卓 App 登录'
+                            ? t('ui.login.message017')
+                            : t('ui.login.message018')
                       }}
                     </div>
                     <div class="mobile-bridge-description">
                       {{
                         mobileBridgeInWeChat
-                          ? '请先在系统浏览器（Chrome/系统浏览器）打开当前页面，再使用 App 登录。'
+                          ? t('ui.login.message019')
                           : mobileBridgeAwaitingApproval
-                            ? '请切回 Ksuser App 完成确认；确认后当前网页会自动登录。'
-                            : '在已登录的 Ksuser 安卓 App 中确认一次，无需手动输入密码。'
+                            ? t('ui.login.message020')
+                            : t('ui.login.message021')
                       }}
                     </div>
                     <div v-if="mobileBridgeFallbackHint" class="mobile-bridge-tip">
-                      当前设备未自动切回 App；你仍可重试拉起，或继续使用普通登录。
+                      {{ t('ui.login.message022') }}
                     </div>
                   </div>
                   <div class="mobile-bridge-actions">
@@ -146,7 +169,7 @@
                       type="primary"
                       @click="copyCurrentLinkForExternalBrowser"
                     >
-                      复制链接去浏览器打开
+                      {{ t('ui.login.message023') }}
                     </el-button>
                     <el-button
                       v-else
@@ -155,7 +178,11 @@
                       @click="handleMobileBridgeLogin"
                       :loading="mobileBridgeLoading"
                     >
-                      {{ mobileBridgeAwaitingApproval ? '重新打开 App' : '使用 App 登录' }}
+                      {{
+                        mobileBridgeAwaitingApproval
+                          ? t('ui.login.message024')
+                          : t('ui.login.message025')
+                      }}
                     </el-button>
                     <el-button
                       v-if="mobileBridgeAwaitingApproval"
@@ -163,301 +190,466 @@
                       link
                       @click="clearMobileBridgeChallenge"
                     >
-                      取消等待
+                      {{ t('ui.login.message026') }}
                     </el-button>
                   </div>
                 </div>
               </div>
 
-          <!-- 第二步：选择登录方式 -->
-          <div v-else-if="step === 'method'" class="step-container" key="method"
-            @keyup.enter="!methodSelecting && selectMethod('password')">
-            <h2 class="step-title">选择登录方式</h2>
+              <!-- 第二步：选择登录方式 -->
+              <div
+                v-else-if="step === 'method'"
+                class="step-container"
+                key="method"
+                @keyup.enter="!methodSelecting && selectMethod('password')"
+              >
+                <h2 class="step-title">{{ t('ui.login.message027') }}</h2>
 
-            <div class="email-confirm">
-              <span class="email-display">{{ emailInput.email }}</span>
-              <el-button link class="change-email-btn" @click="updateStep('email')">不是您的邮箱？</el-button>
-            </div>
-
-            <div class="method-list">
-              <!-- 密码登录 -->
-              <div class="method-option" @click="!methodSelecting && selectMethod('password')"
-                :class="{ 'is-disabled': methodSelecting }">
-                <el-icon class="method-icon" :size="28">
-                  <Lock />
-                </el-icon>
-                <div class="method-info">
-                  <h3>使用密码登录</h3>
-                  <p>输入您的密码</p>
+                <div class="email-confirm">
+                  <span class="email-display">{{ emailInput.email }}</span>
+                  <el-button link class="change-email-btn" @click="updateStep('email')">{{
+                    t('ui.login.message028')
+                  }}</el-button>
                 </div>
-                <el-icon class="method-arrow" v-if="!methodSelecting">
-                  <ArrowRight />
-                </el-icon>
-                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+
+                <div class="method-list">
+                  <!-- 密码登录 -->
+                  <div
+                    class="method-option"
+                    @click="!methodSelecting && selectMethod('password')"
+                    :class="{ 'is-disabled': methodSelecting }"
+                  >
+                    <el-icon class="method-icon" :size="28">
+                      <Lock />
+                    </el-icon>
+                    <div class="method-info">
+                      <h3>{{ t('ui.login.message029') }}</h3>
+                      <p>{{ t('ui.login.message030') }}</p>
+                    </div>
+                    <el-icon class="method-arrow" v-if="!methodSelecting">
+                      <ArrowRight />
+                    </el-icon>
+                    <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+                  </div>
+
+                  <!-- 邮箱验证码登录 -->
+                  <div
+                    class="method-option"
+                    @click="!methodSelecting && selectMethod('email')"
+                    :class="{ 'is-disabled': methodSelecting }"
+                  >
+                    <el-icon class="method-icon" :size="28">
+                      <Message />
+                    </el-icon>
+                    <div class="method-info">
+                      <h3>{{ t('ui.login.message031') }}</h3>
+                      <p>{{ t('ui.login.message032') }}</p>
+                    </div>
+                    <el-icon class="method-arrow" v-if="!methodSelecting">
+                      <ArrowRight />
+                    </el-icon>
+                    <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+                  </div>
+
+                  <!-- Passkey 登录 -->
+                </div>
               </div>
 
-              <!-- 邮箱验证码登录 -->
-              <div class="method-option" @click="!methodSelecting && selectMethod('email')"
-                :class="{ 'is-disabled': methodSelecting }">
-                <el-icon class="method-icon" :size="28">
-                  <Message />
-                </el-icon>
-                <div class="method-info">
-                  <h3>使用验证码登录</h3>
-                  <p>将验证码发送到您的邮箱</p>
+              <!-- 第三步：密码登录 -->
+              <div v-else-if="step === 'password'" class="step-container" key="password">
+                <h2 class="step-title">{{ t('ui.sensitiveVerificationDialog.message006') }}</h2>
+
+                <div class="email-confirm">
+                  <span class="email-display">{{ emailInput.email }}</span>
+                  <el-button link class="change-email-btn" @click="backToMethod">{{
+                    t('ui.login.message033')
+                  }}</el-button>
                 </div>
-                <el-icon class="method-arrow" v-if="!methodSelecting">
-                  <ArrowRight />
-                </el-icon>
-                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+
+                <el-form
+                  ref="passwordFormRef"
+                  :model="passwordInput"
+                  :rules="passwordRules"
+                  label-position="top"
+                >
+                  <el-form-item prop="password">
+                    <el-input
+                      v-model="passwordInput.password"
+                      type="password"
+                      :placeholder="t('ui.loginOptions.message004')"
+                      show-password
+                      @keyup.enter="handlePasswordLogin"
+                      autocomplete="current-password"
+                      autofocus
+                    />
+                  </el-form-item>
+                </el-form>
+
+                <router-link to="/forgot-password" class="forgot-link">{{
+                  t('ui.login.message034')
+                }}</router-link>
+
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="backToMethod">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                  <el-button
+                    class="next-btn"
+                    @click="handlePasswordLogin"
+                    :loading="passwordLoading"
+                  >
+                    {{ t('ui.login.message001') }}
+                  </el-button>
+                </div>
               </div>
 
-              <!-- Passkey 登录 -->
-            </div>
-          </div>
+              <!-- 第三步：邮箱验证码登录 -->
+              <div v-else-if="step === 'email-code'" class="step-container" key="email-code">
+                <h2 class="step-title">{{ t('ui.changeEmail.message010') }}</h2>
 
-          <!-- 第三步：密码登录 -->
-          <div v-else-if="step === 'password'" class="step-container" key="password">
-            <h2 class="step-title">输入密码</h2>
-
-            <div class="email-confirm">
-              <span class="email-display">{{ emailInput.email }}</span>
-              <el-button link class="change-email-btn" @click="backToMethod">回到上一页</el-button>
-            </div>
-
-            <el-form ref="passwordFormRef" :model="passwordInput" :rules="passwordRules" label-position="top">
-              <el-form-item prop="password">
-                <el-input v-model="passwordInput.password" type="password" placeholder="密码" show-password
-                  @keyup.enter="handlePasswordLogin" autocomplete="current-password" autofocus />
-              </el-form-item>
-            </el-form>
-
-            <router-link to="/forgot-password" class="forgot-link">忘记密码？</router-link>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMethod">返回</el-button>
-              <el-button class="next-btn" @click="handlePasswordLogin" :loading="passwordLoading">
-                登录
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 第三步：邮箱验证码登录 -->
-          <div v-else-if="step === 'email-code'" class="step-container" key="email-code">
-            <h2 class="step-title">输入验证码</h2>
-
-            <div class="email-confirm">
-              <span class="email-display">{{ emailInput.email }}</span>
-              <el-button link class="change-email-btn" @click="backToMethod">回到上一页</el-button>
-            </div>
-
-            <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
-              <el-form-item prop="code">
-                <el-input v-model="codeInput.code" placeholder="输入6位验证码" maxlength="6"
-                  @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')" @keyup.enter="handleEmailCodeLogin"
-                  autofocus />
-              </el-form-item>
-            </el-form>
-
-            <div class="code-actions">
-              <el-button v-if="!canResendCode" disabled class="resend-btn resend-disabled">
-                {{ codeCountdown }}s 后重新发送
-              </el-button>
-              <el-button v-else type="primary" @click="resendCode" class="resend-btn">重新发送验证码</el-button>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMethod">返回</el-button>
-              <el-button class="next-btn" @click="handleEmailCodeLogin" :loading="codeLoading">
-                登录
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 第三步：手机扫码登录 -->
-          <div v-else-if="step === 'qr-login'" class="step-container" key="qr-login">
-            <h2 class="step-title">手机扫码登录</h2>
-            <p class="step-subtitle">请使用已登录手机端扫描二维码完成登录</p>
-
-            <div class="qr-card">
-              <img v-if="qrCodeImage" :src="qrCodeImage" alt="扫码登录二维码" class="qr-image" />
-              <div v-else class="qr-placeholder">正在生成二维码...</div>
-              <p class="qr-meta">剩余有效期：{{ Math.max(qrExpiresInSeconds, 0) }} 秒</p>
-              <p class="qr-tip">若账号开启了 MFA，扫码后还需在网页端完成其他 MFA 验证。</p>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="updateStep('email')">返回</el-button>
-              <el-button class="next-btn" @click="refreshQrChallenge" :loading="qrRefreshing">
-                刷新二维码
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 第四步：选择 MFA 验证方式 -->
-          <div v-else-if="step === 'mfa-method'" class="step-container" key="mfa-method">
-            <h2 class="step-title">选择二次验证方式</h2>
-            <p class="step-subtitle">请选择 TOTP、Passkey 或手机扫码完成 MFA 验证</p>
-
-            <div class="method-list">
-              <div class="method-option" @click="!methodSelecting && selectMfaMethod('totp')"
-                :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('totp') }">
-                <el-icon class="method-icon" :size="28">
-                  <Lock />
-                </el-icon>
-                <div class="method-info">
-                  <h3>使用 TOTP 验证</h3>
-                  <p>输入身份验证器中的 6 位验证码或恢复码</p>
+                <div class="email-confirm">
+                  <span class="email-display">{{ emailInput.email }}</span>
+                  <el-button link class="change-email-btn" @click="backToMethod">{{
+                    t('ui.login.message033')
+                  }}</el-button>
                 </div>
-                <el-icon class="method-arrow" v-if="!methodSelecting">
-                  <ArrowRight />
-                </el-icon>
-                <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+
+                <el-form
+                  ref="codeFormRef"
+                  :model="codeInput"
+                  :rules="codeRules"
+                  label-position="top"
+                >
+                  <el-form-item prop="code">
+                    <el-input
+                      v-model="codeInput.code"
+                      :placeholder="t('ui.sensitiveVerificationDialog.message010')"
+                      maxlength="6"
+                      @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
+                      @keyup.enter="handleEmailCodeLogin"
+                      autofocus
+                    />
+                  </el-form-item>
+                </el-form>
+
+                <div class="code-actions">
+                  <el-button v-if="!canResendCode" disabled class="resend-btn resend-disabled">
+                    {{ codeCountdown }}{{ t('ui.changeEmail.message013') }}
+                  </el-button>
+                  <el-button v-else type="primary" @click="resendCode" class="resend-btn">{{
+                    t('ui.sensitiveVerificationDialog.message012')
+                  }}</el-button>
+                </div>
+
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="backToMethod">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                  <el-button class="next-btn" @click="handleEmailCodeLogin" :loading="codeLoading">
+                    {{ t('ui.login.message001') }}
+                  </el-button>
+                </div>
               </div>
 
-              <div class="method-option" @click="!methodSelecting && selectMfaMethod('passkey')" :class="{
-                'is-disabled':
-                  methodSelecting || !mfaMethods.includes('passkey') || !isPasskeySupported,
-              }">
-                <el-icon class="method-icon" :size="28">
-                  <Key />
-                </el-icon>
-                <div class="method-info">
-                  <h3>使用 Passkey 验证</h3>
-                  <p>使用生物识别或安全密钥完成二次验证</p>
+              <!-- 第三步：手机扫码登录 -->
+              <div v-else-if="step === 'qr-login'" class="step-container" key="qr-login">
+                <h2 class="step-title">{{ t('ui.mobileBridgeQrSidebarAction.message002') }}</h2>
+                <p class="step-subtitle">{{ t('ui.login.message035') }}</p>
+
+                <div class="qr-card">
+                  <img
+                    v-if="qrCodeImage"
+                    :src="qrCodeImage"
+                    :alt="t('ui.login.message036')"
+                    class="qr-image"
+                  />
+                  <div v-else class="qr-placeholder">
+                    {{ t('ui.mobileBridgeQrSidebarAction.message004') }}
+                  </div>
+                  <p class="qr-meta">
+                    {{ t('ui.accountRecoveryCard.message009')
+                    }}{{ Math.max(qrExpiresInSeconds, 0) }}
+                    {{ t('ui.accountRecoveryCard.message010') }}
+                  </p>
+                  <p class="qr-tip">{{ t('ui.login.message037') }}</p>
                 </div>
-                <el-icon class="method-arrow" v-if="!methodSelecting && isPasskeySupported">
-                  <ArrowRight />
-                </el-icon>
+
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="updateStep('email')">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                  <el-button class="next-btn" @click="refreshQrChallenge" :loading="qrRefreshing">
+                    {{ t('ui.mobileBridgeQrSidebarAction.message006') }}
+                  </el-button>
+                </div>
               </div>
 
-              <div class="method-option" @click="!methodSelecting && selectMfaMethod('qr')"
-                :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('qr') }">
-                <el-icon class="method-icon" :size="28">
-                  <Message />
-                </el-icon>
-                <div class="method-info">
-                  <h3>使用手机扫码验证</h3>
-                  <p>使用已登录手机端扫描二维码完成二次验证</p>
+              <!-- 第四步：选择 MFA 验证方式 -->
+              <div v-else-if="step === 'mfa-method'" class="step-container" key="mfa-method">
+                <h2 class="step-title">{{ t('ui.login.message038') }}</h2>
+                <p class="step-subtitle">{{ t('ui.login.message039') }}</p>
+
+                <div class="method-list">
+                  <div
+                    class="method-option"
+                    @click="!methodSelecting && selectMfaMethod('totp')"
+                    :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('totp') }"
+                  >
+                    <el-icon class="method-icon" :size="28">
+                      <Lock />
+                    </el-icon>
+                    <div class="method-info">
+                      <h3>{{ t('ui.login.message040') }}</h3>
+                      <p>{{ t('ui.login.message041') }}</p>
+                    </div>
+                    <el-icon class="method-arrow" v-if="!methodSelecting">
+                      <ArrowRight />
+                    </el-icon>
+                    <el-skeleton-item v-else variant="text" class="method-arrow-skeleton" />
+                  </div>
+
+                  <div
+                    class="method-option"
+                    @click="!methodSelecting && selectMfaMethod('passkey')"
+                    :class="{
+                      'is-disabled':
+                        methodSelecting || !mfaMethods.includes('passkey') || !isPasskeySupported,
+                    }"
+                  >
+                    <el-icon class="method-icon" :size="28">
+                      <Key />
+                    </el-icon>
+                    <div class="method-info">
+                      <h3>{{ t('ui.login.message042') }}</h3>
+                      <p>{{ t('ui.login.message043') }}</p>
+                    </div>
+                    <el-icon class="method-arrow" v-if="!methodSelecting && isPasskeySupported">
+                      <ArrowRight />
+                    </el-icon>
+                  </div>
+
+                  <div
+                    class="method-option"
+                    @click="!methodSelecting && selectMfaMethod('qr')"
+                    :class="{ 'is-disabled': methodSelecting || !mfaMethods.includes('qr') }"
+                  >
+                    <el-icon class="method-icon" :size="28">
+                      <Message />
+                    </el-icon>
+                    <div class="method-info">
+                      <h3>{{ t('ui.login.message044') }}</h3>
+                      <p>{{ t('ui.login.message045') }}</p>
+                    </div>
+                    <el-icon class="method-arrow" v-if="!methodSelecting">
+                      <ArrowRight />
+                    </el-icon>
+                  </div>
                 </div>
-                <el-icon class="method-arrow" v-if="!methodSelecting">
-                  <ArrowRight />
-                </el-icon>
+
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="backToMFASource">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                </div>
               </div>
-            </div>
 
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMFASource">返回</el-button>
-            </div>
-          </div>
+              <!-- 第四步：Passkey MFA 验证 -->
+              <div v-else-if="step === 'mfa-passkey'" class="step-container" key="mfa-passkey">
+                <h2 class="step-title">{{ t('ui.login.message046') }}</h2>
+                <p class="step-subtitle">{{ t('ui.login.message047') }}</p>
 
-          <!-- 第四步：Passkey MFA 验证 -->
-          <div v-else-if="step === 'mfa-passkey'" class="step-container" key="mfa-passkey">
-            <h2 class="step-title">Passkey 二次验证</h2>
-            <p class="step-subtitle">点击验证后，按浏览器提示完成验证</p>
+                <div class="passkey-hint">
+                  <p>{{ t('ui.login.message048') }}</p>
+                </div>
 
-            <div class="passkey-hint">
-              <p>支持本机生物识别及实体安全密钥（USB/NFC/蓝牙）。</p>
-            </div>
+                <div
+                  v-if="canChooseMfaMethod()"
+                  class="switch-method-section"
+                  @click="updateStep('mfa-method')"
+                >
+                  <el-icon class="switch-method-icon">
+                    <Refresh />
+                  </el-icon>
+                  <span>{{ t('ui.login.message049') }}</span>
+                </div>
 
-            <div v-if="canChooseMfaMethod()" class="switch-method-section" @click="updateStep('mfa-method')">
-              <el-icon class="switch-method-icon">
-                <Refresh />
-              </el-icon>
-              <span>选择其他验证方式</span>
-            </div>
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="backToMfaMethodOrSource">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                  <el-button
+                    class="next-btn"
+                    @click="handlePasskeyMfaVerify"
+                    :loading="passkeyLoading"
+                  >
+                    {{
+                      passkeyLoading
+                        ? t('ui.sensitiveVerificationDialog.message014')
+                        : t('ui.sensitiveVerificationDialog.message015')
+                    }}
+                  </el-button>
+                </div>
+              </div>
 
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
-              <el-button class="next-btn" @click="handlePasskeyMfaVerify" :loading="passkeyLoading">
-                {{ passkeyLoading ? '验证中...' : '验证身份' }}
-              </el-button>
-            </div>
-          </div>
+              <!-- 第四步：扫码 MFA 验证 -->
+              <div v-else-if="step === 'mfa-qr'" class="step-container" key="mfa-qr">
+                <h2 class="step-title">{{ t('ui.login.message050') }}</h2>
+                <p class="step-subtitle">{{ t('ui.login.message051') }}</p>
 
-          <!-- 第四步：扫码 MFA 验证 -->
-          <div v-else-if="step === 'mfa-qr'" class="step-container" key="mfa-qr">
-            <h2 class="step-title">手机扫码二次验证</h2>
-            <p class="step-subtitle">请使用已登录手机端扫描二维码完成二次验证</p>
+                <div class="qr-card">
+                  <img
+                    v-if="qrCodeImage"
+                    :src="qrCodeImage"
+                    :alt="t('ui.login.message052')"
+                    class="qr-image"
+                  />
+                  <div v-else class="qr-placeholder">
+                    {{ t('ui.mobileBridgeQrSidebarAction.message004') }}
+                  </div>
+                  <p class="qr-meta">
+                    {{ t('ui.accountRecoveryCard.message009')
+                    }}{{ Math.max(qrExpiresInSeconds, 0) }}
+                    {{ t('ui.accountRecoveryCard.message010') }}
+                  </p>
+                </div>
 
-            <div class="qr-card">
-              <img v-if="qrCodeImage" :src="qrCodeImage" alt="MFA 扫码二维码" class="qr-image" />
-              <div v-else class="qr-placeholder">正在生成二维码...</div>
-              <p class="qr-meta">剩余有效期：{{ Math.max(qrExpiresInSeconds, 0) }} 秒</p>
-            </div>
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="backToMfaMethodOrSource">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                  <el-button class="next-btn" @click="refreshQrChallenge" :loading="qrRefreshing">
+                    {{ t('ui.mobileBridgeQrSidebarAction.message006') }}
+                  </el-button>
+                </div>
+              </div>
 
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
-              <el-button class="next-btn" @click="refreshQrChallenge" :loading="qrRefreshing">
-                刷新二维码
-              </el-button>
-            </div>
-          </div>
+              <!-- 第四步：TOTP 验证 -->
+              <div v-else-if="step === 'totp'" class="step-container" key="totp">
+                <h2 class="step-title">{{ t('ui.sensitiveVerificationDialog.message015') }}</h2>
+                <p class="step-subtitle">{{ t('ui.login.message053') }}</p>
 
-          <!-- 第四步：TOTP 验证 -->
-          <div v-else-if="step === 'totp'" class="step-container" key="totp">
-            <h2 class="step-title">验证身份</h2>
-            <p class="step-subtitle">请输入您的 MFA 验证码</p>
+                <div
+                  class="totp-mode-switch"
+                  role="tablist"
+                  :aria-label="t('ui.desktopPasskeyBridge.message002')"
+                >
+                  <button
+                    type="button"
+                    class="totp-mode-chip"
+                    :class="{ active: totpMode === 'totp' }"
+                    :aria-pressed="totpMode === 'totp'"
+                    @click="setTotpMode('totp')"
+                  >
+                    <span class="chip-title">{{
+                      t('ui.sensitiveVerificationDialog.message020')
+                    }}</span>
+                    <span class="chip-meta">{{ t('ui.login.message054') }}</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="totp-mode-chip"
+                    :class="{ active: totpMode === 'recovery' }"
+                    :aria-pressed="totpMode === 'recovery'"
+                    @click="setTotpMode('recovery')"
+                  >
+                    <span class="chip-title">{{
+                      t('ui.sensitiveVerificationDialog.message021')
+                    }}</span>
+                    <span class="chip-meta">{{ t('ui.login.message055') }}</span>
+                  </button>
+                </div>
 
-            <div class="totp-mode-switch" role="tablist" aria-label="验证码类型选择">
-              <button type="button" class="totp-mode-chip" :class="{ active: totpMode === 'totp' }"
-                :aria-pressed="totpMode === 'totp'" @click="setTotpMode('totp')">
-                <span class="chip-title">动态码</span>
-                <span class="chip-meta">推荐</span>
-              </button>
-              <button type="button" class="totp-mode-chip" :class="{ active: totpMode === 'recovery' }"
-                :aria-pressed="totpMode === 'recovery'" @click="setTotpMode('recovery')">
-                <span class="chip-title">恢复码</span>
-                <span class="chip-meta">应急</span>
-              </button>
-            </div>
+                <el-form
+                  ref="totpFormRef"
+                  :model="totpInput"
+                  :rules="totpRules"
+                  label-position="top"
+                >
+                  <el-form-item prop="code">
+                    <el-input
+                      v-model="totpInput.code"
+                      :placeholder="
+                        totpMode === 'totp'
+                          ? t('ui.sensitiveVerificationDialog.message022')
+                          : t('ui.login.message056')
+                      "
+                      :maxlength="totpMode === 'totp' ? 6 : 8"
+                      @input="handleTotpInput"
+                      @keyup.enter="handleTotpVerify"
+                      autofocus
+                    />
+                  </el-form-item>
+                </el-form>
 
-            <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
-              <el-form-item prop="code">
-                <el-input v-model="totpInput.code" :placeholder="totpMode === 'totp' ? '输入6位动态码' : '输入8位大写字母恢复码'"
-                  :maxlength="totpMode === 'totp' ? 6 : 8" @input="handleTotpInput" @keyup.enter="handleTotpVerify"
-                  autofocus />
-              </el-form-item>
-            </el-form>
+                <p class="totp-mode-hint">{{ totpModeHint }}</p>
 
-            <p class="totp-mode-hint">{{ totpModeHint }}</p>
+                <div
+                  v-if="canChooseMfaMethod()"
+                  class="switch-method-section"
+                  @click="updateStep('mfa-method')"
+                >
+                  <el-icon class="switch-method-icon">
+                    <Refresh />
+                  </el-icon>
+                  <span>{{ t('ui.login.message049') }}</span>
+                </div>
 
-            <div v-if="canChooseMfaMethod()" class="switch-method-section" @click="updateStep('mfa-method')">
-              <el-icon class="switch-method-icon">
-                <Refresh />
-              </el-icon>
-              <span>选择其他验证方式</span>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToMfaMethodOrSource">返回</el-button>
-              <el-button class="next-btn" @click="handleTotpVerify" :loading="totpLoading">
-                验证
-              </el-button>
-            </div>
-          </div>
-        </Transition>
+                <div class="step-actions">
+                  <el-button class="back-btn" @click="backToMfaMethodOrSource">{{
+                    t('ui.sensitiveVerificationDialog.message007')
+                  }}</el-button>
+                  <el-button class="next-btn" @click="handleTotpVerify" :loading="totpLoading">
+                    {{ t('ui.sensitiveVerificationDialog.message008') }}
+                  </el-button>
+                </div>
+              </div>
+            </Transition>
 
             <div v-if="step === 'email'" class="extra-login">
-              <div class="extra-title">其他登录方式</div>
+              <div class="extra-title">{{ t('ui.login.message057') }}</div>
               <div class="extra-actions">
                 <div class="extra-icons">
-                  <button class="icon-btn" @click="handleQrLoginInit" aria-label="二维码登录" type="button">
+                  <button
+                    class="icon-btn"
+                    @click="handleQrLoginInit"
+                    :aria-label="t('ui.login.message058')"
+                    type="button"
+                  >
                     <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
                   </button>
-                  <button class="icon-btn" @click="handleUnsupportedLogin('微信')" aria-label="微信登录" type="button">
+                  <button
+                    class="icon-btn"
+                    @click="handleUnsupportedLogin(t('ui.loginOptions.message049'))"
+                    :aria-label="t('ui.login.message059')"
+                    type="button"
+                  >
                     <i class="fa-brands fa-weixin" aria-hidden="true"></i>
                   </button>
-                  <button class="icon-btn" @click="handleQQLogin" aria-label="QQ 登录" type="button">
+                  <button
+                    class="icon-btn"
+                    @click="handleQQLogin"
+                    :aria-label="t('ui.login.message060')"
+                    type="button"
+                  >
                     <i class="fa-brands fa-qq" aria-hidden="true"></i>
                   </button>
-                  <button class="icon-btn" @click="handleAppleLogin" aria-label="Apple 登录" type="button">
+                  <button
+                    class="icon-btn"
+                    @click="handleAppleLogin"
+                    :aria-label="t('ui.login.message061')"
+                    type="button"
+                  >
                     <i class="fa-brands fa-apple" aria-hidden="true"></i>
                   </button>
                   <!-- <button class="icon-btn" @click="handleMicrosoftLogin" aria-label="微软登录" type="button">
                     <i class="fa-brands fa-microsoft" aria-hidden="true"></i>
                   </button> -->
-                  <button class="icon-btn" @click="handleGoogleLogin" aria-label="Google 登录" type="button">
+                  <button
+                    class="icon-btn"
+                    @click="handleGoogleLogin"
+                    :aria-label="t('ui.login.message062')"
+                    type="button"
+                  >
                     <i class="fa-brands fa-google" aria-hidden="true"></i>
                   </button>
                 </div>
@@ -467,30 +659,42 @@
                   :disabled="!isPasskeySupported"
                   @click="handlePasskeyLogin"
                 >
-                  {{ isPasskeySupported ? 'Passkey 登录' : 'Passkey 不可用' }}
+                  {{ isPasskeySupported ? t('ui.login.message063') : t('ui.login.message064') }}
                 </el-button>
               </div>
               <div v-if="iosMobileBridgeAvailable" class="ios-app-login">
                 <el-button
                   class="extra-btn ios-app-login-btn"
                   :loading="mobileBridgeLoading"
-                  @click="mobileBridgeInWeChat ? copyCurrentLinkForExternalBrowser() : handleMobileBridgeLogin()"
+                  @click="
+                    mobileBridgeInWeChat
+                      ? copyCurrentLinkForExternalBrowser()
+                      : handleMobileBridgeLogin()
+                  "
                 >
-                  {{ mobileBridgeAwaitingApproval ? '重新打开 Ksuser 安全 App' : '通过 Ksuser 安全 App 登录' }}
+                  {{
+                    mobileBridgeAwaitingApproval
+                      ? t('ui.login.message065')
+                      : t('ui.login.message066')
+                  }}
                 </el-button>
                 <p v-if="mobileBridgeInWeChat" class="ios-app-login-hint">
-                  请在 Safari 或系统浏览器中打开。点击上方按钮可复制当前链接。
+                  {{ t('ui.login.message067') }}
                 </p>
-                <p v-else-if="mobileBridgeAwaitingApproval" class="ios-app-login-hint" role="status">
-                  请在 App 中登录并确认，再返回浏览器完成网页登录。
-                  若未打开，请确认已安装新版 Ksuser 安全 App，或点击上方按钮重试。
+                <p
+                  v-else-if="mobileBridgeAwaitingApproval"
+                  class="ios-app-login-hint"
+                  role="status"
+                >
+                  {{ t('ui.login.message068') }}
                 </p>
                 <el-button
                   v-if="mobileBridgeAwaitingApproval"
                   class="mobile-bridge-cancel"
                   link
                   @click="clearMobileBridgeChallenge"
-                >取消等待</el-button>
+                  >{{ t('ui.login.message026') }}</el-button
+                >
               </div>
             </div>
           </template>
@@ -501,19 +705,14 @@
 </template>
 
 <script setup lang="ts">
+import { t, LocalizedError } from '@/i18n'
+
 import { resolveApiResult } from '@/utils/apiResult'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import QRCode from 'qrcode'
-import {
-  ArrowRight,
-  Lock,
-  Lightning,
-  Key,
-  Message,
-  Refresh,
-} from '@element-plus/icons-vue'
+import { ArrowRight, Lock, Lightning, Key, Message, Refresh } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -563,7 +762,11 @@ import {
   stripMobileBridgeQuery,
 } from '@/utils/mobileBridge'
 import { getStoredAccessToken, hydrateSessionStorageFromSharedStorage } from '@/utils/authSession'
-import { consumePostLoginRedirect, normalizePostLoginRedirect, persistPostLoginRedirect } from '@/utils/postLoginRedirect'
+import {
+  consumePostLoginRedirect,
+  normalizePostLoginRedirect,
+  persistPostLoginRedirect,
+} from '@/utils/postLoginRedirect'
 import { setRequestBaseUrl } from '@/utils/request'
 import {
   isWebAuthnSupported,
@@ -640,33 +843,35 @@ const emailInput = ref({
   email: '',
 })
 
-const emailRules = {
+const emailRules = computed(() => ({
   email: [
-    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' },
+    { required: true, message: t('ui.login.message069'), trigger: 'blur' },
+    { type: 'email', message: t('ui.login.message070'), trigger: 'blur' },
   ],
-}
+}))
 
 // 密码输入
 const passwordInput = ref({
   password: '',
 })
 
-const passwordRules = {
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-}
+const passwordRules = computed(() => ({
+  password: [
+    { required: true, message: t('ui.sensitiveVerificationDialog.message036'), trigger: 'blur' },
+  ],
+}))
 
 // 验证码输入
 const codeInput = ref({
   code: '',
 })
 
-const codeRules = {
+const codeRules = computed(() => ({
   code: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码应为6位数字', trigger: 'blur' },
+    { required: true, message: t('ui.sensitiveVerificationDialog.message037'), trigger: 'blur' },
+    { len: 6, message: t('ui.sensitiveVerificationDialog.message038'), trigger: 'blur' },
   ],
-}
+}))
 
 // TOTP 验证码输入
 const totpInput = ref({
@@ -677,30 +882,30 @@ const totpMode = ref<'totp' | 'recovery'>('totp')
 
 const totpModeHint = computed(() => {
   if (totpMode.value === 'totp') {
-    return '请输入身份验证器应用中的 6 位数字动态码'
+    return t('ui.login.message071')
   }
 
-  return '请输入 8 位大写字母恢复码（A-Z）'
+  return t('ui.login.message072')
 })
 
-const totpRules = {
+const totpRules = computed(() => ({
   code: [
-    { required: true, message: '请输入验证码或恢复码', trigger: 'blur' },
+    { required: true, message: t('ui.sensitiveVerificationDialog.message039'), trigger: 'blur' },
     {
       validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
         const v = (value || '').trim()
         if (totpMode.value === 'totp' && !/^[0-9]{6}$/.test(v)) {
-          callback(new Error('请输入 6 位数字动态码'))
+          callback(new LocalizedError('ui.sensitiveVerificationDialog.message040'))
           return
         }
 
         if (totpMode.value === 'recovery' && !/^[A-Z]{8}$/.test(v)) {
-          callback(new Error('请输入 8 位大写字母恢复码'))
+          callback(new LocalizedError('ui.sensitiveVerificationDialog.message041'))
           return
         }
 
         if (totpMode.value !== 'totp' && totpMode.value !== 'recovery') {
-          callback(new Error('请选择验证方式'))
+          callback(new LocalizedError('ui.login.message073'))
         } else {
           callback()
         }
@@ -708,7 +913,7 @@ const totpRules = {
       trigger: 'blur',
     },
   ],
-}
+}))
 
 // 加载状态
 const validateLoading = ref(false)
@@ -763,9 +968,12 @@ const desktopBridgeReady = computed(() => {
   return !!desktopBridgeUser.value && step.value === 'email'
 })
 const desktopBridgeHint = computed(() => route.query.desktopBridge === '1')
-const iosMobileBridgeAvailable = computed(() => step.value === 'email' && isIOSMobileBridgeSupported())
-const mobileBridgeSupported = computed(() =>
-  step.value === 'email' && (isAndroidMobileBridgeSupported() || isIOSMobileBridgeSupported()),
+const iosMobileBridgeAvailable = computed(
+  () => step.value === 'email' && isIOSMobileBridgeSupported(),
+)
+const mobileBridgeSupported = computed(
+  () =>
+    step.value === 'email' && (isAndroidMobileBridgeSupported() || isIOSMobileBridgeSupported()),
 )
 const mobileBridgeAvailable = computed(() => mobileBridgeSupported.value)
 const mobileBridgeInWeChat = computed(() => mobileBridgeSupported.value && isWeChatInAppBrowser())
@@ -778,17 +986,17 @@ const hasPendingMobileBridgeChallenge = computed(() => {
 })
 const loginBootstrapTitle = computed(() =>
   desktopBridgeHint.value
-    ? '正在识别网页登录状态'
+    ? t('ui.login.message074')
     : hasPendingMobileBridgeChallenge.value
-      ? '正在等待 App 登录确认'
-      : '正在初始化登录状态',
+      ? t('ui.login.message075')
+      : t('ui.login.message076'),
 )
 const loginBootstrapDescription = computed(() =>
   desktopBridgeHint.value
-    ? '如果当前浏览器已登录，页面会直接跳转，并同步桌面端状态。'
+    ? t('ui.login.message077')
     : hasPendingMobileBridgeChallenge.value
-      ? '请在 Ksuser 安全 App 中登录并确认本次网页登录；确认后当前网页会自动完成登录。'
-      : '请稍候，系统正在检查当前浏览器是否已有可复用的登录会话。',
+      ? t('ui.login.message078')
+      : t('ui.login.message079'),
 )
 
 const getDirectPostLoginTarget = () => {
@@ -805,7 +1013,10 @@ const getPendingOAuthBind = (): { provider: OAuthProvider; bindToken: string } |
   const provider = route.query.oauthBindProvider
   const bindToken = route.query.oauthBindToken
   if (
-    (provider === 'qq' || provider === 'github' || provider === 'microsoft' || provider === 'google') &&
+    (provider === 'qq' ||
+      provider === 'github' ||
+      provider === 'microsoft' ||
+      provider === 'google') &&
     typeof bindToken === 'string' &&
     bindToken.trim()
   ) {
@@ -882,7 +1093,7 @@ const exchangeApprovedMobileBridge = async (transferCode: string) => {
     user: response.user,
     syncDesktop: false,
   })
-  ElMessage.success('已使用 Ksuser 安全 App 登录')
+  ElMessage.success(t('ui.login.message080'))
   await navigateAfterLogin()
 }
 
@@ -918,15 +1129,15 @@ const pollMobileBridgeStatus = async () => {
     }
 
     if (status.status === 'cancelled') {
-      ElMessage.info('App 端已取消本次网页登录请求')
+      ElMessage.info(t('ui.login.message081'))
     } else {
-      ElMessage.warning('App 登录请求已过期，请重试')
+      ElMessage.warning(t('ui.login.message082'))
     }
     await resetMobileBridgeState(true)
   } catch (error: unknown) {
     if (!exchanging && challengeId !== mobileBridgeChallengeId.value) return
     cleanupMobileBridgePolling()
-    const message = error instanceof Error ? error.message : '检查 App 登录状态失败'
+    const message = error instanceof Error ? error.message : t('ui.login.message083')
     ElMessage.error(message)
     await resetMobileBridgeState(false)
   } finally {
@@ -959,7 +1170,7 @@ const resumePendingMobileBridge = async (): Promise<boolean> => {
   appLink.searchParams.set('returnUrl', buildMobileBridgeReturnUrl(challengeId))
   mobileBridgeAppLink.value = appLink.toString()
   if (mobileBridgeFallbackHint.value) {
-    ElMessage.warning('未自动打开 Ksuser App，请确认已安装后重试，或继续使用普通登录')
+    ElMessage.warning(t('ui.login.message084'))
   }
   startMobileBridgePolling()
   return true
@@ -1023,7 +1234,7 @@ const handleQrApproved = async (status: QrChallengeStatusResponse) => {
         accessToken: response.accessToken,
         user: response.user,
       })
-      ElMessage.success(desktopSynced ? '扫码登录成功，已同步到桌面端' : '扫码登录成功')
+      ElMessage.success(desktopSynced ? t('ui.login.message085') : t('ui.login.message086'))
       await navigateAfterLogin()
       return
     }
@@ -1034,13 +1245,13 @@ const handleQrApproved = async (status: QrChallengeStatusResponse) => {
       return
     }
 
-    ElMessage.error('扫码登录结果无效，请重试')
+    ElMessage.error(t('ui.login.message087'))
     return
   }
 
   if (qrMode.value === 'mfa') {
     if (!status.transferCode) {
-      ElMessage.error('扫码 MFA 结果无效，请重试')
+      ElMessage.error(t('ui.login.message088'))
       return
     }
     const response = await exchangeSessionTransfer(status.transferCode, 'web')
@@ -1048,7 +1259,7 @@ const handleQrApproved = async (status: QrChallengeStatusResponse) => {
       accessToken: response.accessToken,
       user: response.user,
     })
-    ElMessage.success(desktopSynced ? '扫码 MFA 验证成功，已同步到桌面端' : '扫码 MFA 验证成功')
+    ElMessage.success(desktopSynced ? t('ui.login.message089') : t('ui.login.message090'))
     await navigateAfterLogin()
   }
 }
@@ -1071,10 +1282,10 @@ const pollQrChallenge = async () => {
       return
     }
     if (status.status === 'rejected') {
-      ElMessage.error('扫码请求已被拒绝，请刷新二维码后重试')
+      ElMessage.error(t('ui.login.message091'))
       return
     }
-    ElMessage.warning('二维码已过期，请刷新二维码')
+    ElMessage.warning(t('ui.sensitiveVerificationDialog.message046'))
   } catch (error) {
     cleanupQrPolling()
     console.error('QR polling failed:', error)
@@ -1108,7 +1319,7 @@ const initQrFlow = async (mode: 'login' | 'mfa') => {
     startQrPolling()
   } catch (error) {
     console.error('Init QR flow failed:', error)
-    ElMessage.error(mode === 'login' ? '初始化扫码登录失败，请重试' : '初始化扫码 MFA 失败，请重试')
+    ElMessage.error(mode === 'login' ? t('ui.login.message092') : t('ui.login.message093'))
   } finally {
     qrRefreshing.value = false
   }
@@ -1125,7 +1336,7 @@ const handleQrLoginInit = async () => {
 
 const startQrMfaFlow = async () => {
   if (!mfaChallenge.value?.challengeId) {
-    ElMessage.error('MFA 挑战信息丢失')
+    ElMessage.error(t('ui.login.message094'))
     return
   }
   await initQrFlow('mfa')
@@ -1167,7 +1378,7 @@ const startMfaFlow = (
   mfaSource.value = source
   mfaMethods.value = normalizeMfaMethods(challenge.methods, challenge.method)
 
-  ElMessage.info('需要进行 MFA 验证')
+  ElMessage.info(t('ui.login.message095'))
 
   const passkeyAvailable = mfaMethods.value.includes('passkey') && isPasskeySupported.value
   const totpAvailable = mfaMethods.value.includes('totp')
@@ -1204,12 +1415,12 @@ const startMfaFlow = (
   }
 
   if (mfaMethods.value.includes('passkey') && !mfaMethods.value.includes('totp')) {
-    ElMessage.error('当前浏览器不支持 Passkey，无法完成 MFA 验证')
+    ElMessage.error(t('ui.login.message096'))
     updateStep('email')
     return
   }
 
-  ElMessage.error('当前账户暂无可用的 MFA 验证方式')
+  ElMessage.error(t('ui.login.message097'))
   updateStep('email')
 }
 
@@ -1224,8 +1435,7 @@ onMounted(() => {
   const mfaFrom = route.query.mfaFrom
 
   if (typeof challengeId === 'string' && challengeId.trim()) {
-    const normalizedMethod: MFAMethod =
-      method === 'passkey' || method === 'qr' ? method : 'totp'
+    const normalizedMethod: MFAMethod = method === 'passkey' || method === 'qr' ? method : 'totp'
     const queryMethods = typeof methods === 'string' ? methods.split(',') : []
     const challenge: MFAChallenge = {
       challengeId: challengeId.trim(),
@@ -1233,14 +1443,17 @@ onMounted(() => {
       methods:
         queryMethods.length > 0
           ? queryMethods.filter(
-            (item): item is MFAMethod =>
-              item === 'totp' || item === 'passkey' || item === 'qr',
-          )
+              (item): item is MFAMethod => item === 'totp' || item === 'passkey' || item === 'qr',
+            )
           : undefined,
     }
 
     const source =
-      mfaFrom === 'qq' || mfaFrom === 'github' || mfaFrom === 'microsoft' || mfaFrom === 'google' || mfaFrom === 'apple'
+      mfaFrom === 'qq' ||
+      mfaFrom === 'github' ||
+      mfaFrom === 'microsoft' ||
+      mfaFrom === 'google' ||
+      mfaFrom === 'apple'
         ? mfaFrom
         : null
 
@@ -1282,7 +1495,7 @@ const initializeLoginView = async () => {
     if (resumedSession) {
       if (desktopBridgeHint.value) {
         const synced = await syncCurrentWebSessionToDesktop()
-        ElMessage.success(synced ? '已复用当前网页登录，并同步到桌面端' : '当前网页已登录')
+        ElMessage.success(synced ? t('ui.login.message098') : t('ui.login.message099'))
       }
       await navigateAfterLogin()
       return
@@ -1347,10 +1560,10 @@ const handleTransferCodeLogin = async (transferCode: string) => {
       user: response.user,
       syncDesktop: false,
     })
-    ElMessage.success('已从桌面端自动登录网页端')
+    ElMessage.success(t('ui.login.message100'))
     await navigateAfterLogin()
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '桌面端自动登录失败'
+    const message = error instanceof Error ? error.message : t('ui.login.message101')
     ElMessage.error(message)
     await loadDesktopBridgeStatus()
   } finally {
@@ -1420,7 +1633,7 @@ const handlePasswordLogin = async () => {
         accessToken: loginResp.accessToken,
         user: loginResp.user,
       })
-      ElMessage.success(desktopSynced ? '登录成功，已同步到桌面端' : '登录成功')
+      ElMessage.success(desktopSynced ? t('ui.login.message102') : t('ui.login.message103'))
       await navigateAfterLogin()
     }
   } catch (error: unknown) {
@@ -1440,7 +1653,7 @@ const sendCode = async () => {
       email: emailInput.value.email,
     })
 
-    ElMessage.success('验证码已发送')
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
     updateStep('email-code')
     codeInput.value.code = ''
     startCodeCountdown()
@@ -1459,7 +1672,7 @@ const resendCode = async () => {
       email: emailInput.value.email,
     })
 
-    ElMessage.success('验证码已重新发送')
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message050'))
     codeInput.value.code = ''
     startCodeCountdown()
   } catch (error: unknown) {
@@ -1512,7 +1725,7 @@ const handleEmailCodeLogin = async () => {
         accessToken: loginResp.accessToken,
         user: loginResp.user,
       })
-      ElMessage.success(desktopSynced ? '登录成功，已同步到桌面端' : '登录成功')
+      ElMessage.success(desktopSynced ? t('ui.login.message102') : t('ui.login.message103'))
       await navigateAfterLogin()
     }
   } catch (error: unknown) {
@@ -1528,7 +1741,7 @@ const handleEmailCodeLogin = async () => {
 const handlePasskeyLogin = async () => {
   if (passkeyLoading.value) return
   if (!isPasskeySupported.value) {
-    ElMessage.error('当前浏览器不支持 Passkey')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message051'))
     return
   }
 
@@ -1548,7 +1761,7 @@ const handlePasskeyLogin = async () => {
     })
 
     if (!credential) {
-      throw new Error('未获取到凭证')
+      throw new LocalizedError('ui.sensitiveVerificationDialog.message052')
     }
 
     // 3. 提取认证数据
@@ -1567,26 +1780,26 @@ const handlePasskeyLogin = async () => {
         accessToken: loginResp.accessToken,
         user: loginResp.user,
       })
-      ElMessage.success(desktopSynced ? 'Passkey 登录成功，已同步到桌面端' : 'Passkey 登录成功')
+      ElMessage.success(desktopSynced ? t('ui.login.message104') : t('ui.login.message105'))
       await navigateAfterLogin()
     }
   } catch (error: unknown) {
     // 处理不同类型的错误
     if (error instanceof Error) {
       if (error.name === 'NotAllowedError') {
-        ElMessage.error('用户取消了认证')
+        ElMessage.error(t('ui.sensitiveVerificationDialog.message053'))
         return
       }
       if (error.name === 'NotSupportedError') {
-        ElMessage.error('浏览器不支持该操作')
+        ElMessage.error(t('ui.addPasskey.message021'))
         return
       }
       if (error.name === 'SecurityError') {
-        ElMessage.error('安全错误，请检查网络连接')
+        ElMessage.error(t('ui.addPasskey.message022'))
         return
       }
       if (error.name === 'InvalidStateError') {
-        ElMessage.error('当前账号没有可用的 Passkey')
+        ElMessage.error(t('ui.login.message106'))
         return
       }
       console.error('Passkey login failed:', error)
@@ -1594,14 +1807,14 @@ const handlePasskeyLogin = async () => {
       console.error('Passkey login failed:', error)
     }
 
-    ElMessage.error('Passkey 登录失败，请重试')
+    ElMessage.error(t('ui.login.message107'))
   } finally {
     passkeyLoading.value = false
   }
 }
 
 const handleUnsupportedLogin = (provider: string) => {
-  ElMessage.info(`${provider.toUpperCase()} 登录 - 暂不支持`)
+  ElMessage.info(t('ui.login.message108', { arg0: provider.toUpperCase() }))
 }
 
 // ===== QQ 登录 =====
@@ -1650,7 +1863,7 @@ const handleQQLogin = async () => {
     window.location.href = authUrl
   } catch (error: unknown) {
     console.error('QQ login failed:', error)
-    ElMessage.error('QQ 登录失败，请重试')
+    ElMessage.error(t('ui.login.message109'))
   }
 }
 
@@ -1660,32 +1873,38 @@ const handleAppleLogin = async () => {
     const response = await signInWithApple('login')
     if (response.needBind) {
       if (desktopBridgeHint.value) {
-        ElMessage.error('需前往网页端或移动端绑定账号之后才可以使用该第三方登录')
+        ElMessage.error(t('ui.login.message110'))
         return
       }
       savePendingAppleAccount(response)
       await router.push('/oauth/apple/continue')
     } else if (response.challengeId) {
-      await router.push({ path: '/login', query: {
-        ...route.query,
-        challengeId: response.challengeId,
-        method: response.method || 'totp',
-        methods: response.methods?.join(','),
-        mfaFrom: 'apple',
-      } })
-      startMfaFlow({
-        challengeId: response.challengeId,
-        method: response.method || 'totp',
-        methods: response.methods,
-      }, 'apple')
+      await router.push({
+        path: '/login',
+        query: {
+          ...route.query,
+          challengeId: response.challengeId,
+          method: response.method || 'totp',
+          methods: response.methods?.join(','),
+          mfaFrom: 'apple',
+        },
+      })
+      startMfaFlow(
+        {
+          challengeId: response.challengeId,
+          method: response.method || 'totp',
+          methods: response.methods,
+        },
+        'apple',
+      )
     } else if (response.accessToken) {
       await finalizeWebLogin({ accessToken: response.accessToken, user: response.user })
       await navigateAfterLogin()
     } else {
-      throw new Error('Apple 登录响应无效')
+      throw new LocalizedError('ui.login.message111')
     }
   } catch (error: unknown) {
-    ElMessage.error(error instanceof Error ? error.message : 'Apple 登录失败，请重试')
+    ElMessage.error(error instanceof Error ? error.message : t('ui.login.message112'))
   }
 }
 
@@ -1704,7 +1923,7 @@ const handleMicrosoftLogin = async () => {
     window.location.href = authUrl
   } catch (error: unknown) {
     console.error('Microsoft login failed:', error)
-    ElMessage.error('Microsoft 登录失败，请重试')
+    ElMessage.error(t('ui.login.message113'))
   }
 }
 
@@ -1721,7 +1940,7 @@ const handleGoogleLogin = async () => {
     window.location.href = authUrl
   } catch (error: unknown) {
     console.error('Google login failed:', error)
-    ElMessage.error('Google 登录失败，请重试')
+    ElMessage.error(t('ui.login.message114'))
   }
 }
 
@@ -1734,17 +1953,17 @@ const selectMfaMethod = async (method: MFAMethod) => {
 
   try {
     if (method === 'totp' && !mfaMethods.value.includes('totp')) {
-      ElMessage.error('当前不可使用 TOTP 验证')
+      ElMessage.error(t('ui.login.message115'))
       return
     }
 
     if (method === 'passkey') {
       if (!mfaMethods.value.includes('passkey')) {
-        ElMessage.error('当前不可使用 Passkey 验证')
+        ElMessage.error(t('ui.login.message116'))
         return
       }
       if (!isPasskeySupported.value) {
-        ElMessage.error('当前浏览器不支持 Passkey')
+        ElMessage.error(t('ui.sensitiveVerificationDialog.message051'))
         return
       }
       updateStep('mfa-passkey')
@@ -1753,7 +1972,7 @@ const selectMfaMethod = async (method: MFAMethod) => {
 
     if (method === 'qr') {
       if (!mfaMethods.value.includes('qr')) {
-        ElMessage.error('当前不可使用扫码验证')
+        ElMessage.error(t('ui.login.message117'))
         return
       }
       await startQrMfaFlow()
@@ -1770,12 +1989,12 @@ const handlePasskeyMfaVerify = async () => {
   if (passkeyLoading.value) return
 
   if (!mfaChallenge.value) {
-    ElMessage.error('MFA 挑战信息丢失')
+    ElMessage.error(t('ui.login.message094'))
     return
   }
 
   if (!isPasskeySupported.value) {
-    ElMessage.error('当前浏览器不支持 Passkey')
+    ElMessage.error(t('ui.sensitiveVerificationDialog.message051'))
     return
   }
 
@@ -1792,7 +2011,7 @@ const handlePasskeyMfaVerify = async () => {
     })
 
     if (!credential) {
-      throw new Error('未获取到凭证')
+      throw new LocalizedError('ui.sensitiveVerificationDialog.message052')
     }
 
     const authData = extractAuthenticationData(credential)
@@ -1806,24 +2025,24 @@ const handlePasskeyMfaVerify = async () => {
       accessToken: response.accessToken,
       user: response.user,
     })
-    ElMessage.success(desktopSynced ? 'MFA 验证成功，已同步到桌面端' : 'MFA 验证成功，登录完成')
+    ElMessage.success(desktopSynced ? t('ui.login.message118') : t('ui.login.message119'))
     await navigateAfterLogin()
   } catch (error: unknown) {
     if (error instanceof Error) {
       if (error.name === 'NotAllowedError') {
-        ElMessage.error('用户取消了认证')
+        ElMessage.error(t('ui.sensitiveVerificationDialog.message053'))
         return
       }
       if (error.name === 'NotSupportedError') {
-        ElMessage.error('浏览器不支持该操作')
+        ElMessage.error(t('ui.addPasskey.message021'))
         return
       }
       if (error.name === 'SecurityError') {
-        ElMessage.error('安全错误，请检查网络连接')
+        ElMessage.error(t('ui.addPasskey.message022'))
         return
       }
       if (error.name === 'InvalidStateError') {
-        ElMessage.error('当前账号没有可用的 Passkey')
+        ElMessage.error(t('ui.login.message106'))
         return
       }
       console.error('Passkey MFA verification failed:', error)
@@ -1841,7 +2060,7 @@ const handleTotpVerify = async () => {
     totpLoading.value = true
 
     if (!mfaChallenge.value) {
-      ElMessage.error('MFA 挑战信息丢失')
+      ElMessage.error(t('ui.login.message094'))
       return
     }
 
@@ -1851,13 +2070,13 @@ const handleTotpVerify = async () => {
     const response = await verifyTOTPForLogin(
       totpMode.value === 'recovery'
         ? {
-          challengeId: mfaChallenge.value.challengeId,
-          recoveryCode: normalizedInput.toUpperCase(),
-        }
+            challengeId: mfaChallenge.value.challengeId,
+            recoveryCode: normalizedInput.toUpperCase(),
+          }
         : {
-          challengeId: mfaChallenge.value.challengeId,
-          code: normalizedInput,
-        },
+            challengeId: mfaChallenge.value.challengeId,
+            code: normalizedInput,
+          },
     )
 
     // 存储 Access Token 到 sessionStorage
@@ -1865,7 +2084,7 @@ const handleTotpVerify = async () => {
       accessToken: response.accessToken,
       user: response.user,
     })
-    ElMessage.success(desktopSynced ? 'MFA 验证成功，已同步到桌面端' : 'MFA 验证成功，登录完成')
+    ElMessage.success(desktopSynced ? t('ui.login.message118') : t('ui.login.message119'))
     await navigateAfterLogin()
   } catch (error: unknown) {
     // 错误已经在 request.ts 中处理并显示
@@ -1922,10 +2141,10 @@ const handleDesktopBridgeLogin = async () => {
       user: response.user,
       syncDesktop: false,
     })
-    ElMessage.success('已使用桌面端登录')
+    ElMessage.success(t('ui.login.message120'))
     await navigateAfterLogin()
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '桌面端登录失败'
+    const message = error instanceof Error ? error.message : t('ui.login.message121')
     ElMessage.error(message)
     desktopBridgeUser.value = null
   } finally {
@@ -1955,9 +2174,9 @@ const copyCurrentLinkForExternalBrowser = async () => {
       document.execCommand('copy')
       document.body.removeChild(tempInput)
     }
-    ElMessage.success('已复制当前链接，请在系统浏览器中打开')
+    ElMessage.success(t('ui.login.message122'))
   } catch {
-    ElMessage.error('复制失败，请手动复制地址栏链接')
+    ElMessage.error(t('ui.login.message123'))
   }
 }
 
@@ -1966,7 +2185,7 @@ const handleMobileBridgeLogin = async () => {
     return
   }
   if (mobileBridgeInWeChat.value) {
-    ElMessage.warning('微信内无法直接拉起 App，请先复制链接并在系统浏览器打开')
+    ElMessage.warning(t('ui.login.message124'))
     return
   }
 
@@ -1991,7 +2210,7 @@ const handleMobileBridgeLogin = async () => {
     startMobileBridgePolling()
     launchMobileBridgeApp(challenge.appLink)
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '打开 Ksuser 安全 App 失败'
+    const message = error instanceof Error ? error.message : t('ui.login.message125')
     ElMessage.error(message)
     await resetMobileBridgeState(false)
   } finally {
@@ -2546,9 +2765,11 @@ onBeforeUnmount(() => {
 }
 
 .resend-btn:not(.resend-disabled) {
-  background: linear-gradient(135deg,
-      var(--el-color-primary) 0%,
-      var(--el-color-primary-light-3) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--el-color-primary) 0%,
+    var(--el-color-primary-light-3) 100%
+  );
   color: white;
   border: none;
   box-shadow: 0 4px 12px rgba(255, 185, 15, 0.2);
@@ -2645,6 +2866,7 @@ onBeforeUnmount(() => {
 }
 
 .create-account .link {
+  margin-inline-start: 4px;
   color: var(--el-color-primary);
   text-decoration: none;
   font-weight: 500;
@@ -2725,8 +2947,7 @@ onBeforeUnmount(() => {
   padding: 16px 18px;
   border-radius: 16px;
   border: 1px solid rgba(32, 100, 224, 0.16);
-  background:
-    linear-gradient(160deg, rgba(238, 246, 255, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+  background: linear-gradient(160deg, rgba(238, 246, 255, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2978,6 +3199,7 @@ onBeforeUnmount(() => {
 
 .extra-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -2985,6 +3207,9 @@ onBeforeUnmount(() => {
 
 .extra-icons {
   display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 16px;
   align-items: center;
 }
@@ -3023,10 +3248,14 @@ onBeforeUnmount(() => {
 }
 
 .extra-btn {
-  height: 40px;
+  height: auto;
+  min-height: 40px;
+  max-width: 100%;
+  margin-left: auto;
+  padding-block: 10px;
   border-radius: 10px;
   font-weight: 500;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .ios-app-login {

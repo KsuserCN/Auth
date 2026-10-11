@@ -4,6 +4,18 @@ import UIKit
 @testable import KsuserAuth
 
 final class NativeAdapterTests: XCTestCase {
+    private var previousLanguage: String?
+    override func setUp() {
+        super.setUp()
+        previousLanguage = UserDefaults.standard.string(forKey: "language")
+        UserDefaults.standard.set("zh-Hans", forKey: "language")
+    }
+    override func tearDown() {
+        if let previousLanguage { UserDefaults.standard.set(previousLanguage, forKey: "language") }
+        else { UserDefaults.standard.removeObject(forKey: "language") }
+        super.tearDown()
+    }
+
     func testAvatarCropExportsSelectedRegionAs1024PixelSquare() throws {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1
         let source = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 100), format: format).image { context in
