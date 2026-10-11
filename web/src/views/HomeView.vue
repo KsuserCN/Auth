@@ -127,18 +127,18 @@
 
     <footer class="overview-footer">
       <div class="footer-left">
-        <a href="https://docs.ksuser.cn/agreement/user" target="_blank" rel="noopener noreferrer">
+        <a :href="documentUrl('agreement/user')" target="_blank" rel="noopener noreferrer">
           {{ t('ui.home.message010') }}
         </a>
         <a
-          href="https://docs.ksuser.cn/agreement/privacy"
+          :href="documentUrl('agreement/privacy')"
           target="_blank"
           rel="noopener noreferrer"
         >
           {{ t('ui.home.message011') }}
         </a>
         <a
-          href="https://docs.ksuser.cn/agreement/third-party-information-sharing"
+          :href="documentUrl('agreement/third-party-information-sharing')"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -172,6 +172,7 @@
 
 <script setup lang="ts">
 import { t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
+import { documentUrl } from '@/utils/documentLinks'
 
 import { computed, onMounted, ref } from 'vue'
 import {

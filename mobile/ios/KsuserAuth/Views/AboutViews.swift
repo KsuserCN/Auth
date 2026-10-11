@@ -166,7 +166,15 @@ struct AboutView: View {
     }
 
     private func legalLink(_ title: String, subtitle: String, icon: String, path: String) -> some View {
-        externalLink(title, subtitle: subtitle, icon: icon, url: "https://docs.ksuser.cn/agreement/" + path)
+        externalLink(
+            title,
+            subtitle: subtitle,
+            icon: icon,
+            url: DocumentationLinks.url(
+                "agreement/" + path,
+                language: language.effectiveLanguage
+            ).absoluteString
+        )
     }
 
     private func externalLink(_ title: String, subtitle: String, icon: String, url: String) -> some View {

@@ -21,6 +21,30 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum DocumentationLinks {
+    static func url(_ path: String, language: String = L10n.language) -> URL {
+        let prefix = language.lowercased().hasPrefix("en") ? "/en" : ""
+        return URL(string: "https://docs.ksuser.cn\(prefix)/\(path)")!
+    }
+
+    static func localizedAgreementMarkdown(
+        _ text: String,
+        language: String = L10n.language
+    ) -> String {
+        let documents = [
+            "agreement/user",
+            "agreement/privacy",
+            "agreement/third-party-information-sharing",
+        ]
+        return documents.reduce(text) { result, path in
+            result.replacingOccurrences(
+                of: "https://docs.ksuser.cn/\(path)",
+                with: url(path, language: language).absoluteString
+            )
+        }
+    }
+}
+
 @MainActor @Observable final class LanguageSettings {
     static let preferenceKey = "language"
     var preference: AppLanguage {

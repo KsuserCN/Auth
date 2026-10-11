@@ -83,7 +83,7 @@
           <div class="section-actions">
             <a
               class="docs-link"
-              href="https://docs.ksuser.cn/auth/oauth/"
+              :href="documentUrl('auth/oauth')"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -165,7 +165,7 @@
           <div class="section-actions">
             <a
               class="docs-link"
-              href="https://docs.ksuser.cn/auth/sso/"
+              :href="documentUrl('auth/sso')"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -844,6 +844,7 @@
 
 <script setup lang="ts">
 import { intlLocale, t, LocalizedError } from '@/i18n'
+import { documentUrl } from '@/utils/documentLinks'
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'

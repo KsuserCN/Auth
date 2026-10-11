@@ -25,11 +25,17 @@ const String kDesktopAppVersion = '1.0.0';
 const String kDesktopBuildNumber = '2';
 const int kDesktopSessionBridgePort = 43921;
 const String kSidebarLogoAsset = 'assets/logo/sidebar_logo.png';
-const String kUserAgreementUrl = 'https://docs.ksuser.cn/agreement/user.html';
-const String kPrivacyPolicyUrl =
-    'https://docs.ksuser.cn/agreement/privacy.html';
-const String kThirdPartySharingUrl =
-    'https://docs.ksuser.cn/agreement/third-party-information-sharing.html';
+String _documentUrl(String path) {
+  final String languagePrefix = desktopLocaleController.languageTag == 'en'
+      ? '/en'
+      : '';
+  return 'https://docs.ksuser.cn$languagePrefix/$path';
+}
+
+String get kUserAgreementUrl => _documentUrl('agreement/user');
+String get kPrivacyPolicyUrl => _documentUrl('agreement/privacy');
+String get kThirdPartySharingUrl =>
+    _documentUrl('agreement/third-party-information-sharing');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
