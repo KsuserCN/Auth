@@ -9,7 +9,7 @@
       @click="handleOpenMobileBridgeQr"
     >
       <el-icon><Iphone /></el-icon>
-      <span>{{ t('ui.mobileBridgeQrSidebarAction.message002') }}</span>
+      <span class="bridge-btn-label">{{ t('ui.mobileBridgeQrSidebarAction.message002') }}</span>
     </el-button>
   </div>
 
@@ -254,14 +254,30 @@ onBeforeUnmount(() => {
 
 .bridge-btn {
   width: 100%;
-  height: 40px;
+  min-width: 0;
+  min-height: 40px;
+  height: auto;
+  padding: 8px 12px;
   border-radius: 8px;
   justify-content: flex-start;
+  gap: 8px;
+  white-space: normal;
 }
 
 .bridge-btn :deep(.el-icon) {
-  margin-right: 8px;
+  flex: 0 0 auto;
+  margin-right: 0;
   font-size: 18px;
+}
+
+.bridge-btn :deep(.bridge-btn-label) {
+  min-width: 0;
+  flex: 1 1 auto;
+  margin-left: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.25;
 }
 
 .mobile-bridge-qr-panel {
