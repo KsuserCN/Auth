@@ -38,7 +38,7 @@ struct AboutView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 20).padding(.bottom, 12)
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.text("外观")).font(.headline).padding(.horizontal, 4)
+                SettingsSectionHeading(title: L10n.text("外观"), icon: "paintpalette")
                 themeLayout {
                     ForEach(AppTheme.allCases) { theme in themeButton(theme) }
                 }
@@ -46,7 +46,7 @@ struct AboutView: View {
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.text("语言")).font(.headline).padding(.horizontal, 4)
+                SettingsSectionHeading(title: L10n.text("语言"), icon: "character.book.closed")
                 VStack(alignment: .leading, spacing: 8) {
                     Menu {
                         ForEach(AppLanguage.allCases) { option in
@@ -71,7 +71,7 @@ struct AboutView: View {
             }
             if model.isAuthenticated { PushNotificationSettingsView() }
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.text("协议与隐私")).font(.headline).padding(.horizontal, 4)
+                SettingsSectionHeading(title: L10n.text("协议与隐私"), icon: "hand.raised")
                 VStack(spacing: 0) {
                     legalLink(L10n.text("服务协议"), subtitle: L10n.text("使用条款"), icon: "doc.text", path: "user")
                     Divider().padding(.leading, 48)
@@ -83,7 +83,7 @@ struct AboutView: View {
                 .background(Brand.card, in: RoundedRectangle(cornerRadius: 22))
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text(L10n.text("帮助与反馈")).font(.headline).padding(.horizontal, 4)
+                SettingsSectionHeading(title: L10n.text("帮助与反馈"), icon: "questionmark.bubble")
                 VStack(spacing: 0) {
                     externalLink(L10n.text("问题反馈"), subtitle: L10n.text("提交问题或建议"), icon: "bubble.left.and.bubble.right", url: "https://github.com/KsuserCN/Auth/issues")
                 }

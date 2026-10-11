@@ -303,13 +303,20 @@ struct ActionRow: View {
     @Environment(AppModel.self) private var model
     let title: String
     let icon: String
+    var imageAsset: String? = nil
     var subtitle: String? = nil
     var destructive = false
     let action: () -> Void
     var body: some View {
         Button(action: action) {
             HStack(spacing: 13) {
-                Image(systemName: icon).frame(width: 24).foregroundStyle(destructive ? Brand.danger : Brand.gold)
+                Group {
+                    if let imageAsset {
+                        Image(imageAsset).renderingMode(.original).resizable().scaledToFit()
+                    } else {
+                        Image(systemName: icon).foregroundStyle(destructive ? Brand.danger : Brand.gold)
+                    }
+                }.frame(width: 24, height: 24)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).foregroundStyle(destructive ? Brand.danger : Color.primary)
                     if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
@@ -318,6 +325,21 @@ struct ActionRow: View {
                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
             }.frame(minHeight: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).disabled(model.isBusy)
+    }
+}
+
+struct SettingsSectionHeading: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: icon).foregroundStyle(Brand.gold)
+        }
+        .font(.headline)
+        .padding(.horizontal, 4)
     }
 }
 

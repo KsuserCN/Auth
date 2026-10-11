@@ -9,7 +9,7 @@ enum SecurityPushMode: String, CaseIterable, Identifiable, Sendable {
     var titleKey: String {
         switch self { case .all: "全部敏感操作"; case .loginAndAbnormal: "仅登录或异常请求"; case .off: "不推送" }
     }
-    var title: String { L10n.text(titleKey) }
+    func title(language: String = L10n.language) -> String { L10n.text(titleKey, language: language) }
 }
 
 struct PushRegistrationResponse: Decodable, Sendable { let enabled: Bool }

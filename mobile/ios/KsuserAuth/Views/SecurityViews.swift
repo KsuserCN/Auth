@@ -39,13 +39,13 @@ struct SecurityView: View {
                 }
                 sectionDivider
                 if model.qqBound {
-                    ActionRow(title: L10n.text("QQ 登录"), icon: "person.crop.circle", subtitle: L10n.text("已绑定")) { unbindQQ = true }
+                    ActionRow(title: L10n.text("QQ 登录"), icon: "person.crop.circle", imageAsset: "QQLogo", subtitle: L10n.text("已绑定")) { unbindQQ = true }
                         .accessibilityIdentifier("qqBindingRow")
                         .confirmationDialog(L10n.text("解除 QQ 绑定？"), isPresented: $unbindQQ, titleVisibility: .visible) {
                             Button(L10n.text("解除绑定"), role: .destructive) { Task { await model.unbindQQ() } }
                         } message: { Text(L10n.text("解绑前请确保已经设置密码或其他可用的登录方式。")) }
                 } else {
-                    ActionRow(title: L10n.text("QQ 登录"), icon: "person.crop.circle", subtitle: L10n.text("未绑定")) { Task { await model.bindQQ() } }
+                    ActionRow(title: L10n.text("QQ 登录"), icon: "person.crop.circle", imageAsset: "QQLogo", subtitle: L10n.text("未绑定")) { Task { await model.bindQQ() } }
                         .accessibilityIdentifier("qqBindingRow")
                 }
             }
