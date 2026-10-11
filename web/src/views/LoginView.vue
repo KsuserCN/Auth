@@ -501,6 +501,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveApiResult } from '@/utils/apiResult'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -822,7 +823,7 @@ const bindPendingOAuthAfterLogin = async () => {
     return
   }
   const result = await bindPendingOAuthAccount(pending)
-  ElMessage.success(result.message || '第三方账号绑定成功')
+  ElMessage.success(resolveApiResult(result))
 }
 
 const navigateAfterLogin = async () => {

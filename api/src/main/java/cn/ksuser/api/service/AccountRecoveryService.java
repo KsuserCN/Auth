@@ -1,5 +1,9 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+import cn.ksuser.api.result.BusinessStateException;
+
 import cn.ksuser.api.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -37,10 +41,10 @@ public class AccountRecoveryService {
             String sponsorIp,
             String sponsorUserAgent) {
         if (user == null || user.getId() == null) {
-            throw new IllegalArgumentException("用户不存在");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_005);
         }
         if (sponsorSessionId == null) {
-            throw new IllegalArgumentException("当前登录会话无效，请重新登录后再试");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_069);
         }
 
         String recoveryCode = generateRecoveryCode();
@@ -68,7 +72,7 @@ public class AccountRecoveryService {
             );
             return payload.withRecoveryCode(recoveryCode);
         } catch (Exception e) {
-            throw new IllegalStateException("创建恢复授权失败", e);
+            throw new BusinessStateException(ApiResultCode.RECOVERY_001, e);
         }
     }
 
@@ -92,24 +96,24 @@ public class AccountRecoveryService {
     public AccountRecoveryPayload consumeAuthorization(String recoveryCode) {
         String normalized = normalizeRecoveryCode(recoveryCode);
         if (normalized == null) {
-            throw new IllegalArgumentException("recoveryCode 不能为空");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_072);
         }
 
         String payloadJson;
         try {
             payloadJson = redisTemplate.opsForValue().getAndDelete(redisKey(normalized));
         } catch (Exception e) {
-            throw new IllegalStateException("读取恢复授权失败", e);
+            throw new BusinessStateException(ApiResultCode.RECOVERY_002, e);
         }
 
         if (payloadJson == null || payloadJson.isBlank()) {
-            throw new IllegalArgumentException("恢复授权不存在、已失效或已被使用");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_073);
         }
 
         try {
             return objectMapper.readValue(payloadJson, AccountRecoveryPayload.class).withRecoveryCode(normalized);
         } catch (Exception e) {
-            throw new IllegalStateException("解析恢复授权失败", e);
+            throw new BusinessStateException(ApiResultCode.RECOVERY_003, e);
         }
     }
 

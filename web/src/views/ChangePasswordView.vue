@@ -36,7 +36,7 @@
           <!-- 第一步：输入新密码 -->
           <div v-if="step === 'new-password'" class="step-container" key="new-password">
             <h2 class="step-title">设置新密码</h2>
-            <p class="step-subtitle">{{ passwordRequirement.requirementMessage }}</p>
+            <p class="step-subtitle">{{ resolveApiResult({ errorCode: passwordRequirement.requirementCode, params: passwordRequirement.requirementParams }) }}</p>
 
             <el-form ref="newPasswordFormRef" :model="passwordInput" :rules="newPasswordRules" label-position="top">
               <el-form-item prop="newPassword">
@@ -92,6 +92,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveApiResult } from '@/utils/apiResult'
 import { ref, computed, onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -135,7 +136,8 @@ const passwordRequirement = ref<PasswordRequirement>({
   requireDigits: true,
   requireSpecialChars: false,
   rejectCommonWeakPasswords: true,
-  requirementMessage: '密码强度不足：需包含大写字母、小写字母、数字'
+  requirementCode: 'PASSWORD_REQUIREMENTS_7',
+  requirementParams: { minLength: 6, maxLength: 66 }
 })
 
 // 密码输入

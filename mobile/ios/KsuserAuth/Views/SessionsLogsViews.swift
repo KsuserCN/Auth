@@ -333,7 +333,7 @@ private struct LogListRow: View {
                     }
                 }
                 .font(.caption).foregroundStyle(.secondary)
-                if !succeeded, let failure = log.failureReason, !failure.isEmpty {
+                if !succeeded, let failure = log.displayFailureReason, !failure.isEmpty {
                     Text(failure).font(.caption).foregroundStyle(Brand.danger).lineLimit(2)
                 }
             }
@@ -438,7 +438,7 @@ struct LogDetailView: View {
                 InfoRow(title: "风险评分", value: String(log.riskScore))
                 InfoRow(title: "响应耗时", value: log.durationMs.map { "\($0) 毫秒" } ?? "暂无记录")
                 if let action = log.actionTaken { InfoRow(title: "执行措施", value: action) }
-                if let note = log.failureReason, !note.isEmpty {
+                if let note = log.displayFailureReason, !note.isEmpty {
                     InfoRow(title: log.result.uppercased() == "SUCCESS" ? "备注" : "失败原因", value: note)
                 }
                 if log.triggeredMultiErrorLock { Label("触发连续错误保护", systemImage: "lock.fill").foregroundStyle(Brand.gold) }

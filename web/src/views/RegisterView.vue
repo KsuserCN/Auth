@@ -84,7 +84,7 @@
           <!-- 第二步：密码 -->
           <div v-else-if="step === 'password'" class="step-container" key="password">
             <h2 class="step-title">设置密码</h2>
-            <p class="step-subtitle">{{ passwordRequirement.requirementMessage }}</p>
+            <p class="step-subtitle">{{ resolveApiResult({ errorCode: passwordRequirement.requirementCode, params: passwordRequirement.requirementParams }) }}</p>
 
             <el-form
               ref="passwordFormRef"
@@ -239,6 +239,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveApiResult } from '@/utils/apiResult'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -303,7 +304,8 @@ const passwordRequirement = ref<PasswordRequirement>({
   requireDigits: true,
   requireSpecialChars: false,
   rejectCommonWeakPasswords: true,
-  requirementMessage: '密码强度不足：需包含大写字母、小写字母、数字',
+  requirementCode: 'PASSWORD_REQUIREMENTS_7',
+  requirementParams: { minLength: 6, maxLength: 66 },
 })
 
 // 用户名检查
@@ -611,7 +613,7 @@ const bindPendingOAuthAfterRegister = async () => {
     return
   }
   const result = await bindPendingOAuthAccount(pending)
-  ElMessage.success(result.message || '第三方账号绑定成功')
+  ElMessage.success(resolveApiResult(result))
 }
 
 const handleRegister = async () => {

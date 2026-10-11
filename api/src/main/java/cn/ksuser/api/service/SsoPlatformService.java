@@ -1,5 +1,7 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.dto.SsoAuthorizeApproveResponse;
 import cn.ksuser.api.dto.SsoAuthorizeContextResponse;
 import cn.ksuser.api.dto.SsoAuthorizeRequest;
@@ -113,8 +115,7 @@ public class SsoPlatformService {
         ensureAdminUser(user);
         long currentCount = oidcClientRepository.count();
         if (currentCount >= maxClients) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                "当前环境最多只能创建 " + maxClients + " 个 SSO 内部服务应用");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_004.withParams("maxClients", maxClients));
         }
 
         String clientName = normalizeClientName(request == null ? null : request.getClientName());
@@ -256,7 +257,7 @@ public class SsoPlatformService {
 
     @Transactional
     public void revokeAuthorization(User user, String clientId) {
-        String normalizedClientId = normalizeRequired(clientId, "ClientID 不能为空");
+        String normalizedClientId = normalizeRequired(clientId, ApiResultCode.SSO_002);
         authorizationRepository.deleteByUserIdAndClientId(user.getId(), normalizedClientId);
     }
 
@@ -264,31 +265,30 @@ public class SsoPlatformService {
                                                          String clientSecret, String redirectUri,
                                                          String codeVerifier) {
         if (!"authorization_code".equals(normalizeOptional(grantType))) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_grant_type",
-                "当前仅支持 authorization_code");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_grant_type", ApiResultCode.OAUTH2_014);
         }
 
         OidcClient client = findActiveClient(clientId, HttpStatus.UNAUTHORIZED);
         if (clientSecret == null || clientSecret.isBlank()
             || client.getClientSecretHash() == null
             || !passwordEncoder.matches(clientSecret, client.getClientSecretHash())) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", "ClientSecret 不正确");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", ApiResultCode.SSO_005);
         }
 
         validateRedirectUriMatches(client, redirectUri);
         AuthorizationCodePayload payload = consumeAuthorizationCode(code);
         if (payload == null) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码无效、已过期或已使用");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_016);
         }
         if (!client.getClientId().equals(payload.clientId()) || !containsValue(parseUriValues(client.getRedirectUris()), payload.redirectUri())) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码与当前客户端或回调地址不匹配");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.SSO_006);
         }
         validateCodeVerifier(client, payload, codeVerifier);
 
         User user = userRepository.findById(payload.userId())
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权用户不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_018));
         if (!hasMatchingAuthorization(payload.userId(), client.getClientId(), payload.authorizationId(), payload.scope())) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权已撤销或已过期");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_019);
         }
 
         String subject = buildSubject(client.getClientId(), user.getUuid());
@@ -319,14 +319,14 @@ public class SsoPlatformService {
     public Map<String, Object> buildUserInfo(String accessToken) {
         SsoTokenService.ParsedSsoAccessToken parsed = ssoTokenService.parseAccessToken(accessToken);
         if (parsed == null || parsed.clientId() == null || parsed.userId() == null) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 无效或已过期");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.OAUTH2_020);
         }
         OidcClient client = findActiveClient(parsed.clientId(), HttpStatus.UNAUTHORIZED);
         if (!hasMatchingAuthorization(parsed.userId(), parsed.clientId(), parsed.authorizationId(), parsed.scope())) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "授权已撤销或已过期");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.OAUTH2_019);
         }
         User user = userRepository.findById(parsed.userId())
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 对应用户不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.OAUTH2_021));
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("sub", parsed.subject());
@@ -376,34 +376,33 @@ public class SsoPlatformService {
 
     private void ensureAdminUser(User user) {
         if (!isAdminUser(user)) {
-            throw new Oauth2Exception(HttpStatus.FORBIDDEN, "unauthorized_client",
-                "只有管理员可以创建或管理 SSO 内部服务应用");
+            throw new Oauth2Exception(HttpStatus.FORBIDDEN, "unauthorized_client", ApiResultCode.SSO_007);
         }
     }
 
     private OidcClient findManagedClient(String clientId) {
-        String normalizedClientId = normalizeRequired(clientId, "ClientID 不能为空");
+        String normalizedClientId = normalizeRequired(clientId, ApiResultCode.SSO_002);
         return oidcClientRepository.findByClientId(normalizedClientId)
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", "SSO 客户端不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", ApiResultCode.SSO_008));
     }
 
     private OidcClient findActiveClient(String clientId, HttpStatus status) {
-        String normalizedClientId = normalizeRequired(clientId, "ClientID 不能为空");
+        String normalizedClientId = normalizeRequired(clientId, ApiResultCode.SSO_002);
         return oidcClientRepository.findByClientId(normalizedClientId)
             .filter(client -> Boolean.TRUE.equals(client.getIsActive()))
-            .orElseThrow(() -> new Oauth2Exception(status, "invalid_client", "SSO 客户端不存在或已停用"));
+            .orElseThrow(() -> new Oauth2Exception(status, "invalid_client", ApiResultCode.SSO_009));
     }
 
     private void validateResponseType(String responseType) {
         if (!"code".equals(normalizeOptional(responseType))) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_response_type", "仅支持 response_type=code");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_response_type", ApiResultCode.OAUTH2_025);
         }
     }
 
     private void validateNonce(String nonce) {
         String normalizedNonce = normalizeOptional(nonce);
         if (normalizedNonce != null && normalizedNonce.length() > 255) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "nonce 长度不能超过 255 个字符");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_010);
         }
     }
 
@@ -413,48 +412,45 @@ public class SsoPlatformService {
         boolean requirePkce = Boolean.TRUE.equals(client.getRequirePkce());
         if (normalizedChallenge == null && normalizedMethod == null) {
             if (requirePkce) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "当前 SSO 客户端要求必须提供 PKCE 参数");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_011);
             }
             return;
         }
         if (normalizedChallenge == null || normalizedMethod == null) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                "code_challenge 与 code_challenge_method 必须同时提供");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_012);
         }
         if (!"S256".equalsIgnoreCase(normalizedMethod)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                "当前仅支持 code_challenge_method=S256");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_013);
         }
         if (normalizedChallenge.length() < 43 || normalizedChallenge.length() > 128) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                "code_challenge 长度需在 43-128 个字符之间");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_014);
         }
     }
 
     private void validateCodeVerifier(OidcClient client, AuthorizationCodePayload payload, String codeVerifier) {
         if (payload.codeChallenge() == null || payload.codeChallengeMethod() == null) {
             if (Boolean.TRUE.equals(client.getRequirePkce())) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "缺少 PKCE 校验信息");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.SSO_015);
             }
             return;
         }
         String normalizedVerifier = normalizeOptional(codeVerifier);
         if (normalizedVerifier == null) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "缺少 code_verifier");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.SSO_016);
         }
         if (normalizedVerifier.length() < 43 || normalizedVerifier.length() > 128) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "code_verifier 长度无效");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.SSO_017);
         }
         String expectedChallenge = PkceUtil.toS256CodeChallenge(normalizedVerifier);
         if (!payload.codeChallenge().equals(expectedChallenge)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "PKCE 校验失败");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.SSO_018);
         }
     }
 
     private String normalizeClientName(String clientName) {
-        String normalized = normalizeRequired(clientName, "客户端名称不能为空");
+        String normalized = normalizeRequired(clientName, ApiResultCode.SSO_003);
         if (normalized.length() < 2 || normalized.length() > 120) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "客户端名称长度需在 2-120 个字符之间");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_019);
         }
         return normalized;
     }
@@ -462,7 +458,7 @@ public class SsoPlatformService {
     private List<String> normalizeAndValidateRedirectUris(List<String> redirectUris) {
         List<String> values = normalizeUriList(redirectUris, true);
         if (values.isEmpty()) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "至少需要配置一个 redirect_uri");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_020);
         }
         return values;
     }
@@ -488,7 +484,7 @@ public class SsoPlatformService {
     }
 
     private String normalizeAndValidateRedirectUri(String redirectUri) {
-        String normalized = normalizeRequired(redirectUri, "回调地址不能为空");
+        String normalized = normalizeRequired(redirectUri, ApiResultCode.OAUTH2_012);
         try {
             URI uri = URI.create(normalized);
             String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
@@ -496,22 +492,21 @@ public class SsoPlatformService {
             boolean httpsAllowed = "https".equals(scheme) && !host.isBlank();
             boolean localhostHttpAllowed = "http".equals(scheme) && "localhost".equals(host);
             if (!httpsAllowed && !localhostHttpAllowed) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                    "回调地址仅支持 https:// 或 http://localhost");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_029);
             }
             if (uri.getFragment() != null) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址不允许包含 URL fragment");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_030);
             }
             return uri.normalize().toString();
         } catch (IllegalArgumentException ex) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址格式不正确");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_031);
         }
     }
 
     private void validateRedirectUriMatches(OidcClient client, String redirectUri) {
         String normalized = normalizeAndValidateRedirectUri(redirectUri);
         if (!containsValue(parseUriValues(client.getRedirectUris()), normalized)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "redirect_uri 与客户端登记信息不一致");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.SSO_021);
         }
     }
 
@@ -525,8 +520,7 @@ public class SsoPlatformService {
         }
         for (String scope : values) {
             if (!SUPPORTED_SCOPES.contains(scope)) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope",
-                    "SSO 暂仅支持 openid、profile、email");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", ApiResultCode.SSO_022);
             }
         }
         return orderScopes(values);
@@ -553,15 +547,14 @@ public class SsoPlatformService {
             : orderScopes(Oauth2ScopeUtil.parseScopeSet(requestedScope));
         for (String scope : requestedScopes) {
             if (!SUPPORTED_SCOPES.contains(scope)) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope",
-                    "SSO 暂仅支持 openid、profile、email");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", ApiResultCode.SSO_022);
             }
         }
         if (!requestedScopes.contains("openid")) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", "SSO 授权请求必须包含 openid");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", ApiResultCode.SSO_023);
         }
         if (!allowedScopes.containsAll(requestedScopes)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", "请求的 scope 超出了客户端登记范围");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", ApiResultCode.SSO_024);
         }
         return requestedScopes;
     }
@@ -667,7 +660,7 @@ public class SsoPlatformService {
                 Duration.ofSeconds(authorizationCodeExpirationSeconds)
             );
         } catch (JsonProcessingException ex) {
-            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", "生成授权码失败");
+            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", ApiResultCode.OAUTH2_036);
         }
     }
 
@@ -695,7 +688,7 @@ public class SsoPlatformService {
             String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
             return "sub_" + encoded.substring(0, Math.min(encoded.length(), 40));
         } catch (Exception ex) {
-            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", "生成 sub 失败");
+            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", ApiResultCode.SSO_025);
         }
     }
 
@@ -706,7 +699,7 @@ public class SsoPlatformService {
                 return candidate;
             }
         }
-        throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", "生成 ClientID 失败，请稍后重试");
+        throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", ApiResultCode.SSO_026);
     }
 
     private String generateOpaqueValue(String prefix, int bytesLength) {
@@ -780,7 +773,7 @@ public class SsoPlatformService {
         return values.isEmpty() ? fallback : values.get(0);
     }
 
-    private String normalizeRequired(String value, String message) {
+    private String normalizeRequired(String value, ApiResultCode message) {
         String normalized = normalizeOptional(value);
         if (normalized == null) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", message);

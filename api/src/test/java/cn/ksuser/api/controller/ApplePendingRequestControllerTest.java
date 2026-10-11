@@ -121,7 +121,8 @@ class ApplePendingRequestControllerTest {
         ticket("login");
         mvc.perform(post("/oauth/apple/register-pending").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"oauthBindToken\":\"" + TICKET + "\"" + terms + "}"))
-            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.msg").value(TERMS_MESSAGE));
+            .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("APPLE_020"))
+            .andExpect(jsonPath("$.msg").doesNotExist());
         verify(users, never()).saveAndFlush(any());
         verify(accounts, never()).saveAndFlush(any());
     }

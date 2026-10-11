@@ -1,5 +1,8 @@
 package cn.ksuser.api.dto;
 
+import cn.ksuser.api.result.ApiResult;
+import cn.ksuser.api.result.ApiResultCode;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -193,6 +196,7 @@ public class AdaptiveAuthStatusResponse {
         this.alertLevel = alertLevel;
     }
 
+    @JsonIgnore
     public String getAlertTitle() {
         return alertTitle;
     }
@@ -201,6 +205,7 @@ public class AdaptiveAuthStatusResponse {
         this.alertTitle = alertTitle;
     }
 
+    @JsonIgnore
     public String getAlertMessage() {
         return alertMessage;
     }
@@ -217,6 +222,7 @@ public class AdaptiveAuthStatusResponse {
         this.alertRemainingSeconds = alertRemainingSeconds;
     }
 
+    @JsonIgnore
     public String getRecommendedAction() {
         return recommendedAction;
     }
@@ -225,6 +231,7 @@ public class AdaptiveAuthStatusResponse {
         this.recommendedAction = recommendedAction;
     }
 
+    @JsonIgnore
     public List<String> getReasons() {
         return reasons;
     }
@@ -232,4 +239,16 @@ public class AdaptiveAuthStatusResponse {
     public void setReasons(List<String> reasons) {
         this.reasons = reasons;
     }
+    private List<ApiResult> reasonCodes = new ArrayList<>();
+    private ApiResultCode recommendedActionCode;
+    private ApiResultCode alertTitleCode;
+    private ApiResultCode alertMessageCode;
+    public List<ApiResult> getReasonCodes() { return reasonCodes; }
+    public void setReasonCodes(List<ApiResult> value) { reasonCodes = value; }
+    public ApiResultCode getRecommendedActionCode() { return recommendedActionCode; }
+    public void setRecommendedActionCode(ApiResultCode value) { recommendedActionCode = value; }
+    public ApiResultCode getAlertTitleCode() { return alertTitleCode; }
+    public void setAlertTitleCode(ApiResultCode value) { alertTitleCode = value; }
+    public ApiResultCode getAlertMessageCode() { return alertMessageCode; }
+    public void setAlertMessageCode(ApiResultCode value) { alertMessageCode = value; }
 }

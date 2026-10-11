@@ -111,9 +111,7 @@ public class SecurityConfig {
                         HandlerExecutionChain handler = handlerMapping.getHandler(request);
                         if (handler == null) {
                             // 路由不存在，返回404
-                            response.setStatus(404);
-                            response.setContentType("application/json;charset=UTF-8");
-                            response.getWriter().write("{\"code\":404,\"msg\":\"请求的资源不存在\"}");
+                            cn.ksuser.api.result.ApiErrorResponses.write(request, response, 404, cn.ksuser.api.result.ApiResultCode.NOT_FOUND);
                             return;
                         }
                     } catch (Exception e) {
@@ -121,14 +119,12 @@ public class SecurityConfig {
                     }
                     
                     // 路由存在但未认证，返回401
-                    response.setStatus(401);
-                    response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("{\"code\":401,\"msg\":\"未登录或Token已过期\"}");
+                    cn.ksuser.api.result.ApiErrorResponses.write(request, response, 401, cn.ksuser.api.result.ApiResultCode.UNAUTHENTICATED);
                 })
                 .accessDeniedHandler((request, response, accessDeniedException) -> {
-                    response.setStatus(403);
-                    response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("{\"code\":403,\"msg\":\"无权限\"}");
+                    cn.ksuser.api.result.ApiErrorResponses.write(request, response, 403,
+                        accessDeniedException instanceof org.springframework.security.web.csrf.CsrfException
+                            ? cn.ksuser.api.result.ApiResultCode.SECURITY_CSRF_INVALID : cn.ksuser.api.result.ApiResultCode.FORBIDDEN);
                 })
             )
             .csrf(csrf -> csrf

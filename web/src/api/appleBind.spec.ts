@@ -13,7 +13,7 @@ describe('Apple pending binding', () => {
 
   it('completes only when the API confirms the Apple account was bound', async () => {
     vi.mocked(request.post).mockResolvedValue({
-      code: 200, msg: 'Apple 绑定成功', data: { bound: true },
+      code: 200, errorCode: 'REQUEST_SUCCESS', data: { bound: true },
     })
 
     await expect(bindPendingApple('apple-ticket')).resolves.toBeUndefined()
@@ -24,15 +24,18 @@ describe('Apple pending binding', () => {
 
   it('reports expired sensitive verification instead of treating HTTP 202 as binding success', async () => {
     vi.mocked(request.post).mockResolvedValue({
-      code: 202, msg: '需要完成敏感操作验证', data: { needVerification: true },
+      code: 202, errorCode: 'SENSITIVE_VERIFICATION_REQUIRED', data: { needVerification: true },
     })
 
-    await expect(bindPendingApple('apple-ticket')).rejects.toThrow('需要完成敏感操作验证')
+    await expect(bindPendingApple('apple-ticket')).rejects.toMatchObject({
+      errorCode: 'SENSITIVE_VERIFICATION_REQUIRED',
+      message: '请先完成敏感操作验证',
+    })
   })
 
   it('rejects an incomplete success response', async () => {
     vi.mocked(request.post).mockResolvedValue({
-      code: 200, msg: '获取成功', data: { bound: false },
+      code: 200, errorCode: 'REQUEST_SUCCESS', data: { bound: false },
     })
 
     await expect(bindPendingApple('apple-ticket')).rejects.toThrow('Apple 绑定未完成，请重新授权')

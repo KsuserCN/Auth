@@ -1,5 +1,7 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserTotp;
@@ -66,7 +68,7 @@ public class TotpController {
             Authentication authentication) {
         if (authentication == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -74,7 +76,7 @@ public class TotpController {
         
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -82,7 +84,7 @@ public class TotpController {
         // 检查用户是否已启用 TOTP
         if (totpService.isTotpEnabled(user.getId())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "用户已启用 TOTP"));
+                .body(new ApiResponse<>(400, ApiResultCode.TOTP_001));
         }
 
         try {
@@ -95,7 +97,7 @@ public class TotpController {
                 if (existing.getIsEnabled()) {
                     // 已启用，不允许重新注册
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "用户已启用 TOTP"));
+                        .body(new ApiResponse<>(400, ApiResultCode.TOTP_001));
                 }
                 // 未启用但存在，删除旧的待确认配置
                 userTotpRepository.delete(existing);
@@ -125,10 +127,10 @@ public class TotpController {
             );
 
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "获取 TOTP 注册选项成功", response));
+                .body(new ApiResponse<>(200, ApiResultCode.TOTP_002, response));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "生成 TOTP 秘钥失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.TOTP_003));
         }
     }
 
@@ -151,19 +153,19 @@ public class TotpController {
         if (authentication == null) {
             sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         if (request.getCode() == null || request.getCode().isEmpty()) {
             sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "empty_verification_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "验证码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
         }
 
         if (request.getRecoveryCodes() == null || request.getRecoveryCodes().length == 0) {
             sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "empty_recovery_codes", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "恢复码不能为空，请使用 registration-options 返回的 recoveryCodes"));
+                .body(new ApiResponse<>(400, ApiResultCode.TOTP_004));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -172,7 +174,7 @@ public class TotpController {
         if (userOpt.isEmpty()) {
             sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -181,7 +183,7 @@ public class TotpController {
         if (totpService.isTotpEnabled(user.getId())) {
             sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "totp_already_enabled", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "用户已启用 TOTP"));
+                .body(new ApiResponse<>(400, ApiResultCode.TOTP_001));
         }
 
         try {
@@ -192,7 +194,7 @@ public class TotpController {
             if (userTotpOpt.isEmpty()) {
                 sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "totp_not_initialized", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "TOTP 未初始化，请先调用 registration-options"));
+                    .body(new ApiResponse<>(400, ApiResultCode.TOTP_005));
             }
 
             UserTotp userTotp = userTotpOpt.get();
@@ -202,7 +204,7 @@ public class TotpController {
                 userTotpRepository.delete(userTotp);
                 sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "pending_secret_expired", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "待确认秘钥已过期，请重新生成"));
+                    .body(new ApiResponse<>(400, ApiResultCode.TOTP_006));
             }
 
             // 使用 registration-options 返回给客户端的同一组恢复码进行确认保存
@@ -218,16 +220,16 @@ public class TotpController {
             if (success) {
                 sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), true, null, startTime);
                 return ResponseEntity.status(HttpStatus.OK)
-                    .body(new ApiResponse<>(200, "TOTP 注册成功"));
+                    .body(new ApiResponse<>(200, ApiResultCode.TOTP_007));
             } else {
                 sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "invalid_or_expired_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码无效或已过期"));
+                    .body(new ApiResponse<>(400, ApiResultCode.TOTP_008));
             }
         } catch (Exception e) {
             sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "TOTP 注册失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.TOTP_009));
         }
     }
 
@@ -242,7 +244,7 @@ public class TotpController {
         
         if (authentication == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -250,7 +252,7 @@ public class TotpController {
         
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -262,8 +264,7 @@ public class TotpController {
             if (request.getCode() != null && !request.getCode().isEmpty()) {
                 if (totpService.verifyTotpCode(user.getId(), request.getCode(), masterKey)) {
                     return ResponseEntity.status(HttpStatus.OK)
-                        .body(new ApiResponse<>(200, "TOTP 验证成功",
-                            new TotpVerifyResponse(true, "验证成功")));
+                        .body(new ApiResponse<>(200, ApiResultCode.TOTP_010, new TotpVerifyResponse(true)));
                 }
             }
 
@@ -271,17 +272,15 @@ public class TotpController {
             if (request.getRecoveryCode() != null && !request.getRecoveryCode().isEmpty()) {
                 if (totpService.verifyRecoveryCode(user.getId(), request.getRecoveryCode())) {
                     return ResponseEntity.status(HttpStatus.OK)
-                        .body(new ApiResponse<>(200, "使用恢复码验证成功",
-                            new TotpVerifyResponse(true, "使用恢复码验证成功")));
+                        .body(new ApiResponse<>(200, ApiResultCode.TOTP_011, new TotpVerifyResponse(true)));
                 }
             }
 
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "验证失败",
-                    new TotpVerifyResponse(false, "TOTP 码或恢复码无效")));
+                .body(new ApiResponse<>(401, ApiResultCode.TOTP_012, new TotpVerifyResponse(false)));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "验证失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.TOTP_012));
         }
     }
 
@@ -294,7 +293,7 @@ public class TotpController {
         
         if (authentication == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -302,7 +301,7 @@ public class TotpController {
         
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -315,7 +314,7 @@ public class TotpController {
         );
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "获取 TOTP 状态成功", response));
+            .body(new ApiResponse<>(200, ApiResultCode.TOTP_013, response));
     }
 
     /**
@@ -331,7 +330,7 @@ public class TotpController {
         if (authentication == null) {
             sensitiveLogUtil.logDisableTotp(request, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -340,7 +339,7 @@ public class TotpController {
         if (userOpt.isEmpty()) {
             sensitiveLogUtil.logDisableTotp(request, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -350,7 +349,7 @@ public class TotpController {
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
             sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         boolean success = totpService.disableTotp(user.getId());
@@ -358,11 +357,11 @@ public class TotpController {
         if (success) {
             sensitiveLogUtil.logDisableTotp(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "TOTP 禁用成功"));
+                .body(new ApiResponse<>(200, ApiResultCode.TOTP_014));
         } else {
             sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "totp_not_enabled", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户未启用 TOTP"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_133));
         }
     }
 
@@ -378,7 +377,7 @@ public class TotpController {
         
         if (authentication == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -386,7 +385,7 @@ public class TotpController {
         
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -395,13 +394,13 @@ public class TotpController {
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         // 检查用户是否启用了 TOTP
         if (!totpService.isTotpEnabled(user.getId())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "用户未启用 TOTP"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_133));
         }
 
         try {
@@ -409,10 +408,10 @@ public class TotpController {
             String[] newCodes = totpService.regenerateRecoveryCodes(user.getId(), masterKey);
             
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "恢复码已重新生成", newCodes));
+                .body(new ApiResponse<>(200, ApiResultCode.TOTP_015, newCodes));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "重新生成恢复码失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.TOTP_016));
         }
     }
 
@@ -428,7 +427,7 @@ public class TotpController {
         
         if (authentication == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未认证"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = (String) authentication.getPrincipal();
@@ -436,7 +435,7 @@ public class TotpController {
         
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -445,13 +444,13 @@ public class TotpController {
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
         
         byte[] masterKey = encryptionUtil.getMasterKey();
         java.util.List<String> codes = totpService.getRecoveryCodes(user.getId(), masterKey);
         
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "获取回复码成功", codes));
+            .body(new ApiResponse<>(200, ApiResultCode.TOTP_017, codes));
     }
 }

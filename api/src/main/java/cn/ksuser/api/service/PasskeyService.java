@@ -1,5 +1,8 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
@@ -159,7 +162,7 @@ public class PasskeyService {
         String storedChallenge = stringRedisTemplate.opsForValue().get(challengeKey);
 
         if (storedChallenge == null) {
-            throw new IllegalArgumentException("Challenge 已过期或不存在");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_001);
         }
 
         // 清除 challenge（防止重放攻击 - 每个 challenge 只能使用一次）
@@ -205,7 +208,7 @@ public class PasskeyService {
         } catch (Exception e) {
             log.warn("Passkey registration validation failed. clientOrigin={}, allowedOrigins={}",
                     readClientOrigin(clientDataJSONBytes), effectiveOrigins, e);
-            throw new IllegalArgumentException("Passkey 注册验证失败: " + e.getMessage(), e);
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_002, e);
         }
 
         // ========== 3. 提取关键数据 ==========
@@ -213,7 +216,7 @@ public class PasskeyService {
                 .getAttestedCredentialData();
 
         if (attestedCredentialData == null) {
-            throw new IllegalArgumentException("AuthenticatorData 缺少 AttestedCredentialData");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_003);
         }
 
         byte[] credentialId = attestedCredentialData.getCredentialId();
@@ -230,7 +233,7 @@ public class PasskeyService {
 
         // ========== 4. Credential ID 唯一性检查 ==========
         if (userPasskeyRepository.findByCredentialId(credentialId).isPresent()) {
-            throw new IllegalArgumentException("此 Passkey 已被注册");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_004);
         }
 
         // ========== 5. 存储到数据库 ==========
@@ -296,7 +299,7 @@ public class PasskeyService {
         String storedChallenge = stringRedisTemplate.opsForValue().get(challengeKey);
 
         if (storedChallenge == null) {
-            throw new IllegalArgumentException("Challenge 已过期或不存在");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_001);
         }
 
         // 清除 challenge（防止重放攻击）
@@ -305,7 +308,7 @@ public class PasskeyService {
         // ========== 2. 查找 Passkey ==========
         byte[] credentialId = Base64.getUrlDecoder().decode(request.getCredentialRawId());
         UserPasskey passkey = userPasskeyRepository.findByCredentialId(credentialId)
-                .orElseThrow(() -> new IllegalArgumentException("Passkey 不存在"));
+                .orElseThrow(() -> new BusinessArgumentException(ApiResultCode.PASSKEY_005));
 
         // ========== 3. 使用 webauthn4j 验证 Assertion（包含签名验证）==========
         byte[] credentialIdBytes = Base64.getUrlDecoder().decode(request.getCredentialRawId());
@@ -366,7 +369,7 @@ public class PasskeyService {
         } catch (Exception e) {
             log.warn("Passkey authentication validation failed. clientOrigin={}, allowedOrigins={}",
                     readClientOrigin(clientDataJSONBytes), effectiveOrigins, e);
-            throw new IllegalArgumentException("Passkey 认证验证失败: " + e.getMessage(), e);
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_006, e);
         }
 
         // ========== 4. Sign Count 检查（防克隆攻击）==========
@@ -377,8 +380,7 @@ public class PasskeyService {
 
         // 如果认证器支持 signCount（> 0），则必须递增
         if (newSignCount > 0 && newSignCount <= currentSignCount) {
-            throw new IllegalArgumentException("Sign count 异常，可能是克隆的 Passkey（旧: " +
-                    currentSignCount + ", 新: " + newSignCount + "）");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_007);
         }
 
         // ========== 5. 更新数据库 ==========
@@ -425,7 +427,7 @@ public class PasskeyService {
         String storedChallenge = stringRedisTemplate.opsForValue().get(challengeKey);
 
         if (storedChallenge == null) {
-            throw new IllegalArgumentException("Challenge 已过期或不存在");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_001);
         }
 
         // 清除 challenge（防止重放攻击）
@@ -434,10 +436,10 @@ public class PasskeyService {
         // ========== 2. 查找 Passkey 并验证用户归属 ==========
         byte[] credentialId = Base64.getUrlDecoder().decode(request.getCredentialRawId());
         UserPasskey passkey = userPasskeyRepository.findByCredentialId(credentialId)
-                .orElseThrow(() -> new IllegalArgumentException("Passkey 不存在"));
+                .orElseThrow(() -> new BusinessArgumentException(ApiResultCode.PASSKEY_005));
 
         if (!passkey.getUserId().equals(user.getId())) {
-            throw new IllegalArgumentException("Passkey 不属于当前用户");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_008);
         }
 
         // ========== 3. 使用 webauthn4j 验证 Assertion（包含签名验证）==========
@@ -499,7 +501,7 @@ public class PasskeyService {
         } catch (Exception e) {
             log.warn("Passkey sensitive validation failed. clientOrigin={}, allowedOrigins={}",
                     readClientOrigin(clientDataJSONBytes), effectiveOrigins, e);
-            throw new IllegalArgumentException("敏感操作验证失败: " + e.getMessage(), e);
+            throw new BusinessArgumentException(ApiResultCode.AUTH_152, e);
         }
 
         // ========== 4. Sign Count 检查（防克隆攻击）==========
@@ -509,7 +511,7 @@ public class PasskeyService {
         }
 
         if (newSignCount > 0 && newSignCount <= currentSignCount) {
-            throw new IllegalArgumentException("Sign count 异常，可能是克隆的 Passkey");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_007);
         }
 
         // ========== 5. 更新数据库 ==========
@@ -543,10 +545,10 @@ public class PasskeyService {
      */
     public void deletePasskey(Long passkeyId, Long userId) {
         UserPasskey passkey = userPasskeyRepository.findById(passkeyId)
-                .orElseThrow(() -> new IllegalArgumentException("Passkey 不存在"));
+                .orElseThrow(() -> new BusinessArgumentException(ApiResultCode.PASSKEY_005));
 
         if (!passkey.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("无权限删除此 Passkey");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_009);
         }
 
         userPasskeyRepository.delete(passkey);
@@ -557,18 +559,18 @@ public class PasskeyService {
      */
     public void renamePasskey(Long passkeyId, Long userId, String newName) {
         if (newName == null || newName.trim().isEmpty()) {
-            throw new IllegalArgumentException("Passkey 名称不能为空");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_010);
         }
 
         if (newName.length() > 50) {
-            throw new IllegalArgumentException("Passkey 名称长度不能超过 50 个字符");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_011);
         }
 
         UserPasskey passkey = userPasskeyRepository.findById(passkeyId)
-                .orElseThrow(() -> new IllegalArgumentException("Passkey 不存在"));
+                .orElseThrow(() -> new BusinessArgumentException(ApiResultCode.PASSKEY_005));
 
         if (!passkey.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("无权限修改此 Passkey");
+            throw new BusinessArgumentException(ApiResultCode.PASSKEY_012);
         }
 
         passkey.setName(newName.trim());

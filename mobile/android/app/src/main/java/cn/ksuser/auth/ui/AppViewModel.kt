@@ -267,11 +267,7 @@ class AppViewModel(
                     }
                 }
                 .onFailure { throwable ->
-                    val readable = if (throwable is ApiException && throwable.statusCode == 401) {
-                        "请先在手机端登录"
-                    } else {
-                        throwable.toReadableMessage()
-                    }
+                    val readable = throwable.toReadableMessage()
                     _uiState.update { it.copy(isBusy = false, error = readable) }
                 }
         }
@@ -647,11 +643,7 @@ class AppViewModel(
                     _uiState.update { it.copy(isBusy = false, message = "扫码授权成功") }
                 }
                 .onFailure { throwable ->
-                    val readable = if (throwable is ApiException && throwable.statusCode == 401) {
-                        "请先在手机端登录"
-                    } else {
-                        throwable.toReadableMessage()
-                    }
+                    val readable = throwable.toReadableMessage()
                     _uiState.update { it.copy(isBusy = false, error = readable) }
                 }
         }

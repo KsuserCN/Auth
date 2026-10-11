@@ -1,5 +1,9 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.ApiFailures;
+import cn.ksuser.api.result.BusinessArgumentException;
+
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.OauthCallbackRequest;
@@ -141,12 +145,12 @@ public class OauthController {
         long startTime = System.currentTimeMillis();
         
         if (authentication == null || authentication.getPrincipal() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
         String uuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(uuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
         var user = userOpt.get();
         
@@ -155,13 +159,13 @@ public class OauthController {
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
-            data.put("message", "解绑 QQ 帐号属于敏感操作，需要先完成身份验证");
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, data));
         }
 
         var acctOpt = oauthRepo.findByProviderAndUserId("qq", user.getId());
         if (acctOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 QQ 帐号"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, ApiResultCode.OAUTH_004));
         }
         var acct = acctOpt.get();
         
@@ -181,14 +185,14 @@ public class OauthController {
         if (!hasPassword && !hasPasskey && !hasApple) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("canUnbind", false);
-            data.put("reason", "last_login_method");
-            data.put("message", "无法解绑，这是您的最后一种登录方式");
+
+
             data.put("suggestions", java.util.Arrays.asList(
                 "请先设置密码或绑定 Passkey",
                 "设置密码后可以使用邮箱+密码登录",
                 "绑定 Passkey 后可以使用无密码登录"
             ));
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
         
         // 删除绑定
@@ -198,7 +202,7 @@ public class OauthController {
         sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "qq", 
             cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, startTime);
 
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "解绑成功"));
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_006));
     }
 
     /**
@@ -244,15 +248,15 @@ public class OauthController {
         String unionid = req.getUnionid() == null ? "" : req.getUnionid().trim();
 
         if (appId.isBlank() || accessToken.isBlank() || openid.isBlank() || unionid.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
         if (!isTrustedQqMobileAppId(appId)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ 移动应用 AppId 未配置或不匹配"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_008));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.RATE_LIMITED));
         }
         rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
@@ -266,14 +270,7 @@ public class OauthController {
                     UserOauthAccount acct = bound.get();
                     acct.setLastLoginAt(java.time.LocalDateTime.now());
                     oauthRepo.save(acct);
-                    return issueOauthLoginResponse(
-                        userOpt.get(),
-                        "qq",
-                        request,
-                        response,
-                        startTime,
-                        "QQ 登录成功"
-                    );
+                    return issueOauthLoginResponse(userOpt.get(), "qq", request, response, startTime, ApiResultCode.OAUTH_001);
                 }
             }
 
@@ -285,14 +282,14 @@ public class OauthController {
                 "login",
                 "mobile"
             );
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_BIND_REQUIRED, data));
         } catch (IllegalArgumentException ex) {
             sensitiveLogUtil.logLogin(request, null, "QQ", false, ex.getMessage(), startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiFailures.result(ex, ApiResultCode.BAD_REQUEST)));
         } catch (Exception ex) {
             logger.error("QQ mobile login failed", ex);
             sensitiveLogUtil.logLogin(request, null, "QQ", false, "QQ mobile login failed", startTime);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, ApiResultCode.SERVER_ERROR));
         }
     }
 
@@ -307,13 +304,13 @@ public class OauthController {
             || authentication.getPrincipal() == null
             || authentication instanceof AnonymousAuthenticationToken
             || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(uuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String appId = req.getAppId() == null ? "" : req.getAppId().trim();
@@ -321,19 +318,18 @@ public class OauthController {
         String openid = req.getOpenid() == null ? "" : req.getOpenid().trim();
         String unionid = req.getUnionid() == null ? "" : req.getUnionid().trim();
         if (appId.isBlank() || accessToken.isBlank() || openid.isBlank() || unionid.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
         if (!isTrustedQqMobileAppId(appId)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ 移动应用 AppId 未配置或不匹配"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_008));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202,
-                "需要完成敏感操作验证", Map.of("needVerification", true)));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.RATE_LIMITED));
         }
         rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
@@ -349,15 +345,14 @@ public class OauthController {
             linkOauthAccount("qq", user, pending);
             sensitiveLogUtil.log(request, user.getId(), "BIND_OAUTH", "qq",
                 cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, startTime);
-            return ResponseEntity.ok(new ApiResponse<>(200, "QQ 绑定成功",
-                Map.of("bound", true, "provider", "qq")));
+            return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH_009, Map.of("bound", true, "provider", "qq")));
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiFailures.result(ex, ApiResultCode.BAD_REQUEST)));
         } catch (DataIntegrityViolationException ex) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "QQ 账号已被绑定，请刷新后重试"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_010));
         } catch (Exception ex) {
             logger.error("QQ mobile bind failed", ex);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, ApiResultCode.SERVER_ERROR));
         }
     }
 
@@ -482,13 +477,13 @@ public class OauthController {
             || authentication.getPrincipal() == null
             || authentication instanceof AnonymousAuthenticationToken
             || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(uuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -513,7 +508,7 @@ public class OauthController {
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功", data));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, data));
     }
 
     private ResponseEntity<ApiResponse<Object>> handleQqCallback(OauthCallbackRequest req,
@@ -526,39 +521,39 @@ public class OauthController {
         String state = req.getState();
 
         if (code == null || code.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "code 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_011));
         }
         if (state == null || state.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_012));
         }
 
         // 新格式: 校验参数;操作类型;prd/dev
         String[] stateParts = state.split(";", -1);
         if (stateParts.length != 3 || stateParts[0].isBlank() || stateParts[1].isBlank() || stateParts[2].isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 格式不正确，需为: 校验参数;操作类型;prd/dev"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_013));
         }
         String stateNonce = stateParts[0].trim();
         String operationType = stateParts[1].trim().toLowerCase();
         String env = stateParts[2].trim().toLowerCase();
         if (!("login".equals(operationType) || "bind".equals(operationType) || "unbind".equals(operationType))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型不支持，仅支持 login/bind/unbind"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_014));
         }
         if (!expectedOperation.equals(operationType)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型与当前接口不匹配"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_015));
         }
         if (!("prd".equals(env) || "dev".equals(env))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_016));
         }
 
         String redirectUri = resolveRedirectUriByEnv(env);
         if (redirectUri == null) {
             logger.error("No qq redirectUri configured for env={}", env);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "QQ redirectUri 未配置"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_017));
         }
         if (redirectUriFromRequest != null && !redirectUriFromRequest.isBlank() && !redirectUri.equals(redirectUriFromRequest)) {
             logger.warn("Ignore redirectUri from request: {}, use configured: {}", redirectUriFromRequest, redirectUri);
@@ -570,17 +565,17 @@ public class OauthController {
                 || authentication.getPrincipal() == null
                 || authentication instanceof AnonymousAuthenticationToken
                 || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_018.withParams("operation", expectedOperation)));
             }
             String uuid = authentication.getPrincipal().toString();
             var userOpt = userService.findByUuid(uuid);
             if (userOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "当前登录态对应用户不存在"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_019));
             }
             currentUser = userOpt.get();
         }
         if (!"login".equals(expectedOperation) && currentUser == null) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_018.withParams("operation", expectedOperation)));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -590,19 +585,19 @@ public class OauthController {
         String rawCodeUsedKey = "oauth:qq:raw-used-code:" + code;
 
         if (Boolean.TRUE.equals(redisTemplate.hasKey(codeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 QQ 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_020));
         }
         if (Boolean.TRUE.equals(redisTemplate.hasKey(rawCodeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 QQ 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_020));
         }
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(codeProcessingKey, "1", Duration.ofSeconds(30));
         if (!Boolean.TRUE.equals(locked)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "登录处理中，请勿重复提交"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.OAUTH_021));
         }
 
         // 速率限制（按 IP）
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.RATE_LIMITED));
         }
         rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
@@ -618,7 +613,7 @@ public class OauthController {
 
             String tokenResp = restTemplate.getForObject(tokenUrl, String.class);
             if (tokenResp == null || tokenResp.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "QQ token 接口无响应"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_022));
             }
 
             JsonNode tokenJson = objectMapper.readTree(tokenResp);
@@ -628,12 +623,12 @@ public class OauthController {
                     redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
                     redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
                 }
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ token 错误: " + err));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_023));
             }
 
             String accessToken = tokenJson.path("access_token").asText(null);
             if (accessToken == null) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 QQ 返回 access_token"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_024));
             }
             redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
             redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
@@ -642,12 +637,12 @@ public class OauthController {
             String meUrl = String.format("https://graph.qq.com/oauth2.0/me?access_token=%s&fmt=json&unionid=1", URLEncoder.encode(accessToken, StandardCharsets.UTF_8));
             String meResp = restTemplate.getForObject(meUrl, String.class);
             if (meResp == null || meResp.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "QQ me 接口无响应"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_025));
             }
             JsonNode meJson = objectMapper.readTree(meResp);
             if (meJson.has("error")) {
                 String err = meJson.path("error_description").asText(meJson.path("error").asText());
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "QQ me 错误: " + err));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_026));
             }
             String openid = meJson.path("openid").asText(null);
             String unionid = meJson.path("unionid").asText(null);
@@ -655,17 +650,17 @@ public class OauthController {
                 unionid = null;
             }
             if (openid == null) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 QQ 返回 openid"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_027));
             }
             if (unionid == null) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 QQ 返回 unionid，请确认已开通 getUnionId 权限"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_028));
             }
 
             // Web 和移动端在校验 QQ 凭据后复用相同的绑定规则。
             if ("bind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "bind 操作需要有效登录态"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_029));
                 }
 
                 PendingOauthIdentity pending = new PendingOauthIdentity(openid, unionid);
@@ -680,17 +675,17 @@ public class OauthController {
                 data.put("provider", "qq");
                 data.put("openid", openid);
                 data.put("unionid", unionid);
-                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "QQ 绑定成功", data));
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_009, data));
             }
 
             if ("unbind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "unbind 操作需要有效登录态"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_030));
                 }
 
                 if (unionid.isBlank()) {
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "未从 QQ 返回可用于解绑校验的 unionid"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_031));
                 }
 
                 String uuid = user.getUuid();
@@ -698,18 +693,18 @@ public class OauthController {
                 if (!sensitiveOperationService.isVerified(uuid, clientIpReq)) {
                     java.util.Map<String, Object> data = new java.util.HashMap<>();
                     data.put("needVerification", true);
-                    data.put("message", "解绑 QQ 帐号属于敏感操作，需要先完成身份验证");
-                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, data));
                 }
 
                 var acctOpt = oauthRepo.findByProviderAndUserId("qq", user.getId());
                 if (acctOpt.isEmpty()) {
-                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 QQ 帐号"));
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, ApiResultCode.OAUTH_004));
                 }
                 var acct = acctOpt.get();
 
                 if (!unionid.equals(acct.getUnionId())) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前授权的 QQ 账号与已绑定账号不一致"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_032));
                 }
 
                 boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isEmpty();
@@ -717,20 +712,20 @@ public class OauthController {
                 if (!hasPassword && !hasPasskey) {
                     java.util.Map<String, Object> data = new java.util.HashMap<>();
                     data.put("canUnbind", false);
-                    data.put("reason", "last_login_method");
-                    data.put("message", "无法解绑，这是您的最后一种登录方式");
+
+
                     data.put("suggestions", java.util.Arrays.asList(
                         "请先设置密码或绑定 Passkey",
                         "设置密码后可以使用邮箱+密码登录",
                         "绑定 Passkey 后可以使用无密码登录"
                     ));
-                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
                 }
 
                 oauthRepo.delete(acct);
                 sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "qq",
                     cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
-                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "解绑成功"));
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_006));
             }
 
             long startTime = System.currentTimeMillis();
@@ -762,7 +757,7 @@ public class OauthController {
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                            .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, resp));
                         }
                     }
 
@@ -788,7 +783,7 @@ public class OauthController {
                     data.put("user", user);
                     data.put("operationType", operationType);
                     data.put("env", env);
-                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "登录成功", data));
+                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.AUTH_034, data));
                 }
             }
 
@@ -796,11 +791,11 @@ public class OauthController {
             sensitiveLogUtil.logLogin(request, null, "QQ", false, "Not bound", startTime);
             java.util.Map<String,Object> data = createPendingOauthBindData("qq", openid, unionid, operationType, env);
             // 202 表示已接受，需前端引导用户注册或绑定
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_BIND_REQUIRED, data));
 
         } catch (Exception e) {
             logger.error("QQ oauth callback failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, ApiResultCode.SERVER_ERROR));
         } finally {
             redisTemplate.delete(codeProcessingKey);
         }
@@ -857,13 +852,13 @@ public class OauthController {
         );
         String meResp = restTemplate.getForObject(meUrl, String.class);
         if (meResp == null || meResp.isBlank()) {
-            throw new IllegalArgumentException("QQ me 接口无响应");
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_025);
         }
 
         JsonNode meJson = objectMapper.readTree(meResp);
         if (meJson.has("error")) {
             String err = meJson.path("error_description").asText(meJson.path("error").asText());
-            throw new IllegalArgumentException("QQ me 错误: " + err);
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_026);
         }
 
         String returnedOpenid = meJson.path("openid").asText(null);
@@ -873,16 +868,16 @@ public class OauthController {
             returnedUnionid = null;
         }
         if (returnedOpenid == null || !returnedOpenid.equals(openid)) {
-            throw new IllegalArgumentException("QQ openid 校验失败");
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_082);
         }
         if (returnedUnionid == null) {
-            throw new IllegalArgumentException("QQ 未返回 unionid，请确认已开通 getUnionId 权限");
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_083);
         }
         if (!returnedUnionid.equals(unionid)) {
-            throw new IllegalArgumentException("QQ unionid 校验失败");
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_084);
         }
         if (!appId.equals(returnedClientId)) {
-            throw new IllegalArgumentException("QQ AppId 校验失败");
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_085);
         }
         return new QqMobileIdentity(returnedOpenid, returnedUnionid);
     }
@@ -898,20 +893,20 @@ public class OauthController {
         String email = req.getEmail();
         String password = req.getPassword();
         if (provider == null || email == null || email.isEmpty() || password == null || password.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
 
         PendingOauthIdentity pending;
         try {
             pending = resolvePendingOauthIdentity(provider, req.getBindToken());
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiFailures.result(ex, ApiResultCode.BAD_REQUEST)));
         }
 
         // 验证用户凭据（使用 UserService.login）
         var loginOpt = userService.login(email, password);
         if (loginOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "邮箱或密码错误"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_036));
         }
         var user = loginOpt.get();
 
@@ -922,7 +917,7 @@ public class OauthController {
         linkOauthAccount(provider, user, pending);
         consumePendingOauthIdentity(req.getBindToken());
 
-        return issueOauthLoginResponse(user, provider, request, response, System.currentTimeMillis(), "绑定并登录成功");
+        return issueOauthLoginResponse(user, provider, request, response, System.currentTimeMillis(), ApiResultCode.OAUTH_002);
     }
 
     /**
@@ -937,17 +932,17 @@ public class OauthController {
         String email = req.getEmail();
         String password = req.getPassword();
         if (provider == null || username == null || username.isEmpty() || email == null || email.isEmpty() || password == null || password.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
 
         PendingOauthIdentity pending;
         try {
             pending = resolvePendingOauthIdentity(provider, req.getBindToken());
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiFailures.result(ex, ApiResultCode.BAD_REQUEST)));
         }
         if (findExistingOauthBinding(provider, pending).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, providerDisplayName(provider) + " 账号已被绑定"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_033.withParams("provider", providerDisplayName(provider))));
         }
 
         // 使用 UserService 注册
@@ -955,11 +950,11 @@ public class OauthController {
         if (regResult.getStatus() != cn.ksuser.api.dto.RegisterResult.Status.SUCCESS) {
             switch (regResult.getStatus()) {
                 case USERNAME_EXISTS:
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "用户名已存在"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.AUTH_029));
                 case EMAIL_EXISTS:
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "邮箱已存在"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.AUTH_031));
                 default:
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "注册失败"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_034));
             }
         }
 
@@ -971,7 +966,7 @@ public class OauthController {
         linkOauthAccount(provider, newUser, pending);
         consumePendingOauthIdentity(req.getBindToken());
 
-        return issueOauthLoginResponse(newUser, provider, request, response, System.currentTimeMillis(), "注册并绑定并登录成功");
+        return issueOauthLoginResponse(newUser, provider, request, response, System.currentTimeMillis(), ApiResultCode.OAUTH_003);
     }
 
     @PostMapping({"/qq/bind-pending", "/github/bind-pending", "/microsoft/bind-pending", "/google/bind-pending"})
@@ -980,26 +975,26 @@ public class OauthController {
                                                                         Authentication authentication) {
         String provider = resolveProviderFromRequest(request, req.getProvider());
         if (provider == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "参数缺失"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
         if (authentication == null
             || authentication.getPrincipal() == null
             || authentication instanceof AnonymousAuthenticationToken
             || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(uuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         PendingOauthIdentity pending;
         try {
             pending = resolvePendingOauthIdentity(provider, req.getBindToken());
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ex.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiFailures.result(ex, ApiResultCode.BAD_REQUEST)));
         }
 
         User user = userOpt.get();
@@ -1013,8 +1008,8 @@ public class OauthController {
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("bound", true);
         data.put("provider", provider);
-        data.put("message", providerDisplayName(provider) + " 绑定成功");
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, providerDisplayName(provider) + " 绑定成功", data));
+
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_035.withParams("provider", providerDisplayName(provider)), data));
     }
 
     /**
@@ -1029,17 +1024,17 @@ public class OauthController {
         String state = req.getState();
 
         if (code == null || code.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "code 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_011));
         }
         if (state == null || state.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_012));
         }
 
         // state 格式：verifyToken;operation;env
         String[] stateParts = state.split(";", -1);
         if (stateParts.length != 3 || stateParts[0].isBlank() || stateParts[1].isBlank() || stateParts[2].isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 格式不正确，需为: verifyToken;operation;env"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_036));
         }
         String verifyToken = stateParts[0].trim();
         String operationType = stateParts[1].trim().toLowerCase();
@@ -1047,22 +1042,22 @@ public class OauthController {
 
         if (!("login".equals(operationType) || "bind".equals(operationType) || "unbind".equals(operationType))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型不支持，仅支持 login/bind/unbind"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_014));
         }
         if (!expectedOperation.equals(operationType)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型与当前接口不匹配"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_015));
         }
         if (!("prd".equals(env) || "dev".equals(env))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_016));
         }
 
         String redirectUri = resolveGithubRedirectUriByEnv(env);
         if (redirectUri == null) {
             logger.error("No github redirectUri configured for env={}", env);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "GitHub redirectUri 未配置"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_037));
         }
         redirectUri = redirectUri.trim();
         try {
@@ -1070,12 +1065,12 @@ public class OauthController {
         } catch (Exception ex) {
             logger.error("Invalid github redirectUri: {}", redirectUri, ex);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "GitHub redirectUri 非法，请检查后端配置"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_038));
         }
         if (githubClientId == null || githubClientId.isBlank() || githubClientSecret == null || githubClientSecret.isBlank()) {
             logger.error("GitHub OAuth client_id/client_secret not configured");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "GitHub OAuth 配置缺失"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_039));
         }
 
         User currentUser = null;
@@ -1084,17 +1079,17 @@ public class OauthController {
                 || authentication.getPrincipal() == null
                 || authentication instanceof AnonymousAuthenticationToken
                 || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_018.withParams("operation", expectedOperation)));
             }
             String uuid = authentication.getPrincipal().toString();
             var userOpt = userService.findByUuid(uuid);
             if (userOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "当前登录态对应用户不存在"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_019));
             }
             currentUser = userOpt.get();
         }
         if (!"login".equals(expectedOperation) && currentUser == null) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_018.withParams("operation", expectedOperation)));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -1104,19 +1099,19 @@ public class OauthController {
         String rawCodeUsedKey = "oauth:github:raw-used-code:" + code;
 
         if (Boolean.TRUE.equals(redisTemplate.hasKey(codeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 GitHub 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_040));
         }
         if (Boolean.TRUE.equals(redisTemplate.hasKey(rawCodeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 GitHub 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_040));
         }
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(codeProcessingKey, "1", Duration.ofSeconds(30));
         if (!Boolean.TRUE.equals(locked)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "登录处理中，请勿重复提交"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.OAUTH_021));
         }
 
         // 速率限制（按 IP）
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.RATE_LIMITED));
         }
         rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
@@ -1144,18 +1139,18 @@ public class OauthController {
             String tokenResp = tokenRespEntity.getBody();
             
             if (tokenResp == null || tokenResp.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "GitHub token 接口无响应"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_041));
             }
 
             JsonNode tokenJson = objectMapper.readTree(tokenResp);
             if (tokenJson.has("error")) {
                 String err = tokenJson.path("error_description").asText(tokenJson.path("error").asText());
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "GitHub token 错误: " + err));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_042));
             }
 
             String accessToken = tokenJson.path("access_token").asText(null);
             if (accessToken == null) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 GitHub 返回 access_token"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_043));
             }
             redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
             redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
@@ -1176,13 +1171,13 @@ public class OauthController {
             String userResp = userRespEntity.getBody();
             
             if (userResp == null || userResp.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "GitHub user 接口无响应"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_044));
             }
             
             JsonNode userJson = objectMapper.readTree(userResp);
             if (userJson.has("message")) {
                 String err = userJson.path("message").asText();
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "GitHub user 错误: " + err));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_045));
             }
             
             String githubId = userJson.path("id").asText(null);
@@ -1190,7 +1185,7 @@ public class OauthController {
             String githubEmail = userJson.path("email").asText(null);
             
             if (githubId == null) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 GitHub 返回用户 ID"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_046));
             }
             
             long startTime = System.currentTimeMillis();
@@ -1199,16 +1194,16 @@ public class OauthController {
             if ("bind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "bind 操作需要有效登录态"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_029));
                 }
 
                 if (oauthRepo.findByProviderAndUserId("github", user.getId()).isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 GitHub"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_047));
                 }
 
                 java.util.Optional<UserOauthAccount> existingBinding = oauthRepo.findByProviderAndProviderUserId("github", githubId);
                 if (existingBinding.isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 GitHub 账号已被绑定"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_048));
                 }
 
                 UserOauthAccount acct = new UserOauthAccount();
@@ -1229,7 +1224,7 @@ public class OauthController {
                 data.put("bound", true);
                 data.put("provider", "github");
                 data.put("openid", githubId);
-                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "GitHub 绑定成功", data));
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_049, data));
             }
 
             // 3) 查询是否已绑定
@@ -1257,7 +1252,7 @@ public class OauthController {
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                            .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, resp));
                         }
                     }
 
@@ -1283,18 +1278,18 @@ public class OauthController {
                     data.put("user", user);
                     data.put("operationType", operationType);
                     data.put("env", env);
-                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "登录成功", data));
+                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.AUTH_034, data));
                 }
             }
 
             // 未绑定
             sensitiveLogUtil.logLogin(request, null, "GITHUB", false, "Not bound", startTime);
             java.util.Map<String,Object> data = createPendingOauthBindData("github", githubId, null, operationType, env);
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_BIND_REQUIRED, data));
 
         } catch (Exception e) {
             logger.error("GitHub oauth callback failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, ApiResultCode.SERVER_ERROR));
         } finally {
             redisTemplate.delete(codeProcessingKey);
         }
@@ -1315,16 +1310,16 @@ public class OauthController {
         state = decodeIfPercentEncoded(state);
 
         if (code == null || code.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "code 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_011));
         }
         if (state == null || state.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_012));
         }
 
         String[] stateParts = state.split(";", -1);
         if (stateParts.length != 3 || stateParts[0].isBlank() || stateParts[1].isBlank() || stateParts[2].isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 格式不正确，需为: verifyToken;operation;env"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_036));
         }
         String verifyToken = stateParts[0].trim();
         String operationType = stateParts[1].trim().toLowerCase();
@@ -1332,27 +1327,27 @@ public class OauthController {
 
         if (!("login".equals(operationType) || "bind".equals(operationType))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型不支持，仅支持 login/bind"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_050));
         }
         if (!expectedOperation.equals(operationType)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型与当前接口不匹配"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_015));
         }
         if (!("prd".equals(env) || "dev".equals(env))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_016));
         }
 
         String redirectUri = resolveGoogleRedirectUriByEnv(env);
         if (redirectUri == null) {
             logger.error("No google redirectUri configured for env={}", env);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Google redirectUri 未配置"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_051));
         }
         if (googleClientId == null || googleClientId.isBlank() || googleClientSecret == null || googleClientSecret.isBlank()) {
             logger.error("Google OAuth client_id/client_secret not configured");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Google OAuth 配置缺失"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_052));
         }
 
         User currentUser = null;
@@ -1361,12 +1356,12 @@ public class OauthController {
                 || authentication.getPrincipal() == null
                 || authentication instanceof AnonymousAuthenticationToken
                 || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_018.withParams("operation", expectedOperation)));
             }
             String uuid = authentication.getPrincipal().toString();
             var userOpt = userService.findByUuid(uuid);
             if (userOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "当前登录态对应用户不存在"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_019));
             }
             currentUser = userOpt.get();
         }
@@ -1378,18 +1373,18 @@ public class OauthController {
         String rawCodeUsedKey = "oauth:google:raw-used-code:" + code;
 
         if (Boolean.TRUE.equals(redisTemplate.hasKey(codeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 Google 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_053));
         }
         if (Boolean.TRUE.equals(redisTemplate.hasKey(rawCodeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 Google 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_053));
         }
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(codeProcessingKey, "1", Duration.ofSeconds(30));
         if (!Boolean.TRUE.equals(locked)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "登录处理中，请勿重复提交"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.OAUTH_021));
         }
 
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.RATE_LIMITED));
         }
         rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
@@ -1424,12 +1419,12 @@ public class OauthController {
                 tokenResp = e.getResponseBodyAsString();
                 if (tokenResp == null || tokenResp.isBlank()) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "Google token 错误: " + e.getStatusText()));
+                        .body(new ApiResponse<>(400, ApiResultCode.OAUTH_054));
                 }
             }
 
             if (tokenResp == null || tokenResp.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "Google token 接口无响应"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_055));
             }
 
             JsonNode tokenJson = objectMapper.readTree(tokenResp);
@@ -1439,16 +1434,15 @@ public class OauthController {
                 if ("invalid_grant".equalsIgnoreCase(errCode)) {
                     redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
                     redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400,
-                        "Google token 错误: invalid_grant（授权码已使用/过期，或 redirect_uri 与授权请求不一致）"));
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_056));
                 }
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "Google token 错误: " + err));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_054));
             }
 
             String accessToken = tokenJson.path("access_token").asText(null);
             String idToken = tokenJson.path("id_token").asText(null);
             if (accessToken == null || accessToken.isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 Google 返回 access_token"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_057));
             }
             redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
             redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
@@ -1458,22 +1452,22 @@ public class OauthController {
                 openid = fetchGoogleSubFromUserInfo(accessToken);
             }
             if (openid == null || openid.isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 Google 返回用户标识"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_058));
             }
 
             if ("bind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "bind 操作需要有效登录态"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_029));
                 }
 
                 if (oauthRepo.findByProviderAndUserId("google", user.getId()).isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 Google"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_059));
                 }
 
                 java.util.Optional<UserOauthAccount> existingBinding = oauthRepo.findByProviderAndProviderUserId("google", openid);
                 if (existingBinding.isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 Google 账号已被绑定"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_060));
                 }
 
                 UserOauthAccount acct = new UserOauthAccount();
@@ -1494,8 +1488,8 @@ public class OauthController {
                 data.put("bound", true);
                 data.put("provider", "google");
                 data.put("openid", openid);
-                data.put("message", "Google 绑定成功");
-                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Google 绑定成功", data));
+
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_061, data));
             }
 
             var bound = oauthRepo.findByProviderAndProviderUserId("google", openid);
@@ -1522,7 +1516,7 @@ public class OauthController {
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                            .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, resp));
                         }
                     }
 
@@ -1544,17 +1538,17 @@ public class OauthController {
                     data.put("user", user);
                     data.put("operationType", operationType);
                     data.put("env", env);
-                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "登录成功", data));
+                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.AUTH_034, data));
                 }
             }
 
             sensitiveLogUtil.logLogin(request, null, "GOOGLE", false, "Not bound", startTime);
             java.util.Map<String, Object> data = createPendingOauthBindData("google", openid, null, operationType, env);
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_BIND_REQUIRED, data));
 
         } catch (Exception e) {
             logger.error("Google oauth callback failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, ApiResultCode.SERVER_ERROR));
         } finally {
             redisTemplate.delete(codeProcessingKey);
         }
@@ -1569,34 +1563,34 @@ public class OauthController {
         if (req != null) {
             String state = req.getState();
             if (state == null || state.isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_012));
             }
 
             String[] stateParts = state.split(";", -1);
             if (stateParts.length != 3 || stateParts[0].isBlank() || stateParts[1].isBlank() || stateParts[2].isBlank()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "state 格式不正确，需为: verifyToken;operation;env"));
+                    .body(new ApiResponse<>(400, ApiResultCode.OAUTH_036));
             }
             String operationType = stateParts[1].trim().toLowerCase();
             String env = stateParts[2].trim().toLowerCase();
             if (!"unbind".equals(operationType)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "state 操作类型与当前接口不匹配"));
+                    .body(new ApiResponse<>(400, ApiResultCode.OAUTH_015));
             }
             if (!("prd".equals(env) || "dev".equals(env))) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+                    .body(new ApiResponse<>(400, ApiResultCode.OAUTH_016));
             }
         }
 
         if (authentication == null || authentication.getPrincipal() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(userUuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -1605,13 +1599,13 @@ public class OauthController {
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
-            data.put("message", "解绑 Google 帐号属于敏感操作，需要先完成身份验证");
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, data));
         }
 
         var acctOpt = oauthRepo.findByProviderAndUserId("google", user.getId());
         if (acctOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 Google 帐号"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, ApiResultCode.OAUTH_062));
         }
 
         var acct = acctOpt.get();
@@ -1620,14 +1614,14 @@ public class OauthController {
         if (!hasPassword && !hasPasskey) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("canUnbind", false);
-            data.put("reason", "last_login_method");
-            data.put("message", "无法解绑，这是您的最后一种登录方式");
+
+
             data.put("suggestions", java.util.Arrays.asList(
                 "请先设置密码或绑定 Passkey",
                 "设置密码后可以使用邮箱+密码登录",
                 "绑定 Passkey 后可以使用无密码登录"
             ));
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
         oauthRepo.delete(acct);
@@ -1637,10 +1631,10 @@ public class OauthController {
         if (req != null) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("canUnbind", true);
-            data.put("message", "Google 解绑校验完成");
-            return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Google 解绑成功", data));
+
+            return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_063, data));
         }
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Google 解绑成功"));
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_063));
     }
 
     private String resolveGoogleRedirectUriByEnv(String env) {
@@ -1755,20 +1749,20 @@ public class OauthController {
         String codeVerifier = req.getCodeVerifier();
 
         if (code == null || code.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "code 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_011));
         }
         if (state == null || state.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "state 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_012));
         }
         if (codeVerifier == null || codeVerifier.isBlank()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "codeVerifier 不能为空"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_064));
         }
 
         // state 格式：verifyToken;operation;env
         String[] stateParts = state.split(";", -1);
         if (stateParts.length != 3 || stateParts[0].isBlank() || stateParts[1].isBlank() || stateParts[2].isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 格式不正确，需为: verifyToken;operation;env"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_036));
         }
         String verifyToken = stateParts[0].trim();
         String operationType = stateParts[1].trim().toLowerCase();
@@ -1776,29 +1770,29 @@ public class OauthController {
 
         if (!("login".equals(operationType) || "bind".equals(operationType) || "unbind".equals(operationType))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型不支持，仅支持 login/bind/unbind"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_014));
         }
         if (!expectedOperation.equals(operationType)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 操作类型与当前接口不匹配"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_015));
         }
         if (!("prd".equals(env) || "dev".equals(env))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "state 环境标识不支持，仅支持 prd/dev"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH_016));
         }
 
         String redirectUri = resolveMicrosoftRedirectUriByEnv(env);
         if (redirectUri == null) {
             logger.error("No microsoft redirectUri configured for env={}", env);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Microsoft redirectUri 未配置"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_065));
         }
 
         String tenantId = (microsoftTenantId == null || microsoftTenantId.isBlank()) ? "common" : microsoftTenantId.trim();
         if (microsoftClientId == null || microsoftClientId.isBlank()) {
             logger.error("Microsoft OAuth client_id not configured");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Microsoft OAuth client_id 未配置"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH_066));
         }
 
         User currentUser = null;
@@ -1807,12 +1801,12 @@ public class OauthController {
                 || authentication.getPrincipal() == null
                 || authentication instanceof AnonymousAuthenticationToken
                 || "anonymousUser".equals(authentication.getPrincipal().toString())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, expectedOperation + " 操作需要有效登录态"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_018.withParams("operation", expectedOperation)));
             }
             String uuid = authentication.getPrincipal().toString();
             var userOpt = userService.findByUuid(uuid);
             if (userOpt.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "当前登录态对应用户不存在"));
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_019));
             }
             currentUser = userOpt.get();
         }
@@ -1824,19 +1818,19 @@ public class OauthController {
         String rawCodeUsedKey = "oauth:microsoft:raw-used-code:" + code;
 
         if (Boolean.TRUE.equals(redisTemplate.hasKey(codeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 Microsoft 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_067));
         }
         if (Boolean.TRUE.equals(redisTemplate.hasKey(rawCodeUsedKey))) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "授权码已使用，请重新发起 Microsoft 登录"));
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_067));
         }
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(codeProcessingKey, "1", Duration.ofSeconds(30));
         if (!Boolean.TRUE.equals(locked)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "登录处理中，请勿重复提交"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.OAUTH_021));
         }
 
         // 速率限制（按 IP）
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, "请求过于频繁"));
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(new ApiResponse<>(429, ApiResultCode.RATE_LIMITED));
         }
         rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
 
@@ -1871,7 +1865,7 @@ public class OauthController {
             );
             String tokenResp = tokenRespEntity.getBody();
             if (tokenResp == null || tokenResp.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "Microsoft token 接口无响应"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_068));
             }
 
             JsonNode tokenJson = objectMapper.readTree(tokenResp);
@@ -1881,13 +1875,13 @@ public class OauthController {
                     redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
                     redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
                 }
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, "Microsoft token 错误: " + err));
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_069));
             }
 
             String accessToken = tokenJson.path("access_token").asText(null);
             String idToken = tokenJson.path("id_token").asText(null);
             if (accessToken == null || accessToken.isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 Microsoft 返回 access_token"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_070));
             }
             redisTemplate.opsForValue().set(codeUsedKey, "1", Duration.ofMinutes(10));
             redisTemplate.opsForValue().set(rawCodeUsedKey, "1", Duration.ofMinutes(10));
@@ -1897,23 +1891,23 @@ public class OauthController {
                 openid = fetchMicrosoftOpenidFromUserInfo(accessToken);
             }
             if (openid == null || openid.isBlank()) {
-                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, "未从 Microsoft 返回用户标识"));
+                return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(new ApiResponse<>(502, ApiResultCode.OAUTH_071));
             }
 
             // bind 操作：为当前登录用户直接写入 Microsoft 绑定关系
             if ("bind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "bind 操作需要有效登录态"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_029));
                 }
 
                 if (oauthRepo.findByProviderAndUserId("microsoft", user.getId()).isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 Microsoft"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_072));
                 }
 
                 java.util.Optional<UserOauthAccount> existingBinding = oauthRepo.findByProviderAndProviderUserId("microsoft", openid);
                 if (existingBinding.isPresent()) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 Microsoft 账号已被绑定"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_073));
                 }
 
                 UserOauthAccount acct = new UserOauthAccount();
@@ -1934,14 +1928,14 @@ public class OauthController {
                 data.put("bound", true);
                 data.put("provider", "microsoft");
                 data.put("openid", openid);
-                data.put("message", "Microsoft 绑定成功");
-                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Microsoft 绑定成功", data));
+
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_074, data));
             }
 
             if ("unbind".equals(operationType)) {
                 User user = currentUser;
                 if (user == null) {
-                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, "unbind 操作需要有效登录态"));
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.OAUTH_030));
                 }
 
                 String callbackIdentity = openid;
@@ -1950,19 +1944,19 @@ public class OauthController {
                 if (!sensitiveOperationService.isVerified(uuid, clientIpReq)) {
                     java.util.Map<String, Object> data = new java.util.HashMap<>();
                     data.put("needVerification", true);
-                    data.put("message", "解绑 Microsoft 帐号属于敏感操作，需要先完成身份验证");
-                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, data));
                 }
 
                 var acctOpt = oauthRepo.findByProviderAndUserId("microsoft", user.getId());
                 if (acctOpt.isEmpty()) {
-                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 Microsoft 帐号"));
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, ApiResultCode.OAUTH_075));
                 }
                 var acct = acctOpt.get();
 
                 String boundIdentity = acct.getProviderUserId();
                 if (!callbackIdentity.equals(boundIdentity)) {
-                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前授权的 Microsoft 账号与已绑定账号不一致"));
+                    return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_076));
                 }
 
                 boolean hasPassword = user.getPasswordHash() != null && !user.getPasswordHash().isEmpty();
@@ -1970,14 +1964,14 @@ public class OauthController {
                 if (!hasPassword && !hasPasskey) {
                     java.util.Map<String, Object> data = new java.util.HashMap<>();
                     data.put("canUnbind", false);
-                    data.put("reason", "last_login_method");
-                    data.put("message", "无法解绑，这是您的最后一种登录方式");
+
+
                     data.put("suggestions", java.util.Arrays.asList(
                         "请先设置密码或绑定 Passkey",
                         "设置密码后可以使用邮箱+密码登录",
                         "绑定 Passkey 后可以使用无密码登录"
                     ));
-                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
                 }
 
                 oauthRepo.delete(acct);
@@ -1986,8 +1980,8 @@ public class OauthController {
 
                 java.util.Map<String, Object> data = new java.util.HashMap<>();
                 data.put("canUnbind", true);
-                data.put("message", "Microsoft 解绑校验完成");
-                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Microsoft 解绑成功", data));
+
+                return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_077, data));
             }
 
             // login 操作：查询是否已绑定
@@ -2015,7 +2009,7 @@ public class OauthController {
                         resp.put("operationType", operationType);
                         resp.put("env", env);
                         return ResponseEntity.status(HttpStatus.CREATED)
-                            .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                            .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, resp));
                         }
                     }
 
@@ -2037,17 +2031,17 @@ public class OauthController {
                     data.put("user", user);
                     data.put("operationType", operationType);
                     data.put("env", env);
-                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "登录成功", data));
+                    return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.AUTH_034, data));
                 }
             }
 
             sensitiveLogUtil.logLogin(request, null, "MICROSOFT", false, "Not bound", startTime);
             java.util.Map<String, Object> data = createPendingOauthBindData("microsoft", openid, null, operationType, env);
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "未绑定，需要注册或绑定", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_BIND_REQUIRED, data));
 
         } catch (Exception e) {
             logger.error("Microsoft oauth callback failed", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, "内部错误"));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(500, ApiResultCode.SERVER_ERROR));
         } finally {
             redisTemplate.delete(codeProcessingKey);
         }
@@ -2059,13 +2053,13 @@ public class OauthController {
     private ResponseEntity<ApiResponse<Object>> handleMicrosoftUnbind(HttpServletRequest request,
                                                                       Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(userUuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         User user = userOpt.get();
@@ -2074,13 +2068,13 @@ public class OauthController {
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
-            data.put("message", "解绑 Microsoft 帐号属于敏感操作，需要先完成身份验证");
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, data));
         }
 
         var acctOpt = oauthRepo.findByProviderAndUserId("microsoft", user.getId());
         if (acctOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 Microsoft 帐号"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, ApiResultCode.OAUTH_075));
         }
 
         var acct = acctOpt.get();
@@ -2089,21 +2083,21 @@ public class OauthController {
         if (!hasPassword && !hasPasskey) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("canUnbind", false);
-            data.put("reason", "last_login_method");
-            data.put("message", "无法解绑，这是您的最后一种登录方式");
+
+
             data.put("suggestions", java.util.Arrays.asList(
                 "请先设置密码或绑定 Passkey",
                 "设置密码后可以使用邮箱+密码登录",
                 "绑定 Passkey 后可以使用无密码登录"
             ));
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
         oauthRepo.delete(acct);
         sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "microsoft",
             cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
 
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "Microsoft 解绑成功"));
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_077));
     }
 
     private String resolveMicrosoftRedirectUriByEnv(String env) {
@@ -2210,13 +2204,13 @@ public class OauthController {
         String state = req.getState();
         
         if (authentication == null || authentication.getPrincipal() == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "未认证"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String userUuid = authentication.getPrincipal().toString();
         var userOpt = userService.findByUuid(userUuid);
         if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, "用户不存在"));
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
         
         User user = userOpt.get();
@@ -2226,13 +2220,13 @@ public class OauthController {
         if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
-            data.put("message", "解绑 GitHub 帐号属于敏感操作，需要先完成身份验证");
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "需要完成敏感操作验证", data));
+
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, data));
         }
 
         var acctOpt = oauthRepo.findByProviderAndUserId("github", user.getId());
         if (acctOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, "未绑定 GitHub 帐号"));
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(404, ApiResultCode.OAUTH_078));
         }
         
         var acct = acctOpt.get();
@@ -2244,14 +2238,14 @@ public class OauthController {
         if (!hasPassword && !hasPasskey) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("canUnbind", false);
-            data.put("reason", "last_login_method");
-            data.put("message", "无法解绑，这是您的最后一种登录方式");
+
+
             data.put("suggestions", java.util.Arrays.asList(
                 "请先设置密码或绑定 Passkey",
                 "设置密码后可以使用邮箱+密码登录",
                 "绑定 Passkey 后可以使用无密码登录"
             ));
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, "无法解绑最后登录方式", data));
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
         // 删除绑定
@@ -2261,7 +2255,7 @@ public class OauthController {
         sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "github", 
             cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
 
-        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, "GitHub 解绑成功"));
+        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, ApiResultCode.OAUTH_079));
     }
 
     /**
@@ -2316,7 +2310,7 @@ public class OauthController {
         data.put("openid", providerUserId);
         data.put("operationType", operationType);
         data.put("env", env);
-        data.put("message", "该 " + providerDisplayName(provider) + " 账号尚未绑定，请绑定已有 Ksuser 账号或注册新账号");
+
         return data;
     }
 
@@ -2327,13 +2321,13 @@ public class OauthController {
     private PendingOauthIdentity resolvePendingOauthIdentity(String provider, String bindToken) {
         String normalizedProvider = normalizeOauthProvider(provider);
         if (normalizedProvider == null) {
-            throw new IllegalArgumentException("不支持的第三方账号类型");
+            throw new BusinessArgumentException(ApiResultCode.OAUTH_086);
         }
 
         if (bindToken != null && !bindToken.isBlank()) {
             String raw = redisTemplate.opsForValue().get(pendingOauthKey(bindToken.trim()));
             if (raw == null || raw.isBlank()) {
-                throw new IllegalArgumentException("第三方登录状态已过期，请重新授权");
+                throw new BusinessArgumentException(ApiResultCode.OAUTH_087);
             }
             try {
                 JsonNode json = objectMapper.readTree(raw);
@@ -2341,7 +2335,7 @@ public class OauthController {
                 String providerUserId = json.path("providerUserId").asText(null);
                 String unionId = json.path("unionId").asText(null);
                 if (!normalizedProvider.equals(tokenProvider) || providerUserId == null || providerUserId.isBlank()) {
-                    throw new IllegalArgumentException("第三方登录状态无效，请重新授权");
+                    throw new BusinessArgumentException(ApiResultCode.OAUTH_088);
                 }
                 if (unionId != null && unionId.isBlank()) {
                     unionId = null;
@@ -2350,11 +2344,11 @@ public class OauthController {
             } catch (IllegalArgumentException ex) {
                 throw ex;
             } catch (Exception ex) {
-                throw new IllegalArgumentException("第三方登录状态无效，请重新授权");
+                throw new BusinessArgumentException(ApiResultCode.OAUTH_088);
             }
         }
 
-        throw new IllegalArgumentException("第三方登录状态缺失，请重新授权");
+        throw new BusinessArgumentException(ApiResultCode.OAUTH_089);
     }
 
     private void consumePendingOauthIdentity(String bindToken) {
@@ -2366,10 +2360,10 @@ public class OauthController {
     private ResponseEntity<ApiResponse<Object>> ensureCanLinkOauth(String provider, User user, PendingOauthIdentity pending) {
         String displayName = providerDisplayName(provider);
         if (oauthRepo.findByProviderAndUserId(provider, user.getId()).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "当前账号已绑定 " + displayName));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_080.withParams("provider", displayName)));
         }
         if (findExistingOauthBinding(provider, pending).isPresent()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, "该 " + displayName + " 账号已被绑定"));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_081.withParams("provider", displayName)));
         }
         return null;
     }
@@ -2377,7 +2371,7 @@ public class OauthController {
     private java.util.Optional<UserOauthAccount> findExistingOauthBinding(String provider, PendingOauthIdentity pending) {
         if ("qq".equals(provider)) {
             if (pending.unionId() == null || pending.unionId().isBlank()) {
-                throw new IllegalArgumentException("QQ unionid 缺失，请重新授权");
+                throw new BusinessArgumentException(ApiResultCode.OAUTH_090);
             }
             return oauthRepo.findByProviderAndUnionId(provider, pending.unionId());
         }
@@ -2405,7 +2399,7 @@ public class OauthController {
                                                                         HttpServletRequest request,
                                                                         HttpServletResponse response,
                                                                         long startTime,
-                                                                        String message) {
+                                                                        ApiResultCode message) {
         UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
         boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
         if (mfaEnabled) {
@@ -2421,7 +2415,7 @@ public class OauthController {
                 resp.put("methods", mfaMethods);
                 resp.put("provider", provider);
                 return ResponseEntity.status(HttpStatus.CREATED)
-                    .body(new ApiResponse<>(201, "需要 MFA 验证", resp));
+                    .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, resp));
             }
         }
 

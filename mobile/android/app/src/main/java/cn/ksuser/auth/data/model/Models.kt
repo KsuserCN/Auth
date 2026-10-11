@@ -1,5 +1,8 @@
 package cn.ksuser.auth.data.model
 
+import cn.ksuser.auth.core.network.ApiResultCodeResolver
+import cn.ksuser.auth.core.network.GeneratedApiResultCodes
+import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 
 data class CsrfTokenResponse(
@@ -14,8 +17,19 @@ data class PasswordRequirement(
     val requireDigits: Boolean,
     val requireSpecialChars: Boolean,
     val rejectCommonWeakPasswords: Boolean = true,
-    val requirementMessage: String = "",
-)
+    val requirementCode: String? = null,
+    val requirementParams: Map<String, JsonElement>? = null,
+) {
+    val requirementMessage: String
+        get() = requirementCode?.let { ApiResultCodeResolver.message(it, requirementParams, 400) }
+            ?: buildList {
+                add("$minLength–$maxLength 个字符")
+                if (requireUppercase) add("包含大写字母")
+                if (requireLowercase) add("包含小写字母")
+                if (requireDigits) add("包含数字")
+                if (requireSpecialChars) add("包含特殊字符 @\$!%*?&")
+            }.joinToString("，")
+}
 
 data class CheckUsernameResponse(
     val exists: Boolean,
@@ -162,7 +176,12 @@ data class TotpRegistrationOptions(
 
 data class TotpVerifyResponse(
     val success: Boolean,
-    val message: String,
+    @Transient val message: String = "",
+)
+
+data class ApiResultDescriptor(
+    val errorCode: String? = null,
+    val params: Map<String, JsonElement>? = null,
 )
 
 data class SensitiveVerificationStatus(
@@ -193,12 +212,21 @@ data class AdaptiveAuthStatus(
     val deviceType: String? = null,
     val multiEndpointAlert: Boolean = false,
     val alertLevel: String? = null,
-    val alertTitle: String? = null,
-    val alertMessage: String? = null,
+    val alertTitleCode: String? = null,
+    val alertMessageCode: String? = null,
     val alertRemainingSeconds: Long = 0,
-    val recommendedAction: String = "",
-    val reasons: List<String> = emptyList(),
-)
+    val recommendedActionCode: String? = null,
+    val reasonCodes: List<ApiResultDescriptor> = emptyList(),
+) {
+    val alertTitle: String?
+        get() = alertTitleCode?.let { ApiResultCodeResolver.message(it, statusCode = 400) }
+    val alertMessage: String?
+        get() = alertMessageCode?.let { ApiResultCodeResolver.message(it, statusCode = 400) }
+    val recommendedAction: String
+        get() = ApiResultCodeResolver.message(recommendedActionCode, statusCode = 400)
+    val reasons: List<String>
+        get() = reasonCodes.map { ApiResultCodeResolver.message(it.errorCode, it.params, 400) }
+}
 
 data class SessionItem(
     val id: Long,
@@ -232,7 +260,13 @@ data class SensitiveLogItem(
     val triggeredRateLimitLock: Boolean = false,
     val durationMs: Int = 0,
     val createdAt: String,
-)
+) {
+    val displayFailureReason: String?
+        get() = failureReason?.let {
+            if (GeneratedApiResultCodes.messages.containsKey(it)) ApiResultCodeResolver.message(it, statusCode = 400)
+            else it
+        }
+}
 
 data class PaginatedSensitiveLogs(
     val data: List<SensitiveLogItem>,
@@ -270,7 +304,7 @@ data class OAuthBindCallbackResponse(
     val provider: String? = null,
     val openid: String? = null,
     val unionid: String? = null,
-    val message: String? = null,
+    @Transient val message: String? = null,
 )
 
 data class SendCodeRequest(

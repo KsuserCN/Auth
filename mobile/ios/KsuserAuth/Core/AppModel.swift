@@ -72,7 +72,7 @@ struct LoadingActivity: Identifiable {
         // The default app host is inert during XCTest; injected repositories still execute isolated unit-test fixtures.
         isUITesting = repository == nil && (ProcessInfo.processInfo.arguments.contains("--ui-testing") || ProcessInfo.processInfo.environment["KSUSER_UI_TESTING"] == "1")
         if isUITesting {
-            passwordRequirement = PasswordRequirement(minLength: 8, maxLength: 64, requireUppercase: true, requireLowercase: true, requireDigits: true, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementMessage: "8–64 个字符，包含大小写字母和数字")
+            passwordRequirement = PasswordRequirement(minLength: 8, maxLength: 64, requireUppercase: true, requireLowercase: true, requireDigits: true, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementCode: nil, requirementParams: nil)
         }
         if isUITesting, ProcessInfo.processInfo.arguments.contains("--ui-test-authenticated") { configureUITestFixture() }
         if isUITesting, ProcessInfo.processInfo.arguments.contains("--ui-test-notice") { noticeMessage = "验证码已发送，请检查邮箱" }
@@ -655,8 +655,8 @@ struct LoadingActivity: Identifiable {
         sessions = [SessionItem(id: 1, ipAddress: "192.0.2.1", ipLocation: "中国 · 上海", userAgent: "KsuserAuthMobile/1.0 (iOS 17.0)", browser: "Ksuser iOS", deviceType: "iPhone", createdAt: "2026-10-01T10:00:00", lastSeenAt: "2026-10-04T10:00:00", expiresAt: "2026-11-01T10:00:00", revokedAt: nil, online: true, current: true)]
         logs = [SensitiveLogItem(id: 1, operationType: "LOGIN", loginMethod: "passkey", loginMethods: ["passkey"], ipAddress: "192.0.2.1", ipLocation: "中国 · 上海", browser: "Ksuser iOS", deviceType: "iPhone", result: "success", failureReason: nil, riskScore: 10, actionTaken: "ALLOW", triggeredMultiErrorLock: false, triggeredRateLimitLock: false, durationMs: 80, createdAt: "2026-10-04T10:00:00")]
         logsTotal = logs.count
-        adaptiveStatus = AdaptiveAuthStatus(sessionId: 1, riskScore: 10, riskLevel: "low", policyDecision: "ALLOW", policyVersion: "1.0.0", trusted: true, requiresStepUp: false, sessionFrozen: false, sensitiveVerified: false, sensitiveVerificationRemainingSeconds: 0, authAgeSeconds: 60, idleSeconds: 0, currentIp: "192.0.2.1", currentLocation: "中国 · 上海", sessionIp: "192.0.2.1", sessionLocation: "中国 · 上海", browser: "Ksuser iOS", deviceType: "iPhone", multiEndpointAlert: false, alertLevel: nil, alertTitle: nil, alertMessage: nil, alertRemainingSeconds: 0, recommendedAction: "当前登录状态安全", reasons: [])
-        passwordRequirement = PasswordRequirement(minLength: 8, maxLength: 64, requireUppercase: true, requireLowercase: true, requireDigits: true, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementMessage: "8–64 个字符，包含大小写字母和数字")
+        adaptiveStatus = AdaptiveAuthStatus(sessionId: 1, riskScore: 10, riskLevel: "low", policyDecision: "ALLOW", policyVersion: "1.0.0", trusted: true, requiresStepUp: false, sessionFrozen: false, sensitiveVerified: false, sensitiveVerificationRemainingSeconds: 0, authAgeSeconds: 60, idleSeconds: 0, currentIp: "192.0.2.1", currentLocation: "中国 · 上海", sessionIp: "192.0.2.1", sessionLocation: "中国 · 上海", browser: "Ksuser iOS", deviceType: "iPhone", multiEndpointAlert: false, alertLevel: nil, alertTitleCode: nil, alertMessageCode: nil, alertRemainingSeconds: 0, recommendedActionCode: "ADAPTIVE_ACTION_SAFE", reasonCodes: [])
+        passwordRequirement = PasswordRequirement(minLength: 8, maxLength: 64, requireUppercase: true, requireLowercase: true, requireDigits: true, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementCode: nil, requirementParams: nil)
     }
     #endif
 }

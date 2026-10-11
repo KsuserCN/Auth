@@ -166,7 +166,7 @@
                 <span class="adaptive-auth-title">
                   {{ adaptiveAuthStatus.requiresStepUp ? '建议立即补做验证' : '当前会话可信度稳定' }}
                 </span>
-                <p class="adaptive-auth-desc">{{ adaptiveAuthStatus.recommendedAction }}</p>
+                <p class="adaptive-auth-desc">{{ resolveApiResult({ errorCode: adaptiveAuthStatus.recommendedActionCode }) }}</p>
               </div>
               <div class="adaptive-auth-actions">
                 <el-tag :type="adaptiveAuthStatus.trusted ? 'success' : 'warning'">
@@ -191,8 +191,8 @@
 
             <el-alert
               v-if="adaptiveAuthStatus.multiEndpointAlert"
-              :title="adaptiveAuthStatus.alertTitle || '风险告警'"
-              :description="adaptiveAuthStatus.alertMessage || '检测到风险信号，请尽快处理'"
+              :title="adaptiveAuthStatus.alertTitleCode ? resolveApiResult({ errorCode: adaptiveAuthStatus.alertTitleCode }) : '风险告警'"
+              :description="adaptiveAuthStatus.alertMessageCode ? resolveApiResult({ errorCode: adaptiveAuthStatus.alertMessageCode }) : '检测到风险信号，请尽快处理'"
               :type="adaptiveAuthStatus.alertLevel === 'high' ? 'error' : 'warning'"
               show-icon
               :closable="false"
@@ -243,12 +243,12 @@
               <span class="metric-label">风险信号</span>
               <div class="adaptive-auth-chip-list">
                 <el-tag
-                  v-for="reason in adaptiveAuthStatus.reasons"
-                  :key="reason"
+                  v-for="(reason, index) in adaptiveAuthStatus.reasonCodes"
+                  :key="`${reason.errorCode}-${index}`"
                   size="small"
                   effect="plain"
                 >
-                  {{ reason }}
+                  {{ resolveApiResult(reason) }}
                 </el-tag>
               </div>
             </div>
@@ -401,6 +401,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveApiResult } from '@/utils/apiResult'
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'

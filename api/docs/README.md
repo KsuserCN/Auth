@@ -1,5 +1,8 @@
 # 身份认证 API 文档
 
+> **当前响应契约**：业务接口返回 `code + errorCode + params + data`，四端通过本地文案表解释详细码，不再读取 `msg`。完整定义、全部码表和维护方式见 [统一错误码文档](api-result-codes.md)。旧接口页中的 `msg/message` 示例是历史契约，以统一错误码文档为准。
+
+
 
 
 
@@ -440,7 +443,7 @@
 ```json
 {
   "code": 400,
-  "msg": "错误描述信息"
+  "errorCode": "BAD_REQUEST"
 }
 ```
 
@@ -457,7 +460,7 @@ curl -X POST \
 # 响应
 {
   "code": 415,
-  "msg": "不支持的请求类型: text/plain。请使用 Content-Type: application/json"
+  "errorCode": "UNSUPPORTED_MEDIA_TYPE"
 }
 ```
 

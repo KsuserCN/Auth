@@ -1,5 +1,9 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+import cn.ksuser.api.result.BusinessStateException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -84,7 +88,7 @@ public class SessionTransferService {
             String requesterUserAgent) {
         String normalizedTarget = normalizeTarget(target);
         if (normalizedTarget == null) {
-            throw new IllegalArgumentException("target 只能是 web、desktop 或 mobile");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_080);
         }
         String normalizedPurpose = normalizePurpose(purpose);
 
@@ -103,44 +107,44 @@ public class SessionTransferService {
             redisTemplate.opsForValue().set(redisKey(transferCode), value, Duration.ofSeconds(DEFAULT_TTL_SECONDS));
             return payload.withTransferCode(transferCode);
         } catch (Exception e) {
-            throw new IllegalStateException("创建跨端票据失败", e);
+            throw new BusinessStateException(ApiResultCode.SESSION_TRANSFER_001, e);
         }
     }
 
     public SessionTransferPayload consumeTransfer(String transferCode, String target) {
         String normalizedTarget = normalizeTarget(target);
         if (normalizedTarget == null) {
-            throw new IllegalArgumentException("target 只能是 web、desktop 或 mobile");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_080);
         }
         if (transferCode == null || transferCode.trim().isEmpty()) {
-            throw new IllegalArgumentException("transferCode 不能为空");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_054);
         }
 
         String payloadJson;
         try {
             payloadJson = redisTemplate.opsForValue().getAndDelete(redisKey(transferCode.trim()));
         } catch (Exception e) {
-            throw new IllegalStateException("读取跨端票据失败", e);
+            throw new BusinessStateException(ApiResultCode.SESSION_TRANSFER_002, e);
         }
 
         if (payloadJson == null || payloadJson.isBlank()) {
-            throw new IllegalArgumentException("跨端票据不存在或已过期");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_087);
         }
 
         try {
             SessionTransferPayload payload = objectMapper.readValue(payloadJson, SessionTransferPayload.class);
             if (!normalizedTarget.equals(payload.getTarget())) {
-                throw new IllegalArgumentException("跨端票据目标端不匹配");
+                throw new BusinessArgumentException(ApiResultCode.SESSION_TRANSFER_003);
             }
             if (payload.getUserId() == null) {
-                throw new IllegalArgumentException("跨端票据数据无效");
+                throw new BusinessArgumentException(ApiResultCode.SESSION_TRANSFER_004);
             }
             payload.setPurpose(normalizePurpose(payload.getPurpose()));
             return payload;
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new IllegalStateException("解析跨端票据失败", e);
+            throw new BusinessStateException(ApiResultCode.SESSION_TRANSFER_005, e);
         }
     }
 

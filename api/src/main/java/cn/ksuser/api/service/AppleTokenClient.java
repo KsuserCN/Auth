@@ -1,5 +1,9 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+import cn.ksuser.api.result.BusinessStateException;
+
 import cn.ksuser.api.config.AppleAuthProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -43,10 +47,10 @@ public class AppleTokenClient {
         String claimedNonce = claims.get("nonce", String.class);
         if (nonce == null || claimedNonce == null || !MessageDigest.isEqual(
                 nonce.getBytes(StandardCharsets.UTF_8), claimedNonce.getBytes(StandardCharsets.UTF_8))) {
-            throw new IllegalArgumentException("Apple nonce 校验失败，请重新授权");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_037);
         }
         if (claims.getSubject() == null || claims.getSubject().isBlank() || claims.getSubject().length() > 128) {
-            throw new IllegalArgumentException("Apple 身份无效");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_038);
         }
         String email = claims.get("email", String.class);
         Object verified = claims.get("email_verified");
@@ -56,28 +60,28 @@ public class AppleTokenClient {
     }
 
     Claims verifyClaims(String token, String clientId) {
-        if (token == null || token.length() > 16384) throw new IllegalArgumentException("Apple 凭据无效");
-        if (!properties.getClientIds().contains(clientId)) throw new IllegalArgumentException("Apple audience 不受信任");
+        if (token == null || token.length() > 16384) throw new BusinessArgumentException(ApiResultCode.APPLE_039);
+        if (!properties.getClientIds().contains(clientId)) throw new BusinessArgumentException(ApiResultCode.APPLE_040);
         try {
             String[] parts = token.split("\\.");
-            if (parts.length != 3) throw new IllegalArgumentException("Apple JWT 格式无效");
+            if (parts.length != 3) throw new BusinessArgumentException(ApiResultCode.APPLE_041);
             JsonNode header = json.readTree(Base64.getUrlDecoder().decode(parts[0]));
-            if (!"RS256".equals(header.path("alg").asText())) throw new IllegalArgumentException("Apple JWT 算法无效");
+            if (!"RS256".equals(header.path("alg").asText())) throw new BusinessArgumentException(ApiResultCode.APPLE_042);
             PublicKey key = signingKey(header.path("kid").asText());
             Claims claims = Jwts.parser().verifyWith(key).requireIssuer(ISSUER).clockSkewSeconds(30)
                 .build().parseSignedClaims(token).getPayload();
             if (claims.getAudience() == null || !claims.getAudience().contains(clientId)
                 || claims.getExpiration() == null || claims.getIssuedAt() == null
                 || claims.getIssuedAt().toInstant().isAfter(Instant.now().plusSeconds(30))) {
-                throw new IllegalArgumentException("Apple JWT 声明无效");
+                throw new BusinessArgumentException(ApiResultCode.APPLE_043);
             }
             return claims;
         } catch (IllegalArgumentException ex) { throw ex; }
-        catch (Exception ex) { throw new IllegalArgumentException("Apple 凭据校验失败，请重新授权"); }
+        catch (Exception ex) { throw new BusinessArgumentException(ApiResultCode.APPLE_044); }
     }
 
     private synchronized PublicKey signingKey(String kid) throws Exception {
-        if (kid == null || kid.isBlank() || kid.length() > 128) throw new IllegalArgumentException("Apple key id 无效");
+        if (kid == null || kid.isBlank() || kid.length() > 128) throw new BusinessArgumentException(ApiResultCode.APPLE_045);
         long now = Instant.now().getEpochSecond();
         if ((now >= keysExpireAt || !keys.containsKey(kid)) && now - lastKeysFetchAt >= 30) {
             // Unknown kid cannot force an unbounded number of network calls.
@@ -95,18 +99,18 @@ public class AppleTokenClient {
             keysExpireAt = now + 3600;
         }
         PublicKey key = keys.get(kid);
-        if (key == null) throw new IllegalArgumentException("Apple 签名密钥未知");
+        if (key == null) throw new BusinessArgumentException(ApiResultCode.APPLE_046);
         return key;
     }
 
     public Tokens exchangeCode(String code, String clientId, String nonce) {
-        if (code == null || code.isBlank() || code.length() > 4096) throw new IllegalArgumentException("Apple 授权码缺失");
+        if (code == null || code.isBlank() || code.length() > 4096) throw new BusinessArgumentException(ApiResultCode.APPLE_047);
         MultiValueMap<String, String> form = form(clientId);
         form.add("grant_type", "authorization_code"); form.add("code", code);
         JsonNode result = post("/auth/token", form);
         Identity identity = verifyIdentity(result.path("id_token").asText(), clientId, nonce);
         String refresh = result.path("refresh_token").asText();
-        if (refresh.isBlank()) throw new IllegalArgumentException("Apple 未返回可撤销凭据，请重新授权");
+        if (refresh.isBlank()) throw new BusinessArgumentException(ApiResultCode.APPLE_048);
         return new Tokens(refresh, identity);
     }
 
@@ -121,7 +125,7 @@ public class AppleTokenClient {
         for (String clientId : properties.getClientIds()) {
             try { return verifyClaims(payload, clientId); } catch (IllegalArgumentException ignored) { }
         }
-        throw new IllegalArgumentException("Apple 通知签名或 audience 无效");
+        throw new BusinessArgumentException(ApiResultCode.APPLE_049);
     }
 
     private MultiValueMap<String, String> form(String clientId) {
@@ -139,7 +143,7 @@ public class AppleTokenClient {
             return Jwts.builder().header().keyId(properties.getKeyId()).and().issuer(properties.getTeamId())
                 .subject(clientId).audience().add(ISSUER).and().issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusSeconds(300))).signWith(key, Jwts.SIG.ES256).compact();
-        } catch (Exception ex) { throw new IllegalStateException("Apple 服务端私钥配置无效"); }
+        } catch (Exception ex) { throw new BusinessStateException(ApiResultCode.APPLE_050); }
     }
     private JsonNode post(String path, MultiValueMap<String, String> form) {
         HttpHeaders headers = new HttpHeaders(); headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
@@ -148,7 +152,7 @@ public class AppleTokenClient {
             return body == null || body.isBlank() ? json.createObjectNode() : json.readTree(body);
         } catch (Exception ex) {
             // Do not include provider response body, codes, client secrets or tokens in logs/errors.
-            throw new IllegalStateException("Apple 服务暂时不可用，请稍后重试");
+            throw new BusinessStateException(ApiResultCode.APPLE_051);
         }
     }
 }

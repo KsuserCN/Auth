@@ -4,6 +4,7 @@ Spring Boot (Java 21) authentication service powering Ksuser accounts.
 
 - Default port: `8000`
 - Main docs: `docs/README.md`
+- [统一详细错误码与四端文案对照](docs/api-result-codes.md)：响应使用 `code + errorCode + params`，不再返回 `msg`。
 
 ---
 

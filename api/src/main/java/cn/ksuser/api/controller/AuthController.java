@@ -1,5 +1,8 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.ApiFailures;
+
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
@@ -131,7 +134,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> health(HttpServletRequest request, HttpServletResponse response) {
         writeCsrfToken(request, response);
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "服务正常"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_001));
     }
 
     @GetMapping("/csrf-token")
@@ -140,7 +143,7 @@ public class AuthController {
         HttpServletResponse response
     ) {
         String token = writeCsrfToken(request, response);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", Map.of("csrfToken", token == null ? "" : token)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, Map.of("csrfToken", token == null ? "" : token)));
     }
 
     /**
@@ -152,13 +155,12 @@ public class AuthController {
     public ResponseEntity<ApiResponse<CheckUsernameResponse>> checkUsername(@RequestParam String username) {
         if (username == null || username.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "用户名不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_002));
         }
 
         boolean exists = userService.findByUsername(username).isPresent();
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, exists ? "用户名已存在" : "用户名可用",
-                new CheckUsernameResponse(exists)));
+            .body(new ApiResponse<>(200, exists ? ApiResultCode.AUTH_USERNAME_EXISTS : ApiResultCode.AUTH_USERNAME_AVAILABLE, new CheckUsernameResponse(exists)));
     }
 
     /**
@@ -177,38 +179,38 @@ public class AuthController {
         // 参数校验
         if (type == null || type.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "类型不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_003));
         }
         if (!("register".equals(type) || "login".equals(type) || "change-email".equals(type) || "sensitive-verification".equals(type))) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "类型只能是 register、login、change-email 或 sensitive-verification"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_004));
         }
 
         // 敏感操作验证码：使用当前登录用户绑定邮箱（不从请求体读取）
         if ("sensitive-verification".equals(type)) {
             if (authentication == null || authentication.getPrincipal() == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "未登录"));
+                    .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
             }
             String uuid = authentication.getPrincipal().toString();
             User user = userService.findByUuid(uuid).orElse(null);
             if (user == null) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "用户不存在"));
+                    .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
             }
             if (user.getEmail() == null || user.getEmail().trim().isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "当前用户未绑定邮箱"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_006));
             }
             email = user.getEmail();
         } else {
             if (email == null || email.trim().isEmpty()) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "邮箱不能为空"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_007));
             }
             if (!securityValidator.isValidEmail(email)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "邮箱格式不正确"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
             }
         }
 
@@ -219,13 +221,13 @@ public class AuthController {
         // 更改邮箱验证码：检查邮箱是否已被使用
         if ("change-email".equals(type) && userService.findByEmail(email).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "邮箱已被使用"));
+                .body(new ApiResponse<>(409, ApiResultCode.AUTH_009));
         }
 
         // 检查邮箱是否被锁定
         if (verificationCodeService.isLocked(email)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
         }
 
         // 获取IP
@@ -237,7 +239,7 @@ public class AuthController {
         // 注册功能锁定检查（按 IP/UA）
         if ("register".equals(type) && rateLimitService.isRegisterLocked(clientIp, userAgent)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, "注册过于频繁，请稍后再试"));
+                .body(new ApiResponse<>(429, ApiResultCode.AUTH_011));
         }
 
         // 检查IP限流（3次/分钟，14次/小时）
@@ -245,10 +247,10 @@ public class AuthController {
             int remainingMinute = rateLimitService.getRemainingMinuteRequestsForIp(clientIp);
             if (remainingMinute == 0) {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "发送过于频繁，请1分钟后再试"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_012));
             } else {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "发送次数过多，每小时最多发送14次"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_013));
             }
         }
 
@@ -257,10 +259,10 @@ public class AuthController {
             int remainingMinute = rateLimitService.getRemainingMinuteRequestsForEmail(email);
             if (remainingMinute == 0) {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "发送过于频繁，请1分钟后再试"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_012));
             } else {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "该邮箱发送次数过多，每小时最多发送14次"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_014));
             }
         }
 
@@ -289,7 +291,7 @@ public class AuthController {
             emailService.sendVerificationCode(email, code, action);
         } catch (MessagingException | UnsupportedEncodingException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "邮件发送失败，请稍后重试"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_015));
         }
 
         // 记录限流
@@ -297,7 +299,7 @@ public class AuthController {
         rateLimitService.recordEmailRequest(email);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "验证码已发送"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_016));
     }
 
     /**
@@ -323,54 +325,53 @@ public class AuthController {
         if (rateLimitService.isRegisterLocked(clientIp, userAgent)) {
             sensitiveLogUtil.logRegister(request, null, false, "Registration locked", startTime);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, "注册过于频繁，请稍后再试"));
+                .body(new ApiResponse<>(429, ApiResultCode.AUTH_011));
         }
 
         // 参数校验
         if (username == null || username.trim().isEmpty()) {
             sensitiveLogUtil.logRegister(request, null, false, "Empty username", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "用户名不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_002));
         }
         if (email == null || email.trim().isEmpty()) {
             sensitiveLogUtil.logRegister(request, null, false, "Empty email", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_007));
         }
         if (!securityValidator.isValidEmail(email)) {
             sensitiveLogUtil.logRegister(request, null, false, "Invalid email format", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
         }
         if (password == null || password.trim().isEmpty()) {
             sensitiveLogUtil.logRegister(request, null, false, "Empty password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_017));
         }
         if (code == null || code.trim().isEmpty()) {
             sensitiveLogUtil.logRegister(request, null, false, "Empty verification code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "验证码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
         }
 
         // 使用 SecurityValidator 进行安全验证
         if (!securityValidator.isValidUsername(username)) {
             sensitiveLogUtil.logRegister(request, null, false, "Invalid username format", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，仅字母数字下划线连字符）"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_019));
         }
 
         if (!securityValidator.isValidEmail(email)) {
             sensitiveLogUtil.logRegister(request, null, false, "Invalid email format", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
         }
 
         if (!securityValidator.isValidPasswordLength(password)) {
             sensitiveLogUtil.logRegister(request, null, false, "Invalid password length", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码长度必须在" + appProperties.getPassword().getMinLength() + 
-                    "-" + appProperties.getPassword().getMaxLength() + "个字符之间"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_020.withParams("min", appProperties.getPassword().getMinLength(), "max", appProperties.getPassword().getMaxLength())));
         }
 
         if (!securityValidator.isStrongPassword(password)) {
@@ -382,7 +383,7 @@ public class AuthController {
         if (securityValidator.isCommonWeakPassword(password)) {
             sensitiveLogUtil.logRegister(request, null, false, "Common weak password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码过于简单，请使用更复杂的密码"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_021));
         }
 
         // 检查 SQL 注入
@@ -390,7 +391,7 @@ public class AuthController {
             securityValidator.possibleSqlInjection(email)) {
             sensitiveLogUtil.logRegister(request, null, false, "SQL injection detected", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "输入包含非法字符"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_022));
         }
 
         // 验证验证码
@@ -400,42 +401,42 @@ public class AuthController {
             if (verifyResult == 3) {
                 sensitiveLogUtil.logRegister(request, null, false, "Verification code locked", startTime);
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
             } else if (verifyResult == 4) {
                 sensitiveLogUtil.logRegister(request, null, false, "No verification code sent", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "请先获取验证码"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_023));
             } else if (verifyResult == 5) {
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logRegister(request, null, false, "Email mismatch", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "邮箱不匹配（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_024.withParams("count", errorCount)));
             } else if (verifyResult == 6) {
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logRegister(request, null, false, "Device mismatch", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "发送验证码的设备与当前设备不匹配（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_025.withParams("count", errorCount)));
             } else if (verifyResult == 1) {
                 // 验证码已过期，但需要检查是否因错误次数导致锁定
                 if (verificationCodeService.isLocked(email)) {
                     sensitiveLogUtil.logRegister(request, null, false, "Verification code locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 }
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logRegister(request, null, false, "Verification code expired", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码已过期，请重新获取（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_026.withParams("count", errorCount)));
             } else {
                 if (verificationCodeService.isLocked(email)) {
                     sensitiveLogUtil.logRegister(request, null, false, "Verification code locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 }
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logRegister(request, null, false, "Invalid verification code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码错误（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_027.withParams("count", errorCount)));
             }
         }
 
@@ -443,7 +444,7 @@ public class AuthController {
         if (userService.findByEmail(email).isPresent()) {
             sensitiveLogUtil.logRegister(request, null, false, "Email already registered", startTime);
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "邮箱已被注册"));
+                .body(new ApiResponse<>(409, ApiResultCode.AUTH_028));
         }
 
         // 执行注册
@@ -451,17 +452,17 @@ public class AuthController {
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             sensitiveLogUtil.logRegister(request, null, false, "Username already exists", startTime);
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "用户名已存在"));
+                .body(new ApiResponse<>(409, ApiResultCode.AUTH_029));
         }
         if (result.getStatus() == RegisterResult.Status.BAD_REQUEST) {
             sensitiveLogUtil.logRegister(request, null, false, "Invalid key parameter", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "key 不支持"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_030));
         }
         if (result.getStatus() == RegisterResult.Status.EMAIL_EXISTS) {
             sensitiveLogUtil.logRegister(request, null, false, "Email already exists", startTime);
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "邮箱已存在"));
+                .body(new ApiResponse<>(409, ApiResultCode.AUTH_031));
         }
 
         // 为新用户初始化默认 settings，避免后续首次设置时出现数据缺失带来的不稳定行为
@@ -485,7 +486,7 @@ public class AuthController {
         sensitiveLogUtil.logRegister(request, result.getUser().getId(), true, null, startTime);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "注册成功", RegisterResponse.fromUserWithToken(result.getUser(), accessToken)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_032, RegisterResponse.fromUserWithToken(result.getUser(), accessToken)));
     }
 
     /**
@@ -508,19 +509,19 @@ public class AuthController {
         if (email == null || email.trim().isEmpty()) {
             sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Empty email", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_007));
         }
         if (code == null || code.trim().isEmpty()) {
             sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Empty code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "验证码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
         }
 
         // 邮箱格式验证
         if (!securityValidator.isValidEmail(email)) {
             sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Invalid email format", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
         }
 
         // 验证验证码
@@ -530,42 +531,42 @@ public class AuthController {
             if (verifyResult == 3) {
                 sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Verification code locked", startTime);
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
             } else if (verifyResult == 4) {
                 sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "No code sent", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "请先获取验证码"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_023));
             } else if (verifyResult == 5) {
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Email mismatch", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "邮箱不匹配（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_024.withParams("count", errorCount)));
             } else if (verifyResult == 6) {
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Device mismatch", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "发送验证码的设备与当前设备不匹配（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_025.withParams("count", errorCount)));
             } else if (verifyResult == 1) {
                 // 验证码已过期，但需要检查是否因错误次数导致锁定
                 if (verificationCodeService.isLocked(email)) {
                     sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Verification code locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 }
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Code expired", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码已过期，请重新获取（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_026.withParams("count", errorCount)));
             } else {
                 if (verificationCodeService.isLocked(email)) {
                     sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Verification code locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 }
                 int errorCount = verificationCodeService.getErrorCount(email);
                 sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "Invalid code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码错误（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_027.withParams("count", errorCount)));
             }
         }
 
@@ -574,7 +575,7 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logLogin(request, null, "EMAIL_CODE", false, "User not found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "邮箱未注册或验证码错误"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_033));
         }
         // 如果用户启用了 MFA，则进入 MFA 流程（可选 TOTP/Passkey）
         UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
@@ -586,8 +587,7 @@ public class AuthController {
                     "email", new HashSet<>(mfaMethods));
             // 不创建会话、不返回 token，告知前端需要 TOTP 验证
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse<>(201, "需要 MFA 验证",
-                        new MfaChallengeResponse(challengeId, mfaMethods.get(0), mfaMethods)));
+                .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, new MfaChallengeResponse(challengeId, mfaMethods.get(0), mfaMethods)));
         }
 
         // 生成 Token
@@ -609,7 +609,7 @@ public class AuthController {
         sensitiveLogUtil.logLogin(request, user.getId(), "EMAIL_CODE", true, null, startTime);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
     }
 
     /**
@@ -631,24 +631,24 @@ public class AuthController {
         if (email == null || email.trim().isEmpty()) {
             sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Empty email", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_007));
         }
         if (password == null || password.trim().isEmpty()) {
             sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Empty password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_017));
         }
 
         // 速率限制检查
         if (!rateLimitService.isEmailAllowed(email, RateLimitService.TYPE_LOGIN)) {
             sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Rate limit exceeded", startTime);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, "登录请求过于频繁，请稍后再试"));
+                .body(new ApiResponse<>(429, ApiResultCode.AUTH_035));
         }
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
             sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Rate limit exceeded", startTime);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, "登录请求过于频繁，请稍后再试"));
+                .body(new ApiResponse<>(429, ApiResultCode.AUTH_035));
         }
 
         // 记录请求
@@ -660,7 +660,7 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Invalid email or password", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "邮箱或密码错误"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_036));
         }
         // 如果用户启用了 MFA，则进入 MFA 流程（可选 TOTP/Passkey）
         UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
@@ -671,8 +671,7 @@ public class AuthController {
             String challengeId = mfaService.createChallenge(user.getId(), clientIp, userAgent,
                     "password", new HashSet<>(mfaMethods));
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(new ApiResponse<>(201, "需要 MFA 验证",
-                        new MfaChallengeResponse(challengeId, mfaMethods.get(0), mfaMethods)));
+                .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, new MfaChallengeResponse(challengeId, mfaMethods.get(0), mfaMethods)));
         }
 
         // 生成 Token
@@ -691,7 +690,7 @@ public class AuthController {
         sensitiveLogUtil.logLogin(request, user.getId(), "PASSWORD", true, null, startTime);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
     }
 
     /**
@@ -704,14 +703,14 @@ public class AuthController {
                                                               Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         UserSettingsResponse settingsResponse = buildUserSettingsResponse(user.getId());
@@ -745,7 +744,7 @@ public class AuthController {
 
         userInfo.setHasPassword(user.getHasPassword());
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "获取成功", userInfo));
+            .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, userInfo));
     }
 
     /**
@@ -759,20 +758,20 @@ public class AuthController {
                                                                             Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         if (updateUserSettingRequest == null || updateUserSettingRequest.getField() == null
             || updateUserSettingRequest.getField().trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "字段名不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_037));
         }
 
         String field = updateUserSettingRequest.getField().trim();
@@ -786,18 +785,18 @@ public class AuthController {
 
         if (!isBooleanField && !isPreferenceField) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "不支持的字段名"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_038));
         }
 
         if (isBooleanField && updateUserSettingRequest.getValue() == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "布尔字段 value 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_039));
         }
 
         if (isPreferenceField && (updateUserSettingRequest.getStringValue() == null
                 || updateUserSettingRequest.getStringValue().trim().isEmpty())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "偏好字段 stringValue 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_040));
         }
 
         UserSettings settings = getOrCreateUserSettings(user.getId());
@@ -823,17 +822,17 @@ public class AuthController {
             case "preferredMfaMethod": {
                 if (!Boolean.TRUE.equals(settings.getMfaEnabled())) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "请先启用 MFA 再设置登录MFA优先方式"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_041));
                 }
                 String preferredMfaMethod = updateUserSettingRequest.getStringValue().trim().toLowerCase(Locale.ROOT);
                 if (!("totp".equals(preferredMfaMethod) || "passkey".equals(preferredMfaMethod))) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "登录MFA优先方式只能是 totp 或 passkey"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_042));
                 }
                 List<String> availableMfaMethods = resolveMfaMethods(user, true);
                 if (!availableMfaMethods.contains(preferredMfaMethod)) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "当前用户未启用所选 MFA 方式"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_043));
                 }
                 settings.setPreferredMfaMethod(preferredMfaMethod);
                 break;
@@ -843,19 +842,19 @@ public class AuthController {
                 String preferredSensitiveMethod = normalizeSensitiveMethod(updateUserSettingRequest.getStringValue());
                 if (preferredSensitiveMethod == null) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "敏感验证优先方式只能是 password、email-code、passkey、totp 或 apple"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_044));
                 }
                 List<String> availableSensitiveMethods = resolveSensitiveMethods(user);
                 if (!availableSensitiveMethods.contains(preferredSensitiveMethod)) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "当前用户不可用所选敏感验证方式"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_045));
                 }
                 settings.setPreferredSensitiveMethod(preferredSensitiveMethod);
                 break;
             }
             default:
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "不支持的字段名"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_038));
         }
 
         UserSettings saved = userSettingsRepository.save(settings);
@@ -869,7 +868,7 @@ public class AuthController {
         );
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "更新成功", response));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_046, response));
     }
 
     private UserSettingsResponse buildUserSettingsResponse(Long userId) {
@@ -921,41 +920,41 @@ public class AuthController {
 
         if (oldRefreshToken == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_047));
         }
 
         // 检查旧RefreshToken是否已在黑名单中
         if (tokenBlacklistService.isBlacklisted(oldRefreshToken)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken已失效"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_048));
         }
 
         // 验证 Token 类型是否为 refresh
         String tokenType = jwtUtil.getTokenType(oldRefreshToken);
         if (tokenType == null || !tokenType.equals("refresh")) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "Token类型无效，应为RefreshToken"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_049));
         }
 
         // 从 Token 中获取 uuid
         String uuid = jwtUtil.getUuidFromToken(oldRefreshToken);
         if (uuid == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_050));
         }
 
         // 查找用户
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_050));
         }
 
         // 验证 RefreshToken
         UserSession session = userSessionService.verifyRefreshToken(user, oldRefreshToken).orElse(null);
         if (session == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_050));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -982,7 +981,7 @@ public class AuthController {
         setRefreshTokenCookie(response, newRefreshToken);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "刷新成功", new RefreshResponse(newAccessToken)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_051, new RefreshResponse(newAccessToken)));
     }
 
     /**
@@ -995,14 +994,14 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String target = requestBody == null ? null : requestBody.getTarget();
@@ -1013,14 +1012,13 @@ public class AuthController {
             SessionTransferService.SessionTransferPayload payload =
                 sessionTransferService.createTransfer(user.getId(), target, purpose, clientIp, userAgent);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "跨端票据已创建",
-                    new SessionTransferResponse(payload.getTransferCode(), SessionTransferService.DEFAULT_TTL_SECONDS)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_052, new SessionTransferResponse(payload.getTransferCode(), SessionTransferService.DEFAULT_TTL_SECONDS)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "跨端票据创建失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_053));
         }
     }
 
@@ -1037,13 +1035,13 @@ public class AuthController {
         if (requestBody == null || requestBody.getTransferCode() == null || requestBody.getTransferCode().isBlank()) {
             sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, "empty_transfer_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "transferCode 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_054));
         }
 
         if (requestBody.getTarget() == null || requestBody.getTarget().isBlank()) {
             sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, "empty_transfer_target", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "target 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_055));
         }
 
         try {
@@ -1056,7 +1054,7 @@ public class AuthController {
                     sensitiveLogUtil.logLogin(request, null, bridgeLoginMethod, false, "user_not_found", startTime);
                 }
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "用户不存在"));
+                    .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
             }
 
             String clientIp = rateLimitService.getClientIp(request);
@@ -1067,15 +1065,15 @@ public class AuthController {
             }
 
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "跨端登录成功", tokenResponse));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_056, tokenResponse));
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             sensitiveLogUtil.logLogin(request, null, "BRIDGE", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "跨端登录失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_057));
         }
     }
 
@@ -1084,7 +1082,7 @@ public class AuthController {
             @RequestBody MobileBridgeCreateRequest requestBody) {
         if (requestBody == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "请求体不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_058));
         }
 
         try {
@@ -1093,17 +1091,17 @@ public class AuthController {
                 requestBody.getClientNonce()
             );
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "移动桥接挑战已创建", new MobileBridgeCreateResponse(
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_059, new MobileBridgeCreateResponse(
                     payload.getChallengeId(),
                     payload.getAppLink(),
                     MobileBridgeService.DEFAULT_TTL_SECONDS
                 )));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "移动桥接挑战创建失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_060));
         }
     }
 
@@ -1114,18 +1112,18 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
         if (requestBody == null || requestBody.getChallengeId() == null || requestBody.getChallengeId().isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_061));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         try {
@@ -1137,7 +1135,7 @@ public class AuthController {
             );
             long expiresInSeconds = mobileBridgeService.getRemainingSeconds(payload.getChallengeId());
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "网页登录确认成功", new MobileBridgeApproveResponse(
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_062, new MobileBridgeApproveResponse(
                     payload.getChallengeId(),
                     payload.getReturnUrl(),
                     payload.getReturnOrigin(),
@@ -1145,10 +1143,10 @@ public class AuthController {
                 )));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "网页登录确认失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_063));
         }
     }
 
@@ -1157,16 +1155,16 @@ public class AuthController {
             @RequestBody MobileBridgeCancelRequest requestBody) {
         if (requestBody == null || requestBody.getChallengeId() == null || requestBody.getChallengeId().isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_061));
         }
 
         try {
             mobileBridgeService.cancelChallenge(requestBody.getChallengeId());
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "移动桥接挑战已取消"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_064));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "移动桥接挑战取消失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_065));
         }
     }
 
@@ -1175,14 +1173,14 @@ public class AuthController {
             @RequestParam String challengeId) {
         if (challengeId == null || challengeId.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_061));
         }
 
         try {
             MobileBridgeService.MobileBridgePayload payload = mobileBridgeService.getChallenge(challengeId);
             if (payload == null) {
                 return ResponseEntity.status(HttpStatus.OK)
-                    .body(new ApiResponse<>(200, "移动桥接挑战已过期", new MobileBridgeStatusResponse(
+                    .body(new ApiResponse<>(200, ApiResultCode.AUTH_066, new MobileBridgeStatusResponse(
                         MobileBridgeService.STATUS_EXPIRED,
                         null,
                         null,
@@ -1193,7 +1191,7 @@ public class AuthController {
 
             long expiresInSeconds = mobileBridgeService.getRemainingSeconds(payload.getChallengeId());
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "获取成功", new MobileBridgeStatusResponse(
+                .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, new MobileBridgeStatusResponse(
                     payload.getStatus(),
                     payload.getTransferCode(),
                     payload.getReturnUrl(),
@@ -1202,7 +1200,7 @@ public class AuthController {
                 )));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "获取移动桥接状态失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_067));
         }
     }
 
@@ -1215,25 +1213,25 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
         AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "account-recovery-issue");
         if (adaptiveStatus.isSessionFrozen()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         Long sponsorSessionId = getCurrentSessionId(request);
@@ -1242,7 +1240,7 @@ public class AuthController {
             : userSessionService.findActiveSessionById(sponsorSessionId).orElse(null);
         if (sponsorSession == null || !user.getId().equals(sponsorSession.getUser().getId())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前登录会话无效，请重新登录后再试"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_069));
         }
 
         String userAgent = rateLimitService.getClientUserAgent(request);
@@ -1250,8 +1248,7 @@ public class AuthController {
             AccountRecoveryService.AccountRecoveryPayload payload =
                 accountRecoveryService.createAuthorization(user, sponsorSession.getId(), clientIp, userAgent);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "恢复授权已生成",
-                    new AccountRecoveryIssueResponse(
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_070, new AccountRecoveryIssueResponse(
                         payload.getRecoveryCode(),
                         AccountRecoveryService.DEFAULT_TTL_SECONDS,
                         payload.getUsername(),
@@ -1263,10 +1260,10 @@ public class AuthController {
                     )));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "恢复授权生成失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_071));
         }
     }
 
@@ -1278,31 +1275,30 @@ public class AuthController {
             @RequestParam String recoveryCode) {
         if (recoveryCode == null || recoveryCode.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "recoveryCode 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_072));
         }
 
         AccountRecoveryService.AccountRecoveryPayload payload =
             accountRecoveryService.getAuthorization(recoveryCode);
         if (payload == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "恢复授权不存在、已失效或已被使用"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_073));
         }
 
         User user = userService.findById(payload.getUserId()).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         if (!isAccountRecoverySponsorSessionActive(payload, user)) {
             return ResponseEntity.status(HttpStatus.GONE)
-                .body(new ApiResponse<>(410, "发起恢复授权的设备已退出登录，请重新发起"));
+                .body(new ApiResponse<>(410, ApiResultCode.AUTH_074));
         }
 
         long remainingSeconds = accountRecoveryService.getRemainingSeconds(recoveryCode);
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功",
-                new AccountRecoveryStatusResponse(
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, new AccountRecoveryStatusResponse(
                     remainingSeconds > 0 ? remainingSeconds : 0,
                     payload.getUsername(),
                     payload.getMaskedEmail(),
@@ -1326,14 +1322,14 @@ public class AuthController {
         if (requestBody == null || requestBody.getRecoveryCode() == null || requestBody.getRecoveryCode().isBlank()) {
             sensitiveLogUtil.logChangePassword(request, null, false, "empty_recovery_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "recoveryCode 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_072));
         }
 
         String newPassword = requestBody.getNewPassword();
         if (newPassword == null || newPassword.trim().isEmpty()) {
             sensitiveLogUtil.logChangePassword(request, null, false, "empty_new_password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "新密码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_076));
         }
 
         AccountRecoveryService.AccountRecoveryPayload previewPayload =
@@ -1341,27 +1337,26 @@ public class AuthController {
         if (previewPayload == null) {
             sensitiveLogUtil.logChangePassword(request, null, false, "recovery_authorization_missing", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "恢复授权不存在、已失效或已被使用"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_073));
         }
 
         User user = userService.findById(previewPayload.getUserId()).orElse(null);
         if (user == null) {
             sensitiveLogUtil.logChangePassword(request, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "用户不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
         }
 
         if (!isAccountRecoverySponsorSessionActive(previewPayload, user)) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "sponsor_session_inactive", startTime);
             return ResponseEntity.status(HttpStatus.GONE)
-                .body(new ApiResponse<>(410, "发起恢复授权的设备已退出登录，请重新发起"));
+                .body(new ApiResponse<>(410, ApiResultCode.AUTH_074));
         }
 
         if (!securityValidator.isValidPasswordLength(newPassword)) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "invalid_password_length", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码长度必须在" + appProperties.getPassword().getMinLength() +
-                    "-" + appProperties.getPassword().getMaxLength() + "个字符之间"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_020.withParams("min", appProperties.getPassword().getMinLength(), "max", appProperties.getPassword().getMaxLength())));
         }
 
         if (!securityValidator.isStrongPassword(newPassword)) {
@@ -1373,7 +1368,7 @@ public class AuthController {
         if (securityValidator.isCommonWeakPassword(newPassword)) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "common_weak_password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码过于简单，请使用更复杂的密码"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_021));
         }
 
         try {
@@ -1381,11 +1376,11 @@ public class AuthController {
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "recovery_authorization_missing", startTime);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, e.getMessage()));
+                .body(new ApiResponse<>(404, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "recovery_authorization_invalid", startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "恢复授权读取失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_077));
         }
 
         userService.updatePassword(user, newPassword);
@@ -1400,7 +1395,7 @@ public class AuthController {
         sensitiveLogUtil.logLogin(request, user.getId(), "ACCOUNT_RECOVERY", true, null, startTime);
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "账号恢复成功", tokenResponse));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_078, tokenResponse));
     }
 
     /**
@@ -1420,7 +1415,7 @@ public class AuthController {
             userAgent
         );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "账号恢复扫码背书已创建", toQrInitResponse(payload)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_079, toQrInitResponse(payload)));
     }
 
 
@@ -1437,7 +1432,7 @@ public class AuthController {
             normalizedTarget = sessionTransferService.normalizeTarget(target);
             if (normalizedTarget == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "target 只能是 web、desktop 或 mobile"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_080));
             }
         }
         QrChallengeService.QrChallengePayload payload =
@@ -1450,7 +1445,7 @@ public class AuthController {
                 userAgent
             );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_081, toQrInitResponse(payload)));
     }
 
     @PostMapping("/qr/mfa/init")
@@ -1459,7 +1454,7 @@ public class AuthController {
             HttpServletRequest request) {
         if (requestBody == null || requestBody.getMfaChallengeId() == null || requestBody.getMfaChallengeId().isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "mfaChallengeId 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_082));
         }
 
         String mfaChallengeId = requestBody.getMfaChallengeId().trim();
@@ -1468,11 +1463,11 @@ public class AuthController {
         Long userId = mfaService.verifyChallenge(mfaChallengeId, clientIp, userAgent);
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "mfaChallengeId 无效或已过期"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_083));
         }
         if (!mfaService.isMethodAllowed(mfaChallengeId, "qr")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "当前 challenge 不允许使用扫码验证"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_084));
         }
 
         QrChallengeService.QrChallengePayload payload =
@@ -1485,7 +1480,7 @@ public class AuthController {
                 userAgent
             );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_081, toQrInitResponse(payload)));
     }
 
     @PostMapping("/qr/sensitive/init")
@@ -1494,14 +1489,14 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String webIp = rateLimitService.getClientIp(request);
@@ -1515,7 +1510,7 @@ public class AuthController {
             userAgent
         );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "二维码挑战已创建", toQrInitResponse(payload)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_081, toQrInitResponse(payload)));
     }
 
     @GetMapping("/qr/preview")
@@ -1524,14 +1519,14 @@ public class AuthController {
             @RequestParam(required = false) String transferCode) {
         if ((approveCode == null || approveCode.isBlank()) && (transferCode == null || transferCode.isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "approveCode 或 transferCode 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_085));
         }
 
         if (approveCode != null && !approveCode.isBlank()) {
             QrChallengeService.QrChallengePayload challenge = qrChallengeService.getByApproveCode(approveCode.trim());
             if (challenge == null) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "二维码挑战不存在或已过期"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_086));
             }
             long expiresInSeconds = qrChallengeService.getRemainingSeconds(challenge.getChallengeId());
             QrScanPreviewResponse response = new QrScanPreviewResponse(
@@ -1544,13 +1539,13 @@ public class AuthController {
                 expiresInSeconds > 0 ? expiresInSeconds : 0L
             );
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "获取成功", response));
+                .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, response));
         }
 
         SessionTransferService.SessionTransferPayload payload = sessionTransferService.getTransfer(transferCode.trim());
         if (payload == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "跨端票据不存在或已过期"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_087));
         }
         long expiresInSeconds = sessionTransferService.getRemainingSeconds(transferCode.trim());
         QrScanPreviewResponse response = new QrScanPreviewResponse(
@@ -1563,7 +1558,7 @@ public class AuthController {
             expiresInSeconds > 0 ? expiresInSeconds : 0L
         );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "获取成功", response));
+            .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, response));
     }
 
     @PostMapping("/qr/approve")
@@ -1573,35 +1568,35 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
         if (requestBody == null || requestBody.getApproveCode() == null || requestBody.getApproveCode().isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "approveCode 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_088));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         QrChallengeService.QrChallengePayload challenge =
             qrChallengeService.getByApproveCode(requestBody.getApproveCode().trim());
         if (challenge == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "二维码挑战不存在或已过期"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_086));
         }
         if (!QrChallengeService.ChallengeStatus.PENDING.value().equals(challenge.getStatus())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "二维码挑战状态不可用"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_089));
         }
 
         QrChallengeService.ChallengeType challengeType = QrChallengeService.ChallengeType.fromValue(challenge.getType());
         if (challengeType == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "二维码挑战类型无效"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_090));
         }
 
         Map<String, Object> result = new HashMap<>();
@@ -1613,9 +1608,9 @@ public class AuthController {
                     List<String> followUpMethods = resolveMfaMethods(user, true, false);
                     if (followUpMethods.isEmpty()) {
                         qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                            Map.of("reason", "未配置可用的非扫码 MFA 方式"));
+                            Map.of("errorCode", ApiResultCode.QR_REJECT_1));
                         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                            .body(new ApiResponse<>(400, "当前账号未配置可用的非扫码 MFA 方式"));
+                            .body(new ApiResponse<>(400, ApiResultCode.AUTH_091));
                     }
 
                     String mfaChallengeId = mfaService.createChallenge(
@@ -1645,15 +1640,15 @@ public class AuthController {
             } else if (challengeType == QrChallengeService.ChallengeType.MFA) {
                 if (challenge.getRequestedUserId() == null || !challenge.getRequestedUserId().equals(user.getId())) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "二维码挑战用户不匹配"));
+                        Map.of("errorCode", ApiResultCode.AUTH_092));
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new ApiResponse<>(403, "二维码挑战用户不匹配"));
+                        .body(new ApiResponse<>(403, ApiResultCode.AUTH_092));
                 }
                 if (challenge.getMfaChallengeId() == null || challenge.getMfaChallengeId().isBlank()) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "mfaChallengeId 缺失"));
+                        Map.of("errorCode", ApiResultCode.AUTH_093));
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "mfaChallengeId 缺失"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_093));
                 }
 
                 Long challengeUserId = mfaService.verifyChallenge(
@@ -1663,21 +1658,21 @@ public class AuthController {
                 );
                 if (challengeUserId == null) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "mfaChallengeId 无效或已过期"));
+                        Map.of("errorCode", ApiResultCode.AUTH_083));
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "mfaChallengeId 无效或已过期"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_083));
                 }
                 if (!challengeUserId.equals(user.getId())) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "MFA 挑战用户不匹配"));
+                        Map.of("errorCode", ApiResultCode.AUTH_094));
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new ApiResponse<>(403, "MFA 挑战用户不匹配"));
+                        .body(new ApiResponse<>(403, ApiResultCode.AUTH_094));
                 }
                 if (!mfaService.isMethodAllowed(challenge.getMfaChallengeId(), "qr")) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "当前 challenge 不允许使用扫码验证"));
+                        Map.of("errorCode", ApiResultCode.AUTH_084));
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "当前 challenge 不允许使用扫码验证"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_084));
                 }
 
                 mfaService.consumeChallenge(challenge.getMfaChallengeId());
@@ -1701,9 +1696,9 @@ public class AuthController {
                     : userSessionService.findActiveSessionById(sponsorSessionId).orElse(null);
                 if (sponsorSession == null || !user.getId().equals(sponsorSession.getUser().getId())) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "当前登录会话无效"));
+                        Map.of("errorCode", ApiResultCode.QR_REJECT_2));
                     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ApiResponse<>(401, "当前登录会话无效，请重新登录后再试"));
+                        .body(new ApiResponse<>(401, ApiResultCode.AUTH_069));
                 }
 
                 String sponsorIp = rateLimitService.getClientIp(request);
@@ -1720,15 +1715,15 @@ public class AuthController {
             } else if (challengeType == QrChallengeService.ChallengeType.SENSITIVE) {
                 if (challenge.getRequestedUserId() == null || !challenge.getRequestedUserId().equals(user.getId())) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "二维码挑战用户不匹配"));
+                        Map.of("errorCode", ApiResultCode.AUTH_092));
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new ApiResponse<>(403, "二维码挑战用户不匹配"));
+                        .body(new ApiResponse<>(403, ApiResultCode.AUTH_092));
                 }
                 if (challenge.getWebIp() == null || challenge.getWebIp().isBlank()) {
                     qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("reason", "二维码挑战缺少 webIp"));
+                        Map.of("errorCode", ApiResultCode.QR_REJECT_3));
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "二维码挑战无效"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_095));
                 }
 
                 sensitiveOperationService.markVerifiedOnce(user.getUuid(), challenge.getWebIp());
@@ -1737,13 +1732,13 @@ public class AuthController {
 
             qrChallengeService.approveChallenge(challenge.getChallengeId(), user.getId(), result);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "二维码挑战已授权", result));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_096, result));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "二维码挑战授权失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_097));
         }
     }
 
@@ -1753,24 +1748,24 @@ public class AuthController {
             @RequestParam String pollToken) {
         if (challengeId == null || challengeId.isBlank() || pollToken == null || pollToken.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 与 pollToken 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_098));
         }
 
         QrChallengeService.QrChallengePayload challenge = qrChallengeService.getByChallengeId(challengeId.trim());
         if (challenge == null) {
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "二维码挑战已过期", new QrChallengeStatusResponse("expired", 0L)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_099, new QrChallengeStatusResponse("expired", 0L)));
         }
 
         if (!pollToken.trim().equals(challenge.getPollToken())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "pollToken 无效"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_100));
         }
 
         long expiresInSeconds = qrChallengeService.getRemainingSeconds(challenge.getChallengeId());
         if (expiresInSeconds <= 0) {
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "二维码挑战已过期", new QrChallengeStatusResponse("expired", 0L)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_099, new QrChallengeStatusResponse("expired", 0L)));
         }
 
         String status = challenge.getStatus() == null ? "pending" : challenge.getStatus();
@@ -1811,7 +1806,7 @@ public class AuthController {
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功", statusResponse));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, statusResponse));
     }
 
     /**
@@ -1826,14 +1821,14 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         Long currentSessionId = getCurrentSessionId(request);
@@ -1850,7 +1845,7 @@ public class AuthController {
             .collect(Collectors.toList());
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功", responses));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, responses));
     }
 
     /**
@@ -1869,25 +1864,25 @@ public class AuthController {
             HttpServletResponse response) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         UserSession session = userSessionService.findSessionByIdForUser(sessionId, user).orElse(null);
         if (session == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, "会话不存在"));
+                .body(new ApiResponse<>(404, ApiResultCode.AUTH_101));
         }
 
         if (session.getRevokedAt() != null || session.getExpiresAt().isBefore(LocalDateTime.now())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "会话已失效"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_102));
         }
 
         userSessionService.revokeSession(session);
@@ -1898,7 +1893,7 @@ public class AuthController {
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "会话已取消"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_103));
     }
 
     /**
@@ -1913,7 +1908,7 @@ public class AuthController {
         if (requestBody == null || requestBody.getChallengeId() == null || 
             (requestBody.getCode() == null && requestBody.getRecoveryCode() == null)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 和 code 或 recoveryCode 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_104));
         }
 
         String clientIp = rateLimitService.getClientIp(httpRequest);
@@ -1923,19 +1918,19 @@ public class AuthController {
         Long userId = mfaService.verifyChallenge(requestBody.getChallengeId(), clientIp, userAgent);
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 无效或已过期"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_105));
         }
 
         if (!mfaService.isMethodAllowed(requestBody.getChallengeId(), "totp")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "当前 challenge 不允许使用 TOTP"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_106));
         }
 
         // 查找用户
         User user = userService.findById(userId).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         long startTime = System.currentTimeMillis();
@@ -1972,10 +1967,10 @@ public class AuthController {
                 
                 if (remaining > 0) {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "TOTP/恢复码校验失败，剩余尝试次数：" + remaining));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_107.withParams("remaining", remaining)));
                 } else {
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "TOTP/恢复码校验失败次数过多，请重新登录"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_108));
                 }
             }
 
@@ -1994,13 +1989,13 @@ public class AuthController {
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, true, verifyMethod, startTime);
 
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
         } catch (Exception e) {
             String loginMethod = mfaService.getLoginMethod(requestBody.getChallengeId());
             String logMethod = Arrays.asList(loginMethod, "mfa").toString();
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "TOTP 验证处理失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_109));
         }
     }
 
@@ -2019,7 +2014,7 @@ public class AuthController {
                 || requestBody.getAuthenticatorData() == null || requestBody.getAuthenticatorData().isBlank()
                 || requestBody.getSignature() == null || requestBody.getSignature().isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "mfaChallengeId、passkeyChallengeId 及 Passkey 参数不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_110));
         }
 
         String clientIp = rateLimitService.getClientIp(httpRequest);
@@ -2028,18 +2023,18 @@ public class AuthController {
         Long userId = mfaService.verifyChallenge(requestBody.getMfaChallengeId(), clientIp, userAgent);
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "mfaChallengeId 无效或已过期"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_083));
         }
 
         if (!mfaService.isMethodAllowed(requestBody.getMfaChallengeId(), "passkey")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "当前 challenge 不允许使用 Passkey"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_111));
         }
 
         User user = userService.findById(userId).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         long startTime = System.currentTimeMillis();
@@ -2063,7 +2058,7 @@ public class AuthController {
                 mfaService.recordFailedAttempt(requestBody.getMfaChallengeId());
                 sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, "Passkey 与 MFA 用户不匹配", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "Passkey 校验失败"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_112));
             }
 
             mfaService.consumeChallenge(requestBody.getMfaChallengeId());
@@ -2077,21 +2072,21 @@ public class AuthController {
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, true, null, startTime);
 
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
         } catch (IllegalArgumentException e) {
             mfaService.recordFailedAttempt(requestBody.getMfaChallengeId());
             int remaining = mfaService.getRemainingAttempts(requestBody.getMfaChallengeId());
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, e.getMessage(), startTime);
             if (remaining > 0) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "Passkey 校验失败，剩余尝试次数：" + remaining));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_113.withParams("remaining", remaining)));
             }
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "Passkey 校验失败次数过多，请重新登录"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_114));
         } catch (Exception e) {
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Passkey MFA 验证处理失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_115));
         }
     }
 
@@ -2123,28 +2118,28 @@ public class AuthController {
 
         if (refreshToken == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_047));
         }
 
         // 从 Token 中获取 uuid
         String uuid = jwtUtil.getUuidFromToken(refreshToken);
         if (uuid == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_050));
         }
 
         // 查找用户
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_050));
         }
 
         // 验证 RefreshToken 并撤销会话
         UserSession session = userSessionService.verifyRefreshToken(user, refreshToken).orElse(null);
         if (session == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "RefreshToken无效或已过期"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_050));
         }
 
         userSessionService.revokeSession(session);
@@ -2164,7 +2159,7 @@ public class AuthController {
         setRefreshTokenCookie(response, "");
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "退出成功"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_116));
     }
 
     /**
@@ -2177,14 +2172,14 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> logoutAll(Authentication authentication, HttpServletResponse response) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         // 撤销该用户所有会话
@@ -2200,7 +2195,7 @@ public class AuthController {
         setRefreshTokenCookie(response, "");
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "已从所有设备退出登录"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_117));
     }
 
     /**
@@ -2214,14 +2209,14 @@ public class AuthController {
                                                                              Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         // 参数校验：一次只能更新一个字段
@@ -2230,11 +2225,11 @@ public class AuthController {
 
         if (key == null || key.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "key 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_118));
         }
         if (value == null || value.trim().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "value 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_119));
         }
 
         String normalizedKey = key.trim();
@@ -2243,12 +2238,12 @@ public class AuthController {
         if ("username".equalsIgnoreCase(normalizedKey)) {
             if (!securityValidator.isValidUsername(value)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "用户名格式不正确（3-20字符，字母数字下划线连字符或简体中文）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_120));
             }
             // SQL 注入检查
             if (securityValidator.possibleSqlInjection(value)) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "输入包含非法字符"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_022));
             }
         }
 
@@ -2259,7 +2254,7 @@ public class AuthController {
                 parsedBirthDate = LocalDate.parse(value.trim());
             } catch (DateTimeParseException ex) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "birthDate 格式不正确，应为 YYYY-MM-DD"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_121));
             }
         }
 
@@ -2267,11 +2262,11 @@ public class AuthController {
         RegisterResult result = userService.updateProfileSingleField(user, normalizedKey, value.trim(), parsedBirthDate);
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "用户名已存在"));
+                .body(new ApiResponse<>(409, ApiResultCode.AUTH_029));
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "更新成功", UpdateProfileResponse.fromUser(result.getUser())));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_046, UpdateProfileResponse.fromUser(result.getUser())));
     }
 
     /**
@@ -2285,36 +2280,36 @@ public class AuthController {
                                                                             Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         if (file == null || file.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "请选择头像文件"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_122));
         }
 
         if (file.getSize() > AVATAR_MAX_SIZE_BYTES) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "头像文件不能超过 3MB"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_123));
         }
 
         String contentType = file.getContentType();
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "仅支持图片文件"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_124));
         }
 
         String fileExtension = resolveFileExtension(contentType, file.getOriginalFilename());
         if (fileExtension == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "不支持的图片格式"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_125));
         }
 
         try {
@@ -2329,10 +2324,10 @@ public class AuthController {
             RegisterResult result = userService.updateProfileSingleField(user, "avatarUrl", avatarUrl, null);
 
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "头像上传成功", UpdateProfileResponse.fromUser(result.getUser())));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_126, UpdateProfileResponse.fromUser(result.getUser())));
         } catch (IOException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "头像上传失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_127));
         }
     }
 
@@ -2388,7 +2383,7 @@ public class AuthController {
         if (authentication == null || authentication.getPrincipal() == null) {
             sensitiveLogUtil.logSensitiveVerify(request, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
@@ -2396,7 +2391,7 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logSensitiveVerify(request, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String method = verifySensitiveOperationRequest.getMethod();
@@ -2405,12 +2400,12 @@ public class AuthController {
         if (method == null || method.trim().isEmpty()) {
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_method", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "验证方式不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_128));
         }
         if (!("password".equals(method) || "email-code".equals(method) || "totp".equals(method) || "passkey".equals(method))) {
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "invalid_verification_method", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(new ApiResponse<>(400, "验证方式只能是 password、email-code、passkey 或 totp"));
+            .body(new ApiResponse<>(400, ApiResultCode.AUTH_129));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -2421,13 +2416,13 @@ public class AuthController {
             if (password == null || password.trim().isEmpty()) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_password", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "密码不能为空"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_017));
             }
 
             if (!userService.verifyPassword(password, user.getPasswordHash())) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "invalid_password", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "密码错误"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_130));
             }
 
             // 验证成功，标记用户已验证
@@ -2436,7 +2431,7 @@ public class AuthController {
             verificationCodeService.clearLockAndError(user.getEmail());
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         }
 
         // 邮箱验证码验证
@@ -2445,7 +2440,7 @@ public class AuthController {
             if (code == null || code.trim().isEmpty()) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码不能为空"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
             }
 
             String email = user.getEmail();
@@ -2457,41 +2452,41 @@ public class AuthController {
                 if (verifyResult == 3) {
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 } else if (verifyResult == 4) {
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_not_sent", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "请先获取验证码"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_023));
                 } else if (verifyResult == 5) {
                     int errorCount = verificationCodeService.getErrorCount(email);
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "email_mismatch", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "邮箱不匹配（" + errorCount + "/5）"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_024.withParams("count", errorCount)));
                 } else if (verifyResult == 6) {
                     int errorCount = verificationCodeService.getErrorCount(email);
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "ip_mismatch", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "发送验证码的设备与当前设备不匹配（" + errorCount + "/5）"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_025.withParams("count", errorCount)));
                 } else if (verifyResult == 1) {
                     if (verificationCodeService.isLocked(email)) {
                         sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_locked", startTime);
                         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                            .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                            .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                     }
                     int errorCount = verificationCodeService.getErrorCount(email);
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_expired", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "验证码已过期，请重新获取（" + errorCount + "/5）"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_026.withParams("count", errorCount)));
                 } else {
                     if (verificationCodeService.isLocked(email)) {
                         sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_locked", startTime);
                         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                            .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                            .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                     }
                     int errorCount = verificationCodeService.getErrorCount(email);
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_invalid", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "验证码错误（" + errorCount + "/5）"));
+                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_027.withParams("count", errorCount)));
                 }
             }
 
@@ -2501,7 +2496,7 @@ public class AuthController {
             verificationCodeService.clearLockAndError(email);
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         }
 
         // TOTP 验证
@@ -2512,14 +2507,14 @@ public class AuthController {
             if (!usingRecoveryCode && (code == null || code.isBlank())) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码或恢复码不能为空"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_132));
             }
 
             // 检查是否已启用 TOTP
             if (!totpService.isTotpEnabled(user.getId())) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "totp_not_enabled", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "用户未启用 TOTP"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_133));
             }
 
             try {
@@ -2529,12 +2524,12 @@ public class AuthController {
                 if (!ok) {
                     sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, usingRecoveryCode ? "recovery_code_invalid_or_used" : "verification_code_invalid_or_expired", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, usingRecoveryCode ? "恢复码错误或已使用" : "验证码错误或已过期"));
+                        .body(new ApiResponse<>(400, usingRecoveryCode ? ApiResultCode.AUTH_RECOVERY_CODE_INVALID : ApiResultCode.AUTH_VERIFICATION_CODE_INVALID));
                 }
             } catch (Exception e) {
                 sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, e.getMessage(), startTime);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse<>(500, "TOTP 验证失败：" + e.getMessage()));
+                    .body(new ApiResponse<>(500, ApiResultCode.AUTH_134));
             }
 
             // 验证成功，标记用户已验证
@@ -2542,18 +2537,18 @@ public class AuthController {
             strengthenCurrentSession(request, "totp");
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         }
 
         if ("passkey".equals(method)) {
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "passkey_requires_webauthn_challenge", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "Passkey 验证请使用 /auth/passkey/sensitive-verification-options 与 /auth/passkey/sensitive-verification-verify"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_135));
         }
 
         sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "unknown_verification_method", startTime);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .body(new ApiResponse<>(400, "未知的验证方式"));
+            .body(new ApiResponse<>(400, ApiResultCode.AUTH_136));
     }
 
     /**
@@ -2572,7 +2567,7 @@ public class AuthController {
         if (authentication == null || authentication.getPrincipal() == null) {
             sensitiveLogUtil.logChangeEmail(request, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
@@ -2580,7 +2575,7 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logChangeEmail(request, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -2588,14 +2583,14 @@ public class AuthController {
         if (adaptiveStatus.isSessionFrozen()) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "session_frozen_by_adaptive_risk", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         // 参数校验
@@ -2605,24 +2600,24 @@ public class AuthController {
         if (newEmail == null || newEmail.trim().isEmpty()) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "empty_email", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "新邮箱不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_137));
         }
         if (!securityValidator.isValidEmail(newEmail)) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "invalid_email_format", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "邮箱格式不正确"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
         }
         if (code == null || code.trim().isEmpty()) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "empty_verification_code", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "验证码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
         }
 
         // 检查新邮箱是否已被使用
         if (userService.findByEmail(newEmail).isPresent()) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "email_already_exists", startTime);
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(new ApiResponse<>(409, "邮箱已被使用"));
+                .body(new ApiResponse<>(409, ApiResultCode.AUTH_009));
         }
 
         // 验证新邮箱的验证码
@@ -2632,41 +2627,41 @@ public class AuthController {
             if (verifyResult == 3) {
                 sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "verification_code_locked", startTime);
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
             } else if (verifyResult == 4) {
                 sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "verification_code_not_sent", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "请先获取验证码"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_023));
             } else if (verifyResult == 5) {
                 int errorCount = verificationCodeService.getErrorCount(newEmail);
                 sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "email_mismatch", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "邮箱不匹配（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_024.withParams("count", errorCount)));
             } else if (verifyResult == 6) {
                 int errorCount = verificationCodeService.getErrorCount(newEmail);
                 sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "ip_mismatch", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "发送验证码的设备与当前设备不匹配（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_025.withParams("count", errorCount)));
             } else if (verifyResult == 1) {
                 if (verificationCodeService.isLocked(newEmail)) {
                     sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "verification_code_locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 }
                 int errorCount = verificationCodeService.getErrorCount(newEmail);
                 sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "verification_code_expired", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码已过期，请重新获取（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_026.withParams("count", errorCount)));
             } else {
                 if (verificationCodeService.isLocked(newEmail)) {
                     sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "verification_code_locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, "验证码错误次数过多，该邮箱已被锁定1小时"));
+                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 }
                 int errorCount = verificationCodeService.getErrorCount(newEmail);
                 sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "verification_code_invalid", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "验证码错误（" + errorCount + "/5）"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_027.withParams("count", errorCount)));
             }
         }
 
@@ -2676,7 +2671,7 @@ public class AuthController {
         sensitiveLogUtil.logChangeEmail(request, updatedUser.getId(), true, null, startTime);
         
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "邮箱更新成功", ChangeEmailResponse.fromUser(updatedUser)));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_138, ChangeEmailResponse.fromUser(updatedUser)));
     }
 
     /**
@@ -2690,21 +2685,21 @@ public class AuthController {
                                                                                                          HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
         AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "check-sensitive-verification");
         if (adaptiveStatus.isSessionFrozen()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
 
         // 检查是否已验证
@@ -2732,7 +2727,7 @@ public class AuthController {
         );
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功", response));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, response));
     }
 
     @GetMapping("/adaptive-auth/status")
@@ -2741,14 +2736,14 @@ public class AuthController {
             HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         Long currentSessionId = getCurrentSessionId(request);
@@ -2766,7 +2761,7 @@ public class AuthController {
             "adaptive-auth-status"
         );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功", response));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, response));
     }
 
     @GetMapping("/adaptive-auth/metrics")
@@ -2776,14 +2771,14 @@ public class AuthController {
     ) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         AdaptiveRiskMetricsResponse response = adaptiveRiskMetricsService.buildUserMetrics(
@@ -2791,7 +2786,7 @@ public class AuthController {
             windowHours == null ? 168 : windowHours
         );
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "查询成功", response));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_075, response));
     }
 
     /**
@@ -2807,34 +2802,34 @@ public class AuthController {
                                                               HttpServletRequest request) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
         AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, request, "delete-account");
         if (adaptiveStatus.isSessionFrozen()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         // 参数校验
         String confirmText = deleteAccountRequest.getConfirmText();
         if (confirmText == null || !confirmText.equals("我真的不想要我的号辣")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "请输入正确的确认文本"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_139));
         }
 
         // 删除用户账号
@@ -2855,7 +2850,7 @@ public class AuthController {
         }
 
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "账号已注销"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_140));
     }
 
     /**
@@ -2873,7 +2868,7 @@ public class AuthController {
         if (authentication == null || authentication.getPrincipal() == null) {
             sensitiveLogUtil.logChangePassword(request, null, false, "Not authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
@@ -2881,7 +2876,7 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logChangePassword(request, null, false, "User not found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         String clientIp = rateLimitService.getClientIp(request);
@@ -2889,14 +2884,14 @@ public class AuthController {
         if (adaptiveStatus.isSessionFrozen()) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "session_frozen_by_adaptive_risk", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
 
         // 检查是否已完成敏感操作验证
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Sensitive verification not completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "请先完成敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         // 参数校验
@@ -2905,14 +2900,13 @@ public class AuthController {
         if (newPassword == null || newPassword.trim().isEmpty()) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Empty new password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "新密码不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_076));
         }
 
         if (!securityValidator.isValidPasswordLength(newPassword)) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Invalid password length", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码长度必须在" + appProperties.getPassword().getMinLength() + 
-                    "-" + appProperties.getPassword().getMaxLength() + "个字符之间"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_020.withParams("min", appProperties.getPassword().getMinLength(), "max", appProperties.getPassword().getMaxLength())));
         }
 
         if (!securityValidator.isStrongPassword(newPassword)) {
@@ -2924,7 +2918,7 @@ public class AuthController {
         if (securityValidator.isCommonWeakPassword(newPassword)) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Common weak password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "密码过于简单，请使用更复杂的密码"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_021));
         }
 
         // 更新密码
@@ -2937,35 +2931,15 @@ public class AuthController {
         sensitiveLogUtil.logChangePassword(request, user.getId(), true, null, startTime);
         
         return ResponseEntity.status(HttpStatus.OK)
-            .body(new ApiResponse<>(200, "密码修改成功"));
+            .body(new ApiResponse<>(200, ApiResultCode.AUTH_141));
     }
 
     /**
      * 根据配置动态生成密码要求消息
      * @return 密码要求描述
      */
-    private String buildPasswordRequirementMessage() {
-        AppProperties.Password pwdConfig = appProperties.getPassword();
-        List<String> requirements = new ArrayList<>();
-        
-        if (pwdConfig.isRequireUppercase()) {
-            requirements.add("大写字母");
-        }
-        if (pwdConfig.isRequireLowercase()) {
-            requirements.add("小写字母");
-        }
-        if (pwdConfig.isRequireDigits()) {
-            requirements.add("数字");
-        }
-        if (pwdConfig.isRequireSpecialChars()) {
-            requirements.add("特殊字符");
-        }
-        
-        if (requirements.isEmpty()) {
-            return "密码强度不足";
-        }
-        
-        return "密码强度不足：需包含" + String.join("、", requirements);
+    private ApiResultCode buildPasswordRequirementMessage() {
+        return cn.ksuser.api.result.PasswordRequirementResult.from(appProperties.getPassword());
     }
 
     /**
@@ -3105,14 +3079,14 @@ public class AuthController {
             HttpServletRequest httpRequest) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         // ========== 检查是否已通过敏感操作验证 ==========
@@ -3120,11 +3094,11 @@ public class AuthController {
         AdaptiveAuthStatusResponse adaptiveStatus = evaluateAdaptiveRiskForCurrentSession(user, httpRequest, "passkey-registration-options");
         if (adaptiveStatus.isSessionFrozen()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "当前会话风险过高，已被冻结，请重新登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
         if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(new ApiResponse<>(403, "需要先通过敏感操作验证"));
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         // ========== 生成注册选项 ==========
@@ -3134,10 +3108,10 @@ public class AuthController {
                     request != null ? request.getAuthenticatorType() : null
             );
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "生成注册选项成功", options));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_142, options));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "生成注册选项失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_143));
         }
     }
 
@@ -3157,7 +3131,7 @@ public class AuthController {
         if (authentication == null || authentication.getPrincipal() == null) {
             sensitiveLogUtil.logAddPasskey(httpRequest, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
@@ -3165,22 +3139,22 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logAddPasskey(httpRequest, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         try {
             cn.ksuser.api.entity.UserPasskey passkey = passkeyService.verifyRegistration(user, request);
             sensitiveLogUtil.logAddPasskey(httpRequest, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "Passkey 注册成功", PasskeyRegistrationVerifyResponse.fromUserPasskey(passkey)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_144, PasskeyRegistrationVerifyResponse.fromUserPasskey(passkey)));
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logAddPasskey(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (Exception e) {
             sensitiveLogUtil.logAddPasskey(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Passkey 注册失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_145));
         }
     }
 
@@ -3193,10 +3167,10 @@ public class AuthController {
         try {
             PasskeyAuthenticationOptionsResponse options = passkeyService.generateAuthenticationOptions();
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "生成认证选项成功", options));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_146, options));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "生成认证选项失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_147));
         }
     }
 
@@ -3218,7 +3192,7 @@ public class AuthController {
             if (challengeId == null || challengeId.trim().isEmpty()) {
                 sensitiveLogUtil.logLogin(httpRequest, null, "PASSKEY", false, "empty_challenge_id", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, "challengeId 不能为空"));
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_061));
             }
             
             // 验证 Passkey 并获取用户 ID
@@ -3229,7 +3203,7 @@ public class AuthController {
             if (user == null) {
                 sensitiveLogUtil.logLogin(httpRequest, null, "PASSKEY", false, "user_not_found", startTime);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "Passkey 验证失败"));
+                    .body(new ApiResponse<>(401, ApiResultCode.AUTH_148));
             }
 
             // Passkey 作为一因子登录时，允许 TOTP/二维码等非 Passkey 二因子
@@ -3243,8 +3217,7 @@ public class AuthController {
                     String challenge = mfaService.createChallenge(user.getId(), clientIp, userAgent,
                             "passkey", new HashSet<>(mfaMethods));
                     return ResponseEntity.status(HttpStatus.CREATED)
-                        .body(new ApiResponse<>(201, "需要 MFA 验证",
-                                new MfaChallengeResponse(challenge, mfaMethods.get(0), mfaMethods)));
+                        .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, new MfaChallengeResponse(challenge, mfaMethods.get(0), mfaMethods)));
                 }
             }
 
@@ -3260,15 +3233,15 @@ public class AuthController {
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), "PASSKEY", true, null, startTime);
 
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "登录成功", new TokenResponse(accessToken)));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logLogin(httpRequest, null, "PASSKEY", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (Exception e) {
             sensitiveLogUtil.logLogin(httpRequest, null, "PASSKEY", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Passkey 认证失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_149));
         }
     }
 
@@ -3282,16 +3255,16 @@ public class AuthController {
             Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         try {
             PasskeyAuthenticationOptionsResponse options = passkeyService.generateSensitiveVerificationOptions();
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "生成敏感操作验证选项成功", options));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_150, options));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "生成验证选项失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_151));
         }
     }
 
@@ -3314,13 +3287,13 @@ public class AuthController {
         if (challengeId == null || challengeId.trim().isEmpty()) {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, null, false, "empty_challenge_id", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "challengeId 不能为空"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_061));
         }
         
         if (authentication == null || authentication.getPrincipal() == null) {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
@@ -3328,7 +3301,7 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         try {
@@ -3340,15 +3313,15 @@ public class AuthController {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), true, null, startTime);
             
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "验证成功，有效期15分钟"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (Exception e) {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "敏感操作验证失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_152));
         }
     }
 
@@ -3361,24 +3334,24 @@ public class AuthController {
     public ResponseEntity<ApiResponse<PasskeyListResponse>> getUserPasskeys(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         try {
             List<PasskeyListResponse.PasskeyInfo> passkeys = passkeyService.getUserPasskeys(user.getId());
             PasskeyListResponse response = new PasskeyListResponse(passkeys);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "获取成功", response));
+                .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, response));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "获取 Passkey 列表失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_153));
         }
     }
 
@@ -3398,7 +3371,7 @@ public class AuthController {
         if (authentication == null || authentication.getPrincipal() == null) {
             sensitiveLogUtil.logDeletePasskey(httpRequest, null, false, "not_authenticated", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
@@ -3406,22 +3379,22 @@ public class AuthController {
         if (user == null) {
             sensitiveLogUtil.logDeletePasskey(httpRequest, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         try {
             passkeyService.deletePasskey(passkeyId, user.getId());
             sensitiveLogUtil.logDeletePasskey(httpRequest, user.getId(), true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "Passkey 删除成功"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_154));
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logDeletePasskey(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (Exception e) {
             sensitiveLogUtil.logDeletePasskey(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "删除失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_155));
         }
     }
 
@@ -3439,26 +3412,26 @@ public class AuthController {
             Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "未登录"));
+                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         }
 
         String uuid = authentication.getPrincipal().toString();
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, "用户不存在"));
+                .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         try {
             passkeyService.renamePasskey(passkeyId, user.getId(), request.getNewName());
             return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, "Passkey 重命名成功"));
+                .body(new ApiResponse<>(200, ApiResultCode.AUTH_156));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, e.getMessage()));
+                .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "重命名失败：" + e.getMessage()));
+                .body(new ApiResponse<>(500, ApiResultCode.AUTH_157));
         }
     }
 

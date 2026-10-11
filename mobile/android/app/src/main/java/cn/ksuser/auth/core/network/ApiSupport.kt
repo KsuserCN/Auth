@@ -1,17 +1,23 @@
 package cn.ksuser.auth.core.network
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import retrofit2.Response
 
 data class ApiEnvelope<T>(
     val code: Int? = null,
-    val msg: String? = null,
+    val errorCode: String? = null,
+    val params: Map<String, JsonElement>? = null,
     val data: T? = null,
-)
+) {
+    val resultMessage: String
+        get() = ApiResultCodeResolver.message(errorCode, params, code ?: 500)
+}
 
 class ApiException(
     val statusCode: Int,
     override val message: String,
+    val errorCode: String? = null,
 ) : RuntimeException(message)
 
 suspend fun <T> executeEnvelope(
@@ -27,15 +33,19 @@ suspend fun <T> executeEnvelope(
     val parsedError = response.errorBody()?.charStream()?.use { reader ->
         runCatching { gson.fromJson(reader, ApiEnvelope::class.java) }.getOrNull()
     }
-    val message = parsedError?.msg ?: body?.msg ?: response.message().ifBlank { "请求失败" }
-    throw ApiException(response.code(), message)
+    val result = parsedError ?: body
+    throw ApiException(
+        response.code(),
+        ApiResultCodeResolver.message(result?.errorCode, result?.params, response.code()),
+        result?.errorCode,
+    )
 }
 
 fun requireCode(
     envelope: ApiEnvelope<*>,
     vararg acceptedCodes: Int,
 ) {
-    val code = envelope.code ?: error("缺少响应状态码")
+    val code = envelope.code ?: throw ApiException(500, ApiResultCodeResolver.message("INVALID_RESPONSE"), "INVALID_RESPONSE")
     if (acceptedCodes.contains(code)) return
-    throw ApiException(code, envelope.msg ?: "请求失败")
+    throw ApiException(code, envelope.resultMessage, envelope.errorCode)
 }

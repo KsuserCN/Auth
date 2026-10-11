@@ -5,7 +5,7 @@ enum APIError: Error, LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .server(_, let message), .unsupported(let message): return message
-        case .invalidResponse: return "服务器返回了无法识别的数据"
+        case .invalidResponse: return APIResultCodeResolver.message(errorCode: "INVALID_RESPONSE")
         case .storage: return "无法安全保存登录凭据，请解锁设备后重试"
         case .invalidQRCode: return "这不是有效的 Ksuser 授权二维码"
         case .cancelled: return "操作已取消"
@@ -64,7 +64,7 @@ actor APIClient {
 
     func request<T: Decodable & Sendable>(_ path: String, method: String = "GET", query: [String: String] = [:], body: [String: JSONValue]? = nil, authenticated: Bool = true, acceptedCodes: Set<Int> = [200]) async throws -> T {
         let envelope: APIEnvelope<T> = try await envelope(path, method: method, query: query, body: body, authenticated: authenticated)
-        guard acceptedCodes.contains(envelope.code) else { throw APIError.server(envelope.code, envelope.msg ?? "请求失败") }
+        guard acceptedCodes.contains(envelope.code) else { throw APIError.server(envelope.code, envelope.resultMessage) }
         guard let payload = envelope.data else {
             if T.self == EmptyPayload.self { return EmptyPayload() as! T }
             throw APIError.invalidResponse
@@ -84,7 +84,8 @@ actor APIClient {
         var body = Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"avatar.\(fileExtension)\"\r\nContent-Type: \(mimeType)\r\n\r\n".utf8)
         body.append(data); body.append(Data("\r\n--\(boundary)--\r\n".utf8))
         let envelope: APIEnvelope<T> = try await perform(path, method: "POST", query: [:], data: body, contentType: "multipart/form-data; boundary=\(boundary)", authenticated: true, canReplay: true)
-        guard envelope.code == 200, let payload = envelope.data else { throw APIError.server(envelope.code, envelope.msg ?? "上传失败") }
+        guard envelope.code == 200 else { throw APIError.server(envelope.code, envelope.resultMessage) }
+        guard let payload = envelope.data else { throw APIError.invalidResponse }
         return payload
     }
     private func ensureCSRF() async throws {
@@ -113,7 +114,8 @@ actor APIClient {
         do {
             try await ensureCSRF()
             let envelope: APIEnvelope<TokenPayload> = try await perform("/auth/refresh", method: "POST", query: [:], data: Data("{}".utf8), contentType: "application/json", authenticated: false, canReplay: false)
-            guard envelope.code == 200, let token = envelope.data?.accessToken else { throw APIError.server(envelope.code, envelope.msg ?? "登录已失效，请重新登录") }
+            guard envelope.code == 200 else { throw APIError.server(envelope.code, envelope.resultMessage) }
+            guard let token = envelope.data?.accessToken else { throw APIError.invalidResponse }
             guard generation == startedGeneration else { throw APIError.cancelled }
             try setAccessToken(token); return token
         } catch {
@@ -147,10 +149,12 @@ actor APIClient {
         guard startedGeneration == generation else { throw APIError.cancelled }
         try receiveCookies(response, url: url)
         let parsed = try? JSONDecoder().decode(APIEnvelope<T>.self, from: bytes)
-        let status = parsed?.code ?? response.statusCode
+        // Decode metadata independently: an error body need not match the successful data type.
+        let result = try? JSONDecoder().decode(APIResultDescriptor.self, from: bytes)
+        let status = result?.code ?? response.statusCode
         if response.statusCode >= 500 || ((200..<300).contains(response.statusCode) && (parsed?.code ?? 0) >= 500) {
             await availabilityMonitor?.recordServiceFailure()
-        } else if let parsed {
+        } else if parsed != nil {
             await availabilityMonitor?.recordServiceResponse()
         } else if (200..<300).contains(response.statusCode) {
             await availabilityMonitor?.recordServiceFailure()
@@ -161,12 +165,12 @@ actor APIClient {
         }
         if (response.statusCode == 401 || status == 401), authenticated, !canReplay {
             try clearSession()
-            throw APIError.server(401, parsed?.msg ?? "登录已失效，请重新登录")
+            throw APIError.server(401, result?.message(statusCode: 401) ?? APIResultCodeResolver.message(errorCode: nil, statusCode: 401))
         }
         guard (200..<300).contains(response.statusCode) else {
-            let message = (try? JSONDecoder().decode(APIEnvelope<JSONValue>.self, from: bytes))?.msg
-            throw APIError.server(response.statusCode, message ?? "请求失败（\(response.statusCode)）")
+            throw APIError.server(response.statusCode, result?.message(statusCode: response.statusCode) ?? APIResultCodeResolver.message(errorCode: nil, statusCode: response.statusCode))
         }
+        if status >= 400 { throw APIError.server(status, result?.message(statusCode: status) ?? APIResultCodeResolver.message(errorCode: nil, statusCode: status)) }
         guard let parsed else { throw APIError.invalidResponse }
         return parsed
     }

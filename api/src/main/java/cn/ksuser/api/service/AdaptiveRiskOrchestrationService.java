@@ -1,6 +1,7 @@
 package cn.ksuser.api.service;
 
 import cn.ksuser.api.dto.AdaptiveAuthStatusResponse;
+import cn.ksuser.api.result.ApiResultCode;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserSensitiveLog;
 import cn.ksuser.api.entity.UserSession;
@@ -97,6 +98,8 @@ public class AdaptiveRiskOrchestrationService {
             response.setAlertLevel(null);
             response.setAlertTitle(null);
             response.setAlertMessage(null);
+            response.setAlertTitleCode(null);
+            response.setAlertMessageCode(null);
             response.setAlertRemainingSeconds(0);
             return;
         }
@@ -104,16 +107,21 @@ public class AdaptiveRiskOrchestrationService {
         response.setAlertLevel(alert.getLevel());
         response.setAlertTitle(alert.getTitle());
         response.setAlertMessage(alert.getMessage());
+        boolean frozen = "FREEZE".equals(alert.getDecision());
+        response.setAlertTitleCode(frozen ? ApiResultCode.ADAPTIVE_ALERT_FROZEN_TITLE : ApiResultCode.ADAPTIVE_ALERT_STEP_UP_TITLE);
+        response.setAlertMessageCode(frozen ? ApiResultCode.ADAPTIVE_ALERT_FROZEN_MESSAGE : ApiResultCode.ADAPTIVE_ALERT_STEP_UP_MESSAGE);
         response.setAlertRemainingSeconds(adaptiveRiskAlertService.getRemainingSeconds(user.getId()));
     }
 
     private void adjustRecommendedAction(AdaptiveAuthStatusResponse response, PolicyDecision decision) {
         if (decision == PolicyDecision.FREEZE) {
             response.setRecommendedAction("当前会话风险极高，系统已冻结会话，请重新登录并完成验证");
+            response.setRecommendedActionCode(ApiResultCode.ADAPTIVE_ACTION_FROZEN);
             return;
         }
         if (decision == PolicyDecision.STEP_UP) {
             response.setRecommendedAction("当前会话风险中等，需完成 step-up 验证后继续敏感操作");
+            response.setRecommendedActionCode(ApiResultCode.ADAPTIVE_ACTION_POLICY_STEP_UP);
         }
     }
 

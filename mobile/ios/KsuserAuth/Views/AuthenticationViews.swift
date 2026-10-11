@@ -321,7 +321,7 @@ struct RegistrationView: View {
                 case 1:
                     FormField(title: "设置密码", text: $password, secure: true, contentType: .newPassword)
                     if let rules = model.passwordRequirement {
-                        Text(rules.requirementMessage ?? "请设置符合要求的安全密码").font(.caption).foregroundStyle(.secondary)
+                        Text(rules.requirementMessage).font(.caption).foregroundStyle(.secondary)
                         if let passwordError, !password.isEmpty { Label(passwordError, systemImage: "info.circle").font(.caption).foregroundStyle(Brand.gold) }
                     } else {
                         Text("正在获取密码要求…").foregroundStyle(.secondary)

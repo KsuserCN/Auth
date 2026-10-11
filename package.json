@@ -40,6 +40,8 @@
     "dev:mobile:ios": "bash mobile/ios/scripts/ios.sh debug",
     "build:mobile:ios": "bash mobile/ios/scripts/ios.sh release",
     "test:mobile:ios": "bash mobile/ios/scripts/ios.sh test",
-    "archive:mobile:ios": "bash mobile/ios/scripts/ios.sh archive"
+    "archive:mobile:ios": "bash mobile/ios/scripts/ios.sh archive",
+    "generate:api-codes": "node scripts/generate-api-result-codes.mjs",
+    "check:api-codes": "node scripts/generate-api-result-codes.mjs --check"
   }
 }

@@ -1,5 +1,7 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
@@ -47,7 +49,7 @@ public class Oauth2PlatformController {
     @GetMapping("/apps")
     public ResponseEntity<ApiResponse<Oauth2AppsOverviewResponse>> listApplications(Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", oauth2PlatformService.listApplications(user)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, oauth2PlatformService.listApplications(user)));
     }
 
     @PostMapping("/apps")
@@ -57,7 +59,7 @@ public class Oauth2PlatformController {
         User user = requireUser(authentication);
         Oauth2AppCreateResponse response = oauth2PlatformService.createApplication(user, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(new ApiResponse<>(201, "创建成功，请妥善保存 AppSecret", response));
+            .body(new ApiResponse<>(201, ApiResultCode.OAUTH2_001, response));
     }
 
     @PutMapping("/apps/{appId}")
@@ -66,7 +68,7 @@ public class Oauth2PlatformController {
                                                                             Authentication authentication) {
         User user = requireUser(authentication);
         Oauth2AppResponse response = oauth2PlatformService.updateApplication(user, appId, request);
-        return ResponseEntity.ok(new ApiResponse<>(200, "更新成功", response));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.AUTH_046, response));
     }
 
     @DeleteMapping("/apps/{appId}")
@@ -74,7 +76,7 @@ public class Oauth2PlatformController {
                                                                Authentication authentication) {
         User user = requireUser(authentication);
         oauth2PlatformService.deleteApplication(user, appId);
-        return ResponseEntity.ok(new ApiResponse<>(200, "删除成功"));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_002));
     }
 
     @PostMapping(value = "/apps/{appId}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -84,22 +86,22 @@ public class Oauth2PlatformController {
         User user = requireUser(authentication);
         if (file == null || file.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "请选择 Logo 文件"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH2_003));
         }
         if (file.getSize() > LOGO_MAX_SIZE_BYTES) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "Logo 文件不能超过 3MB"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH2_004));
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "仅支持图片文件"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_124));
         }
 
         String extension = resolveFileExtension(contentType, file.getOriginalFilename());
         if (extension == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "不支持的图片格式"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_125));
         }
 
         try {
@@ -112,10 +114,10 @@ public class Oauth2PlatformController {
 
             String logoUrl = getStaticHostPrefix() + "/static/oauth2-logos/" + filename;
             Oauth2AppResponse response = oauth2PlatformService.updateApplicationLogo(user, appId, logoUrl);
-            return ResponseEntity.ok(new ApiResponse<>(200, "Logo 上传成功", response));
+            return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_005, response));
         } catch (IOException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Logo 上传失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH2_006));
         }
     }
 
@@ -130,7 +132,7 @@ public class Oauth2PlatformController {
         Oauth2AuthorizeContextResponse response = oauth2PlatformService.buildAuthorizeContext(
             user, clientId, redirectUri, responseType, scope
         );
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", response));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, response));
     }
 
     @PostMapping("/authorize/approve")
@@ -139,14 +141,14 @@ public class Oauth2PlatformController {
         Authentication authentication) {
         User user = requireUser(authentication);
         Oauth2AuthorizeApproveResponse response = oauth2PlatformService.approveAuthorization(user, request);
-        return ResponseEntity.ok(new ApiResponse<>(200, "授权成功", response));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_007, response));
     }
 
     @GetMapping("/authorizations")
     public ResponseEntity<ApiResponse<java.util.List<Oauth2AuthorizedAppResponse>>> listAuthorizations(
         Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", oauth2PlatformService.listAuthorizations(user)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, oauth2PlatformService.listAuthorizations(user)));
     }
 
     @DeleteMapping("/authorizations/{appId}")
@@ -154,7 +156,7 @@ public class Oauth2PlatformController {
                                                                  Authentication authentication) {
         User user = requireUser(authentication);
         oauth2PlatformService.revokeAuthorization(user, appId);
-        return ResponseEntity.ok(new ApiResponse<>(200, "撤销成功"));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_008));
     }
 
     @PostMapping("/token")
@@ -191,11 +193,13 @@ public class Oauth2PlatformController {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("error", ex.getError());
             body.put("error_description", ex.getDescription());
+            body.put("errorCode", ex.getResult().errorCode());
+            if (!ex.getResult().params().isEmpty()) body.put("params", ex.getResult().params());
             return ResponseEntity.status(ex.getStatus()).body(body);
         }
 
         return ResponseEntity.status(ex.getStatus())
-            .body(new ApiResponse<>(ex.getStatus().value(), ex.getDescription()));
+            .body(new ApiResponse<>(ex.getStatus().value(), ex.getResult()));
     }
 
     private boolean isOauthProtocolRequest(HttpServletRequest request) {
@@ -208,12 +212,12 @@ public class Oauth2PlatformController {
 
     private User requireUser(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "未登录");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.UNAUTHENTICATED);
         }
 
         String uuid = authentication.getPrincipal().toString();
         return userService.findByUuid(uuid)
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "用户不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.AUTH_005));
     }
 
     private User resolveUser(Authentication authentication) {

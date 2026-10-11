@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'api_result_messages.dart';
+
 const Color kPrimaryColor = Color(0xFFFFB90F);
 const Color kSurfaceTint = Color(0xFFFFF2CC);
 const String kDefaultApiBaseUrl = 'https://api.ksuser.cn';
@@ -2438,7 +2440,7 @@ class AppController extends ChangeNotifier {
               return;
             }
             if (response.accessToken == null || response.accessToken!.isEmpty) {
-              throw ApiException(response.message ?? '浏览器未返回登录结果');
+              throw response.toException('浏览器未返回登录结果');
             }
             _apiClient.accessToken = response.accessToken;
             pendingMfaChallenge = null;
@@ -2787,7 +2789,7 @@ class AppController extends ChangeNotifier {
               return;
             }
             if (response.accessToken == null || response.accessToken!.isEmpty) {
-              throw ApiException(response.message ?? '浏览器未返回登录结果');
+              throw response.toException('浏览器未返回登录结果');
             }
             _apiClient.accessToken = response.accessToken;
             await refreshWorkspace();
@@ -2862,7 +2864,7 @@ class AppController extends ChangeNotifier {
               accessToken: _apiClient.accessToken,
             );
         if (!response.verified) {
-          throw ApiException(response.message ?? '浏览器未完成敏感验证');
+          throw response.toException('浏览器未完成敏感验证');
         }
       } on SocketException catch (error) {
         throw ApiException(_passkeyBridgeSocketErrorMessage(error));
@@ -2881,7 +2883,7 @@ class AppController extends ChangeNotifier {
               accessToken: _apiClient.accessToken,
             );
         if (!response.verified) {
-          throw ApiException(response.message ?? '浏览器未完成敏感验证');
+          throw response.toException('浏览器未完成敏感验证');
         }
       } on SocketException catch (error) {
         throw ApiException(_passkeyBridgeSocketErrorMessage(error));
@@ -2934,7 +2936,7 @@ class AppController extends ChangeNotifier {
               passkeyName: preferredName,
             );
         if (!response.registered) {
-          throw ApiException(response.message ?? '浏览器未完成 Passkey 登记');
+          throw response.toException('浏览器未完成 Passkey 登记');
         }
         await refreshPasskeys();
       } on SocketException catch (error) {
@@ -3359,8 +3361,11 @@ class KsuserApiClient {
       _captureCookies(response);
       final String content = await response.transform(utf8.decoder).join();
       final dynamic decoded = content.isEmpty ? null : jsonDecode(content);
-      final String? responseMessage = _extractMessage(decoded);
-      if (response.statusCode == 401 &&
+      final String? responseResultCode = apiResultCode(decoded);
+      final int? responseBusinessCode = decoded is Map<String, dynamic>
+          ? asInt(decoded['code'])
+          : null;
+      if ((response.statusCode == 401 || responseBusinessCode == 401) &&
           _canAttemptTokenRefresh(
             path,
             authorized: authorized,
@@ -3379,8 +3384,8 @@ class KsuserApiClient {
         );
       }
       if (!csrfRetried &&
-          response.statusCode == 403 &&
-          responseMessage == '无权限') {
+          (response.statusCode == 403 || responseBusinessCode == 403) &&
+          responseResultCode == 'SECURITY_CSRF_INVALID') {
         await _refreshCsrfToken(force: true);
         return await postMultipartFile(
           path,
@@ -3394,15 +3399,15 @@ class KsuserApiClient {
         );
       }
       if (response.statusCode >= 400) {
-        throw ApiException(
-          responseMessage ?? '请求失败',
-          statusCode: response.statusCode,
-        );
+        throw ApiException.fromResponse(decoded, response.statusCode);
       }
       if (decoded is Map<String, dynamic>) {
-        final int? code = asInt(decoded['code']);
+        final int? code = responseBusinessCode;
+        if (responseResultCode == 'SENSITIVE_VERIFICATION_REQUIRED') {
+          throw ApiException.fromResponse(decoded, code ?? response.statusCode);
+        }
         if (code != null && code >= 400) {
-          throw ApiException(responseMessage ?? '请求失败', statusCode: code);
+          throw ApiException.fromResponse(decoded, code);
         }
         return decoded.containsKey('data') ? decoded['data'] : decoded;
       }
@@ -3504,7 +3509,10 @@ class KsuserApiClient {
       _captureCookies(response);
       final String content = await response.transform(utf8.decoder).join();
       final dynamic decoded = content.isEmpty ? null : jsonDecode(content);
-      final String? responseMessage = _extractMessage(decoded);
+      final String? responseResultCode = apiResultCode(decoded);
+      final int? responseBusinessCode = decoded is Map<String, dynamic>
+          ? asInt(decoded['code'])
+          : null;
 
       if (response.statusCode == 401) {
         if (_canAttemptTokenRefresh(
@@ -3528,12 +3536,12 @@ class KsuserApiClient {
             // Fall through to the standard unauthorized error below.
           }
         }
-        throw ApiException(responseMessage ?? '认证已失效，请重新登录', statusCode: 401);
+        throw ApiException.fromResponse(decoded, 401);
       }
       if (!csrfRetried &&
           method != 'GET' &&
-          response.statusCode == 403 &&
-          responseMessage == '无权限') {
+          (response.statusCode == 403 || responseBusinessCode == 403) &&
+          responseResultCode == 'SECURITY_CSRF_INVALID') {
         await _refreshCsrfToken(force: true);
         return await _request(
           method,
@@ -3543,16 +3551,17 @@ class KsuserApiClient {
           authorized: authorized,
           bypassWarmup: true,
           csrfRetried: true,
+          tokenRetried: tokenRetried,
         );
       }
       if (response.statusCode >= 400) {
-        throw ApiException(
-          responseMessage ?? '请求失败',
-          statusCode: response.statusCode,
-        );
+        throw ApiException.fromResponse(decoded, response.statusCode);
       }
       if (decoded is Map<String, dynamic>) {
-        final int? code = asInt(decoded['code']);
+        final int? code = responseBusinessCode;
+        if (responseResultCode == 'SENSITIVE_VERIFICATION_REQUIRED') {
+          throw ApiException.fromResponse(decoded, code ?? response.statusCode);
+        }
         if (code == 401 &&
             _canAttemptTokenRefresh(
               path,
@@ -3572,14 +3581,11 @@ class KsuserApiClient {
               tokenRetried: true,
             );
           } on ApiException {
-            throw ApiException(
-              responseMessage ?? '认证已失效，请重新登录',
-              statusCode: 401,
-            );
+            throw ApiException.fromResponse(decoded, 401);
           }
         }
         if (code != null && code >= 400) {
-          throw ApiException(responseMessage ?? '请求失败', statusCode: code);
+          throw ApiException.fromResponse(decoded, code);
         }
         return decoded.containsKey('data') ? decoded['data'] : decoded;
       }
@@ -3608,13 +3614,6 @@ class KsuserApiClient {
       }
       _cookies[cookie.name] = cookie;
     }
-  }
-
-  String? _extractMessage(dynamic decoded) {
-    if (decoded is Map<String, dynamic> && decoded['msg'] != null) {
-      return decoded['msg'].toString();
-    }
-    return null;
   }
 
   bool _isRefreshRequest(String path) {
@@ -3714,10 +3713,35 @@ class KsuserApiClient {
 }
 
 class ApiException implements Exception {
-  ApiException(this.message, {this.statusCode});
+  ApiException(
+    this.message, {
+    this.statusCode,
+    this.errorCode,
+    this.params = const <String, dynamic>{},
+  });
+
+  factory ApiException.fromResponse(dynamic response, int statusCode) {
+    final String errorCode =
+        apiResultCode(response) ?? apiFallbackResultCode(statusCode);
+    final Map<String, dynamic> params = apiResultParams(
+      response is Map ? response['params'] : null,
+    );
+    return ApiException(
+      resolveApiResultMessage(
+        errorCode: errorCode,
+        params: params,
+        statusCode: statusCode,
+      ),
+      statusCode: statusCode,
+      errorCode: errorCode,
+      params: params,
+    );
+  }
 
   final String message;
   final int? statusCode;
+  final String? errorCode;
+  final Map<String, dynamic> params;
 
   @override
   String toString() => message;
@@ -8430,8 +8454,7 @@ Future<void> _runWithSensitiveVerification(
     try {
       await action();
     } on ApiException catch (error) {
-      if (error.statusCode == 403 &&
-          error.message == '请先完成敏感操作验证' &&
+      if (error.errorCode == 'SENSITIVE_VERIFICATION_REQUIRED' &&
           context.mounted) {
         final bool verified = await _showSensitiveVerificationDialog(
           context,
@@ -10154,7 +10177,10 @@ class PasswordRequirement {
       requireDigits: asBool(json['requireDigits']),
       requireSpecialChars: asBool(json['requireSpecialChars']),
       rejectCommonWeakPasswords: asBool(json['rejectCommonWeakPasswords']),
-      requirementMessage: asString(json['requirementMessage']) ?? '',
+      requirementMessage: resolveApiResultMessage(
+        errorCode: asString(json['requirementCode']),
+        params: apiResultParams(json['requirementParams']),
+      ),
     );
   }
 
@@ -10286,14 +10312,25 @@ class AdaptiveAuthStatus {
       deviceType: asString(json['deviceType']),
       multiEndpointAlert: asBool(json['multiEndpointAlert']),
       alertLevel: asString(json['alertLevel']),
-      alertTitle: asString(json['alertTitle']),
-      alertMessage: asString(json['alertMessage']),
+      alertTitle: json['alertTitleCode'] == null
+          ? null
+          : resolveApiResultMessage(
+              errorCode: asString(json['alertTitleCode']),
+            ),
+      alertMessage: json['alertMessageCode'] == null
+          ? null
+          : resolveApiResultMessage(
+              errorCode: asString(json['alertMessageCode']),
+            ),
       alertRemainingSeconds: asInt(json['alertRemainingSeconds']) ?? 0,
-      recommendedAction: asString(json['recommendedAction']) ?? '',
-      reasons: asList(json['reasons'])
-          .map((dynamic item) => item.toString())
-          .where((String item) => item.trim().isNotEmpty)
-          .toList(),
+      recommendedAction: json['recommendedActionCode'] == null
+          ? ''
+          : resolveApiResultMessage(
+              errorCode: asString(json['recommendedActionCode']),
+            ),
+      reasons: asList(
+        json['reasonCodes'],
+      ).map((dynamic item) => resolveApiResultPayload(item)).toList(),
     );
   }
 
@@ -10649,7 +10686,7 @@ class SensitiveLogItem {
       browser: asString(json['browser']),
       deviceType: asString(json['deviceType']),
       result: asString(json['result']) ?? 'SUCCESS',
-      failureReason: asString(json['failureReason']),
+      failureReason: resolveAuditFailureReason(asString(json['failureReason'])),
       riskScore: asInt(json['riskScore']) ?? 0,
       createdAt: asString(json['createdAt']) ?? '',
     );
@@ -10704,6 +10741,8 @@ class BrowserPasskeyBridgeResponse {
   const BrowserPasskeyBridgeResponse({
     required this.success,
     required this.message,
+    this.errorCode,
+    this.params = const <String, dynamic>{},
     this.accessToken,
     this.transferCode,
     this.verified = false,
@@ -10711,9 +10750,12 @@ class BrowserPasskeyBridgeResponse {
   });
 
   factory BrowserPasskeyBridgeResponse.fromJson(Map<String, dynamic> json) {
+    final bool success = asString(json['status']) != 'error';
     return BrowserPasskeyBridgeResponse(
-      success: asString(json['status']) != 'error',
-      message: asString(json['message']),
+      success: success,
+      message: resolveApiResultPayload(json, statusCode: success ? 200 : 400),
+      errorCode: apiResultCode(json),
+      params: apiResultParams(json['params']),
       accessToken: asString(json['accessToken']),
       transferCode: asString(json['transferCode']),
       verified: asBool(json['verified']),
@@ -10723,10 +10765,20 @@ class BrowserPasskeyBridgeResponse {
 
   final bool success;
   final String? message;
+  final String? errorCode;
+  final Map<String, dynamic> params;
   final String? accessToken;
   final String? transferCode;
   final bool verified;
   final bool registered;
+
+  ApiException toException(String fallbackMessage) {
+    return ApiException(
+      message ?? fallbackMessage,
+      errorCode: errorCode,
+      params: params,
+    );
+  }
 }
 
 class BrowserPasskeyBridge {
@@ -10899,7 +10951,7 @@ class BrowserPasskeyBridge {
         completer.complete(response);
       } else {
         completer.completeError(
-          ApiException(response.message ?? '浏览器未完成 Passkey 操作'),
+          response.toException('浏览器未完成 Passkey 操作'),
         );
       }
     }
@@ -10984,9 +11036,10 @@ class DesktopSessionBridgeServer {
     final bool originAllowed = _isAllowedOrigin(origin);
 
     if (origin != null && !originAllowed) {
-      request.response.statusCode = HttpStatus.forbidden;
-      request.response.write('forbidden');
-      await request.response.close();
+      await _writeJson(request.response, <String, dynamic>{
+        'code': HttpStatus.forbidden,
+        'errorCode': 'FORBIDDEN',
+      }, statusCode: HttpStatus.forbidden);
       return;
     }
 
@@ -11024,7 +11077,8 @@ class DesktopSessionBridgeServer {
           request.uri.path == '/ksuser-auth/bridge/export') {
         if (!controller.isAuthenticated) {
           await _writeJson(request.response, <String, dynamic>{
-            'message': '桌面端当前未登录',
+            'code': HttpStatus.conflict,
+            'errorCode': 'UNAUTHENTICATED',
           }, statusCode: HttpStatus.conflict);
           return;
         }
@@ -11053,7 +11107,8 @@ class DesktopSessionBridgeServer {
         final String? transferCode = asString(payload['transferCode']);
         if (transferCode == null || transferCode.trim().isEmpty) {
           await _writeJson(request.response, <String, dynamic>{
-            'message': 'transferCode 不能为空',
+            'code': HttpStatus.badRequest,
+            'errorCode': 'BAD_REQUEST',
           }, statusCode: HttpStatus.badRequest);
           return;
         }
@@ -11072,15 +11127,21 @@ class DesktopSessionBridgeServer {
       }
 
       await _writeJson(request.response, <String, dynamic>{
-        'message': 'Not found',
+        'code': HttpStatus.notFound,
+        'errorCode': 'NOT_FOUND',
       }, statusCode: HttpStatus.notFound);
     } on ApiException catch (error) {
       await _writeJson(request.response, <String, dynamic>{
-        'message': error.message,
+        'code': error.statusCode ?? HttpStatus.badRequest,
+        'errorCode':
+            error.errorCode ??
+            apiFallbackResultCode(error.statusCode ?? HttpStatus.badRequest),
+        if (error.params.isNotEmpty) 'params': error.params,
       }, statusCode: error.statusCode ?? HttpStatus.badRequest);
-    } catch (error) {
+    } catch (_) {
       await _writeJson(request.response, <String, dynamic>{
-        'message': error.toString(),
+        'code': HttpStatus.internalServerError,
+        'errorCode': 'SERVER_ERROR',
       }, statusCode: HttpStatus.internalServerError);
     }
   }

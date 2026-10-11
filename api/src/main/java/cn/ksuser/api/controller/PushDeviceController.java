@@ -1,5 +1,7 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.config.ApnsProperties;
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.PushDeviceRequest;
@@ -40,17 +42,17 @@ public class PushDeviceController {
             @RequestHeader(value = "Authorization", required = false) String header,
             Authentication authentication, @Valid @RequestBody PushDeviceRequest request) {
         UserSession session = currentSession(header, authentication);
-        if (session == null) return ResponseEntity.status(401).body(new ApiResponse<>(401, "请重新登录"));
+        if (session == null) return ResponseEntity.status(401).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         push.register(session, request);
-        return ResponseEntity.ok(new ApiResponse<>(200, "推送设置已保存", Map.of("enabled", properties.isEnabled())));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.REQUEST_001, Map.of("enabled", properties.isEnabled())));
     }
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> unregister(
             @RequestHeader(value = "Authorization", required = false) String header, Authentication authentication) {
         UserSession session = currentSession(header, authentication);
-        if (session == null) return ResponseEntity.status(401).body(new ApiResponse<>(401, "请重新登录"));
+        if (session == null) return ResponseEntity.status(401).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
         push.unregister(session.getId());
-        return ResponseEntity.ok(new ApiResponse<>(200, "此设备已停止接收推送"));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.REQUEST_002));
     }
 }

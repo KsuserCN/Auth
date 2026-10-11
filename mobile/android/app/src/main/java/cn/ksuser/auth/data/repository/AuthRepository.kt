@@ -2,6 +2,7 @@ package cn.ksuser.auth.data.repository
 
 import cn.ksuser.auth.core.network.ApiEnvelope
 import cn.ksuser.auth.core.network.ApiException
+import cn.ksuser.auth.core.network.ApiResultCodeResolver
 import cn.ksuser.auth.core.network.KsuserApiService
 import cn.ksuser.auth.core.network.executeEnvelope
 import cn.ksuser.auth.core.network.requireCode
@@ -154,7 +155,8 @@ class AuthRepository(
             )
         }
         requireCode(envelope, 200)
-        return envelope.data ?: OAuthBindCallbackResponse(bound = true, provider = "qq")
+        return (envelope.data ?: OAuthBindCallbackResponse(bound = true, provider = "qq"))
+            .copy(message = envelope.resultMessage)
     }
 
     suspend fun register(
@@ -257,14 +259,18 @@ class AuthRepository(
         envelope: ApiEnvelope<JsonObject>,
         source: AuthSource,
     ): AuthResult {
-        val code = envelope.code ?: throw ApiException(500, "缺少状态码")
+        val code = envelope.code ?: invalidAuthResponse()
         val payload = envelope.data ?: JsonObject()
-        if (code == 201 || payload.has("challengeId")) {
+        if (code == 201) {
+            val challengeId = payload.get("challengeId")?.takeIf { it.isJsonPrimitive }?.asString
+                ?.takeIf { it.isNotBlank() } ?: invalidAuthResponse()
+            val method = payload.get("method")?.takeIf { it.isJsonPrimitive }?.asString
+                ?.takeIf { it.isNotBlank() } ?: "totp"
             val methods = payload.getAsJsonArray("methods").toStringList()
             return AuthResult.NeedsMfa(
-                challengeId = payload.get("challengeId").asString,
-                method = payload.get("method").asString,
-                methods = methods.ifEmpty { listOf(payload.get("method").asString) },
+                challengeId = challengeId,
+                method = method,
+                methods = methods.ifEmpty { listOf(method) },
                 source = source,
             )
         }
@@ -276,16 +282,23 @@ class AuthRepository(
         if (code == 202 && payload.get("needBind")?.asBoolean == true) {
             val provider = payload.get("provider")?.asString?.takeIf { it.isNotBlank() } ?: "qq"
             val bindToken = payload.get("oauthBindToken")?.asString?.takeIf { it.isNotBlank() }
-                ?: throw ApiException(code, "第三方登录状态缺失，请重新授权")
+                ?: invalidAuthResponse()
             return AuthResult.NeedsOAuthBind(
                 provider = provider,
                 bindToken = bindToken,
                 openid = payload.get("openid")?.asString?.takeIf { it.isNotBlank() },
-                message = payload.get("message")?.asString?.takeIf { it.isNotBlank() },
+                message = envelope.resultMessage,
             )
         }
-        throw ApiException(code, envelope.msg ?: "认证失败")
+        if (code == 200 || code == 202) invalidAuthResponse()
+        throw ApiException(code, envelope.resultMessage, envelope.errorCode)
     }
+
+    private fun invalidAuthResponse(): Nothing = throw ApiException(
+        500,
+        ApiResultCodeResolver.message("INVALID_RESPONSE"),
+        "INVALID_RESPONSE",
+    )
 }
 
 private fun JsonArray?.toStringList(): List<String> {

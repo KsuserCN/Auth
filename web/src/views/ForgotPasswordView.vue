@@ -160,6 +160,7 @@
 </template>
 
 <script setup lang="ts">
+import { resolveApiResult } from '@/utils/apiResult'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
 import QRCode from 'qrcode'
@@ -229,7 +230,8 @@ const passwordRequirement = ref<PasswordRequirement>({
   requireDigits: true,
   requireSpecialChars: false,
   rejectCommonWeakPasswords: true,
-  requirementMessage: '密码强度不足：需包含大写字母、小写字母、数字',
+  requirementCode: 'PASSWORD_REQUIREMENTS_7',
+  requirementParams: { minLength: 6, maxLength: 66 },
 })
 let recoveryCountdownTimer: number | null = null
 let qrRecoveryPollingTimer: number | null = null

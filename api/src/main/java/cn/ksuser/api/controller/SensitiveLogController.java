@@ -1,5 +1,7 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.PageResponse;
 import cn.ksuser.api.dto.SensitiveLogQueryRequest;
@@ -47,21 +49,21 @@ public class SensitiveLogController {
 
         if (accessToken == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "Access token不存在"));
+                    .body(new ApiResponse<>(401, ApiResultCode.REQUEST_003));
         }
 
         // 从token获取UUID
         String uuid = jwtUtil.getUuidFromToken(accessToken);
         if (uuid == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "Access token无效或已过期"));
+                    .body(new ApiResponse<>(401, ApiResultCode.REQUEST_004));
         }
 
         // 查找用户
         User user = userService.findByUuid(uuid).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponse<>(401, "用户不存在"));
+                    .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
         // 构建查询请求
@@ -74,7 +76,7 @@ public class SensitiveLogController {
                 request.setStartDate(java.time.LocalDate.parse(startDate));
             } catch (Exception e) {
                 return ResponseEntity.badRequest()
-                        .body(new ApiResponse<>(400, "Invalid startDate format, use YYYY-MM-DD"));
+                        .body(new ApiResponse<>(400, ApiResultCode.REQUEST_005));
             }
         }
         
@@ -83,7 +85,7 @@ public class SensitiveLogController {
                 request.setEndDate(java.time.LocalDate.parse(endDate));
             } catch (Exception e) {
                 return ResponseEntity.badRequest()
-                        .body(new ApiResponse<>(400, "Invalid endDate format, use YYYY-MM-DD"));
+                        .body(new ApiResponse<>(400, ApiResultCode.REQUEST_006));
             }
         }
         
@@ -93,6 +95,6 @@ public class SensitiveLogController {
         // 查询日志
         PageResponse<SensitiveLogResponse> response = sensitiveLogService.queryLogs(user.getId(), request);
 
-        return ResponseEntity.ok(new ApiResponse<>(200, "Sensitive logs retrieved successfully", response));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.REQUEST_007, response));
     }
 }

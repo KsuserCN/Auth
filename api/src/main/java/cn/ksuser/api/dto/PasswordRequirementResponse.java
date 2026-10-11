@@ -8,7 +8,7 @@ public class PasswordRequirementResponse {
     private boolean requireDigits;
     private boolean requireSpecialChars;
     private boolean rejectCommonWeakPasswords;
-    private String requirementMessage;
+    private cn.ksuser.api.result.ApiResultCode requirementCode;
 
     public PasswordRequirementResponse() {
     }
@@ -16,7 +16,7 @@ public class PasswordRequirementResponse {
     public PasswordRequirementResponse(int minLength, int maxLength,
                                        boolean requireUppercase, boolean requireLowercase,
                                        boolean requireDigits, boolean requireSpecialChars,
-                                       boolean rejectCommonWeakPasswords, String requirementMessage) {
+                                       boolean rejectCommonWeakPasswords, cn.ksuser.api.result.ApiResultCode requirementCode) {
         this.minLength = minLength;
         this.maxLength = maxLength;
         this.requireUppercase = requireUppercase;
@@ -24,7 +24,7 @@ public class PasswordRequirementResponse {
         this.requireDigits = requireDigits;
         this.requireSpecialChars = requireSpecialChars;
         this.rejectCommonWeakPasswords = rejectCommonWeakPasswords;
-        this.requirementMessage = requirementMessage;
+        this.requirementCode = requirementCode;
     }
 
     public int getMinLength() {
@@ -83,11 +83,6 @@ public class PasswordRequirementResponse {
         this.rejectCommonWeakPasswords = rejectCommonWeakPasswords;
     }
 
-    public String getRequirementMessage() {
-        return requirementMessage;
-    }
-
-    public void setRequirementMessage(String requirementMessage) {
-        this.requirementMessage = requirementMessage;
-    }
+    public cn.ksuser.api.result.ApiResultCode getRequirementCode() { return requirementCode; }
+    public java.util.Map<String, Object> getRequirementParams() { return java.util.Map.of(); }
 }

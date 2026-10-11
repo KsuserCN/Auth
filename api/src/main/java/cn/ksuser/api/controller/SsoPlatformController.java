@@ -1,5 +1,7 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.SsoAuthorizeApproveResponse;
@@ -68,7 +70,7 @@ public class SsoPlatformController {
     @GetMapping("/clients")
     public ResponseEntity<ApiResponse<SsoClientsOverviewResponse>> listClients(Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.listClients(user)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, ssoPlatformService.listClients(user)));
     }
 
     @PostMapping("/clients")
@@ -77,7 +79,7 @@ public class SsoPlatformController {
         User user = requireUser(authentication);
         SsoClientCreateResponse response = ssoPlatformService.createClient(user, request);
         return ResponseEntity.status(HttpStatus.CREATED)
-            .body(new ApiResponse<>(201, "创建成功，请妥善保存 ClientSecret", response));
+            .body(new ApiResponse<>(201, ApiResultCode.SSO_001, response));
     }
 
     @PutMapping("/clients/{clientId}")
@@ -85,7 +87,7 @@ public class SsoPlatformController {
                                                                        @RequestBody SsoClientUpdateRequest request,
                                                                        Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "更新成功", ssoPlatformService.updateClient(user, clientId, request)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.AUTH_046, ssoPlatformService.updateClient(user, clientId, request)));
     }
 
     @DeleteMapping("/clients/{clientId}")
@@ -93,7 +95,7 @@ public class SsoPlatformController {
                                                           Authentication authentication) {
         User user = requireUser(authentication);
         ssoPlatformService.deleteClient(user, clientId);
-        return ResponseEntity.ok(new ApiResponse<>(200, "删除成功"));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_002));
     }
 
     @PostMapping(value = "/clients/{clientId}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -103,22 +105,22 @@ public class SsoPlatformController {
         User user = requireUser(authentication);
         if (file == null || file.isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "请选择 Logo 文件"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH2_003));
         }
         if (file.getSize() > LOGO_MAX_SIZE_BYTES) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "Logo 文件不能超过 3MB"));
+                .body(new ApiResponse<>(400, ApiResultCode.OAUTH2_004));
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "仅支持图片文件"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_124));
         }
 
         String extension = resolveFileExtension(contentType, file.getOriginalFilename());
         if (extension == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, "不支持的图片格式"));
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_125));
         }
 
         try {
@@ -131,10 +133,10 @@ public class SsoPlatformController {
 
             String logoUrl = getStaticHostPrefix() + "/static/sso-logos/" + filename;
             SsoClientResponse response = ssoPlatformService.updateClientLogo(user, clientId, logoUrl);
-            return ResponseEntity.ok(new ApiResponse<>(200, "Logo 上传成功", response));
+            return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_005, response));
         } catch (IOException ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, "Logo 上传失败"));
+                .body(new ApiResponse<>(500, ApiResultCode.OAUTH2_006));
         }
     }
 
@@ -149,7 +151,7 @@ public class SsoPlatformController {
         @RequestParam(name = "code_challenge_method", required = false) String codeChallengeMethod,
         Authentication authentication) {
         User user = resolveUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.buildAuthorizeContext(
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, ssoPlatformService.buildAuthorizeContext(
             user, clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod
         )));
     }
@@ -158,14 +160,14 @@ public class SsoPlatformController {
     public ResponseEntity<ApiResponse<SsoAuthorizeApproveResponse>> approveAuthorization(@RequestBody SsoAuthorizeRequest request,
                                                                                          Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "授权成功", ssoPlatformService.approveAuthorization(user, request)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_007, ssoPlatformService.approveAuthorization(user, request)));
     }
 
     @GetMapping("/authorizations")
     public ResponseEntity<ApiResponse<List<SsoAuthorizedClientResponse>>> listAuthorizations(
         Authentication authentication) {
         User user = requireUser(authentication);
-        return ResponseEntity.ok(new ApiResponse<>(200, "获取成功", ssoPlatformService.listAuthorizations(user)));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, ssoPlatformService.listAuthorizations(user)));
     }
 
     @DeleteMapping("/authorizations/{clientId}")
@@ -173,7 +175,7 @@ public class SsoPlatformController {
                                                                  Authentication authentication) {
         User user = requireUser(authentication);
         ssoPlatformService.revokeAuthorization(user, clientId);
-        return ResponseEntity.ok(new ApiResponse<>(200, "撤销成功"));
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.OAUTH2_008));
     }
 
     @PostMapping("/token")
@@ -217,10 +219,12 @@ public class SsoPlatformController {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("error", ex.getError());
             body.put("error_description", ex.getDescription());
+            body.put("errorCode", ex.getResult().errorCode());
+            if (!ex.getResult().params().isEmpty()) body.put("params", ex.getResult().params());
             return ResponseEntity.status(ex.getStatus()).body(body);
         }
         return ResponseEntity.status(ex.getStatus())
-            .body(new ApiResponse<>(ex.getStatus().value(), ex.getDescription()));
+            .body(new ApiResponse<>(ex.getStatus().value(), ex.getResult()));
     }
 
     private boolean isSsoProtocolRequest(HttpServletRequest request) {
@@ -235,11 +239,11 @@ public class SsoPlatformController {
 
     private User requireUser(Authentication authentication) {
         if (authentication == null || authentication.getPrincipal() == null) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "未登录");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.UNAUTHENTICATED);
         }
         String uuid = authentication.getPrincipal().toString();
         return userService.findByUuid(uuid)
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "用户不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.AUTH_005));
     }
 
     private User resolveUser(Authentication authentication) {

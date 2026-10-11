@@ -41,8 +41,20 @@ enum JSONValue: Codable, Sendable, Equatable {
     }
 }
 
-struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable { let code: Int; let msg: String?; let data: T? }
-/// Successful mutation payloads vary between null, a message string and an object.
+struct APIEnvelope<T: Decodable & Sendable>: Decodable, Sendable {
+    let code: Int
+    let errorCode: String?
+    let params: [String: JSONValue]?
+    let data: T?
+    var resultMessage: String { APIResultCodeResolver.message(errorCode: errorCode, params: params, statusCode: code) }
+}
+struct APIResultDescriptor: Codable, Sendable {
+    let code: Int?
+    let errorCode: String?
+    let params: [String: JSONValue]?
+    func message(statusCode: Int) -> String { APIResultCodeResolver.message(errorCode: errorCode, params: params, statusCode: statusCode) }
+}
+/// Successful mutations may omit a data payload.
 struct EmptyPayload: Codable, Sendable {
     init() {}
     init(from decoder: Decoder) throws {}
@@ -51,7 +63,16 @@ struct TokenPayload: Codable, Sendable { let accessToken: String }
 struct PasswordRequirement: Codable, Sendable {
     let minLength: Int; let maxLength: Int
     let requireUppercase: Bool; let requireLowercase: Bool; let requireDigits: Bool; let requireSpecialChars: Bool
-    let rejectCommonWeakPasswords: Bool?; let requirementMessage: String?
+    let rejectCommonWeakPasswords: Bool?; let requirementCode: String?; let requirementParams: [String: JSONValue]?
+    var requirementMessage: String {
+        if let requirementCode { return APIResultCodeResolver.message(errorCode: requirementCode, params: requirementParams, statusCode: 400) }
+        var parts = ["\(minLength)–\(maxLength) 个字符"]
+        if requireUppercase { parts.append("包含大写字母") }
+        if requireLowercase { parts.append("包含小写字母") }
+        if requireDigits { parts.append("包含数字") }
+        if requireSpecialChars { parts.append("包含特殊字符 @$!%*?&") }
+        return parts.joined(separator: "，")
+    }
     func validationError(for password: String) -> String? {
         if password.utf16.count < minLength || password.utf16.count > maxLength { return "密码需要 \(minLength)–\(maxLength) 个字符" }
         if password.rangeOfCharacter(from: .newlines) != nil { return "密码不能包含换行符" }
@@ -114,8 +135,12 @@ struct AdaptiveAuthStatus: Codable, Sendable {
     let sessionId: Int64?; let riskScore: Int; let riskLevel: String; let policyDecision: String?; let policyVersion: String?
     let trusted: Bool; let requiresStepUp: Bool; let sessionFrozen: Bool; let sensitiveVerified: Bool; let sensitiveVerificationRemainingSeconds: Int
     let authAgeSeconds: Int; let idleSeconds: Int; let currentIp: String?; let currentLocation: String?; let sessionIp: String?; let sessionLocation: String?
-    let browser: String?; let deviceType: String?; let multiEndpointAlert: Bool; let alertLevel: String?; let alertTitle: String?; let alertMessage: String?
-    let alertRemainingSeconds: Int; let recommendedAction: String; let reasons: [String]
+    let browser: String?; let deviceType: String?; let multiEndpointAlert: Bool; let alertLevel: String?; let alertTitleCode: String?; let alertMessageCode: String?
+    let alertRemainingSeconds: Int; let recommendedActionCode: String?; let reasonCodes: [APIResultDescriptor]?
+    var alertTitle: String? { alertTitleCode.map { APIResultCodeResolver.message(errorCode: $0, statusCode: 400) } }
+    var alertMessage: String? { alertMessageCode.map { APIResultCodeResolver.message(errorCode: $0, statusCode: 400) } }
+    var recommendedAction: String { APIResultCodeResolver.message(errorCode: recommendedActionCode, statusCode: 400) }
+    var reasons: [String] { (reasonCodes ?? []).map { $0.message(statusCode: 400) } }
 }
 struct SessionItem: Codable, Sendable, Identifiable {
     let id: Int64; let ipAddress: String; let ipLocation: String?; let userAgent: String?; let browser: String?; let deviceType: String?
@@ -142,6 +167,9 @@ struct SensitiveLogItem: Codable, Sendable, Identifiable {
     let id: Int64; let operationType: String; let loginMethod: String?; let loginMethods: [String]?; let ipAddress: String; let ipLocation: String?
     let browser: String?; let deviceType: String?; let result: String; let failureReason: String?; let riskScore: Int; let actionTaken: String?
     let triggeredMultiErrorLock: Bool; let triggeredRateLimitLock: Bool; let durationMs: Int?; let createdAt: String
+    var displayFailureReason: String? {
+        failureReason.map { GeneratedAPIResultCodes.messages[$0] != nil ? APIResultCodeResolver.message(errorCode: $0, statusCode: 400) : $0 }
+    }
 }
 struct PaginatedSensitiveLogs: Codable, Sendable { let data: [SensitiveLogItem]; let page: Int; let pageSize: Int; let total: Int; let totalPages: Int }
 struct QrScanPreview: Codable, Sendable {

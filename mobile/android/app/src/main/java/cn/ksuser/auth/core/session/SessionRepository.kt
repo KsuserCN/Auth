@@ -4,6 +4,7 @@ import cn.ksuser.auth.core.network.ApiException
 import cn.ksuser.auth.core.network.CookieStore
 import cn.ksuser.auth.core.network.KsuserApiService
 import cn.ksuser.auth.core.network.executeEnvelope
+import cn.ksuser.auth.core.network.requireCode
 import com.google.gson.Gson
 import kotlinx.coroutines.runBlocking
 import okhttp3.HttpUrl
@@ -37,7 +38,7 @@ class SessionRepository(
             return
         }
         runCatching {
-            executeEnvelope(gson) { refreshApi.getCsrfToken() }
+            requireCode(executeEnvelope(gson) { refreshApi.getCsrfToken() }, 200)
         }
     }
 
@@ -61,6 +62,7 @@ class SessionRepository(
             try {
                 ensureCsrfToken()
                 val response = executeEnvelope(gson) { refreshApi.refresh() }
+                requireCode(response, 200)
                 val token = response.data?.accessToken
                 if (!token.isNullOrBlank()) {
                     sessionStorage.setAccessToken(token)

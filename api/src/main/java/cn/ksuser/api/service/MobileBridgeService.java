@@ -1,5 +1,9 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+import cn.ksuser.api.result.BusinessStateException;
+
 import cn.ksuser.api.config.AppProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -55,7 +59,7 @@ public class MobileBridgeService {
             );
             return payload.withAppLink(buildAppLink(challengeId, validated.returnUrl()));
         } catch (Exception e) {
-            throw new IllegalStateException("创建移动桥接挑战失败", e);
+            throw new BusinessStateException(ApiResultCode.MOBILE_BRIDGE_001, e);
         }
     }
 
@@ -75,7 +79,7 @@ public class MobileBridgeService {
             payload.setStatus(normalizeStatus(payload.getStatus()));
             return payload;
         } catch (Exception e) {
-            throw new IllegalStateException("读取移动桥接挑战失败", e);
+            throw new BusinessStateException(ApiResultCode.MOBILE_BRIDGE_002, e);
         }
     }
 
@@ -86,13 +90,13 @@ public class MobileBridgeService {
             String requesterUserAgent) {
         MobileBridgePayload payload = getChallenge(challengeId);
         if (payload == null) {
-            throw new IllegalArgumentException("移动桥接挑战不存在或已过期");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_003);
         }
         if (!STATUS_PENDING.equals(payload.getStatus())) {
-            throw new IllegalArgumentException("移动桥接挑战已处理");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_004);
         }
         if (userId == null) {
-            throw new IllegalArgumentException("用户不存在");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_005);
         }
 
         SessionTransferService.SessionTransferPayload transferPayload = sessionTransferService.createTransfer(
@@ -136,7 +140,7 @@ public class MobileBridgeService {
     private void persistChallenge(MobileBridgePayload payload) {
         long ttlSeconds = getRemainingSeconds(payload.getChallengeId());
         if (ttlSeconds <= 0) {
-            throw new IllegalArgumentException("移动桥接挑战不存在或已过期");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_003);
         }
         try {
             redisTemplate.opsForValue().set(
@@ -145,30 +149,30 @@ public class MobileBridgeService {
                 Duration.ofSeconds(ttlSeconds)
             );
         } catch (Exception e) {
-            throw new IllegalStateException("更新移动桥接挑战失败", e);
+            throw new BusinessStateException(ApiResultCode.MOBILE_BRIDGE_005, e);
         }
     }
 
     private ValidatedReturnUrl validateReturnUrl(String rawReturnUrl) {
         String returnUrl = normalizeBlank(rawReturnUrl);
         if (returnUrl == null) {
-            throw new IllegalArgumentException("returnUrl 不能为空");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_006);
         }
 
         URI uri;
         try {
             uri = URI.create(returnUrl);
         } catch (Exception e) {
-            throw new IllegalArgumentException("returnUrl 格式不正确");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_007);
         }
 
         String scheme = normalizeBlank(uri.getScheme());
         String host = normalizeBlank(uri.getHost());
         if (scheme == null || host == null || !uri.isAbsolute()) {
-            throw new IllegalArgumentException("returnUrl 必须是完整地址");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_008);
         }
         if (!"https".equalsIgnoreCase(scheme) && !"http".equalsIgnoreCase(scheme)) {
-            throw new IllegalArgumentException("returnUrl 仅支持 http 或 https");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_009);
         }
 
         String origin = scheme.toLowerCase(Locale.ROOT) + "://" + host.toLowerCase(Locale.ROOT);
@@ -183,7 +187,7 @@ public class MobileBridgeService {
             .filter(item -> item != null && !item.isBlank())
             .anyMatch(origin::equals);
         if (!allowed) {
-            throw new IllegalArgumentException("returnUrl 不在允许的域名白名单中");
+            throw new BusinessArgumentException(ApiResultCode.MOBILE_BRIDGE_010);
         }
 
         return new ValidatedReturnUrl(uri.toString(), origin);

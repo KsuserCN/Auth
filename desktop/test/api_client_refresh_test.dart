@@ -29,7 +29,7 @@ void main() {
         healthCount += 1;
         currentXsrfToken = 'xsrf-$healthCount';
         request.response.headers.add(HttpHeaders.setCookieHeader, 'XSRF-TOKEN=$currentXsrfToken; Path=/');
-        jsonResponse(200, <String, dynamic>{'code': 200, 'msg': '服务正常'});
+        jsonResponse(200, <String, dynamic>{'code': 200, 'errorCode': 'REQUEST_SUCCESS'});
         await request.response.close();
         return;
       }
@@ -43,7 +43,7 @@ void main() {
         );
         jsonResponse(200, <String, dynamic>{
           'code': 200,
-          'msg': '登录成功',
+          'errorCode': 'REQUEST_SUCCESS',
           'data': <String, dynamic>{'accessToken': currentAccessToken},
         });
         await request.response.close();
@@ -62,7 +62,7 @@ void main() {
         );
         jsonResponse(200, <String, dynamic>{
           'code': 200,
-          'msg': '刷新成功',
+          'errorCode': 'REQUEST_SUCCESS',
           'data': <String, dynamic>{'accessToken': currentAccessToken},
         });
         await request.response.close();
@@ -72,9 +72,9 @@ void main() {
       if (path == '/auth/info') {
         final String authHeader = request.headers.value(HttpHeaders.authorizationHeader) ?? '';
         if (authHeader != 'Bearer $currentAccessToken') {
-          jsonResponse(401, <String, dynamic>{'code': 401, 'msg': '未登录或Token已过期'});
+          jsonResponse(401, <String, dynamic>{'code': 401, 'errorCode': 'UNAUTHENTICATED'});
         } else if (currentAccessToken == expiredAccessToken) {
-          jsonResponse(401, <String, dynamic>{'code': 401, 'msg': '未登录或Token已过期'});
+          jsonResponse(401, <String, dynamic>{'code': 401, 'errorCode': 'UNAUTHENTICATED'});
         } else {
           // Match the real backend behavior observed after refresh: it clears the XSRF cookie.
           request.response.headers.add(
@@ -83,7 +83,7 @@ void main() {
           );
           jsonResponse(200, <String, dynamic>{
             'code': 200,
-            'msg': '获取成功',
+            'errorCode': 'REQUEST_SUCCESS',
             'data': <String, dynamic>{'username': 'tester'},
           });
         }
@@ -95,13 +95,13 @@ void main() {
         final String authHeader = request.headers.value(HttpHeaders.authorizationHeader) ?? '';
         final String xsrfHeader = request.headers.value('X-XSRF-TOKEN') ?? '';
         if (authHeader != 'Bearer $currentAccessToken') {
-          jsonResponse(401, <String, dynamic>{'code': 401, 'msg': '未登录或Token已过期'});
+          jsonResponse(401, <String, dynamic>{'code': 401, 'errorCode': 'UNAUTHENTICATED'});
         } else if (xsrfHeader != currentXsrfToken) {
-          jsonResponse(403, <String, dynamic>{'code': 403, 'msg': '无权限'});
+          jsonResponse(403, <String, dynamic>{'code': 403, 'errorCode': 'SECURITY_CSRF_INVALID'});
         } else {
           jsonResponse(200, <String, dynamic>{
             'code': 200,
-            'msg': '更新成功',
+            'errorCode': 'REQUEST_SUCCESS',
             'data': <String, dynamic>{'username': 'tester'},
           });
         }
@@ -109,7 +109,7 @@ void main() {
         return;
       }
 
-      jsonResponse(404, <String, dynamic>{'code': 404, 'msg': 'not found'});
+      jsonResponse(404, <String, dynamic>{'code': 404, 'errorCode': 'NOT_FOUND'});
       await request.response.close();
     });
 

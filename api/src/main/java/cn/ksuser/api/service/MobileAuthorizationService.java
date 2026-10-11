@@ -1,5 +1,7 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
@@ -50,11 +52,11 @@ public class MobileAuthorizationService {
 
     public Created create(CreateRequest input) {
         if (input == null || input.authorization() == null || (input.mode() == null || !List.of("oauth", "sso").contains(input.mode()))) {
-            throw invalid("授权请求不完整");
+            throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
         }
         String origin = validateOrigin(input.returnOrigin());
         String serialized = encode(input.authorization());
-        if (serialized.length() > 8192) throw invalid("授权请求过长");
+        if (serialized.length() > 8192) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_002);
         context("", new Stored(input.mode(), origin, "", input.authorization()), null, 300);
         String ticket = opaque(), secret = opaque();
         redis.opsForValue().set(key(ticket), encode(new Stored(input.mode(), origin, secret, input.authorization())), TTL);
@@ -79,7 +81,7 @@ public class MobileAuthorizationService {
             c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds);
     }
     public Return decide(Decision decision, User user) {
-        if (decision == null || user == null) throw invalid("请先登录后授权");
+        if (decision == null || user == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_003);
         Stored stored = stored(decision.ticket());
         if (decision.approve()) {
             String mode = AuthorizationGrantPolicy.normalizeGrantMode(decision.grantMode());
@@ -88,7 +90,7 @@ public class MobileAuthorizationService {
         String lock = key(decision.ticket()) + ":decision";
         if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(lock, user.getUuid(), TTL))) {
             if (user.getUuid().equals(redis.opsForValue().get(lock)) && redis.hasKey(key(decision.ticket()) + ":result")) return new Return(returnUrl(decision.ticket(), stored));
-            throw new Oauth2Exception(HttpStatus.CONFLICT, "invalid_request", "请求正在处理中，请稍后重试");
+            throw new Oauth2Exception(HttpStatus.CONFLICT, "invalid_request", ApiResultCode.MOBILE_AUTHORIZATION_007);
         }
         Context context = context(decision.ticket(), stored, user, remaining(decision.ticket()));
         String redirect;
@@ -107,6 +109,7 @@ public class MobileAuthorizationService {
         } else {
             redirect = UriComponentsBuilder.fromUriString(context.redirectUri())
                 .queryParam("error", "access_denied")
+                .queryParam("errorCode", ApiResultCode.FORBIDDEN.name())
                 .queryParamIfPresent("state", java.util.Optional.ofNullable(a.getState())
                     .map(value -> java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8)))
                 .build(true).toUriString();
@@ -116,7 +119,7 @@ public class MobileAuthorizationService {
         return new Return(returnUrl(decision.ticket(), stored));
     }
     public Result consume(BrowserRequest input) {
-        if (input == null) throw invalid("授权请求不完整");
+        if (input == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
         Stored stored = stored(input.ticket());
         checkSecret(stored, input.secret());
         String result = redis.opsForValue().getAndDelete(key(input.ticket()) + ":result");
@@ -125,10 +128,10 @@ public class MobileAuthorizationService {
         return decode(result, Result.class);
     }
     public void cancel(BrowserRequest input) {
-        if (input == null) throw invalid("授权请求不完整");
+        if (input == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
         Stored stored = stored(input.ticket()); checkSecret(stored, input.secret());
         if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key(input.ticket()) + ":decision", "cancelled", TTL))) {
-            throw new Oauth2Exception(HttpStatus.CONFLICT, "invalid_request", "授权已提交，请等待结果");
+            throw new Oauth2Exception(HttpStatus.CONFLICT, "invalid_request", ApiResultCode.MOBILE_AUTHORIZATION_008);
         }
         redis.delete(key(input.ticket()));
     }
@@ -137,7 +140,7 @@ public class MobileAuthorizationService {
     }
     private void checkSecret(Stored stored, String secret) {
         if (secret == null || !MessageDigest.isEqual(stored.secret().getBytes(java.nio.charset.StandardCharsets.UTF_8),
-            secret.getBytes(java.nio.charset.StandardCharsets.UTF_8))) throw invalid("授权请求校验失败");
+            secret.getBytes(java.nio.charset.StandardCharsets.UTF_8))) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_004);
     }
     private String validateOrigin(String origin) {
         try {
@@ -145,12 +148,12 @@ public class MobileAuthorizationService {
             if (uri.getUserInfo() != null || uri.getHost() == null || uri.getQuery() != null || uri.getFragment() != null
                 || (uri.getPath() != null && !uri.getPath().isEmpty())
                 || !List.of("https", "http").contains(uri.getScheme())
-                || !properties.getMobileBridge().getAllowedReturnOrigins().contains(origin)) throw invalid("网页来源不受信任");
+                || !properties.getMobileBridge().getAllowedReturnOrigins().contains(origin)) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_005);
             return origin;
-        } catch (IllegalArgumentException | NullPointerException e) { throw invalid("网页来源不受信任"); }
+        } catch (IllegalArgumentException | NullPointerException e) { throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_005); }
     }
     private Stored stored(String ticket) {
-        if (ticket == null || !ticket.matches("[A-Za-z0-9_-]{32}")) throw invalid("授权请求无效");
+        if (ticket == null || !ticket.matches("[A-Za-z0-9_-]{32}")) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_006);
         String raw = redis.opsForValue().get(key(ticket));
         if (raw == null) throw expired();
         return decode(raw, Stored.class);
@@ -164,6 +167,6 @@ public class MobileAuthorizationService {
     private String opaque() { byte[] bytes = new byte[24]; random.nextBytes(bytes); return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes); }
     private String encode(Object value) { try { return mapper.writeValueAsString(value); } catch (JsonProcessingException e) { throw new IllegalStateException(e); } }
     private <T> T decode(String value, Class<T> type) { try { return mapper.readValue(value, type); } catch (JsonProcessingException e) { throw new IllegalStateException(e); } }
-    private Oauth2Exception invalid(String message) { return new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", message); }
-    private Oauth2Exception expired() { return new Oauth2Exception(HttpStatus.GONE, "invalid_request", "授权请求已完成或过期，请返回网页重试"); }
+    private Oauth2Exception invalid(ApiResultCode message) { return new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", message); }
+    private Oauth2Exception expired() { return new Oauth2Exception(HttpStatus.GONE, "invalid_request", ApiResultCode.MOBILE_AUTHORIZATION_009); }
 }

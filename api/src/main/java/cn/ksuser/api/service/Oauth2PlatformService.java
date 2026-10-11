@@ -1,5 +1,7 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.dto.Oauth2AppCreateRequest;
 import cn.ksuser.api.dto.Oauth2AppCreateResponse;
 import cn.ksuser.api.dto.Oauth2AppResponse;
@@ -106,8 +108,7 @@ public class Oauth2PlatformService {
         ensureOauthCreator(user);
 
         if (applicationRepository.countByOwnerUserId(user.getId()) >= maxAppsPerUser) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                "每位认证用户最多只能创建 " + maxAppsPerUser + " 个 OAuth2 应用");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_013.withParams("maxApps", maxAppsPerUser));
         }
 
         String appName = normalizeAppName(request == null ? null : request.getAppName());
@@ -228,37 +229,36 @@ public class Oauth2PlatformService {
 
     @Transactional
     public void revokeAuthorization(User user, String appId) {
-        String normalizedAppId = normalizeRequired(appId, "AppID 不能为空");
+        String normalizedAppId = normalizeRequired(appId, ApiResultCode.OAUTH2_009);
         authorizationRepository.deleteByUserIdAndAppId(user.getId(), normalizedAppId);
     }
 
     public Map<String, Object> exchangeAuthorizationCode(String grantType, String code, String clientId,
                                                          String clientSecret, String redirectUri) {
         if (!"authorization_code".equals(normalizeOptional(grantType))) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_grant_type",
-                "当前仅支持 authorization_code");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_grant_type", ApiResultCode.OAUTH2_014);
         }
 
         Oauth2Application application = findActiveApplication(clientId, HttpStatus.UNAUTHORIZED);
         if (clientSecret == null || clientSecret.isBlank()
             || !passwordEncoder.matches(clientSecret, application.getAppSecretHash())) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", "AppSecret 不正确");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", ApiResultCode.OAUTH2_015);
         }
 
         String normalizedRedirectUri = validateRedirectUriMatches(application, redirectUri);
         AuthorizationCodePayload payload = consumeAuthorizationCode(code);
         if (payload == null) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码无效、已过期或已使用");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_016);
         }
         if (!application.getAppId().equals(payload.clientId())
             || !normalizedRedirectUri.equals(payload.redirectUri())) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权码与当前应用或回调地址不匹配");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_017);
         }
 
         User user = userRepository.findById(payload.userId())
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权用户不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_018));
         if (!hasMatchingAuthorization(payload.userId(), application.getAppId(), payload.authorizationId(), payload.scope())) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", "授权已撤销或已过期");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_019);
         }
 
         String openid = buildOpenId(application.getAppId(), user.getUuid());
@@ -288,15 +288,15 @@ public class Oauth2PlatformService {
     public Map<String, Object> buildUserInfo(String accessToken) {
         Oauth2TokenService.ParsedOauth2AccessToken parsed = oauth2TokenService.parse(accessToken);
         if (parsed == null || parsed.clientId() == null || parsed.userId() == null || parsed.ownerUserId() == null) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 无效或已过期");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.OAUTH2_020);
         }
 
         Oauth2Application application = findActiveApplication(parsed.clientId(), HttpStatus.UNAUTHORIZED);
         if (!hasMatchingAuthorization(parsed.userId(), parsed.clientId(), parsed.authorizationId(), parsed.scope())) {
-            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "授权已撤销或已过期");
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.OAUTH2_019);
         }
         User user = userRepository.findById(parsed.userId())
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "Access Token 对应用户不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.OAUTH2_021));
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("openid", parsed.openid() == null || parsed.openid().isBlank()
@@ -327,62 +327,59 @@ public class Oauth2PlatformService {
 
     private void ensureOauthCreator(User user) {
         if (!isOauthCreator(user)) {
-            throw new Oauth2Exception(HttpStatus.FORBIDDEN, "unauthorized_client",
-                "仅个人认证、企业认证或管理员账号可以创建 OAuth2 应用");
+            throw new Oauth2Exception(HttpStatus.FORBIDDEN, "unauthorized_client", ApiResultCode.OAUTH2_022);
         }
     }
 
     private Oauth2Application findOwnedApplication(User user, String appId) {
-        String normalizedAppId = normalizeRequired(appId, "AppID 不能为空");
+        String normalizedAppId = normalizeRequired(appId, ApiResultCode.OAUTH2_009);
         Oauth2Application application = applicationRepository.findByAppId(normalizedAppId)
-            .orElseThrow(() -> new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", "应用不存在"));
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", ApiResultCode.OAUTH2_023));
         if (!Objects.equals(application.getOwnerUserId(), user.getId())) {
-            throw new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", "应用不存在");
+            throw new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", ApiResultCode.OAUTH2_023);
         }
         return application;
     }
 
     private Oauth2Application findActiveApplication(String clientId, HttpStatus status) {
-        String normalizedClientId = normalizeRequired(clientId, "AppID 不能为空");
+        String normalizedClientId = normalizeRequired(clientId, ApiResultCode.OAUTH2_009);
         return applicationRepository.findByAppId(normalizedClientId)
             .filter(app -> Boolean.TRUE.equals(app.getIsActive()))
-            .orElseThrow(() -> new Oauth2Exception(status, "invalid_client", "AppID 不存在或已停用"));
+            .orElseThrow(() -> new Oauth2Exception(status, "invalid_client", ApiResultCode.OAUTH2_024));
     }
 
     private void validateResponseType(String responseType) {
         if (!"code".equals(normalizeOptional(responseType))) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_response_type",
-                "仅支持 response_type=code");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_response_type", ApiResultCode.OAUTH2_025);
         }
     }
 
     private String validateRedirectUriMatches(Oauth2Application application, String redirectUri) {
         String normalizedRedirectUri = normalizeAndValidateRedirectUri(redirectUri);
         if (!parseRegisteredRedirectUris(application.getRedirectUri()).contains(normalizedRedirectUri)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                "redirect_uri 与应用登记信息不一致");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_026);
         }
         return normalizedRedirectUri;
     }
 
     private String normalizeAppName(String appName) {
-        String normalized = normalizeRequired(appName, "应用名称不能为空");
+        String normalized = normalizeRequired(appName, ApiResultCode.OAUTH2_010);
         if (normalized.length() < 2 || normalized.length() > 100) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "应用名称长度需在 2-100 个字符之间");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_027);
         }
         return normalized;
     }
 
     private String normalizeContactInfo(String contactInfo) {
-        String normalized = normalizeRequired(contactInfo, "联系方式不能为空");
+        String normalized = normalizeRequired(contactInfo, ApiResultCode.OAUTH2_011);
         if (normalized.length() < 3 || normalized.length() > 120) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "联系方式长度需在 3-120 个字符之间");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_028);
         }
         return normalized;
     }
 
     private String normalizeAndValidateRedirectUri(String redirectUri) {
-        String normalized = normalizeRequired(redirectUri, "回调地址不能为空");
+        String normalized = normalizeRequired(redirectUri, ApiResultCode.OAUTH2_012);
 
         try {
             URI uri = URI.create(normalized);
@@ -391,20 +388,19 @@ public class Oauth2PlatformService {
             boolean httpsAllowed = "https".equals(scheme) && !host.isBlank();
             boolean localhostHttpAllowed = "http".equals(scheme) && "localhost".equals(host);
             if (!httpsAllowed && !localhostHttpAllowed) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request",
-                    "回调地址仅支持 https:// 或 http://localhost");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_029);
             }
             if (uri.getFragment() != null) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址不允许包含 URL fragment");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_030);
             }
             return uri.normalize().toString();
         } catch (IllegalArgumentException ex) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址格式不正确");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_031);
         }
     }
 
     private String normalizeAndValidateRedirectUris(String redirectUris) {
-        String normalized = normalizeRequired(redirectUris, "回调地址不能为空");
+        String normalized = normalizeRequired(redirectUris, ApiResultCode.OAUTH2_012);
         LinkedHashSet<String> values = new LinkedHashSet<>();
         for (String redirectUri : normalized.split(";")) {
             String item = normalizeOptional(redirectUri);
@@ -413,11 +409,11 @@ public class Oauth2PlatformService {
             }
         }
         if (values.isEmpty()) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址不能为空");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_012);
         }
         String joined = String.join(";", values);
         if (joined.length() > 500) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "回调地址总长度不能超过 500 个字符");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_032);
         }
         return joined;
     }
@@ -446,8 +442,7 @@ public class Oauth2PlatformService {
         }
         List<String> requestedScopes = orderScopes(parseScopes(requestedScope));
         if (!allowedScopes.containsAll(requestedScopes)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope",
-                "请求的 scope 超出了应用已登记的权限范围");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", ApiResultCode.OAUTH2_033);
         }
         return requestedScopes;
     }
@@ -459,8 +454,7 @@ public class Oauth2PlatformService {
         LinkedHashSet<String> scopes = new LinkedHashSet<>();
         for (String scope : Oauth2ScopeUtil.parseScopeList(scopeValue)) {
             if (!SUPPORTED_SCOPES.contains(scope)) {
-                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope",
-                    "暂仅支持 profile、email 两种 scope");
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_scope", ApiResultCode.OAUTH2_034);
             }
             scopes.add(scope);
         }
@@ -594,7 +588,7 @@ public class Oauth2PlatformService {
                 return candidate;
             }
         }
-        throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", "生成 AppID 失败，请稍后重试");
+        throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", ApiResultCode.OAUTH2_035);
     }
 
     private String generateOpaqueValue(String prefix, int bytesLength) {
@@ -611,7 +605,7 @@ public class Oauth2PlatformService {
                 Duration.ofSeconds(authorizationCodeExpirationSeconds)
             );
         } catch (JsonProcessingException ex) {
-            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", "生成授权码失败");
+            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", ApiResultCode.OAUTH2_036);
         }
     }
 
@@ -647,11 +641,11 @@ public class Oauth2PlatformService {
             String encoded = Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
             return prefix + encoded.substring(0, Math.min(encoded.length(), 40));
         } catch (Exception ex) {
-            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", "生成用户标识失败");
+            throw new Oauth2Exception(HttpStatus.INTERNAL_SERVER_ERROR, "server_error", ApiResultCode.OAUTH2_037);
         }
     }
 
-    private String normalizeRequired(String value, String message) {
+    private String normalizeRequired(String value, ApiResultCode message) {
         String normalized = normalizeOptional(value);
         if (normalized == null) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", message);

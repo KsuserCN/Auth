@@ -52,3 +52,7 @@ miniprogram
 mobile/ios/Config/Local.xcconfig
 
 docs/
+# Keep the generated API result-code reference with the shared catalog.
+!api/docs/
+api/docs/*
+!api/docs/api-result-codes.md

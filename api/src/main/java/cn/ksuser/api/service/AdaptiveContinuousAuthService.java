@@ -1,6 +1,8 @@
 package cn.ksuser.api.service;
 
 import cn.ksuser.api.dto.AdaptiveAuthStatusResponse;
+import cn.ksuser.api.result.ApiResult;
+import cn.ksuser.api.result.ApiResultCode;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.entity.UserSensitiveLog;
 import cn.ksuser.api.entity.UserSession;
@@ -46,6 +48,8 @@ public class AdaptiveContinuousAuthService {
             response.setRequiresStepUp(true);
             response.setRecommendedAction("当前会话不存在或已失效，请重新登录");
             response.setReasons(List.of("未找到当前活跃会话"));
+            response.setReasonCodes(List.of(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_SESSION_MISSING)));
+            response.setRecommendedActionCode(ApiResultCode.ADAPTIVE_ACTION_RELOGIN);
             return response;
         }
 
@@ -70,10 +74,12 @@ public class AdaptiveContinuousAuthService {
 
         int score = 0;
         List<String> reasons = new ArrayList<>();
+        List<ApiResult> reasonCodes = new ArrayList<>();
 
         if (detectUnusualLogin && currentIp != null && session.getIpAddress() != null && !currentIp.equals(session.getIpAddress())) {
             score += 35;
             reasons.add("当前 IP 与会话建立时不一致");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_IP_CHANGED));
         }
 
         if (detectUnusualLogin
@@ -82,22 +88,27 @@ public class AdaptiveContinuousAuthService {
                 && !response.getCurrentLocation().equals(session.getIpLocation())) {
             score += 20;
             reasons.add("当前位置与会话建立位置发生变化");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_LOCATION_CHANGED));
         }
 
         if (authAgeSeconds > 3L * 24 * 3600) {
             score += 20;
             reasons.add("当前会话已持续超过 3 天");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_AGE_THREE_DAYS));
         } else if (authAgeSeconds > 12L * 3600) {
             score += 10;
             reasons.add("当前会话已持续超过 12 小时");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_AGE_TWELVE_HOURS));
         }
 
         if (idleSeconds > 2L * 3600) {
             score += 15;
             reasons.add("当前会话空闲时间超过 2 小时");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_IDLE_TWO_HOURS));
         } else if (idleSeconds > 30L * 60) {
             score += 8;
             reasons.add("当前会话已空闲超过 30 分钟");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_IDLE_THIRTY_MINUTES));
         }
 
         List<UserSensitiveLog> recentFailures = userSensitiveLogRepository.findRecentFailuresByUser(
@@ -107,12 +118,14 @@ public class AdaptiveContinuousAuthService {
         if (recentFailures.size() >= 3) {
             score += 15;
             reasons.add("24 小时内存在多次失败认证或敏感操作");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_RECENT_FAILURES));
         }
 
         UserSensitiveLog latestLog = userSensitiveLogRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId()).orElse(null);
         if (latestLog != null && latestLog.getRiskScore() != null && latestLog.getRiskScore() >= 70) {
             score += 15;
             reasons.add("最近一次安全事件风险评分较高");
+            reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_RECENT_HIGH_RISK));
         }
 
         if (session.getLastMfaVerifiedAt() != null) {
@@ -137,7 +150,11 @@ public class AdaptiveContinuousAuthService {
         response.setRequiresStepUp(requiresStepUp);
         response.setTrusted(!requiresStepUp);
         response.setReasons(reasons.isEmpty() ? List.of("当前会话环境稳定，未发现需要额外认证的风险信号") : reasons);
+        response.setReasonCodes(reasonCodes.isEmpty() ? List.of(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_STABLE)) : reasonCodes);
         response.setRecommendedAction(buildRecommendedAction(level, sensitiveVerified, response.getSensitiveVerificationRemainingSeconds()));
+        response.setRecommendedActionCode("high".equals(level) ? ApiResultCode.ADAPTIVE_ACTION_STEP_UP
+            : "medium".equals(level) && !sensitiveVerified ? ApiResultCode.ADAPTIVE_ACTION_VERIFY
+            : sensitiveVerified && remainingSeconds > 0 ? ApiResultCode.ADAPTIVE_ACTION_VERIFIED : ApiResultCode.ADAPTIVE_ACTION_SAFE);
         return response;
     }
 

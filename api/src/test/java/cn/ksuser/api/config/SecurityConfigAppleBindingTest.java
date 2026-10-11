@@ -113,7 +113,9 @@ class SecurityConfigAppleBindingTest {
     void otherProtectedOperationsStillRequireCsrf() throws Exception {
         mvc.perform(post("/test/protected")
                 .header("Authorization", "Bearer access-token"))
-            .andExpect(status().is4xxClientError());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.errorCode").value("SECURITY_CSRF_INVALID"))
+            .andExpect(jsonPath("$.msg").doesNotExist());
         mvc.perform(post("/test/protected").with(csrf())
                 .header("Authorization", "Bearer access-token"))
             .andExpect(status().isOk());

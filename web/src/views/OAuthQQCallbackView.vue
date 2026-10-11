@@ -86,6 +86,7 @@
 </template>
 
 <script setup lang="ts">
+import { ApiError, resolveApiResult } from '@/utils/apiResult'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDark, useStorage } from '@vueuse/core'
@@ -238,7 +239,6 @@ const handleCallback = async () => {
     const code = params.get('code')
     const returnedState = params.get('state')
     const oauthError = params.get('error')
-    const oauthErrorDescription = params.get('error_description')
 
     // 检查是否获取到 state（无论是否有error都需要）
     if (!returnedState) {
@@ -257,10 +257,9 @@ const handleCallback = async () => {
       return
     }
 
-    // OAuth 提供商直接返回错误时，展示原始错误详情
+    // Third-party OAuth errors use local copy, never provider error descriptions.
     if (oauthError) {
-      const decoded = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription) : ''
-      throw new Error(decoded || `${providerLabel.value} 授权失败：${oauthError}`)
+      throw new ApiError({ errorCode: oauthError === 'access_denied' ? 'FORBIDDEN' : 'REQUEST_FAILED' })
     }
 
     // 检查是否获取到 code
@@ -316,7 +315,7 @@ const handleCallback = async () => {
         }
         state.value = 'needBind'
         ElMessage.warning(
-          loginResponse.message || `该 ${providerLabel.value} 账号尚未绑定，请先绑定或注册账号`,
+          resolveApiResult(loginResponse),
         )
         return
       }
@@ -366,29 +365,27 @@ const handleCallback = async () => {
       const bindResponse = response as OAuthBindCallbackResponse
       if (bindResponse.bound === true) {
         state.value = 'success'
-        ElMessage.success(bindResponse.message || `${providerLabel.value} 绑定成功`)
+        ElMessage.success(resolveApiResult(bindResponse))
         setTimeout(() => {
           router.push('/home/security')
         }, 1000)
         return
       }
 
-      throw new Error(bindResponse.message || `${providerLabel.value} 绑定失败，请重试`)
+      throw new ApiError(bindResponse)
     }
 
     const unbindResponse = response as OAuthUnbindCallbackResponse
     if (unbindResponse.canUnbind !== false) {
       state.value = 'success'
-      ElMessage.success(unbindResponse.message || `${providerLabel.value} 解绑校验完成`)
+      ElMessage.success(resolveApiResult(unbindResponse))
       setTimeout(() => {
         router.push('/home/security')
       }, 1000)
       return
     }
 
-    throw new Error(
-      unbindResponse.reason || unbindResponse.message || `${providerLabel.value} 解绑失败，请重试`,
-    )
+    throw new ApiError(unbindResponse)
   } catch (error: unknown) {
     state.value = 'error'
 

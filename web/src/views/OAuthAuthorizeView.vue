@@ -506,7 +506,7 @@ const buildDeniedRedirect = () => {
 
   const url = new URL(context.value.redirectUri)
   url.searchParams.set('error', 'access_denied')
-  url.searchParams.set('error_description', 'user denied the authorization request')
+  url.searchParams.set('errorCode', 'FORBIDDEN')
   if (requestParams.value.state) {
     url.searchParams.set('state', requestParams.value.state)
   }
@@ -644,18 +644,7 @@ const loadContext = async () => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
-    if (
-      message &&
-      (message.toLowerCase().includes('redirect') ||
-        message.toLowerCase().includes('callback') ||
-        message.toLowerCase().includes('client') ||
-        message.toLowerCase().includes('scope') ||
-        message.toLowerCase().includes('pkce'))
-    ) {
-      errorMessage.value = '授权请求无效，请返回应用重试或联系应用支持。'
-    } else {
-      errorMessage.value = message || '授权请求无效，请返回应用重试或联系应用支持。'
-    }
+    errorMessage.value = message || '授权请求无效，请返回应用重试或联系应用支持。'
   } finally {
     if (!autoRedirecting.value) {
       loading.value = false
@@ -699,15 +688,7 @@ const handleApprove = async (silent = false) => {
     window.location.replace(response.redirectUrl)
   } catch (error) {
     const rawMessage = error instanceof Error ? error.message : ''
-    const message =
-      rawMessage &&
-      (rawMessage.toLowerCase().includes('redirect') ||
-        rawMessage.toLowerCase().includes('callback') ||
-        rawMessage.toLowerCase().includes('client') ||
-        rawMessage.toLowerCase().includes('scope') ||
-        rawMessage.toLowerCase().includes('pkce'))
-        ? '授权失败，请返回应用后重试。'
-        : rawMessage || '授权失败，请稍后重试'
+    const message = rawMessage || '授权失败，请稍后重试'
     autoRedirecting.value = false
     loading.value = false
     if (silent) {

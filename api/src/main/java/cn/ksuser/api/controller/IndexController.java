@@ -13,7 +13,7 @@ public class IndexController {
     public Map<String, Object> index() {
         Map<String, Object> result = new HashMap<>();
         result.put("code", 200);
-        result.put("msg", "work");
+        result.put("errorCode", cn.ksuser.api.result.ApiResultCode.REQUEST_SUCCESS);
         return result;
     }
 }

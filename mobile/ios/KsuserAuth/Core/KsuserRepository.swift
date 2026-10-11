@@ -157,7 +157,7 @@ extension KsuserRepositoryProviding {
 
     private func auth(_ path: String, query: [String: String] = [:], body: [String: JSONValue], source: String, authenticated: Bool = false) async throws -> AuthResult {
         let envelope: APIEnvelope<JSONValue> = try await client.envelope(path, method: "POST", query: query, body: body, authenticated: authenticated)
-        guard let data = envelope.data?.objectValue else { throw APIError.server(envelope.code, envelope.msg ?? "认证失败") }
+        guard let data = envelope.data?.objectValue else { throw APIError.invalidResponse }
         if envelope.code == 201, let challengeId = data["challengeId"]?.stringValue {
             let method = data["method"]?.stringValue ?? "totp"
             let methods = data["methods"]?.arrayValue?.compactMap(\.stringValue) ?? [method]
@@ -165,9 +165,10 @@ extension KsuserRepositoryProviding {
         }
         if envelope.code == 200, let token = data["accessToken"]?.stringValue { return .success(token) }
         if envelope.code == 202, data["needBind"]?.boolValue == true, let bindToken = data["oauthBindToken"]?.stringValue {
-            return .needsOAuth(PendingOAuth(provider: data["provider"]?.stringValue ?? source, bindToken: bindToken, message: data["message"]?.stringValue ?? envelope.msg, canRegister: data["canRegister"]?.boolValue ?? true, emailConflict: data["emailConflict"]?.boolValue ?? false))
+            return .needsOAuth(PendingOAuth(provider: data["provider"]?.stringValue ?? source, bindToken: bindToken, message: envelope.resultMessage, canRegister: data["canRegister"]?.boolValue ?? true, emailConflict: data["emailConflict"]?.boolValue ?? false))
         }
-        throw APIError.server(envelope.code, envelope.msg ?? "认证失败")
+        if envelope.code == 200 { throw APIError.invalidResponse }
+        throw APIError.server(envelope.code, envelope.resultMessage)
     }
     private func assertionBody(_ payload: PasskeyAuthenticationPayload) -> [String: JSONValue] {
         ["credentialRawId": .string(payload.credentialRawId), "clientDataJSON": .string(payload.clientDataJSON), "authenticatorData": .string(payload.authenticatorData), "signature": .string(payload.signature)]

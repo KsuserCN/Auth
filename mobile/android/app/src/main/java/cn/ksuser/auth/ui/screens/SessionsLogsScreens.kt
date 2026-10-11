@@ -338,7 +338,7 @@ internal fun LogsScreen(
             verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
         ) {
             items(logs, key = { it.id }) { log ->
-                val showFailureReason = log.result.equals("FAILURE", true) && !log.failureReason.isNullOrBlank()
+                val showFailureReason = log.result.equals("FAILURE", true) && !log.displayFailureReason.isNullOrBlank()
                 SectionCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -394,7 +394,7 @@ internal fun LogsScreen(
                     }
                     if (showFailureReason) {
                         Text(
-                            "失败原因：${log.failureReason}",
+                            "失败原因：${log.displayFailureReason}",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )

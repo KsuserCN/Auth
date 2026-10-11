@@ -59,6 +59,7 @@ class MobileBridgeServiceTest {
             () -> service.createChallenge("https://evil.example.com/login", null)
         );
 
-        assertEquals("returnUrl 不在允许的域名白名单中", error.getMessage());
+        assertEquals(cn.ksuser.api.result.ApiResultCode.MOBILE_BRIDGE_010,
+            ((cn.ksuser.api.result.BusinessArgumentException) error).getResult().errorCode());
     }
 }

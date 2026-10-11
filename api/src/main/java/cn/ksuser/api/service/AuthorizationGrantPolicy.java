@@ -1,5 +1,7 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.exception.Oauth2Exception;
 import org.springframework.http.HttpStatus;
 
@@ -30,7 +32,7 @@ public final class AuthorizationGrantPolicy {
         }
         String normalized = rawMode.trim().toUpperCase(Locale.ROOT);
         if (!SUPPORTED_MODES.contains(normalized)) {
-            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", "不支持的授权模式");
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.REQUEST_010);
         }
         return normalized;
     }
@@ -41,11 +43,7 @@ public final class AuthorizationGrantPolicy {
         }
         int ttlSeconds = requestedTtlSeconds == null ? DEFAULT_TTL_SECONDS : requestedTtlSeconds;
         if (ttlSeconds < MIN_TTL_SECONDS || ttlSeconds > MAX_TTL_SECONDS) {
-            throw new Oauth2Exception(
-                HttpStatus.BAD_REQUEST,
-                "invalid_request",
-                "限时授权有效期必须在 " + MIN_TTL_SECONDS + "-" + MAX_TTL_SECONDS + " 秒之间"
-            );
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.REQUEST_011.withParams("min", MIN_TTL_SECONDS, "max", MAX_TTL_SECONDS));
         }
         return ttlSeconds;
     }

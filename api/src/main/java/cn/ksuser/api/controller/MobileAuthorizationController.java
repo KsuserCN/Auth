@@ -1,5 +1,7 @@
 package cn.ksuser.api.controller;
 
+import cn.ksuser.api.result.ApiResultCode;
+
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
@@ -20,10 +22,10 @@ public class MobileAuthorizationController {
     @PostMapping("/decide") public ResponseEntity<?> decide(@RequestBody MobileAuthorizationService.Decision input, Authentication auth) { return ok(service.decide(input, user(auth))); }
     @PostMapping("/consume") public ResponseEntity<?> consume(@RequestBody MobileAuthorizationService.BrowserRequest input) { return ok(service.consume(input)); }
     @PostMapping("/cancel") public ResponseEntity<?> cancel(@RequestBody MobileAuthorizationService.BrowserRequest input) { service.cancel(input); return ok(null); }
-    private ResponseEntity<?> ok(Object value) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new ApiResponse<>(200, "成功", value)); }
+    private ResponseEntity<?> ok(Object value) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new ApiResponse<>(200, ApiResultCode.REQUEST_SUCCESS, value)); }
     private User user(Authentication auth) {
-        if (auth == null || auth.getPrincipal() == null) throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "请先登录");
-        return users.findByUuid(auth.getPrincipal().toString()).orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", "用户不存在"));
+        if (auth == null || auth.getPrincipal() == null) throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.UNAUTHENTICATED);
+        return users.findByUuid(auth.getPrincipal().toString()).orElseThrow(() -> new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_token", ApiResultCode.AUTH_005));
     }
-    @ExceptionHandler(Oauth2Exception.class) public ResponseEntity<?> error(Oauth2Exception e) { return ResponseEntity.status(e.getStatus()).cacheControl(CacheControl.noStore()).body(new ApiResponse<>(e.getStatus().value(), e.getDescription())); }
+    @ExceptionHandler(Oauth2Exception.class) public ResponseEntity<?> error(Oauth2Exception e) { return ResponseEntity.status(e.getStatus()).cacheControl(CacheControl.noStore()).body(new ApiResponse<>(e.getStatus().value(), e.getResult())); }
 }

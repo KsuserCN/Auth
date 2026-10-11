@@ -1,5 +1,9 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+import cn.ksuser.api.result.BusinessStateException;
+
 import cn.ksuser.api.config.AppleAuthProperties;
 import cn.ksuser.api.entity.*;
 import cn.ksuser.api.repository.*;
@@ -51,7 +55,7 @@ public class AppleAuthService {
 
     public Challenge challenge(String purpose, String clientId, Context context) {
         properties.requireConfigured(clientId);
-        if (purpose==null || !Set.of("login","bind","sensitive").contains(purpose)) throw new IllegalArgumentException("Apple 验证用途无效");
+        if (purpose==null || !Set.of("login","bind","sensitive").contains(purpose)) throw new BusinessArgumentException(ApiResultCode.APPLE_014);
         if (!"login".equals(purpose)) requireAuthenticated(context);
         String id=random(),nonce=random(),state=random();
         put("apple:challenge:"+id,new StoredChallenge(purpose,clientId,nonce,state,context));
@@ -60,12 +64,12 @@ public class AppleAuthService {
 
     public Verified verify(Credential request, Context context, boolean sensitive) {
         StoredChallenge challenge=take("apple:challenge:",request.challengeId(),StoredChallenge.class);
-        if (sensitive != "sensitive".equals(challenge.purpose())) throw new IllegalArgumentException("Apple challenge 用途不匹配");
-        if (!same(challenge.state(), request.state())) throw new IllegalArgumentException("Apple state 校验失败");
+        if (sensitive != "sensitive".equals(challenge.purpose())) throw new BusinessArgumentException(ApiResultCode.APPLE_015);
+        if (!same(challenge.state(), request.state())) throw new BusinessArgumentException(ApiResultCode.APPLE_016);
         validateContext(challenge.context(),context,!"login".equals(challenge.purpose()));
         AppleTokenClient.Identity identity=apple.verifyIdentity(request.identityToken(),challenge.clientId(),challenge.nonce());
         AppleTokenClient.Tokens tokens=apple.exchangeCode(request.authorizationCode(),challenge.clientId(),challenge.nonce());
-        if (!same(identity.sub(),tokens.identity().sub())) throw new IllegalArgumentException("Apple 授权码身份不一致");
+        if (!same(identity.sub(),tokens.identity().sub())) throw new BusinessArgumentException(ApiResultCode.APPLE_017);
         String name=request.fullName();
         if (name==null || name.isBlank()) name=String.join(" ",Objects.toString(request.givenName(),""),Objects.toString(request.familyName(),"")).trim();
         if (name.length()>50) name=name.substring(0,50);
@@ -75,12 +79,12 @@ public class AppleAuthService {
         if (sensitive) {
             User user=requireAuthenticated(context);
             if (account==null || !account.getUserId().equals(user.getId()) || !Boolean.TRUE.equals(account.getIsEnabled()))
-                throw new IllegalArgumentException("请使用当前账号绑定的 Apple 身份进行验证");
+                throw new BusinessArgumentException(ApiResultCode.APPLE_018);
             updateCredential(account,pending);accounts.save(account);
             return new Verified(pending,user);
         }
         if ("login".equals(challenge.purpose()) && account!=null) {
-            User user=users.findById(account.getUserId()).orElseThrow(() -> new IllegalArgumentException("绑定账号不存在"));
+            User user=users.findById(account.getUserId()).orElseThrow(() -> new BusinessArgumentException(ApiResultCode.APPLE_019));
             updateCredential(account,pending);account.setIsEnabled(true);account.setLastLoginAt(LocalDateTime.now());accounts.save(account);
             return new Verified(pending,user);
         }
@@ -91,20 +95,19 @@ public class AppleAuthService {
         String token=random();put("apple:pending:"+token,pending);
         boolean conflict=pending.email()!=null && users.findByEmail(pending.email()).isPresent();
         return Map.of("needBind",true,"provider","apple","oauthBindToken",token,
-            "canRegister","login".equals(pending.purpose()) && !conflict,"emailConflict",conflict,
-            "message", conflict ? "邮箱已存在，请登录已有账号后绑定 Apple" : "请创建账号，或登录已有账号后绑定 Apple");
+            "canRegister","login".equals(pending.purpose()) && !conflict,"emailConflict",conflict);
     }
 
     @Transactional
     public User register(PendingRequest request,Context context) {
-        if (!Boolean.TRUE.equals(request.acceptTerms())) throw new IllegalArgumentException("请先同意服务协议与隐私政策");
+        if (!Boolean.TRUE.equals(request.acceptTerms())) throw new BusinessArgumentException(ApiResultCode.APPLE_020);
         Pending pending=take("apple:pending:",request.oauthBindToken(),Pending.class);
-        if (!"login".equals(pending.purpose())) throw new IllegalArgumentException("此 Apple 身份只能绑定已有账号");
+        if (!"login".equals(pending.purpose())) throw new BusinessArgumentException(ApiResultCode.APPLE_021);
         validateContext(pending.context(),context,false);
-        if (accounts.findByProviderAndProviderUserId("apple",pending.sub()).isPresent()) throw new IllegalArgumentException("Apple 身份已绑定，请重新登录");
-        if (pending.email()!=null && users.findByEmail(pending.email()).isPresent()) throw new IllegalArgumentException("邮箱已存在，请登录已有账号后绑定");
+        if (accounts.findByProviderAndProviderUserId("apple",pending.sub()).isPresent()) throw new BusinessArgumentException(ApiResultCode.APPLE_022);
+        if (pending.email()!=null && users.findByEmail(pending.email()).isPresent()) throw new BusinessArgumentException(ApiResultCode.APPLE_023);
         String username=request.username()==null || request.username().isBlank() ? "apple_"+random().substring(0,12) : request.username().trim();
-        if (!validator.isValidUsername(username) || users.findByUsername(username).isPresent()) throw new IllegalArgumentException("用户名格式无效或已被使用");
+        if (!validator.isValidUsername(username) || users.findByUsername(username).isPresent()) throw new BusinessArgumentException(ApiResultCode.APPLE_024);
         User user=new User(UUID.randomUUID().toString(),username,pending.email(),null);
         if (!pending.name().isBlank()) user.setRealName(pending.name());
         user=users.saveAndFlush(user);
@@ -119,11 +122,11 @@ public class AppleAuthService {
     public void bind(PendingRequest request,Context context) {
         requireAuthenticated(context);
         Pending pending=take("apple:pending:",request.oauthBindToken(),Pending.class);
-        if (!"bind".equals(pending.purpose())) throw new IllegalArgumentException("请在登录后重新授权 Apple 以绑定账号");
+        if (!"bind".equals(pending.purpose())) throw new BusinessArgumentException(ApiResultCode.APPLE_025);
         validateContext(pending.context(),context,true);
-        User user=users.findByUuidForUpdate(context.uuid()).orElseThrow(() -> new IllegalArgumentException("账号不存在"));
+        User user=users.findByUuidForUpdate(context.uuid()).orElseThrow(() -> new BusinessArgumentException(ApiResultCode.APPLE_011));
         if (accounts.findByProviderAndUserId("apple",user.getId()).isPresent() || accounts.findByProviderAndProviderUserId("apple",pending.sub()).isPresent())
-            throw new IllegalArgumentException("此账号或 Apple 身份已绑定");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_026);
         link(user,pending);
     }
     private void link(User user,Pending pending) {
@@ -152,9 +155,9 @@ public class AppleAuthService {
     @Transactional
     public void unbind(Context context) {
         requireAuthenticated(context);
-        User user=users.findByUuidForUpdate(context.uuid()).orElseThrow(() -> new IllegalArgumentException("账号不存在"));
-        UserOauthAccount account=accounts.findByProviderAndUserId("apple",user.getId()).orElseThrow(() -> new IllegalArgumentException("尚未绑定 Apple"));
-        if (!hasOtherLoginMethod(user)) throw new IllegalArgumentException("请先设置密码、验证邮箱或绑定其他登录方式");
+        User user=users.findByUuidForUpdate(context.uuid()).orElseThrow(() -> new BusinessArgumentException(ApiResultCode.APPLE_011));
+        UserOauthAccount account=accounts.findByProviderAndUserId("apple",user.getId()).orElseThrow(() -> new BusinessArgumentException(ApiResultCode.APPLE_027));
+        if (!hasOtherLoginMethod(user)) throw new BusinessArgumentException(ApiResultCode.APPLE_028);
         revocations.enqueue(account);accounts.delete(account);
     }
 
@@ -163,24 +166,24 @@ public class AppleAuthService {
         Claims claims=apple.verifyNotification(payload);
         Object rawEvent=claims.get("events");
         if (!(rawEvent instanceof String eventJson) || eventJson.isBlank()) {
-            throw new IllegalArgumentException("Apple 通知格式无效");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_029);
         }
         com.fasterxml.jackson.databind.JsonNode event;
         try {
             event=json.readTree(eventJson);
         } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            throw new IllegalArgumentException("Apple 通知格式无效");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_029);
         }
-        if (event==null || !event.isObject()) throw new IllegalArgumentException("Apple 通知格式无效");
+        if (event==null || !event.isObject()) throw new BusinessArgumentException(ApiResultCode.APPLE_029);
         String type=event.path("type").asText(),sub=event.path("sub").asText();
         if (!Set.of("consent-revoked","account-delete","account-deleted","email-disabled","email-enabled").contains(type) || sub.isBlank()) {
-            throw new IllegalArgumentException("Apple 通知事件无效");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_030);
         }
         final String dedup;
         try {
             dedup=Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("Apple 通知处理暂时不可用",ex);
+            throw new BusinessStateException(ApiResultCode.APPLE_031, ex);
         }
         String key="apple:notification:"+dedup;
         boolean acquired=false;
@@ -189,7 +192,7 @@ public class AppleAuthService {
             acquired=Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key,"processing",Duration.ofMinutes(2)));
             if (!acquired) {
                 if ("done".equals(redis.opsForValue().get(key))) return;
-                throw new IllegalStateException("Apple 通知正在处理中，请重试");
+                throw new BusinessStateException(ApiResultCode.APPLE_032);
             }
             UserOauthAccount account=accounts.findByProviderAndProviderUserId("apple",sub).orElse(null);
             if (account!=null) {
@@ -214,27 +217,27 @@ public class AppleAuthService {
             if (acquired) {
                 try { redis.delete(key); } catch (RuntimeException ignored) { /* Lease expiry permits retry. */ }
             }
-            throw new IllegalStateException("Apple 通知处理暂时失败，请稍后重试",ex);
+            throw new BusinessStateException(ApiResultCode.APPLE_010, ex);
         }
     }
 
     private User requireAuthenticated(Context context) {
-        if (context.uuid()==null || context.sessionId()==null) throw new IllegalArgumentException("请先登录账号");
-        return users.findByUuid(context.uuid()).orElseThrow(() -> new IllegalArgumentException("账号不存在"));
+        if (context.uuid()==null || context.sessionId()==null) throw new BusinessArgumentException(ApiResultCode.UNAUTHENTICATED);
+        return users.findByUuid(context.uuid()).orElseThrow(() -> new BusinessArgumentException(ApiResultCode.APPLE_011));
     }
     void validateContext(Context original,Context current,boolean authenticated) {
         if (!Objects.equals(original.ip(),current.ip()) || !Objects.equals(original.userAgent(),current.userAgent())
             || (authenticated && (!Objects.equals(original.uuid(),current.uuid()) || !Objects.equals(original.sessionId(),current.sessionId()))))
-            throw new IllegalArgumentException("Apple 验证会话不匹配，请重新授权");
+            throw new BusinessArgumentException(ApiResultCode.APPLE_033);
     }
     private <T> T take(String prefix,String token,Class<T> type) {
-        if (token==null || !token.matches("[A-Za-z0-9_-]{43}")) throw new IllegalArgumentException("Apple 验证票据无效");
+        if (token==null || !token.matches("[A-Za-z0-9_-]{43}")) throw new BusinessArgumentException(ApiResultCode.APPLE_034);
         String value=redis.opsForValue().getAndDelete(prefix+token);
-        if (value==null) throw new IllegalArgumentException("Apple 验证已过期或已使用，请重新授权");
-        try {return json.readValue(value,type);} catch (Exception ex) {throw new IllegalArgumentException("Apple 验证票据无效");}
+        if (value==null) throw new BusinessArgumentException(ApiResultCode.APPLE_035);
+        try {return json.readValue(value,type);} catch (Exception ex) {throw new BusinessArgumentException(ApiResultCode.APPLE_034);}
     }
     private void put(String key,Object value) {
-        try {redis.opsForValue().set(key,json.writeValueAsString(value),TTL);} catch (Exception ex) {throw new IllegalStateException("Apple 验证服务暂时不可用");}
+        try {redis.opsForValue().set(key,json.writeValueAsString(value),TTL);} catch (Exception ex) {throw new BusinessStateException(ApiResultCode.APPLE_036);}
     }
     private static String random() {byte[] bytes=new byte[32];new SecureRandom().nextBytes(bytes);return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);}
     private static boolean same(String left,String right) {return left!=null && right!=null && MessageDigest.isEqual(left.getBytes(StandardCharsets.UTF_8),right.getBytes(StandardCharsets.UTF_8));}

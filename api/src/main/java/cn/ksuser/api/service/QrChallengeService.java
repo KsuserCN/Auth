@@ -1,5 +1,9 @@
 package cn.ksuser.api.service;
 
+import cn.ksuser.api.result.ApiResultCode;
+import cn.ksuser.api.result.BusinessArgumentException;
+import cn.ksuser.api.result.BusinessStateException;
+
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -106,10 +110,10 @@ public class QrChallengeService {
     private void updateChallengeStatus(String challengeId, ChallengeStatus status, Long approvedByUserId, Map<String, Object> result) {
         QrChallengePayload payload = getByChallengeId(challengeId);
         if (payload == null) {
-            throw new IllegalArgumentException("二维码挑战不存在或已过期");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_086);
         }
         if (!ChallengeStatus.PENDING.value().equals(payload.getStatus())) {
-            throw new IllegalArgumentException("二维码挑战状态不可用");
+            throw new BusinessArgumentException(ApiResultCode.AUTH_089);
         }
 
         long now = Instant.now().getEpochSecond();
@@ -144,7 +148,7 @@ public class QrChallengeService {
             redisTemplate.opsForValue().set(challengeKey(payload.getChallengeId()), value, ttl, TimeUnit.SECONDS);
             redisTemplate.opsForValue().set(approveKey(payload.getApproveCode()), payload.getChallengeId(), ttl, TimeUnit.SECONDS);
         } catch (Exception e) {
-            throw new IllegalStateException("保存二维码挑战失败", e);
+            throw new BusinessStateException(ApiResultCode.QR_001, e);
         }
     }
 

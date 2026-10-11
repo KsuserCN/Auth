@@ -1,5 +1,6 @@
 import { createSessionTransfer, exchangeSessionTransfer } from '@/api/auth'
 import { clearStoredUser, storeAuthSession } from '@/utils/authSession'
+import { ApiError, type ApiResultPayload } from '@/utils/apiResult'
 
 const DESKTOP_BRIDGE_BASE_URLS = ['http://127.0.0.1:43921', 'http://localhost:43921']
 const BRIDGE_DISCOVERY_TIMEOUT_MS = 500
@@ -118,10 +119,10 @@ const requestBridge = async <T>(
     throw normalizeBridgeError(error, timeoutMs)
   }
 
-  const payload = (await response.json().catch(() => ({}))) as T & { message?: string }
+  const payload = (await response.json().catch(() => ({}))) as T & ApiResultPayload
 
   if (!response.ok) {
-    throw new Error(payload.message || '桌面桥接请求失败')
+    throw new ApiError(payload, response.status)
   }
 
   return payload

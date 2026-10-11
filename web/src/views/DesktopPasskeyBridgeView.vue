@@ -102,6 +102,7 @@ import {
   type LoginResponse,
 } from '@/api/auth'
 import { getRequestBaseUrl, setRequestBaseUrl } from '@/utils/request'
+import { ApiError } from '@/utils/apiResult'
 import {
   clearStoredAccessToken,
   getStoredAccessToken,
@@ -121,7 +122,8 @@ type TotpMode = 'totp' | 'recovery'
 interface BridgeCallbackPayload {
   status: 'success' | 'error'
   state: string
-  message?: string
+  errorCode?: string
+  params?: Record<string, unknown>
   accessToken?: string
   transferCode?: string
   verified?: boolean
@@ -243,7 +245,7 @@ const buildCallbackRedirectUrl = (baseUrl: string, payload: BridgeCallbackPayloa
 
 const callbackToDesktop = async (payload: BridgeCallbackPayload) => {
   if (!callbackUrl.value) {
-    throw new Error('回调地址缺失')
+    throw new ApiError({ errorCode: 'BAD_REQUEST' })
   }
 
   try {
@@ -298,13 +300,14 @@ const createDesktopTransferCode = async (nextAccessToken: string): Promise<strin
   }
 }
 
-const failWithMessage = async (message: string) => {
-  errorMessage.value = message
+const failWithResult = async (result: ApiError) => {
+  errorMessage.value = result.message
   try {
     await callbackToDesktop({
       status: 'error',
       state: state.value,
-      message,
+      errorCode: result.errorCode,
+      params: result.params,
     })
   } catch {
     // Desktop callback may already be unavailable; keep the browser error visible.
@@ -341,14 +344,14 @@ const handleLoginResponse = async (response: LoginResponse | MFAChallenge) => {
       return
     }
 
-    throw new Error('当前账号需要额外的 MFA 验证，但浏览器桥接页无法继续完成')
+    throw new ApiError({ errorCode: 'PASSKEY_MFA_UNSUPPORTED' })
   }
 
   const transferCode = await createDesktopTransferCode(response.accessToken)
   await completeWithSuccess({
     accessToken: response.accessToken,
     transferCode,
-    message: 'Passkey 登录成功',
+    errorCode: 'REQUEST_SUCCESS',
   })
   successMessage.value = 'Passkey 登录成功，桌面端会自动进入工作台。'
   restoreAccessToken()
@@ -365,7 +368,7 @@ const runPasskeyLogin = async () => {
   })
 
   if (!credential) {
-    throw new Error('未获取到凭证')
+    throw new ApiError({ errorCode: 'PASSKEY_CREDENTIAL_UNAVAILABLE' })
   }
 
   const response = await verifyPasskeyAuthentication(
@@ -386,7 +389,7 @@ const runPasskeyMfa = async (challengeId: string) => {
   })
 
   if (!credential) {
-    throw new Error('未获取到凭证')
+    throw new ApiError({ errorCode: 'PASSKEY_CREDENTIAL_UNAVAILABLE' })
   }
 
   const response = await verifyPasskeyForLoginMFA({
@@ -399,7 +402,7 @@ const runPasskeyMfa = async (challengeId: string) => {
   await completeWithSuccess({
     accessToken: response.accessToken,
     transferCode,
-    message: 'MFA 验证成功',
+    errorCode: 'REQUEST_SUCCESS',
   })
   successMessage.value = 'Passkey 二次验证成功，桌面端会自动继续登录。'
   restoreAccessToken()
@@ -416,13 +419,13 @@ const runSensitiveVerification = async () => {
   })
 
   if (!credential) {
-    throw new Error('未获取到凭证')
+    throw new ApiError({ errorCode: 'PASSKEY_CREDENTIAL_UNAVAILABLE' })
   }
 
   await verifyPasskeySensitiveOperation(options.challengeId, extractAuthenticationData(credential))
   await completeWithSuccess({
     verified: true,
-    message: '敏感操作验证成功',
+    errorCode: 'REQUEST_SUCCESS',
   })
   successMessage.value = '敏感操作验证成功，可以直接返回桌面端。'
   restoreAccessToken()
@@ -436,7 +439,7 @@ const runRegistration = async () => {
   const credential = await createPasskeyCredential(options)
 
   if (!credential) {
-    throw new Error('未创建凭证')
+    throw new ApiError({ errorCode: 'PASSKEY_CREDENTIAL_UNAVAILABLE' })
   }
 
   await verifyPasskeyRegistration({
@@ -446,7 +449,7 @@ const runRegistration = async () => {
 
   await completeWithSuccess({
     registered: true,
-    message: 'Passkey 已添加',
+    errorCode: 'REQUEST_SUCCESS',
   })
   successMessage.value = 'Passkey 已添加，桌面端会自动刷新列表。'
   restoreAccessToken()
@@ -484,7 +487,7 @@ const submitTotp = async () => {
     await completeWithSuccess({
       accessToken: response.accessToken,
       transferCode,
-      message: 'MFA 验证成功',
+      errorCode: 'REQUEST_SUCCESS',
     })
     successMessage.value = 'MFA 验证成功，桌面端会自动继续登录。'
   } catch (error: unknown) {
@@ -512,13 +515,13 @@ const setTotpMode = (value: TotpMode) => {
 
 const runFlow = async () => {
   if (!isWebAuthnSupported()) {
-    throw new Error('当前浏览器不支持 WebAuthn / Passkey')
+    throw new ApiError({ errorCode: 'PASSKEY_UNSUPPORTED' })
   }
 
   switch (mode.value) {
     case 'mfa':
       if (!mfaChallengeId.value) {
-        throw new Error('缺少 MFA 挑战信息')
+        throw new ApiError({ errorCode: 'BAD_REQUEST' })
       }
       await runPasskeyMfa(mfaChallengeId.value)
       return
@@ -548,21 +551,21 @@ const start = async () => {
   try {
     await runFlow()
   } catch (error: unknown) {
-    let message = error instanceof Error ? error.message : 'Passkey 验证失败'
+    let result = error instanceof ApiError ? error : new ApiError({ errorCode: 'REQUEST_FAILED' })
 
     if (error instanceof Error) {
       if (error.name === 'NotAllowedError') {
-        message = '用户取消了当前 Passkey 操作'
+        result = new ApiError({ errorCode: 'PASSKEY_CANCELLED' })
       } else if (error.name === 'NotSupportedError') {
-        message = '当前浏览器不支持该 Passkey 操作'
+        result = new ApiError({ errorCode: 'PASSKEY_UNSUPPORTED' })
       } else if (error.name === 'SecurityError') {
-        message = '浏览器安全校验失败，请确认当前使用受信任地址'
+        result = new ApiError({ errorCode: 'PASSKEY_SECURITY_ERROR' })
       } else if (error.name === 'InvalidStateError') {
-        message = '当前账号没有可用的 Passkey，或 Passkey 状态不正确'
+        result = new ApiError({ errorCode: 'PASSKEY_CREDENTIAL_UNAVAILABLE' })
       }
     }
 
-    await failWithMessage(message)
+    await failWithResult(result)
   } finally {
     busy.value = false
   }

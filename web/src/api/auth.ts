@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
+import { ApiError, resolveAuditReason, unwrapApiResult, type ApiResultPayload } from '@/utils/apiResult'
 
 // 用户基本信息类型
 export interface User {
@@ -564,7 +565,7 @@ export const pollQrStatus = async (
  */
 export const getUserInfo = async (): Promise<User> => {
   const response = await request.get<any>('/auth/info', { params: { type: 'basic' } })
-  // 响应拦截器返回的是 { code, msg, data: {...} }
+  // 响应拦截器返回的是 { code, errorCode, params, data: {...} }
   // response.data 就是真实的用户数据
   return response.data as User
 }
@@ -575,7 +576,7 @@ export const getUserInfo = async (): Promise<User> => {
  */
 export const getUserDetailsInfo = async (): Promise<UserDetails> => {
   const response = await request.get<any>('/auth/info', { params: { type: 'details' } })
-  // 响应拦截器返回的是 { code, msg, data: {...} }
+  // 响应拦截器返回的是 { code, errorCode, params, data: {...} }
   // response.data 就是真实的用户详细数据
   return response.data as UserDetails
 }
@@ -631,7 +632,7 @@ export interface UpdateProfileRequest {
 
 export const updateUserProfile = async (data: UpdateProfileRequest): Promise<UserDetails> => {
   const response = await request.post<any>('/auth/update/profile', data)
-  // 响应拦截器返回的是 { code, msg, data: {...} }
+  // 响应拦截器返回的是 { code, errorCode, params, data: {...} }
   return response.data as UserDetails
 }
 
@@ -727,11 +728,11 @@ export interface AdaptiveAuthStatus {
   deviceType: string | null
   multiEndpointAlert?: boolean
   alertLevel?: 'medium' | 'high' | string
-  alertTitle?: string | null
-  alertMessage?: string | null
+  alertTitleCode?: string | null
+  alertMessageCode?: string | null
   alertRemainingSeconds?: number
-  recommendedAction: string
-  reasons: string[]
+  recommendedActionCode: string
+  reasonCodes: ApiResultPayload[]
 }
 
 export const getAdaptiveAuthStatus = async (): Promise<AdaptiveAuthStatus> => {
@@ -839,7 +840,11 @@ export const getSensitiveLogs = async (
   const response = await request.get<ApiResponse<SensitiveLogsResponse>>('/auth/sensitive-logs', {
     params,
   })
-  return (response as unknown as ApiResponse<SensitiveLogsResponse>).data
+  const result = (response as unknown as ApiResponse<SensitiveLogsResponse>).data
+  return {
+    ...result,
+    data: result.data.map((log) => ({ ...log, failureReason: resolveAuditReason(log.failureReason) })),
+  }
 }
 
 // ========== 更改邮箱 ==========
@@ -897,7 +902,8 @@ export interface PasswordRequirement {
   requireDigits: boolean
   requireSpecialChars: boolean
   rejectCommonWeakPasswords: boolean
-  requirementMessage: string
+  requirementCode: string
+  requirementParams?: Record<string, unknown>
 }
 
 /**
@@ -1061,14 +1067,13 @@ export interface TotpRecoveryCodeVerifyRequest {
 
 export type TotpVerifyRequestPayload = TotpVerifyRequest | TotpRecoveryCodeVerifyRequest
 
-export interface TotpVerifyResponse {
+export interface TotpVerifyResponse extends ApiResultPayload {
   success: boolean
-  message: string
 }
 
 export const verifyTotp = async (data: TotpVerifyRequestPayload): Promise<TotpVerifyResponse> => {
   const response = await request.post<ApiResponse<TotpVerifyResponse>>('/auth/totp/verify', data)
-  return (response as unknown as ApiResponse<TotpVerifyResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<TotpVerifyResponse>)
 }
 
 /**
@@ -1175,7 +1180,7 @@ export interface QQCallbackRequest {
   state: string
 }
 
-export interface OAuthLoginCallbackResponse {
+export interface OAuthLoginCallbackResponse extends ApiResultPayload {
   // 已绑定用户，直接登录成功 (HTTP 200)
   accessToken?: string
   user?: {
@@ -1189,7 +1194,6 @@ export interface OAuthLoginCallbackResponse {
   provider?: OAuthProvider
   oauthBindToken?: string
   openid?: string
-  message?: string
   // MFA 场景 (HTTP 201)
   challengeId?: string
   method?: MFAMethod
@@ -1218,18 +1222,15 @@ export interface OAuthRegisterBindRequest {
   password: string
 }
 
-export interface OAuthBindCallbackResponse {
+export interface OAuthBindCallbackResponse extends ApiResultPayload {
   bound?: boolean
   provider?: string
   openid?: string
   unionid?: string
-  message?: string
 }
 
-export interface OAuthUnbindCallbackResponse {
+export interface OAuthUnbindCallbackResponse extends ApiResultPayload {
   canUnbind?: boolean
-  reason?: string
-  message?: string
 }
 
 export type QQLoginCallbackResponse = OAuthLoginCallbackResponse
@@ -1286,7 +1287,7 @@ export const handleQQLoginCallback = async (
     '/oauth/qq/callback/login',
     data,
   )
-  return (response as unknown as ApiResponse<QQLoginCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<QQLoginCallbackResponse>)
 }
 
 /**
@@ -1300,7 +1301,7 @@ export const handleQQBindCallback = async (
     '/oauth/qq/callback/bind',
     data,
   )
-  return (response as unknown as ApiResponse<QQBindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<QQBindCallbackResponse>)
 }
 
 /**
@@ -1314,7 +1315,7 @@ export const handleQQUnbindCallback = async (data?: {
     '/oauth/qq/callback/unbind',
     data,
   )
-  return (response as unknown as ApiResponse<QQUnbindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<QQUnbindCallbackResponse>)
 }
 
 /**
@@ -1368,7 +1369,7 @@ export const handleGithubLoginCallback = async (
     '/oauth/github/callback/login',
     data,
   )
-  return (response as unknown as ApiResponse<GithubLoginCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<GithubLoginCallbackResponse>)
 }
 
 /**
@@ -1382,7 +1383,7 @@ export const handleGithubBindCallback = async (
     '/oauth/github/callback/bind',
     data,
   )
-  return (response as unknown as ApiResponse<GithubBindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<GithubBindCallbackResponse>)
 }
 
 /**
@@ -1396,7 +1397,7 @@ export const handleGithubUnbindCallback = async (data?: {
     '/oauth/github/callback/unbind',
     data,
   )
-  return (response as unknown as ApiResponse<GithubUnbindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<GithubUnbindCallbackResponse>)
 }
 
 /**
@@ -1453,7 +1454,7 @@ export const handleGoogleLoginCallback = async (
     '/oauth/google/callback/login',
     data,
   )
-  return (response as unknown as ApiResponse<GoogleLoginCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<GoogleLoginCallbackResponse>)
 }
 
 /**
@@ -1467,7 +1468,7 @@ export const handleGoogleBindCallback = async (
     '/oauth/google/callback/bind',
     data,
   )
-  return (response as unknown as ApiResponse<GoogleBindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<GoogleBindCallbackResponse>)
 }
 
 /**
@@ -1481,7 +1482,7 @@ export const handleGoogleUnbindCallback = async (data?: {
     '/oauth/google/callback/unbind',
     data,
   )
-  return (response as unknown as ApiResponse<GoogleUnbindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<GoogleUnbindCallbackResponse>)
 }
 
 /**
@@ -1541,7 +1542,7 @@ export const handleMicrosoftLoginCallback = async (
     '/oauth/microsoft/callback/login',
     data,
   )
-  return (response as unknown as ApiResponse<MicrosoftLoginCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<MicrosoftLoginCallbackResponse>)
 }
 
 /**
@@ -1555,7 +1556,7 @@ export const handleMicrosoftBindCallback = async (
     '/oauth/microsoft/callback/bind',
     data,
   )
-  return (response as unknown as ApiResponse<MicrosoftBindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<MicrosoftBindCallbackResponse>)
 }
 
 /**
@@ -1571,7 +1572,7 @@ export const handleMicrosoftUnbindCallback = async (data?: {
     '/oauth/microsoft/callback/unbind',
     data,
   )
-  return (response as unknown as ApiResponse<MicrosoftUnbindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<MicrosoftUnbindCallbackResponse>)
 }
 
 /**
@@ -1608,7 +1609,7 @@ export const handleQQCallback = async (
     '/oauth/qq/callback/login',
     data,
   )
-  return (response as unknown as ApiResponse<QQLoginCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<QQLoginCallbackResponse>)
 }
 
 export const bindExistingOAuthAccount = async (
@@ -1638,7 +1639,7 @@ export const bindPendingOAuthAccount = async (
     `/oauth/${data.provider}/bind-pending`,
     data,
   )
-  return (response as unknown as ApiResponse<OAuthBindCallbackResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<OAuthBindCallbackResponse>)
 }
 
 export interface OAuthAccountStatusItem {
@@ -1718,7 +1719,7 @@ export const submitAppleCredential = async (data: {
   familyName?: string
 }): Promise<AppleLoginResponse> => {
   const response = await request.post<ApiResponse<AppleLoginResponse>>('/oauth/apple/mobile-login', data)
-  return (response as unknown as ApiResponse<AppleLoginResponse>).data
+  return unwrapApiResult(response as unknown as ApiResponse<AppleLoginResponse>)
 }
 
 export const registerPendingApple = async (oauthBindToken: string, acceptTerms: boolean, username: string): Promise<LoginResponse | MFAChallenge> => {
@@ -1737,7 +1738,7 @@ export const bindPendingApple = async (oauthBindToken: string): Promise<void> =>
   )
   const result = response as unknown as ApiResponse<{ bound?: boolean; needVerification?: boolean }>
   if (result.code !== 200) {
-    throw new Error(result.msg || 'Apple 绑定未完成，请重试')
+    throw new ApiError(result)
   }
   if (result.data?.bound !== true) {
     throw new Error('Apple 绑定未完成，请重新授权')

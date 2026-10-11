@@ -82,7 +82,7 @@ class SecurityRepository(
             api.verifyTotp(cn.ksuser.auth.data.model.TotpVerifyRequest(code, recoveryCode))
         }
         requireCode(envelope, 200)
-        return envelope.data ?: error("TOTP 验证响应为空")
+        return (envelope.data ?: error("TOTP 验证响应为空")).copy(message = envelope.resultMessage)
     }
 
     suspend fun getRecoveryCodes(): List<String> {

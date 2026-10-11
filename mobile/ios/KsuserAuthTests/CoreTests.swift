@@ -168,7 +168,7 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(request?.value(forHTTPHeaderField: "Authorization"), nil)
     }
     func testStringMutationPayloadDecodes() throws {
-        let response = try JSONDecoder().decode(APIEnvelope<EmptyPayload>.self, from: Data(#"{"code":200,"msg":"ok","data":"operation completed"}"#.utf8))
+        let response = try JSONDecoder().decode(APIEnvelope<EmptyPayload>.self, from: Data(#"{"code":200,"errorCode":"REQUEST_SUCCESS","data":"operation completed"}"#.utf8))
         XCTAssertEqual(response.code, 200); XCTAssertNotNil(response.data)
     }
     func testAdaptivePolicyLogWithNullDurationDecodes() throws {
@@ -184,12 +184,12 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(first.allowCredentials?.arrayValue, second.allowCredentials?.arrayValue)
     }
     func testPasswordPolicyMatchesServerASCIIAndUTF16Rules() {
-        let policy = PasswordRequirement(minLength: 8, maxLength: 64, requireUppercase: true, requireLowercase: true, requireDigits: true, requireSpecialChars: true, rejectCommonWeakPasswords: true, requirementMessage: nil)
+        let policy = PasswordRequirement(minLength: 8, maxLength: 64, requireUppercase: true, requireLowercase: true, requireDigits: true, requireSpecialChars: true, rejectCommonWeakPasswords: true, requirementCode: nil, requirementParams: nil)
         XCTAssertNil(policy.validationError(for: "Abc1234@"))
         XCTAssertNotNil(policy.validationError(for: "Abc1234#"))
         XCTAssertNotNil(policy.validationError(for: "Äbc1234@"))
         XCTAssertNotNil(policy.validationError(for: "Abc١٢٣٤@"))
-        let lengthPolicy = PasswordRequirement(minLength: 8, maxLength: 8, requireUppercase: false, requireLowercase: false, requireDigits: false, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementMessage: nil)
+        let lengthPolicy = PasswordRequirement(minLength: 8, maxLength: 8, requireUppercase: false, requireLowercase: false, requireDigits: false, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementCode: nil, requirementParams: nil)
         XCTAssertNil(lengthPolicy.validationError(for: "Ab1234😀"))
     }
     func testCookieDomainPathAndSecureMatching() {
@@ -529,7 +529,7 @@ final class CoreTests: XCTestCase {
 
         XCTAssertFalse(revoked)
         XCTAssertNil(model.noticeMessage)
-        XCTAssertEqual(model.errorMessage, "撤销失败，请稍后重试")
+        XCTAssertEqual(model.errorMessage, GeneratedAPIResultCodes.messages["SERVER_ERROR"])
         let apps = try await model.authorizedApps()
         XCTAssertEqual(apps.ksuserApps.map(\.clientId), ["campus"])
     }
@@ -642,7 +642,7 @@ private actor FixtureTransport: HTTPTransport {
         if mode == .authorizationLists || mode == .authorizationRevokeFails {
             authorizationRequests.append(request)
             if request.httpMethod == "DELETE" {
-                if mode == .authorizationRevokeFails { return response(request, 500, #"{"code":500,"msg":"撤销失败，请稍后重试"}"#) }
+                if mode == .authorizationRevokeFails { return response(request, 500, #"{"code":500,"errorCode":"SERVER_ERROR"}"#) }
                 if path == "/sso/authorizations/campus" { revokedKsuserAuthorization = true }
                 if path == "/oauth2/authorizations/calendar" { revokedThirdPartyAuthorization = true }
                 return response(request, 200, #"{"code":200,"data":null}"#)
@@ -666,15 +666,15 @@ private actor FixtureTransport: HTTPTransport {
             if path == "/oauth/qq/unbind" {
                 qqUnbindRequest = request
                 return mode == .qqUnbindBlocked
-                    ? response(request, 202, #"{"code":202,"msg":"无法解绑最后登录方式","data":{"canUnbind":false}}"#)
+                    ? response(request, 202, #"{"code":202,"errorCode":"OAUTH_BIND_REQUIRED","data":{"canUnbind":false}}"#)
                     : response(request, 200, #"{"code":200,"data":null}"#)
             }
         }
         if path == "/auth/refresh" {
             refreshes += 1
             if mode == .offlineRefresh { throw URLError(.notConnectedToInternet) }
-            if mode == .invalidRefresh { return response(request, 401, #"{"code":401,"msg":"RefreshToken已失效"}"#) }
-            if mode == .forbiddenRefresh { return response(request, 403, #"{"code":403,"msg":"无权限"}"#) }
+            if mode == .invalidRefresh { return response(request, 401, #"{"code":401,"errorCode":"UNAUTHENTICATED"}"#) }
+            if mode == .forbiddenRefresh { return response(request, 403, #"{"code":403,"errorCode":"FORBIDDEN"}"#) }
             if mode == .refreshSuspends { await withCheckedContinuation { refreshGate = $0 } }
             else { try await Task.sleep(nanoseconds: 20_000_000) }
             return response(request, 200, #"{"code":200,"data":{"accessToken":"fresh"}}"#)
@@ -709,7 +709,7 @@ private actor FixtureTransport: HTTPTransport {
         }
         protectedCalls += 1
         if mode == .replayUnauthorized || request.value(forHTTPHeaderField: "Authorization") != "Bearer fresh" {
-            return response(request, 401, #"{"code":401,"msg":"登录已失效"}"#)
+            return response(request, 401, #"{"code":401,"errorCode":"UNAUTHENTICATED"}"#)
         }
         return response(request, 200, #"{"code":200,"data":{"ok":true}}"#)
     }

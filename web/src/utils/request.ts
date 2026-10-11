@@ -3,6 +3,7 @@ import type { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'a
 import { ElMessage } from 'element-plus'
 import { clearAuthSession, getStoredAccessToken, setStoredAccessToken } from '@/utils/authSession'
 import { persistPostLoginRedirect } from '@/utils/postLoginRedirect'
+import { ApiError } from '@/utils/apiResult'
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
   _refreshRetried?: boolean
@@ -13,7 +14,8 @@ type RetryableRequestConfig = InternalAxiosRequestConfig & {
 // API 响应格式
 export interface ApiResponse<T = any> {
   code: number
-  msg: string
+  errorCode: string
+  params?: Record<string, unknown>
   data: T
 }
 
@@ -385,7 +387,14 @@ request.interceptors.request.use(
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const data = response.data
-    const { code, msg } = data
+    if (!data || typeof data !== 'object' || typeof data.code !== 'number') {
+      const resultError = new ApiError({ errorCode: 'INVALID_RESPONSE' }, response.status)
+      if (!shouldSuppressErrorToast(response.config as RetryableRequestConfig)) {
+        ElMessage.error(resultError.message)
+      }
+      return Promise.reject(resultError)
+    }
+    const { code } = data
     const accessToken = (data as ApiResponse<{ accessToken?: string }>)?.data?.accessToken
 
     // 成功响应 (200)、MFA 需求 (201)、未绑定账号或需要验证 (202) - 直接返回 ApiResponse 对象
@@ -397,20 +406,26 @@ request.interceptors.response.use(
     }
 
     // 其他错误码
+    const resultError = new ApiError(data, code ?? response.status)
     if (!shouldSuppressErrorToast(response.config as RetryableRequestConfig)) {
-      ElMessage.error(msg || '请求失败')
+      ElMessage.error(resultError.message)
     }
-    return Promise.reject(new Error(msg || '请求失败'))
+    return Promise.reject(resultError)
   },
   async (error) => {
     const originalRequest = error.config as RetryableRequestConfig | undefined
 
     // 网络错误或服务器错误
     if (!error.response) {
+      const resultError = new ApiError({
+        errorCode: error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT'
+          ? 'REQUEST_TIMEOUT'
+          : 'NETWORK_ERROR',
+      })
       if (!shouldSuppressErrorToast(originalRequest)) {
-        ElMessage.error('网络连接失败，请检查网络')
+        ElMessage.error(resultError.message)
       }
-      return Promise.reject(error)
+      return Promise.reject(resultError)
     }
 
     const { status, data, config } = error.response
@@ -432,30 +447,30 @@ request.interceptors.response.use(
 
       if (isAuthEndpoint) {
         // 登录接口的 401 错误直接显示并返回，不做其他处理
-        const errorMsg = data?.msg || '认证失败'
+        const resultError = new ApiError(data, status)
         if (!shouldSuppressErrorToast(originalRequest)) {
-          ElMessage.error(errorMsg)
+          ElMessage.error(resultError.message)
         }
-        return Promise.reject(new Error(errorMsg))
+        return Promise.reject(resultError)
       }
 
       if (originalRequest._skipAuthRefresh) {
-        const errorMsg = data?.msg || '登录状态已失效，请重新登录'
+        const resultError = new ApiError(data, status)
         clearAuthSession()
         if (!shouldSuppressErrorToast(originalRequest)) {
-          ElMessage.error(errorMsg)
+          ElMessage.error(resultError.message)
         }
-        return Promise.reject(new Error(errorMsg))
+        return Promise.reject(resultError)
       }
 
       // 同一个请求最多只做一次 refresh + retry，避免认证异常时无限重放
       if (originalRequest._refreshRetried) {
-        const errorMsg = data?.msg || '登录状态已失效，请重新登录'
+        const resultError = new ApiError(data, status)
         clearAuthSession()
         if (!shouldSuppressErrorToast(originalRequest)) {
-          ElMessage.error(errorMsg)
+          ElMessage.error(resultError.message)
         }
-        return Promise.reject(new Error(errorMsg))
+        return Promise.reject(resultError)
       }
       originalRequest._refreshRetried = true
 
@@ -499,11 +514,11 @@ request.interceptors.response.use(
     }
 
     // 其他错误状态码
-    const errorMsg = data?.msg || '请求失败'
+    const resultError = new ApiError(data, status)
     if (!shouldSuppressErrorToast(config as RetryableRequestConfig)) {
-      ElMessage.error(errorMsg)
+      ElMessage.error(resultError.message)
     }
-    return Promise.reject(new Error(errorMsg))
+    return Promise.reject(resultError)
   },
 )
 

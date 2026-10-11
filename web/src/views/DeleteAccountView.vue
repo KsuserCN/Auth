@@ -128,6 +128,7 @@
 </template>
 
 <script setup lang="ts">
+import { ApiError } from '@/utils/apiResult'
 import { ref, onMounted } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -276,14 +277,14 @@ const handleSubmit = async () => {
     }
 
     console.error('Delete account failed:', error)
-    if (error?.response?.status === 403) {
-      ElMessage.error('身份验证已过期，请重新验证')
+    if (error instanceof ApiError && error.errorCode === 'SENSITIVE_VERIFICATION_REQUIRED') {
+      ElMessage.error(error.message)
       router.push({
         path: '/sensitive-verification',
         query: { returnTo: '/delete-account' },
       })
-    } else if (error?.response?.status === 400) {
-      ElMessage.error(error?.response?.data?.msg || '删除失败，请重试')
+    } else if (error instanceof ApiError) {
+      ElMessage.error(error.message)
     } else {
       ElMessage.error('注销失败，请重试')
     }
