@@ -1,11 +1,18 @@
 <template>
   <div class="open-platform-page">
-    <div class="content-header">
-      <div>
+    <header class="platform-hero">
+      <div class="hero-copy">
+        <div class="hero-eyebrow"><span class="hero-eyebrow-dot" />开发者平台</div>
         <h1 class="page-title">服务接入</h1>
-        <p class="page-subtitle">创建并管理 OAuth 与 SSO 接入应用</p>
+        <p class="page-subtitle">配置应用凭证与回调地址，接入 Ksuser OAuth 授权或 OIDC 单点登录。</p>
       </div>
-    </div>
+      <div class="hero-hint">
+        <span class="hero-hint-label">接入步骤</span>
+        <span>阅读文档</span><span class="step-divider">›</span>
+        <span>创建应用</span><span class="step-divider">›</span>
+        <span>配置回调</span>
+      </div>
+    </header>
 
     <el-row :gutter="16" class="summary-grid">
       <el-col :xs="24" :md="8">
@@ -16,7 +23,7 @@
               {{ verificationLabel }}
             </el-tag>
           </div>
-          <div class="summary-desc">仅个人/企业认证可以创建OAuth应用</div>
+          <div class="summary-desc">创建 OAuth 应用需要完成个人或企业认证</div>
         </el-card>
       </el-col>
 
@@ -24,10 +31,10 @@
         <el-card class="card summary-card" shadow="never">
           <div class="summary-label">OAuth2.0 应用</div>
           <div class="summary-count">
-            <span class="summary-number">{{ oauthOverview?.currentCount ?? 0 }}</span>
-            <span class="summary-total">/ {{ oauthOverview?.maxApps ?? 5 }}</span>
+            <span class="summary-number">{{ oauthOverview?.currentCount ?? '—' }}</span>
+            <span v-if="oauthOverview" class="summary-total">/ {{ oauthOverview.maxApps }}</span>
           </div>
-          <div class="summary-desc">OAuth2.0协议，支持精细权限控制</div>
+          <div class="summary-desc">第三方应用授权，按需开放用户资料与邮箱权限</div>
         </el-card>
       </el-col>
 
@@ -35,10 +42,10 @@
         <el-card class="card summary-card" shadow="never">
           <div class="summary-label">SSO 内部服务</div>
           <div class="summary-count">
-            <span class="summary-number">{{ ssoOverview?.currentCount ?? 0 }}</span>
-            <span class="summary-total">/ {{ ssoOverview?.maxClients ?? 20 }}</span>
+            <span class="summary-number">{{ ssoOverview?.currentCount ?? '—' }}</span>
+            <span v-if="ssoOverview" class="summary-total">/ {{ ssoOverview.maxClients }}</span>
           </div>
-          <div class="summary-desc">仅管理员可创建，拥有 `openid`、`id_token` 与 PKCE 等能力</div>
+          <div class="summary-desc">管理员专用，支持 OIDC、PKCE 与自定义 Audience</div>
         </el-card>
       </el-col>
     </el-row>
@@ -53,11 +60,14 @@
     <el-card class="card app-list-card" shadow="never">
       <template #header>
         <div class="section-header">
-          <div>
+          <div class="section-heading">
             <div class="section-title">OAuth2.0 应用</div>
-            <!-- <div class="section-subtitle">第三方应用通过 `/oauth2/*` 完成授权、换 token 与 userinfo。</div> -->
+            <div class="section-subtitle">管理第三方应用、回调地址与授权范围。</div>
           </div>
           <div class="section-actions">
+            <a class="docs-link" href="https://docs.ksuser.cn/auth/oauth/" target="_blank" rel="noopener noreferrer">
+              OAuth 接入文档 <span aria-hidden="true">↗</span>
+            </a>
             <el-button text @click="loadOAuthApps" :loading="oauthLoading">刷新</el-button>
             <el-button class="primary-btn" type="primary" :disabled="!oauthOverview?.canCreate"
               @click="openOAuthCreateDialog">
@@ -100,11 +110,14 @@
     <el-card class="card app-list-card" shadow="never">
       <template #header>
         <div class="section-header">
-          <div>
+          <div class="section-heading">
             <div class="section-title">SSO 内部服务应用</div>
-            <!-- <div class="section-subtitle">内部客户端通过 `/sso/*` 与 `/.well-known/openid-configuration` 接入。</div> -->
+            <div class="section-subtitle">配置 OIDC 客户端、PKCE、Audience 与登出回调。</div>
           </div>
           <div class="section-actions">
+            <a class="docs-link" href="https://docs.ksuser.cn/auth/sso/" target="_blank" rel="noopener noreferrer">
+              OIDC 接入文档 <span aria-hidden="true">↗</span>
+            </a>
             <el-button text @click="loadSSOClients" :loading="ssoLoading">刷新</el-button>
             <el-button class="primary-btn" type="primary" :disabled="!ssoOverview?.canCreate"
               @click="openSSOCreateDialog">
@@ -1284,25 +1297,80 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.content-header {
+.platform-hero {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding: 22px 24px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 92% 12%, color-mix(in srgb, var(--el-color-primary) 10%, transparent), transparent 32%),
+    var(--el-bg-color-overlay);
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--el-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.hero-eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  box-shadow: 0 0 0 4px var(--el-color-primary-light-9);
 }
 
 .page-title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.25;
+  font-weight: 700;
   color: var(--el-text-color-primary);
 }
 
 .page-subtitle {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: var(--el-text-color-secondary);
   font-size: 14px;
+  line-height: 1.6;
+}
+
+.hero-hint {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  color: var(--el-text-color-regular);
+  background: color-mix(in srgb, var(--el-bg-color) 82%, transparent);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.hero-hint-label {
+  margin-right: 2px;
+  color: var(--el-text-color-secondary);
+}
+
+.step-divider {
+  color: var(--el-color-primary);
+  font-size: 17px;
 }
 
 .summary-grid,
@@ -1372,10 +1440,17 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
+.section-heading {
+  min-width: 0;
+}
+
 .section-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  flex-shrink: 0;
 }
 
 .section-title {
@@ -1388,6 +1463,31 @@ onBeforeUnmount(() => {
   margin-top: 4px;
   font-size: 13px;
   color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.docs-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--el-color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.docs-link:hover {
+  color: var(--el-color-primary-dark-2);
+  background: var(--el-color-primary-light-9);
+}
+
+.docs-link:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .app-list {
@@ -1798,6 +1898,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+  .platform-hero {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .hero-hint {
+    align-self: flex-start;
+    flex-wrap: wrap;
+    white-space: normal;
+  }
 
   .section-header,
   .app-item,
@@ -1809,6 +1921,11 @@ onBeforeUnmount(() => {
 
   .section-actions {
     justify-content: flex-start;
+  }
+
+  .section-heading,
+  .section-actions {
+    width: 100%;
   }
 
   .app-item-actions,
@@ -1834,6 +1951,10 @@ onBeforeUnmount(() => {
 
   .detail-actions {
     display: flex;
+  }
+
+  .page-title {
+    font-size: 25px;
   }
 }
 </style>
