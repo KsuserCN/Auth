@@ -43,8 +43,9 @@ public class ConsoleController {
     }
     @GetMapping("/users")
     public ApiResponse<ConsoleAdminService.PageView<ConsoleAdminService.UserView>> users(@RequestParam(defaultValue="0") int page,
-        @RequestParam(defaultValue="20") int size,@RequestParam(required=false) String search,@RequestParam(required=false) String role) {
-        return success(admin.listUsers(page,size,search,role));
+        @RequestParam(defaultValue="20") int size,@RequestParam(required=false) String search,@RequestParam(required=false) String role,
+        @RequestParam(defaultValue="createdAt") String sort,@RequestParam(defaultValue="desc") String direction) {
+        return success(admin.listUsers(page,size,search,role,sort,direction));
     }
     @GetMapping("/users/{uuid}")
     public ApiResponse<ConsoleAdminService.UserView> user(@PathVariable String uuid) { return success(admin.user(uuid)); }
@@ -75,8 +76,9 @@ public class ConsoleController {
         return success(admin.rotateSecret(principal(auth),clientId,clientIp(request)));
     }
     @GetMapping("/audit-logs")
-    public ApiResponse<ConsoleAdminService.PageView<ConsoleAuditLog>> audits(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size) {
-        return success(admin.listAudits(page,size));
+    public ApiResponse<ConsoleAdminService.PageView<ConsoleAuditLog>> audits(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,
+        @RequestParam(defaultValue="createdAt") String sort,@RequestParam(defaultValue="desc") String direction) {
+        return success(admin.listAudits(page,size,sort,direction));
     }
     private static String clientIp(HttpServletRequest request) {
         String remote = request.getRemoteAddr();

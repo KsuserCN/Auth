@@ -293,6 +293,8 @@ export const consoleApi = {
     size: number
     search?: string
     role?: string
+    sort?: 'username' | 'uuid' | 'systemRole' | 'createdAt'
+    direction?: 'asc' | 'desc'
   }): Promise<PageResult<ConsoleUser>> {
     return (
       await request.get<ApiResult<PageResult<ConsoleUser>>>('/console/users', {
@@ -352,10 +354,15 @@ export const consoleApi = {
       )
     ).data.data
   },
-  async audit(page: number, size: number): Promise<PageResult<AuditLog>> {
+  async audit(
+    page: number,
+    size: number,
+    sort: 'createdAt' | 'action' | 'actorUuid' | 'target' | 'ipAddress' = 'createdAt',
+    direction: 'asc' | 'desc' = 'desc',
+  ): Promise<PageResult<AuditLog>> {
     return (
       await request.get<ApiResult<PageResult<AuditLog>>>('/console/audit-logs', {
-        params: { page, size },
+        params: { page, size, sort, direction },
       })
     ).data.data
   },

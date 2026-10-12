@@ -21,16 +21,45 @@
         ><el-button native-type="submit" type="primary">查询</el-button
         ><span class="muted">共 {{ total }} 位用户</span>
       </form>
+      <div v-if="selectedUsers.length" class="bulk-toolbar">
+        <span class="muted">本页已选择 {{ selectedUsers.length }} 位用户</span>
+        <el-button
+          size="small"
+          :disabled="assignableUsers.length === 0 || bulkRoleSaving"
+          @click="requestBulkRole('ADMIN')"
+          >批量任命管理员<span v-if="assignableUsers.length">（{{ assignableUsers.length }}）</span></el-button
+        >
+        <el-button
+          size="small"
+          :disabled="revokableUsers.length === 0 || bulkRoleSaving"
+          @click="requestBulkRole('USER')"
+          >批量撤销管理员<span v-if="revokableUsers.length">（{{ revokableUsers.length }}）</span></el-button
+        >
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          :disabled="deletableUsers.length === 0 || bulkDeleting"
+          @click="requestBulkDelete"
+          >批量删除<span v-if="deletableUsers.length">（{{ deletableUsers.length }}）</span></el-button
+        >
+        <el-button size="small" text @click="clearSelection">取消选择</el-button>
+      </div>
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
       <el-table
+        ref="tableRef"
         v-else
         v-loading="loading"
         :data="users"
         row-key="uuid"
+        :default-sort="{ prop: 'createdAt', order: 'descending' }"
         style="width: 100%"
         empty-text="暂无匹配用户"
+        @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
       >
-        <el-table-column label="用户" min-width="180"
+        <el-table-column type="selection" width="48" :selectable="canSelectUser" />
+        <el-table-column label="用户" prop="username" min-width="180" sortable="custom"
           ><template #default="{ row }"
             ><div class="user-cell">
               <el-avatar
@@ -46,12 +75,12 @@
             </div></template
           ></el-table-column
         >
-        <el-table-column label="UUID" min-width="270"
+        <el-table-column label="UUID" prop="uuid" min-width="270" sortable="custom"
           ><template #default="{ row }"
             ><span class="mono">{{ row.uuid }}</span></template
           ></el-table-column
         >
-        <el-table-column label="系统角色" width="135"
+        <el-table-column label="系统角色" prop="systemRole" width="135" sortable="custom"
           ><template #default="{ row }"
             ><el-tag
               :type="
@@ -66,7 +95,7 @@
             ></template
           ></el-table-column
         >
-        <el-table-column label="注册时间" min-width="160"
+        <el-table-column label="注册时间" prop="createdAt" min-width="160" sortable="custom"
           ><template #default="{ row }">{{ date(row.createdAt) }}</template></el-table-column
         >
         <el-table-column label="操作" width="285" fixed="right"
@@ -127,10 +156,20 @@
       :title="pendingRole === 'ADMIN' ? '任命管理员' : '撤销管理员'"
       width="460px"
       :close-on-click-modal="false"
+      :close-on-press-escape="!savingRole && !bulkRoleSaving"
+      :show-close="!savingRole && !bulkRoleSaving"
       ><p v-if="roleUser">
         将 <strong>{{ roleUser.username }}</strong
         >（{{ roleUser.email }}）设为{{ roleLabel(pendingRole) }}。
       </p>
+      <div v-else-if="roleTargets.length" class="bulk-confirm-list">
+        <p>将以下 {{ roleTargets.length }} 位用户设为{{ roleLabel(pendingRole) }}：</p>
+        <ul>
+          <li v-for="user in roleTargets" :key="user.uuid">
+            <strong>{{ user.username }}</strong><span class="muted">（{{ user.email }}）</span>
+          </li>
+        </ul>
+      </div>
       <p class="muted">
         管理员可以使用通行证中的 OAuth 和 SSO 管理功能。此操作会记录在操作记录中。
       </p>
@@ -140,8 +179,8 @@
         type="success"
         :closable="false"
       /><template #footer
-        ><el-button :disabled="savingRole" @click="roleVisible = false">取消</el-button
-        ><el-button type="primary" :loading="savingRole" @click="saveRole"
+        ><el-button :disabled="savingRole || bulkRoleSaving" @click="roleVisible = false">取消</el-button
+        ><el-button type="primary" :loading="savingRole || bulkRoleSaving" @click="saveRole"
           >确认{{ pendingRole === 'ADMIN' ? '任命' : '撤销' }}</el-button
         ></template
       ></el-dialog
@@ -185,13 +224,49 @@
           >永久删除账号</el-button
         ></template
       ></el-dialog
+    ><el-dialog
+      v-model="bulkDeleteVisible"
+      title="批量永久删除用户账号"
+      width="520px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!bulkDeleting"
+      :show-close="!bulkDeleting"
+      @closed="clearBulkDeleteDialog"
+      ><p>
+        即将永久删除以下 {{ bulkDeleteTargets.length }} 位用户及其账号资料、登录凭证、会话和授权。此操作无法撤销。
+      </p>
+      <ul class="delete-user-list">
+        <li v-for="user in bulkDeleteTargets" :key="user.uuid">
+          <strong>{{ user.username }}</strong><span class="muted">（{{ user.email }}）</span>
+        </li>
+      </ul>
+      <p class="muted">输入 DELETE 以确认删除所列账号。</p>
+      <el-input
+        v-model="bulkDeleteConfirmation"
+        :disabled="bulkDeleting"
+        placeholder="DELETE"
+        autocomplete="off"
+        aria-label="输入 DELETE 确认批量删除"
+      />
+      <p class="muted delete-verification-hint">提交前需要再次验证管理员身份。</p>
+      <template #footer
+        ><el-button :disabled="bulkDeleting" @click="bulkDeleteVisible = false">取消</el-button
+        ><el-button
+          type="danger"
+          :loading="bulkDeleting"
+          :disabled="bulkDeleteConfirmation.trim() !== 'DELETE' || !bulkDeleteTargets.length"
+          @click="saveBulkDelete"
+          >永久删除 {{ bulkDeleteTargets.length }} 个账号</el-button
+        ></template
+      ></el-dialog
     >
   </div>
 </template>
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { consoleApi, type ConsoleUser, type SystemRole } from '@/api/console'
+import { useSessionStore } from '@/stores/session'
 import { avatarFallback } from '@/utils/avatar'
 import { VerificationCancelledError, withConsoleVerification } from '@/utils/consoleVerification'
 import {
@@ -202,24 +277,43 @@ const search = ref('')
 const role = ref('')
 const page = ref(1)
 const size = 20
+type UserSortField = 'username' | 'uuid' | 'systemRole' | 'createdAt'
+const sort = ref<UserSortField>('createdAt')
+const direction = ref<'asc' | 'desc'>('desc')
+const store = useSessionStore()
 const users = ref<ConsoleUser[]>([])
 const total = ref(0)
 const loading = ref(true)
 const error = ref('')
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const selectedUsers = ref<ConsoleUser[]>([])
+const assignableUsers = computed(() => selectedUsers.value.filter((user) => user.systemRole === 'USER'))
+const revokableUsers = computed(() => selectedUsers.value.filter((user) => user.systemRole === 'ADMIN'))
+const deletableUsers = computed(() =>
+  selectedUsers.value.filter(
+    (user) => user.systemRole !== 'SUPER_ADMIN' && user.uuid !== store.session?.user.uuid,
+  ),
+)
 const detail = ref<ConsoleUser | null>(null)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailError = ref('')
 const roleVisible = ref(false)
 const roleUser = ref<ConsoleUser | null>(null)
+const roleTargets = ref<ConsoleUser[]>([])
 const pendingRole = ref<'ADMIN' | 'USER'>('ADMIN')
 const savingRole = ref(false)
+const bulkRoleSaving = ref(false)
 const restored = ref(false)
 const deleteVisible = ref(false)
 const deleteTarget = ref<ConsoleUser | null>(null)
 const deleteConfirmation = ref('')
 const deleting = ref(false)
 const restoredDelete = ref(false)
+const bulkDeleteVisible = ref(false)
+const bulkDeleteTargets = ref<ConsoleUser[]>([])
+const bulkDeleteConfirmation = ref('')
+const bulkDeleting = ref(false)
 const roleLabel = (value: SystemRole) =>
   ({ USER: '普通用户', ADMIN: '管理员', SUPER_ADMIN: '超级管理员' })[value]
 const date = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN') : '—')
@@ -252,8 +346,30 @@ const detailValue = (key: keyof ConsoleUser) => {
   return detail.value[key] || '—'
 }
 let loadGeneration = 0
+const clearSelection = () => {
+  selectedUsers.value = []
+  tableRef.value?.clearSelection()
+}
+const onSelectionChange = (selection: ConsoleUser[]) => {
+  selectedUsers.value = selection
+}
+const canSelectUser = (user: ConsoleUser) =>
+  user.systemRole !== 'SUPER_ADMIN' && user.uuid !== store.session?.user.uuid
+const onSortChange = (event: { prop: string; order: 'ascending' | 'descending' | null }) => {
+  const prop = event.prop as UserSortField
+  if (['username', 'uuid', 'systemRole', 'createdAt'].includes(prop) && event.order) {
+    sort.value = prop
+    direction.value = event.order === 'ascending' ? 'asc' : 'desc'
+  } else {
+    sort.value = 'createdAt'
+    direction.value = 'desc'
+  }
+  page.value = 1
+  void load()
+}
 const load = async () => {
   const generation = ++loadGeneration
+  clearSelection()
   loading.value = true
   error.value = ''
   try {
@@ -262,6 +378,8 @@ const load = async () => {
       size,
       search: search.value.trim(),
       role: role.value,
+      sort: sort.value,
+      direction: direction.value,
     })
     if (generation !== loadGeneration) return
     users.value = result.items
@@ -292,7 +410,17 @@ const showDetail = async (uuid: string) => {
 }
 const requestRole = (user: ConsoleUser) => {
   roleUser.value = user
+  roleTargets.value = []
   pendingRole.value = user.systemRole === 'ADMIN' ? 'USER' : 'ADMIN'
+  restored.value = false
+  roleVisible.value = true
+}
+const requestBulkRole = (nextRole: 'ADMIN' | 'USER') => {
+  const targets = nextRole === 'ADMIN' ? assignableUsers.value : revokableUsers.value
+  if (!targets.length) return
+  roleUser.value = null
+  roleTargets.value = [...targets]
+  pendingRole.value = nextRole
   restored.value = false
   roleVisible.value = true
 }
@@ -330,20 +458,114 @@ const saveDelete = async () => {
   }
 }
 const saveRole = async () => {
-  const target = roleUser.value
-  if (!target || savingRole.value) return
+  const targets = roleTargets.value.length
+    ? [...roleTargets.value]
+    : roleUser.value
+      ? [roleUser.value]
+      : []
+  if (!targets.length || savingRole.value || bulkRoleSaving.value) return
   const nextRole = pendingRole.value
-  savingRole.value = true
+  const isBulk = roleTargets.value.length > 0
+  if (!isBulk) {
+    const target = roleUser.value
+    if (!target) return
+    savingRole.value = true
+    try {
+      await withConsoleVerification(() => consoleApi.setRole(target.uuid, nextRole))
+      roleVisible.value = false
+      ElMessage.success('用户角色已更新')
+      await load()
+    } catch (failure) {
+      if (!(failure instanceof VerificationCancelledError))
+        ElMessage.error(failure instanceof Error ? failure.message : '角色更新失败')
+    } finally {
+      savingRole.value = false
+    }
+    return
+  }
+  bulkRoleSaving.value = true
+  let succeeded = 0
+  const failures: string[] = []
+  let canceled = false
   try {
-    await withConsoleVerification(() => consoleApi.setRole(target.uuid, nextRole))
+    for (const target of targets) {
+      try {
+        await withConsoleVerification(() => consoleApi.setRole(target.uuid, nextRole))
+        succeeded += 1
+      } catch (failure) {
+        if (failure instanceof VerificationCancelledError) {
+          canceled = true
+          break
+        }
+        failures.push(target.username)
+      }
+    }
     roleVisible.value = false
-    ElMessage.success('用户角色已更新')
+    roleUser.value = null
+    roleTargets.value = []
+    if (failures.length) {
+      ElMessage.warning(`已更新 ${succeeded} 位用户，${failures.length} 位失败：${failures.join('、')}`)
+    } else if (canceled) {
+      ElMessage.warning(`已更新 ${succeeded} 位用户，其余操作已取消。`)
+    } else {
+      ElMessage.success(`已更新 ${succeeded} 位用户的角色`)
+    }
     await load()
-  } catch (failure) {
-    if (!(failure instanceof VerificationCancelledError))
-      ElMessage.error(failure instanceof Error ? failure.message : '角色更新失败')
   } finally {
     savingRole.value = false
+    bulkRoleSaving.value = false
+  }
+}
+const requestBulkDelete = () => {
+  if (!deletableUsers.value.length) return
+  bulkDeleteTargets.value = [...deletableUsers.value]
+  bulkDeleteConfirmation.value = ''
+  bulkDeleteVisible.value = true
+}
+const clearBulkDeleteDialog = () => {
+  bulkDeleteTargets.value = []
+  bulkDeleteConfirmation.value = ''
+}
+const saveBulkDelete = async () => {
+  const targets = [...bulkDeleteTargets.value]
+  if (
+    !targets.length ||
+    bulkDeleting.value ||
+    bulkDeleteConfirmation.value.trim() !== 'DELETE'
+  )
+    return
+  bulkDeleting.value = true
+  const deleted: string[] = []
+  const failures: string[] = []
+  let canceled = false
+  try {
+    for (const target of targets) {
+      try {
+        await withConsoleVerification(() => consoleApi.deleteUser(target.uuid))
+        deleted.push(target.username)
+      } catch (failure) {
+        if (failure instanceof VerificationCancelledError) {
+          canceled = true
+          break
+        }
+        failures.push(target.username)
+      }
+    }
+    bulkDeleteVisible.value = false
+    if (failures.length) {
+      ElMessage.warning(`已删除 ${deleted.length} 位用户，${failures.length} 位失败：${failures.join('、')}`)
+    } else if (canceled) {
+      ElMessage.warning(`已删除 ${deleted.length} 位用户，其余操作已取消。`)
+    } else {
+      ElMessage.success(`已删除 ${deleted.length} 位用户账号`)
+    }
+    await load()
+    if (users.value.length === 0 && page.value > 1) {
+      page.value -= 1
+      await load()
+    }
+  } finally {
+    bulkDeleting.value = false
   }
 }
 onMounted(async () => {
@@ -352,6 +574,7 @@ onMounted(async () => {
   if (roleDraft) {
     try {
       roleUser.value = await consoleApi.user(roleDraft.uuid)
+      roleTargets.value = []
       if (roleUser.value.systemRole !== 'SUPER_ADMIN') {
         pendingRole.value = roleDraft.systemRole
         restored.value = true
@@ -398,6 +621,16 @@ onMounted(async () => {
 .user-cell .muted {
   font-size: 12px;
   margin-top: 3px;
+}
+.bulk-confirm-list ul,
+.delete-user-list {
+  max-height: 220px;
+  overflow: auto;
+  padding-left: 22px;
+  line-height: 1.9;
+}
+.bulk-confirm-list p {
+  margin-top: 0;
 }
 .detail-profile {
   display: flex;

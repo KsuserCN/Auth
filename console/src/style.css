@@ -118,6 +118,20 @@ h1 {
 .toolbar .el-select {
   width: 180px;
 }
+.bulk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--console-border);
+  border-radius: 10px;
+  background: var(--console-surface-hover);
+}
+.bulk-toolbar .muted {
+  margin-right: 4px;
+}
 .pagination {
   margin-top: 22px;
   justify-content: flex-end;

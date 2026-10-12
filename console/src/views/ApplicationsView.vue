@@ -5,7 +5,7 @@
         <h1>官方应用</h1>
         <p>配置可以读取真实用户 UUID 的 Ksuser 官方应用。</p>
       </div>
-      <el-button type="primary" @click="openCreate">新增官方应用</el-button>
+      <el-button type="primary" :disabled="busy" @click="openCreate">新增官方应用</el-button>
     </div>
     <el-alert
       title="应用仅能读取用户已授权的资料范围。服务端应用密钥只在创建和轮换时显示一次。"
@@ -23,15 +23,37 @@
         /><el-button @click="load">刷新</el-button
         ><span class="muted">{{ applications.length }} 个官方应用</span>
       </div>
+      <div v-if="selectedApps.length" class="bulk-toolbar">
+        <span class="muted">已选择 {{ selectedApps.length }} 个应用</span>
+        <el-button
+          size="small"
+          :disabled="activatableApps.length === 0 || busy"
+          @click="setSelectedAppsActive(true)"
+          >批量启用<span v-if="activatableApps.length">（{{ activatableApps.length }}）</span></el-button
+        >
+        <el-button
+          size="small"
+          type="warning"
+          plain
+          :disabled="deactivatableApps.length === 0 || busy"
+          @click="setSelectedAppsActive(false)"
+          >批量停用<span v-if="deactivatableApps.length">（{{ deactivatableApps.length }}）</span></el-button
+        >
+        <el-button size="small" text @click="clearSelection">取消选择</el-button>
+      </div>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
       <el-table
+        ref="tableRef"
         v-else
         v-loading="loading"
         :data="filtered"
         row-key="clientId"
         empty-text="暂无官方应用"
+        @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
       >
-        <el-table-column label="应用" min-width="240"
+        <el-table-column type="selection" width="48" :selectable="selectableApp" />
+        <el-table-column label="应用" prop="clientName" min-width="240" sortable="custom"
           ><template #default="{ row }"
             ><div class="app-cell">
               <el-avatar
@@ -48,12 +70,12 @@
             </div></template
           ></el-table-column
         >
-        <el-table-column label="类型" width="145"
+        <el-table-column label="类型" prop="clientType" width="145" sortable="custom"
           ><template #default="{ row }">{{
             row.clientType === 'public' ? '公开客户端 / SPA' : '服务端客户端'
           }}</template></el-table-column
         >
-        <el-table-column label="状态" width="160"
+        <el-table-column label="状态" prop="isActive" width="160" sortable="custom"
           ><template #default="{ row }"
             ><div class="status-tags">
               <el-tag :type="row.isActive ? 'success' : 'info'" effect="plain">{{
@@ -63,7 +85,7 @@
             </div></template
           ></el-table-column
         >
-        <el-table-column label="允许的资料范围" min-width="240"
+        <el-table-column label="允许的资料范围" prop="scopes" min-width="240" sortable="custom"
           ><template #default="{ row }"
             ><div class="scope-tags">
               <el-tag
@@ -79,7 +101,7 @@
         >
         <el-table-column label="操作" width="200" fixed="right"
           ><template #default="{ row }"
-            ><el-button link type="primary" @click="openEdit(row)">配置</el-button
+            ><el-button link type="primary" :disabled="busy" @click="openEdit(row)">配置</el-button
             ><el-button
               v-if="row.clientType === 'confidential'"
               link
@@ -234,7 +256,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   consoleApi,
@@ -262,16 +284,41 @@ const scopeLabels: Record<OfficialScope, string> = {
 const scopeLabel = (scope: string) => scopeLabels[scope as OfficialScope] ?? scope
 const applications = ref<OfficialApplication[]>([])
 const search = ref('')
+type ApplicationSortField = 'clientName' | 'clientType' | 'isActive' | 'scopes'
+const sortField = ref<ApplicationSortField>('clientName')
+const sortOrder = ref<'asc' | 'desc' | ''>('')
 const loading = ref(true)
 const error = ref('')
 const busy = ref(false)
-const filtered = computed(() =>
-  applications.value.filter((app) =>
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const selectedApps = ref<OfficialApplication[]>([])
+const activatableApps = computed(() => selectedApps.value.filter((app) => !app.isActive && !app.reserved))
+const deactivatableApps = computed(() => selectedApps.value.filter((app) => app.isActive && !app.reserved))
+const filtered = computed(() => {
+  const result = applications.value.filter((app) =>
     `${app.clientName} ${app.clientId}`
       .toLocaleLowerCase()
       .includes(search.value.trim().toLocaleLowerCase()),
-  ),
-)
+  )
+  if (!sortOrder.value) return result
+  const value = (app: OfficialApplication) => {
+    switch (sortField.value) {
+      case 'clientName':
+        return app.clientName.toLocaleLowerCase()
+      case 'clientType':
+        return app.clientType.toLocaleLowerCase()
+      case 'isActive':
+        return app.isActive ? '1' : '0'
+      case 'scopes':
+        return [...app.scopes].sort().join(',')
+    }
+  }
+  const direction = sortOrder.value === 'asc' ? 1 : -1
+  return result.sort((left, right) => {
+    const compared = value(left).localeCompare(value(right), 'zh-Hans', { numeric: true })
+    return compared === 0 ? left.clientId.localeCompare(right.clientId) : compared * direction
+  })
+})
 const emptyForm = (): ApplicationDraft => ({
   clientId: '',
   clientName: '',
@@ -296,7 +343,27 @@ const editingReserved = computed(
     form.value.editing &&
     applications.value.some((app) => app.clientId === form.value.clientId && app.reserved),
 )
+const clearSelection = () => {
+  selectedApps.value = []
+  tableRef.value?.clearSelection()
+}
+const onSelectionChange = (selection: OfficialApplication[]) => {
+  selectedApps.value = selection
+}
+const selectableApp = (app: OfficialApplication) => !app.reserved
+watch(search, clearSelection)
+const onSortChange = (event: { prop: string; order: 'ascending' | 'descending' | null }) => {
+  const prop = event.prop as ApplicationSortField
+  if (['clientName', 'clientType', 'isActive', 'scopes'].includes(prop) && event.order) {
+    sortField.value = prop
+    sortOrder.value = event.order === 'ascending' ? 'asc' : 'desc'
+  } else {
+    sortOrder.value = ''
+  }
+  clearSelection()
+}
 const load = async () => {
+  clearSelection()
   loading.value = true
   error.value = ''
   try {
@@ -450,6 +517,58 @@ const toggle = async (app: OfficialApplication) => {
   } catch (failure) {
     if (!(failure instanceof VerificationCancelledError))
       ElMessage.error(failure instanceof Error ? failure.message : '应用状态更新失败')
+  } finally {
+    busy.value = false
+  }
+}
+const setSelectedAppsActive = async (isActive: boolean) => {
+  const targets = isActive ? [...activatableApps.value] : [...deactivatableApps.value]
+  if (!targets.length || busy.value) return
+  const names = targets.map((app) => app.clientName).join('、')
+  try {
+    await ElMessageBox.confirm(
+      isActive
+        ? `将启用以下 ${targets.length} 个官方应用：${names}`
+        : `将停用以下 ${targets.length} 个官方应用。停用后，现有令牌将无法获取用户资料：${names}`,
+      isActive ? '批量启用官方应用' : '批量停用官方应用',
+      { confirmButtonText: '确认', cancelButtonText: '取消', type: isActive ? 'info' : 'warning' },
+    )
+  } catch {
+    return
+  }
+  busy.value = true
+  let succeeded = 0
+  const failures: string[] = []
+  let canceled = false
+  try {
+    for (const app of targets) {
+      try {
+        await withConsoleVerification(() =>
+          consoleApi.updateApplication(app.clientId, {
+            clientName: app.clientName,
+            logoUrl: app.logoUrl,
+            redirectUris: app.redirectUris,
+            scopes: app.scopes,
+            isActive,
+          }),
+        )
+        succeeded += 1
+      } catch (failure) {
+        if (failure instanceof VerificationCancelledError) {
+          canceled = true
+          break
+        }
+        failures.push(app.clientName)
+      }
+    }
+    if (failures.length) {
+      ElMessage.warning(`已更新 ${succeeded} 个应用，${failures.length} 个失败：${failures.join('、')}`)
+    } else if (canceled) {
+      ElMessage.warning(`已更新 ${succeeded} 个应用，其余操作已取消。`)
+    } else {
+      ElMessage.success(`已${isActive ? '启用' : '停用'} ${succeeded} 个官方应用`)
+    }
+    await load()
   } finally {
     busy.value = false
   }

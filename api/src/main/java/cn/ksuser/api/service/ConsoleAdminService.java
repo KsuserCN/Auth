@@ -46,9 +46,22 @@ public class ConsoleAdminService {
     void setUserService(UserService userService) { this.userService=userService; }
 
     @Transactional(readOnly=true)
-    public PageView<UserView> listUsers(int page, int size, String search, String role) {
+    public PageView<UserView> listUsers(int page, int size, String search, String role, String sort, String direction) {
         if (search != null && search.length() > 255) throw invalid();
         if (role != null && !role.isBlank() && !List.of("USER","ADMIN","SUPER_ADMIN").contains(role)) throw invalid();
+        String sortProperty = switch (sort == null ? "" : sort) {
+            case "username" -> "username";
+            case "uuid" -> "uuid";
+            case "systemRole" -> "systemRole";
+            case "createdAt" -> "createdAt";
+            default -> throw invalid();
+        };
+        Sort.Direction sortDirection;
+        try {
+            sortDirection = Sort.Direction.fromString(direction);
+        } catch (IllegalArgumentException failure) {
+            throw invalid();
+        }
         Specification<User> spec = (root, query, builder) -> {
             java.util.ArrayList<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
             if (search != null && !search.isBlank()) {
@@ -59,7 +72,10 @@ public class ConsoleAdminService {
             if (role != null && !role.isBlank()) predicates.add(builder.equal(root.get("systemRole"), role));
             return builder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
-        Page<User> result = users.findAll(spec, pagination(page,size));
+        if (page < 0 || size < 1 || size > 100) throw invalid();
+        Sort ordering = Sort.by(sortDirection, sortProperty);
+        if (!"uuid".equals(sortProperty)) ordering = ordering.and(Sort.by(Sort.Direction.ASC, "uuid"));
+        Page<User> result = users.findAll(spec, PageRequest.of(page, size, ordering));
         return new PageView<>(result.map(UserView::of).getContent(), result.getTotalElements(), page, size);
     }
     @Transactional(readOnly=true)
@@ -159,13 +175,25 @@ public class ConsoleAdminService {
     }
 
     @Transactional(readOnly=true)
-    public PageView<ConsoleAuditLog> listAudits(int page,int size) {
-        Page<ConsoleAuditLog> result=audits.findAll(pagination(page,size));
+    public PageView<ConsoleAuditLog> listAudits(int page,int size,String sort,String direction) {
+        if (page < 0 || size < 1 || size > 100) throw invalid();
+        String sortProperty = switch (sort == null ? "" : sort) {
+            case "createdAt" -> "createdAt";
+            case "action" -> "action";
+            case "actorUuid" -> "actorUuid";
+            case "target" -> "target";
+            case "ipAddress" -> "ipAddress";
+            default -> throw invalid();
+        };
+        Sort.Direction sortDirection;
+        try {
+            sortDirection = Sort.Direction.fromString(direction);
+        } catch (IllegalArgumentException failure) {
+            throw invalid();
+        }
+        Sort ordering = Sort.by(sortDirection, sortProperty).and(Sort.by(Sort.Direction.DESC, "id"));
+        Page<ConsoleAuditLog> result=audits.findAll(PageRequest.of(page,size,ordering));
         return new PageView<>(result.getContent(),result.getTotalElements(),page,size);
-    }
-    private static PageRequest pagination(int page,int size) {
-        if (page<0 || size<1 || size>100) throw invalid();
-        return PageRequest.of(page,size, Sort.by(Sort.Order.desc("createdAt"),Sort.Order.desc("id")));
     }
     private OfficialApplication appForUpdate(String id) {
         return applications.findByClientIdForUpdate(id).orElseThrow(() -> new Oauth2Exception(HttpStatus.NOT_FOUND,"invalid_request",ApiResultCode.CONSOLE_APPLICATION_INVALID));
