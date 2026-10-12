@@ -389,7 +389,7 @@ onMounted(async () => {
 }
 .user-avatar,
 .detail-avatar {
-  color: #805c00;
+  color: var(--console-link);
   background-color: var(--el-color-primary-light-9);
   border: 1px solid var(--el-color-primary-light-8);
   font-weight: 600;
@@ -411,7 +411,7 @@ h2 {
 }
 .detail-profile p {
   margin: 7px 0 0;
-  color: #647386;
+  color: var(--console-text-secondary);
 }
 .el-descriptions {
   overflow-wrap: anywhere;

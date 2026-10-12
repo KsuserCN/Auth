@@ -194,15 +194,17 @@ function encodeBase64Url(value: ArrayBuffer): string {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(circle at 75% 20%, #fff1c7, transparent 45%), #f4f6f9;
+  background:
+    radial-gradient(circle at 75% 20%, var(--console-accent-glow), transparent 45%),
+    var(--console-page-bg);
 }
 .verification-card {
   width: min(100%, 480px);
   padding: 40px;
-  border: 1px solid #e4e8ee;
+  border: 1px solid var(--console-border);
   border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 12px 45px #1823320a;
+  background: var(--console-surface);
+  box-shadow: 0 12px 45px rgb(24 35 50 / 4%);
 }
 .brand-icon {
   display: block;
@@ -211,7 +213,7 @@ function encodeBase64Url(value: ArrayBuffer): string {
   margin-bottom: 18px;
 }
 .eyebrow {
-  color: #8b6500;
+  color: var(--console-link);
   font-size: 11px;
   letter-spacing: 2px;
 }
@@ -221,7 +223,7 @@ h1 {
 }
 .intro,
 .method-hint {
-  color: #647386;
+  color: var(--console-text-secondary);
   font-size: 14px;
   line-height: 1.8;
 }
@@ -259,7 +261,7 @@ h1 {
 footer {
   position: fixed;
   bottom: 20px;
-  color: #7b8490;
+  color: var(--console-text-muted);
   font-size: 12px;
 }
 @media (max-width: 520px) {

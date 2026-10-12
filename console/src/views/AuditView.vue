@@ -109,7 +109,7 @@ onMounted(load)
 <style scoped>
 pre {
   margin-top: 20px;
-  background: #f4f6f9;
+  background: var(--console-inset-bg);
   padding: 18px;
   border-radius: 8px;
   font-size: 12px;

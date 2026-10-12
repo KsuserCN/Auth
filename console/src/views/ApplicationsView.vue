@@ -555,8 +555,8 @@ onMounted(async () => {
   margin: 18px 0;
   padding: 20px;
   border-radius: 8px;
-  border: 1px solid #ffe397;
-  background: #fff8df;
+  border: 1px solid var(--console-accent-border);
+  background: var(--console-accent-soft);
   overflow-wrap: anywhere;
   user-select: all;
 }

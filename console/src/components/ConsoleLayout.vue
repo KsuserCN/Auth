@@ -21,6 +21,23 @@
       <header class="topbar">
         <span>Ksuser 通行证 · 管理中心</span>
         <div class="account">
+          <el-dropdown trigger="click" @command="handleThemeCommand">
+            <el-button class="theme-button" text aria-label="切换主题">
+              <el-icon>
+                <Sunny v-if="currentThemeIcon === 'light'" />
+                <Moon v-else-if="currentThemeIcon === 'dark'" />
+                <Monitor v-else />
+              </el-icon>
+              <span>主题</span>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="light">浅色</el-dropdown-item>
+                <el-dropdown-item command="dark">暗黑</el-dropdown-item>
+                <el-dropdown-item command="system">跟随系统</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-avatar
             class="account-avatar"
             :size="30"
@@ -39,16 +56,18 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Grid, Document } from '@element-plus/icons-vue'
+import { User, Grid, Document, Monitor, Moon, Sunny } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { consoleApi } from '@/api/console'
 import { avatarFallback } from '@/utils/avatar'
 import { useSessionStore } from '@/stores/session'
 import { clearConsoleNavigation } from '@/utils/navigation'
 import ConsoleSensitiveVerificationDialog from '@/components/ConsoleSensitiveVerificationDialog.vue'
+import { currentThemeIcon, setThemeMode, type ConsoleThemeMode } from '@/utils/theme'
 const store = useSessionStore()
 const router = useRouter()
 const loggingOut = ref(false)
+const handleThemeCommand = (mode: ConsoleThemeMode) => setThemeMode(mode)
 const logout = async () => {
   loggingOut.value = true
   try {
@@ -71,8 +90,8 @@ const logout = async () => {
 .sidebar {
   width: 226px;
   flex-shrink: 0;
-  background: #fff;
-  border-right: 1px solid #e4e8ee;
+  background: var(--console-surface);
+  border-right: 1px solid var(--console-border);
   padding: 32px 18px;
   display: flex;
   flex-direction: column;
@@ -81,7 +100,7 @@ const logout = async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #182332;
+  color: var(--console-text);
   font-size: 23px;
   font-weight: 700;
   margin: 0 10px 45px;
@@ -97,12 +116,12 @@ const logout = async () => {
   font-size: 12px;
   letter-spacing: 1px;
   font-weight: 450;
-  color: #647386;
+  color: var(--console-text-secondary);
   margin-top: 2px;
 }
 .nav-caption {
   font-size: 11px;
-  color: #88929e;
+  color: var(--console-text-subtle);
   margin: 0 15px 12px;
 }
 nav {
@@ -111,7 +130,7 @@ nav {
   gap: 7px;
 }
 nav a {
-  color: #5e6b7a;
+  color: var(--console-nav-text);
   border-radius: 9px;
   padding: 14px;
   display: flex;
@@ -120,18 +139,18 @@ nav a {
   font-size: 14px;
 }
 nav a:hover {
-  background: #f5f7f8;
+  background: var(--console-surface-hover);
 }
 nav a.router-link-active {
-  background: #fff5d6;
-  color: #805c00;
+  background: var(--console-nav-active-bg);
+  color: var(--console-nav-active-text);
   font-weight: 600;
 }
 .sidebar-note {
   margin: auto 12px 0;
   padding-top: 30px;
   font-size: 11px;
-  color: #7b8490;
+  color: var(--console-text-muted);
   display: flex;
   gap: 7px;
   align-items: center;
@@ -148,23 +167,30 @@ nav a.router-link-active {
 }
 .topbar {
   height: 76px;
-  background: #fff;
-  border-bottom: 1px solid #e4e8ee;
+  background: var(--console-surface);
+  border-bottom: 1px solid var(--console-border);
   padding: 0 35px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #647386;
+  color: var(--console-text-secondary);
   font-size: 13px;
 }
 .account {
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #182332;
+  color: var(--console-text);
+}
+.theme-button {
+  gap: 6px;
+  color: var(--console-text-secondary);
+}
+.theme-button:hover {
+  color: var(--console-text);
 }
 .account-avatar {
-  color: #805c00;
+  color: var(--console-link);
   background-color: var(--el-color-primary-light-9);
   border: 1px solid var(--el-color-primary-light-8);
   font-weight: 600;
@@ -198,7 +224,7 @@ main {
     width: 100%;
     padding: 14px 16px;
     border-right: 0;
-    border-bottom: 1px solid #e4e8ee;
+    border-bottom: 1px solid var(--console-border);
   }
   .brand {
     font-size: 19px;

@@ -1,4 +1,23 @@
 :root {
+  color-scheme: light;
+  --console-page-bg: #f4f6f9;
+  --console-surface: #fff;
+  --console-surface-raised: #fff;
+  --console-surface-hover: #f5f7f8;
+  --console-border: #e4e8ee;
+  --console-text: #182332;
+  --console-text-secondary: #647386;
+  --console-text-muted: #7b8490;
+  --console-text-subtle: #88929e;
+  --console-nav-text: #5e6b7a;
+  --console-link: #805c00;
+  --console-link-hover: #5e4200;
+  --console-nav-active-bg: #fff5d6;
+  --console-nav-active-text: #805c00;
+  --console-accent-glow: #fff1c7;
+  --console-accent-soft: #fff8df;
+  --console-accent-border: #ffe397;
+  --console-inset-bg: #f4f6f9;
   --brand-yellow: #ffb90f;
   --brand-yellow-hover: #e5a908;
   --el-color-primary: #ffb90f;
@@ -10,18 +29,48 @@
   --el-color-primary-light-9: #fff8df;
   --el-color-primary-dark-2: #cc940c;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
-  color: #182332;
-  background: #f4f6f9;
+  color: var(--console-text);
+  background: var(--console-page-bg);
   font-synthesis: none;
+}
+:root.dark {
+  color-scheme: dark;
+  --console-page-bg: #15120d;
+  --console-surface: #1d1912;
+  --console-surface-raised: #262116;
+  --console-surface-hover: #2d271b;
+  --console-border: #3b3324;
+  --console-text: #f4eddf;
+  --console-text-secondary: #c8baa0;
+  --console-text-muted: #ad9d7e;
+  --console-text-subtle: #938265;
+  --console-nav-text: #d0c1a5;
+  --console-link: #ffd36b;
+  --console-link-hover: #ffe29b;
+  --console-nav-active-bg: rgb(255 185 15 / 15%);
+  --console-nav-active-text: #ffda7c;
+  --console-accent-glow: rgb(255 185 15 / 10%);
+  --console-accent-soft: rgb(255 185 15 / 11%);
+  --console-accent-border: rgb(255 185 15 / 34%);
+  --console-inset-bg: #110f0b;
 }
 * {
   box-sizing: border-box;
 }
+html,
 body {
+  min-height: 100%;
   margin: 0;
+  background: var(--console-page-bg);
+  color: var(--console-text);
+}
+#app {
+  min-height: 100vh;
+  background: var(--console-page-bg);
+  color: var(--console-text);
 }
 a {
-  color: #805c00;
+  color: var(--console-link);
   text-decoration: none;
 }
 button,
@@ -47,12 +96,12 @@ h1 {
 }
 .page-heading p {
   margin: 8px 0 0;
-  color: #647386;
+  color: var(--console-text-secondary);
   font-size: 14px;
 }
 .panel {
-  background: #fff;
-  border: 1px solid #e4e8ee;
+  background: var(--console-surface);
+  border: 1px solid var(--console-border);
   border-radius: 14px;
   padding: 24px;
 }
@@ -78,7 +127,7 @@ h1 {
   font-size: 12px;
 }
 .muted {
-  color: #647386;
+  color: var(--console-text-secondary);
 }
 .el-button--primary {
   --el-button-bg-color: var(--brand-yellow);
@@ -92,15 +141,15 @@ h1 {
   --el-button-active-text-color: #241b05;
 }
 .el-button--primary.is-link {
-  --el-button-text-color: #805c00;
-  --el-button-hover-text-color: #5e4200;
+  --el-button-text-color: var(--console-link);
+  --el-button-hover-text-color: var(--console-link-hover);
 }
 .el-tag--primary {
-  --el-tag-text-color: #805c00;
+  --el-tag-text-color: var(--console-link);
 }
 .el-link--primary {
-  --el-link-text-color: #805c00;
-  --el-link-hover-text-color: #5e4200;
+  --el-link-text-color: var(--console-link);
+  --el-link-hover-text-color: var(--console-link-hover);
 }
 .el-dialog {
   max-width: calc(100vw - 32px);
@@ -108,6 +157,29 @@ h1 {
 }
 .el-alert {
   line-height: 1.6;
+}
+html.dark {
+  --el-color-primary: #ffb90f;
+  --el-color-primary-light-3: #ffd05b;
+  --el-color-primary-light-5: #ffd976;
+  --el-color-primary-light-7: rgb(255 185 15 / 44%);
+  --el-color-primary-light-8: rgb(255 185 15 / 30%);
+  --el-color-primary-light-9: rgb(255 185 15 / 16%);
+  --el-color-primary-dark-2: #e6a500;
+  --el-bg-color-page: var(--console-page-bg);
+  --el-bg-color: var(--console-surface);
+  --el-bg-color-overlay: var(--console-surface-raised);
+  --el-fill-color: #292419;
+  --el-fill-color-light: #292419;
+  --el-fill-color-lighter: #302a1e;
+  --el-fill-color-extra-light: #211d15;
+  --el-border-color: #4a402e;
+  --el-border-color-light: #423927;
+  --el-border-color-lighter: #3b3324;
+  --el-text-color-primary: var(--console-text);
+  --el-text-color-regular: #e2d7c1;
+  --el-text-color-secondary: var(--console-text-secondary);
+  --el-text-color-placeholder: #9a8a6c;
 }
 @media (max-width: 800px) {
   .panel {

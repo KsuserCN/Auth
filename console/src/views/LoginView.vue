@@ -50,17 +50,19 @@ const login = async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 75% 20%, #fff1c7, transparent 45%), #f4f6f9;
+  background:
+    radial-gradient(circle at 75% 20%, var(--console-accent-glow), transparent 45%),
+    var(--console-page-bg);
   padding: 24px;
 }
 .login-card {
   width: 440px;
   max-width: 100%;
-  background: #fff;
-  border: 1px solid #e4e8ee;
+  background: var(--console-surface);
+  border: 1px solid var(--console-border);
   padding: 48px;
   border-radius: 20px;
-  box-shadow: 0 12px 45px #1823320a;
+  box-shadow: 0 12px 45px rgb(24 35 50 / 4%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -74,7 +76,7 @@ const login = async () => {
   margin-bottom: 4px;
 }
 .eyebrow {
-  color: #8b6500;
+  color: var(--console-link);
   font-size: 11px;
   letter-spacing: 2px;
 }
@@ -83,7 +85,7 @@ h1 {
 }
 p {
   line-height: 1.9;
-  color: #647386;
+  color: var(--console-text-secondary);
   margin: -6px 0 6px;
   font-size: 14px;
 }
@@ -97,7 +99,7 @@ p {
 .login-card > a,
 .login-footer {
   font-size: 12px;
-  color: #7b8490;
+  color: var(--console-text-muted);
 }
 .login-footer {
   margin-top: 32px;
