@@ -294,7 +294,7 @@ class SsoPlatformServiceTest {
         User user = new User();
         user.setId(1L);
         user.setUuid("user-uuid-demo");
-        user.setVerificationType("admin");
+        user.setSystemRole("ADMIN");
         return user;
     }
 

@@ -84,6 +84,12 @@ public class AuthController {
     private final QrChallengeService qrChallengeService;
     private final AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService;
     private final AdaptiveRiskMetricsService adaptiveRiskMetricsService;
+    private ConsoleSessionService consoleSessionService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setConsoleSessionService(ConsoleSessionService service) {
+        this.consoleSessionService = service;
+    }
 
     public AuthController(UserService userService, UserSessionService userSessionService, JwtUtil jwtUtil,
                           EmailService emailService, VerificationCodeService verificationCodeService,
@@ -735,6 +741,8 @@ public class AuthController {
         }
 
         userInfo.setHasPassword(user.getHasPassword());
+        userInfo.setSystemRole(user.getSystemRole());
+        userInfo.setDeveloperVerificationType(user.getDeveloperVerificationType());
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, userInfo));
     }
@@ -2387,6 +2395,14 @@ public class AuthController {
         }
 
         String method = verifySensitiveOperationRequest.getMethod();
+        String consoleVerificationId = verifySensitiveOperationRequest.getConsoleVerificationId();
+        if (consoleVerificationId != null) {
+            consoleSessionService.validateVerificationRequest(consoleVerificationId, uuid);
+            if (!"password".equals(method) && !"totp".equals(method)) {
+                return ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.CONSOLE_FLOW_INVALID));
+            }
+        }
+
 
         // 参数校验
         if (method == null || method.trim().isEmpty()) {
@@ -2418,6 +2434,9 @@ public class AuthController {
             }
 
             // 验证成功，标记用户已验证
+            if (consoleVerificationId != null) {
+                consoleSessionService.recordVerificationProof(consoleVerificationId, uuid);
+            }
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(request, "password");
             verificationCodeService.clearLockAndError(user.getEmail());
@@ -2483,6 +2502,9 @@ public class AuthController {
             }
 
             // 验证成功，标记用户已验证
+            if (consoleVerificationId != null) {
+                consoleSessionService.recordVerificationProof(consoleVerificationId, uuid);
+            }
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(request, "email-code");
             verificationCodeService.clearLockAndError(email);
@@ -2525,6 +2547,9 @@ public class AuthController {
             }
 
             // 验证成功，标记用户已验证
+            if (consoleVerificationId != null) {
+                consoleSessionService.recordVerificationProof(consoleVerificationId, uuid);
+            }
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(request, "totp");
             sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
@@ -3271,6 +3296,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<Void>> verifySensitiveOperationWithPasskey(
             @RequestBody PasskeyAuthenticationVerifyRequest request,
             @RequestParam(required = false) String challengeId,
+            @RequestParam(required = false) String consoleVerificationId,
             Authentication authentication,
             HttpServletRequest httpRequest) {
         long startTime = System.currentTimeMillis();
@@ -3296,16 +3322,24 @@ public class AuthController {
                 .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
+        if (consoleVerificationId != null) {
+            consoleSessionService.validateVerificationRequest(consoleVerificationId, uuid);
+        }
         try {
             passkeyService.verifySensitiveOperation(user, request, challengeId);
             
             String clientIp = rateLimitService.getClientIp(httpRequest);
+            if (consoleVerificationId != null) {
+                consoleSessionService.recordVerificationProof(consoleVerificationId, uuid);
+            }
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(httpRequest, "passkey");
             sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), true, null, startTime);
             
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
+        } catch (cn.ksuser.api.exception.Oauth2Exception e) {
+            throw e;
         } catch (IllegalArgumentException e) {
             sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

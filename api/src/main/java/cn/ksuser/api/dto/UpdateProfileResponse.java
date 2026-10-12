@@ -14,6 +14,8 @@ public class UpdateProfileResponse {
     private String region;
     private String bio;
     private String verificationType;
+    private String systemRole = "USER";
+    private String developerVerificationType = "none";
     private LocalDateTime updatedAt;
 
     public UpdateProfileResponse() {
@@ -44,7 +46,7 @@ public class UpdateProfileResponse {
     }
 
     public static UpdateProfileResponse fromUser(cn.ksuser.api.entity.User user) {
-        return new UpdateProfileResponse(
+        UpdateProfileResponse response = new UpdateProfileResponse(
             user.getUuid(),
             user.getUsername(),
             user.getEmail(),
@@ -57,6 +59,9 @@ public class UpdateProfileResponse {
             user.getVerificationType(),
             user.getUpdatedAt()
         );
+        response.setSystemRole(user.getSystemRole());
+        response.setDeveloperVerificationType(user.getDeveloperVerificationType());
+        return response;
     }
 
     public String getUuid() {
@@ -115,6 +120,11 @@ public class UpdateProfileResponse {
     public void setBio(String bio) {
         this.bio = bio;
     }
+
+    public String getSystemRole() { return systemRole; }
+    public void setSystemRole(String value) { systemRole = value; }
+    public String getDeveloperVerificationType() { return developerVerificationType; }
+    public void setDeveloperVerificationType(String value) { developerVerificationType = value; }
 
     public String getVerificationType() {
         return verificationType;

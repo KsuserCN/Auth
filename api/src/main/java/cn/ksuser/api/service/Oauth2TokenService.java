@@ -36,7 +36,7 @@ public class Oauth2TokenService {
                                       String scope, String openid, String unionid, Long authorizationId) {
         long now = System.currentTimeMillis();
         return Jwts.builder()
-            .subject(userUuid)
+            .subject(openid)
             .claim("type", "oauth2_access")
             .claim("client_id", clientId)
             .claim("owner_user_id", ownerUserId)

@@ -622,6 +622,12 @@ public class PasskeyService {
             origins.add(Origin.create("https://auth.ksuser.cn"));
         }
 
+        // Console shares the auth RP ID using WebAuthn Related Origin Requests.
+        // Keep the API's signed-origin allowlist aligned with the RP's well-known origin list.
+        origins.add(Origin.create(appProperties.isDebug()
+            ? "http://localhost:5174"
+            : "https://console.ksuser.cn"));
+
         List<String> configuredAndroidOrigins = appProperties.getPasskey().getAndroidOrigins();
         if (configuredAndroidOrigins != null) {
             for (String origin : configuredAndroidOrigins) {

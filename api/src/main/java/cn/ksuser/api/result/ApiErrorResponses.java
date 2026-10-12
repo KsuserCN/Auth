@@ -36,7 +36,9 @@ public final class ApiErrorResponses {
         path = path.replaceAll("/+$", "");
         return path.equals("/oauth2/token") || path.equals("/oauth2/userinfo")
             || path.equals("/sso/token") || path.equals("/sso/userinfo") || path.equals("/sso/jwks")
-            || path.equals("/.well-known/openid-configuration");
+            || path.equals("/.well-known/openid-configuration")
+            || path.equals("/official/token") || path.equals("/official/userinfo")
+            || path.equals("/official/jwks") || path.equals("/official/.well-known/openid-configuration");
     }
     public static Object body(HttpServletRequest request, int status, ApiResult result) {
         if (!isProtocol(request)) return new ApiResponse<>(status, result);

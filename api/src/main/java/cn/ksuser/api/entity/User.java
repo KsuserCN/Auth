@@ -47,6 +47,9 @@ public class User {
     @Column(name = "verification_type", length = 20, nullable = false)
     private String verificationType = "none";
 
+    @Column(name = "system_role", length = 20, nullable = false)
+    private String systemRole = "USER";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -179,7 +182,29 @@ public class User {
     }
 
     public String getVerificationType() {
-        return verificationType == null || verificationType.isBlank() ? "none" : verificationType;
+        // Preserve the published field for older clients. Authorization uses systemRole only.
+        return isSystemAdmin() ? "admin" : getDeveloperVerificationType();
+    }
+
+    public String getDeveloperVerificationType() {
+        return "personal".equals(verificationType) || "enterprise".equals(verificationType)
+            ? verificationType : "none";
+    }
+
+    public String getSystemRole() {
+        return systemRole == null ? "USER" : systemRole;
+    }
+
+    public void setSystemRole(String systemRole) {
+        if (!java.util.Set.of("USER", "ADMIN", "SUPER_ADMIN").contains(systemRole)) {
+            throw new IllegalArgumentException("Invalid system role");
+        }
+        this.systemRole = systemRole;
+    }
+
+    @JsonIgnore
+    public boolean isSystemAdmin() {
+        return "ADMIN".equals(getSystemRole()) || "SUPER_ADMIN".equals(getSystemRole());
     }
 
     public void setVerificationType(String verificationType) {

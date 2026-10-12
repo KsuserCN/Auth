@@ -101,7 +101,7 @@ public class SsoPlatformService {
         List<SsoClientResponse> clients = admin
             ? oidcClientRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toClientResponse).toList()
             : List.of();
-        return new SsoClientsOverviewResponse(
+        SsoClientsOverviewResponse overview = new SsoClientsOverviewResponse(
             user == null ? "none" : user.getVerificationType(),
             admin,
             maxClients,
@@ -109,6 +109,9 @@ public class SsoPlatformService {
             admin && clients.size() < maxClients,
             clients
         );
+        overview.setSystemRole(user.getSystemRole());
+        overview.setDeveloperVerificationType(user.getDeveloperVerificationType());
+        return overview;
     }
 
     public SsoClientCreateResponse createClient(User user, SsoClientCreateRequest request) {
@@ -370,8 +373,7 @@ public class SsoPlatformService {
     }
 
     public boolean isAdminUser(User user) {
-        String verificationType = user == null ? "none" : user.getVerificationType();
-        return "admin".equalsIgnoreCase(verificationType);
+        return user != null && user.isSystemAdmin();
     }
 
     private void ensureAdminUser(User user) {

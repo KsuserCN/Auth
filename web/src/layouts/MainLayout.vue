@@ -158,6 +158,7 @@
 </template>
 
 <script setup lang="ts">
+import { canCreateApplications, verificationDisplayType } from '@/utils/userRoles'
 import { t } from '@/i18n'
 
 import { ref, computed, watch, onMounted } from 'vue'
@@ -204,7 +205,7 @@ const menuItems = computed(() => [
 
 const currentPath = computed(() => route.path)
 const canCreateApps = computed(() =>
-  ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
+  canCreateApplications(user.value),
 )
 const visibleMenuItems = computed(() =>
   menuItems.value.filter((item) => item.path !== '/home/open-platform' || canCreateApps.value),
@@ -226,7 +227,8 @@ const currentThemeIcon = computed(() => {
 })
 
 const verificationLabel = computed(() => {
-  const type = user.value?.verificationType
+  const type = verificationDisplayType(user.value)
+  if (user.value?.systemRole === 'SUPER_ADMIN') return t('ui.console.superAdmin')
   if (type === 'admin') return t('ui.mainLayout.message017')
   if (type === 'enterprise') return t('ui.mainLayout.message018')
   if (type === 'personal') return t('ui.mainLayout.message019')
@@ -234,7 +236,7 @@ const verificationLabel = computed(() => {
 })
 
 const verificationTagType = computed(() => {
-  const type = user.value?.verificationType
+  const type = verificationDisplayType(user.value)
   if (type === 'admin') return 'danger'
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'

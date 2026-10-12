@@ -4040,6 +4040,114 @@
         "web/src/views/DesktopPasskeyBridgeView.vue"
       ],
       "messageEn": "This account requires additional MFA verification, which cannot be completed on the browser bridge page"
+    },
+    "OFFICIAL_REQUEST_INVALID": {
+      "message": "官方应用授权参数不正确",
+      "messageEn": "Invalid official authorization parameters",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_CLIENT_INVALID": {
+      "message": "官方应用不存在或已停用",
+      "messageEn": "Official application is unavailable",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_REDIRECT_INVALID": {
+      "message": "官方应用回调地址不匹配",
+      "messageEn": "Official application callback does not match",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_SCOPE_INVALID": {
+      "message": "官方应用请求了未开放的资料范围",
+      "messageEn": "Requested user data scope is not allowed",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_PKCE_INVALID": {
+      "message": "官方应用登录验证失败，请重新登录",
+      "messageEn": "Official application PKCE verification failed. Sign in again.",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_GRANT_INVALID": {
+      "message": "官方应用授权已失效，请重新授权",
+      "messageEn": "Official application authorization has expired or been revoked",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_TOKEN_INVALID": {
+      "message": "官方应用访问凭证无效或已过期",
+      "messageEn": "Official application access token is invalid or expired",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_CONSENT_REQUIRED": {
+      "message": "请先确认官方应用的资料授权",
+      "messageEn": "Confirm the official application data access first",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_ACCESS_DENIED": {
+      "message": "当前账号无权登录此官方应用",
+      "messageEn": "This account cannot sign in to this official application",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_AUTHORIZED": {
+      "message": "官方应用授权成功",
+      "messageEn": "Official application authorized",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_REVOKED": {
+      "message": "已撤销官方应用授权",
+      "messageEn": "Official application authorization revoked",
+      "params": [],
+      "sources": []
+    },
+    "OFFICIAL_SUCCESS": {
+      "message": "操作成功",
+      "messageEn": "Operation completed",
+      "params": [],
+      "sources": []
+    },
+    "CONSOLE_SESSION_INVALID": {
+      "message": "管理面板登录已失效，请重新登录",
+      "messageEn": "Console session expired. Sign in again.",
+      "params": [],
+      "sources": []
+    },
+    "CONSOLE_ACCESS_DENIED": {
+      "message": "只有超级管理员可以访问管理面板",
+      "messageEn": "Only super administrators can access the console",
+      "params": [],
+      "sources": []
+    },
+    "CONSOLE_VERIFICATION_REQUIRED": {
+      "message": "请前往通行证再次验证身份",
+      "messageEn": "Verify your identity again in Ksuser Passport",
+      "params": [],
+      "sources": []
+    },
+    "CONSOLE_FLOW_INVALID": {
+      "message": "管理面板验证流程已失效，请重试",
+      "messageEn": "Console verification flow is invalid or expired. Try again.",
+      "params": [],
+      "sources": []
+    },
+    "CONSOLE_APPLICATION_INVALID": {
+      "message": "官方应用配置不正确或操作不被允许",
+      "messageEn": "Invalid official application configuration or operation",
+      "params": [],
+      "sources": []
+    },
+    "CONSOLE_USER_NOT_FOUND": {
+      "message": "未找到指定用户",
+      "messageEn": "The requested user was not found",
+      "params": [],
+      "sources": []
     }
   }
 }

@@ -84,7 +84,8 @@ public class SecurityHeadersConfig {
                     "accelerometer=()");
                 
                 // Cache-Control: 防止敏感信息被缓存
-                if (request.getRequestURI().contains("/auth/")) {
+                if (request.getRequestURI().contains("/auth/") || request.getRequestURI().startsWith("/console/")
+                    || request.getRequestURI().startsWith("/official/")) {
                     response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
                     response.setHeader("Pragma", "no-cache");
                     response.setHeader("Expires", "0");

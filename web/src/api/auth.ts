@@ -10,8 +10,12 @@ export interface User {
   email: string
   avatarUrl?: string | null
   verificationType?: VerificationType
+  developerVerificationType?: Exclude<VerificationType, 'admin'>
+  systemRole?: SystemRole
   settings?: UserSettings
 }
+
+export type SystemRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN'
 
 export type VerificationType = 'none' | 'personal' | 'enterprise' | 'admin'
 
@@ -296,8 +300,11 @@ export interface PasskeySensitiveVerificationRequest {
 export const verifyPasskeySensitiveOperation = async (
   challengeId: string,
   data: PasskeySensitiveVerificationRequest,
+  consoleVerificationId?: string,
 ): Promise<void> => {
-  await request.post(`/auth/passkey/sensitive-verification-verify?challengeId=${challengeId}`, data)
+  const params = new URLSearchParams({ challengeId })
+  if (consoleVerificationId) params.set('consoleVerificationId', consoleVerificationId)
+  await request.post(`/auth/passkey/sensitive-verification-verify?${params}`, data)
 }
 
 // ========== Passkey 管理 ==========
@@ -680,7 +687,9 @@ export type VerifySensitiveRequest =
   | VerifySensitiveTotpCodeRequest
   | VerifySensitiveRecoveryCodeRequest
 
-export const verifySensitiveOperation = async (data: VerifySensitiveRequest): Promise<void> => {
+export const verifySensitiveOperation = async (
+  data: VerifySensitiveRequest & { consoleVerificationId?: string },
+): Promise<void> => {
   await request.post('/auth/verify-sensitive', data)
 }
 

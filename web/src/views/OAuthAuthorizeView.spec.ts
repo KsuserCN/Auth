@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   continue: vi.fn(),
   oauthContext: vi.fn(),
   ssoContext: vi.fn(),
+  officialContext: vi.fn(),
+  officialApprove: vi.fn(),
+  token: null as string | null,
+  account: null as { username: string; email: string } | null,
   desktopStatus: vi.fn(),
   route: {
     path: '/sso/authorize',
@@ -35,13 +39,13 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: mocks.replace }),
 }))
 vi.mock('@vueuse/core', () => ({ useDark: () => ref(false) }))
-vi.mock('pinia', () => ({ storeToRefs: () => ({ user: ref(null) }) }))
+vi.mock('pinia', () => ({ storeToRefs: () => ({ user: ref(mocks.account) }) }))
 vi.mock('@/stores/user', () => ({
   useUserStore: () => ({ clearUser: vi.fn(), fetchUserInfo: vi.fn() }),
 }))
 vi.mock('@/utils/authSession', () => ({
   clearAuthSession: vi.fn(),
-  getStoredAccessToken: () => null,
+  getStoredAccessToken: () => mocks.token,
 }))
 vi.mock('@/api/auth', () => ({ logout: vi.fn() }))
 vi.mock('@/api/oauth2', () => ({
@@ -51,6 +55,14 @@ vi.mock('@/api/oauth2', () => ({
 vi.mock('@/api/sso', () => ({
   getSSOAuthorizeContext: mocks.ssoContext,
   approveSSOAuthorize: vi.fn(),
+}))
+vi.mock('@/api/official', () => ({
+  getOfficialAuthorizeContext: mocks.officialContext,
+  approveOfficialAuthorize: mocks.officialApprove,
+  officialScopeLabel: (scope: string) =>
+    ({ openid: '真实用户 UUID', email: '邮箱', real_name: '真实姓名' })[
+      scope as 'openid' | 'email' | 'real_name'
+    ] || scope,
 }))
 vi.mock('@/utils/desktopBridge', () => ({
   getDesktopBridgeStatus: mocks.desktopStatus,
@@ -101,6 +113,8 @@ const render = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.route.path = '/sso/authorize'
+  mocks.token = null
+  mocks.account = null
   mocks.ios.mockReturnValue(true)
   mocks.ssoContext.mockResolvedValue(context)
   mocks.oauthContext.mockResolvedValue(context)
@@ -109,6 +123,92 @@ beforeEach(() => {
   mocks.continue.mockReturnValue(false)
   mocks.cancel.mockResolvedValue(undefined)
   mocks.desktopStatus.mockResolvedValue(null)
+})
+
+describe('official application consent', () => {
+  beforeEach(() => {
+    mocks.route.path = '/official/authorize'
+    mocks.token = 'passport-session'
+    mocks.account = { username: 'Ksuser', email: 'ksuser@example.com' }
+    mocks.officialContext.mockResolvedValue({
+      clientId: 'client',
+      clientName: '官方校园服务',
+      requestedScopes: ['openid', 'email', 'real_name'],
+      authorizedScopes: [],
+      loggedIn: true,
+      consentRequired: true,
+      consoleApplication: false,
+    })
+    // Keep navigation pending while asserting the request sent before redirect.
+    mocks.officialApprove.mockImplementation(() => new Promise(() => {}))
+  })
+  it('displays exact profile fields and hides the ordinary grant policy', async () => {
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).toContain('官方校园服务')
+    expect(wrapper.text()).toContain('真实用户 UUID')
+    expect(wrapper.text()).toContain('真实姓名')
+    expect(wrapper.find('.grant-policy-options').exists()).toBe(false)
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(mocks.officialApprove).not.toHaveBeenCalled()
+  })
+  it('remembers approved scopes and automatically resumes without consent prompt', async () => {
+    const originalPrompt = mocks.route.query.prompt
+    mocks.route.query.prompt = ''
+    mocks.officialContext.mockResolvedValue({
+      clientId: 'client',
+      clientName: '官方校园服务',
+      requestedScopes: ['openid', 'email'],
+      authorizedScopes: ['openid', 'email'],
+      loggedIn: true,
+      consentRequired: false,
+      consoleApplication: false,
+    })
+    render()
+    await flushPromises()
+    expect(mocks.officialApprove).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approved: true,
+        state: 'original-state',
+        nonce: 'original-nonce',
+        codeChallenge: 'original-challenge',
+        codeChallengeMethod: 'S256',
+      }),
+    )
+    mocks.route.query.prompt = originalPrompt
+  })
+  it('denies official consent through the validated server callback', async () => {
+    const wrapper = render()
+    await flushPromises()
+    const deny = wrapper.findAll('button').find((button) => button.text() === '拒绝')!
+    await deny.trigger('click')
+    expect(mocks.officialApprove).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approved: false,
+        state: 'original-state',
+        nonce: 'original-nonce',
+      }),
+    )
+  })
+  it('requires consent again when an application requests an additional profile field', async () => {
+    const originalPrompt = mocks.route.query.prompt
+    mocks.route.query.prompt = ''
+    mocks.officialContext.mockResolvedValue({
+      clientId: 'client',
+      clientName: '官方校园服务',
+      requestedScopes: ['openid', 'email', 'real_name'],
+      authorizedScopes: ['openid', 'email'],
+      loggedIn: true,
+      consentRequired: true,
+      consoleApplication: false,
+    })
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).toContain('真实姓名')
+    expect(wrapper.text()).toContain('首次授权后将记住已同意的范围')
+    expect(mocks.officialApprove).not.toHaveBeenCalled()
+    mocks.route.query.prompt = originalPrompt
+  })
 })
 afterEach(() => mounted.splice(0).forEach((wrapper) => wrapper.unmount()))
 describe('authorization handoff page', () => {

@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
-import HomeView from '../views/HomeView.vue'
 import MainLayout from '../layouts/MainLayout.vue'
 
 const router = createRouter({
@@ -125,6 +124,16 @@ const router = createRouter({
       path: '/app/authorize-return',
       name: 'mobile-authorization-return',
       component: () => import('../views/MobileAuthorizationReturnView.vue'),
+    },
+    {
+      path: '/console/verify',
+      name: 'console-verification',
+      component: () => import('../views/ConsoleVerificationView.vue'),
+    },
+    {
+      path: '/official/authorize',
+      name: 'official-authorize',
+      component: () => import('../views/OAuthAuthorizeView.vue'),
     },
     {
       path: '/oauth/authorize',

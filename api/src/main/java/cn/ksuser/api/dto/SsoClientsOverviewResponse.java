@@ -4,6 +4,8 @@ import java.util.List;
 
 public class SsoClientsOverviewResponse {
     private String verificationType;
+    private String systemRole = "USER";
+    private String developerVerificationType = "none";
     private boolean admin;
     private int maxClients;
     private int currentCount;
@@ -23,6 +25,11 @@ public class SsoClientsOverviewResponse {
         this.canCreate = canCreate;
         this.clients = clients;
     }
+
+    public String getSystemRole() { return systemRole; }
+    public void setSystemRole(String value) { systemRole = value; }
+    public String getDeveloperVerificationType() { return developerVerificationType; }
+    public void setDeveloperVerificationType(String value) { developerVerificationType = value; }
 
     public String getVerificationType() {
         return verificationType;

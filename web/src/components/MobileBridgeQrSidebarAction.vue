@@ -1,5 +1,5 @@
 <template>
-  <div class="mobile-bridge-sidebar">
+  <div v-if="!isMobileBrowser" class="mobile-bridge-sidebar">
     <div class="section-label">{{ t('ui.mobileBridgeQrSidebarAction.message001') }}</div>
     <el-button
       class="bridge-btn"
@@ -11,6 +11,19 @@
       <el-icon><Iphone /></el-icon>
       <span class="bridge-btn-label">{{ t('ui.mobileBridgeQrSidebarAction.message002') }}</span>
     </el-button>
+  </div>
+
+  <div v-else-if="isAppleMobile" class="mobile-bridge-sidebar">
+    <div class="section-label">{{ t('ui.mobileBridgeQrSidebarAction.message009') }}</div>
+    <a
+      class="bridge-btn app-download-btn"
+      :href="appStoreUrl"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <el-icon><Iphone /></el-icon>
+      <span class="bridge-btn-label">{{ t('ui.mobileBridgeQrSidebarAction.message010') }}</span>
+    </a>
   </div>
 
   <el-dialog
@@ -55,9 +68,9 @@
 </template>
 
 <script setup lang="ts">
-import { t } from '@/i18n'
+import { computed, onBeforeUnmount, ref } from 'vue'
+import { effectiveLocale, t } from '@/i18n'
 
-import { onBeforeUnmount, ref } from 'vue'
 import QRCode from 'qrcode'
 import { ElMessage } from 'element-plus'
 import { Iphone } from '@element-plus/icons-vue'
@@ -82,6 +95,20 @@ const mobileBridgeQrRefreshing = ref(false)
 const mobileBridgeQrImage = ref('')
 const mobileBridgeQrExpiresInSeconds = ref(0)
 const passkeySupported = isWebAuthnSupported()
+
+const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+const isAppleMobile =
+  /iPhone|iPad/i.test(userAgent) ||
+  (typeof navigator !== 'undefined' &&
+    navigator.platform === 'MacIntel' &&
+    navigator.maxTouchPoints > 1)
+const isMobileBrowser =
+  /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(userAgent) || isAppleMobile
+const appStoreUrl = computed(() =>
+  effectiveLocale.value === 'zh-Hans'
+    ? 'https://apps.apple.com/cn/app/ksuser%E5%AE%89%E5%85%A8/id6776157121'
+    : 'https://apps.apple.com/us/app/ksuser%E5%AE%89%E5%85%A8/id6776157121',
+)
 
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 let mobileBridgeQrCountdownTimer: number | null = null
@@ -262,6 +289,24 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   gap: 8px;
   white-space: normal;
+}
+
+.app-download-btn {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.app-download-btn:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.app-download-btn:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .bridge-btn :deep(.el-icon) {

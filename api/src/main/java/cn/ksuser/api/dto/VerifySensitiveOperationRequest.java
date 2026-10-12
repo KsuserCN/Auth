@@ -5,6 +5,10 @@ public class VerifySensitiveOperationRequest {
     private String password; // 当 method=password 时需要
     private String code; // 当 method=email-code 或 totp 时需要
     private String recoveryCode; // 当 method=totp 且使用一次性恢复码时需要
+    private String consoleVerificationId;
+
+    public String getConsoleVerificationId() { return consoleVerificationId; }
+    public void setConsoleVerificationId(String value) { consoleVerificationId = value; }
 
     public VerifySensitiveOperationRequest() {
     }

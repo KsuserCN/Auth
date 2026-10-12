@@ -32,6 +32,10 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 - [Microsoft OAuth 适配说明](./MICROSOFT_OAUTH_ADAPTATION.md)
 - [Google OAuth 适配说明](./GOOGLE_OAUTH_ADAPTATION.md)
 
+## Console Passkey 验证
+
+Console 在 `console.ksuser.cn` 内完成身份验证。为继续使用注册在 `auth.ksuser.cn` RP ID 下的现有 Passkey，部署时需要将 `public/.well-known/webauthn` 发布到 `https://auth.ksuser.cn/.well-known/webauthn`，并确保响应 `Content-Type` 为 `application/json`。Nginx 部署可将 [`deploy/nginx-webauthn-location.conf`](./deploy/nginx-webauthn-location.conf) 包含在 `auth.ksuser.cn` 的 HTTPS server 块中。API 端的 WebAuthn origin allowlist 也已包含 Console origin。
+
 ## Project Setup
 
 ```sh

@@ -94,7 +94,7 @@ public class Oauth2PlatformService {
             .toList();
         boolean verified = isOauthCreator(user);
         int currentCount = apps.size();
-        return new Oauth2AppsOverviewResponse(
+        Oauth2AppsOverviewResponse overview = new Oauth2AppsOverviewResponse(
             user.getVerificationType(),
             verified,
             maxAppsPerUser,
@@ -102,6 +102,9 @@ public class Oauth2PlatformService {
             verified && currentCount < maxAppsPerUser,
             apps
         );
+        overview.setSystemRole(user.getSystemRole());
+        overview.setDeveloperVerificationType(user.getDeveloperVerificationType());
+        return overview;
     }
 
     public Oauth2AppCreateResponse createApplication(User user, Oauth2AppCreateRequest request) {
@@ -319,10 +322,10 @@ public class Oauth2PlatformService {
     }
 
     public boolean isOauthCreator(User user) {
-        String verificationType = user == null ? "none" : user.getVerificationType();
+        String verificationType = user == null ? "none" : user.getDeveloperVerificationType();
         return "personal".equalsIgnoreCase(verificationType)
             || "enterprise".equalsIgnoreCase(verificationType)
-            || "admin".equalsIgnoreCase(verificationType);
+            || (user != null && user.isSystemAdmin());
     }
 
     private void ensureOauthCreator(User user) {

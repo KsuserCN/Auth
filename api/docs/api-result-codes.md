@@ -537,3 +537,21 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `APPLE_BIND_EMAIL_CONFLICT` | 邮箱已存在，请登录已有账号后绑定 Apple | This email address already exists. Sign in to the existing account before linking Apple. | — | AppleAuthController.java |
 | `APPLE_BIND_REQUIRED` | 请创建账号，或登录已有账号后绑定 Apple | Create an account, or sign in to an existing account and link Apple. | — | AppleAuthController.java |
 | `PASSKEY_MFA_UNSUPPORTED` | 当前账号需要额外的 MFA 验证，但浏览器桥接页无法继续完成 | This account requires additional MFA verification, which cannot be completed on the browser bridge page | — | DesktopPasskeyBridgeView.vue |
+| `OFFICIAL_REQUEST_INVALID` | 官方应用授权参数不正确 | Invalid official authorization parameters | — | 公共/客户端 |
+| `OFFICIAL_CLIENT_INVALID` | 官方应用不存在或已停用 | Official application is unavailable | — | 公共/客户端 |
+| `OFFICIAL_REDIRECT_INVALID` | 官方应用回调地址不匹配 | Official application callback does not match | — | 公共/客户端 |
+| `OFFICIAL_SCOPE_INVALID` | 官方应用请求了未开放的资料范围 | Requested user data scope is not allowed | — | 公共/客户端 |
+| `OFFICIAL_PKCE_INVALID` | 官方应用登录验证失败，请重新登录 | Official application PKCE verification failed. Sign in again. | — | 公共/客户端 |
+| `OFFICIAL_GRANT_INVALID` | 官方应用授权已失效，请重新授权 | Official application authorization has expired or been revoked | — | 公共/客户端 |
+| `OFFICIAL_TOKEN_INVALID` | 官方应用访问凭证无效或已过期 | Official application access token is invalid or expired | — | 公共/客户端 |
+| `OFFICIAL_CONSENT_REQUIRED` | 请先确认官方应用的资料授权 | Confirm the official application data access first | — | 公共/客户端 |
+| `OFFICIAL_ACCESS_DENIED` | 当前账号无权登录此官方应用 | This account cannot sign in to this official application | — | 公共/客户端 |
+| `OFFICIAL_AUTHORIZED` | 官方应用授权成功 | Official application authorized | — | 公共/客户端 |
+| `OFFICIAL_REVOKED` | 已撤销官方应用授权 | Official application authorization revoked | — | 公共/客户端 |
+| `OFFICIAL_SUCCESS` | 操作成功 | Operation completed | — | 公共/客户端 |
+| `CONSOLE_SESSION_INVALID` | 管理面板登录已失效，请重新登录 | Console session expired. Sign in again. | — | 公共/客户端 |
+| `CONSOLE_ACCESS_DENIED` | 只有超级管理员可以访问管理面板 | Only super administrators can access the console | — | 公共/客户端 |
+| `CONSOLE_VERIFICATION_REQUIRED` | 请前往通行证再次验证身份 | Verify your identity again in Ksuser Passport | — | 公共/客户端 |
+| `CONSOLE_FLOW_INVALID` | 管理面板验证流程已失效，请重试 | Console verification flow is invalid or expired. Try again. | — | 公共/客户端 |
+| `CONSOLE_APPLICATION_INVALID` | 官方应用配置不正确或操作不被允许 | Invalid official application configuration or operation | — | 公共/客户端 |
+| `CONSOLE_USER_NOT_FOUND` | 未找到指定用户 | The requested user was not found | — | 公共/客户端 |

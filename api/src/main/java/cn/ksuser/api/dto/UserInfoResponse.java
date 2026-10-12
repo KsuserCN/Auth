@@ -17,6 +17,8 @@ public class UserInfoResponse {
     private String region;
     private String bio;
     private String verificationType;
+    private String systemRole = "USER";
+    private String developerVerificationType = "none";
     private LocalDateTime updatedAt;
     private UserSettingsResponse settings;
 
@@ -123,6 +125,11 @@ public class UserInfoResponse {
     public void setBio(String bio) {
         this.bio = bio;
     }
+
+    public String getSystemRole() { return systemRole; }
+    public void setSystemRole(String value) { systemRole = value; }
+    public String getDeveloperVerificationType() { return developerVerificationType; }
+    public void setDeveloperVerificationType(String value) { developerVerificationType = value; }
 
     public String getVerificationType() {
         return verificationType;

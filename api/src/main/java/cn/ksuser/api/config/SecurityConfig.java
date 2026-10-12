@@ -1,6 +1,7 @@
 package cn.ksuser.api.config;
 
 import cn.ksuser.api.filter.JwtAuthenticationFilter;
+import cn.ksuser.api.filter.ConsoleSessionFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,6 +15,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.web.servlet.HandlerExecutionChain;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 
 @Configuration
 @EnableWebSecurity
@@ -32,7 +35,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, ObjectProvider<ConsoleSessionFilter> consoleFilters) throws Exception {
         CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepository.setCookieCustomizer((builder) -> {
             builder.path("/");
@@ -50,6 +53,10 @@ public class SecurityConfig {
                 // Normal requests still require the endpoint's authentication and CSRF checks.
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/console/auth/start", "/console/auth/exchange", "/console/csrf-token",
+                    "/official/authorize/context", "/official/token", "/official/userinfo",
+                    "/official/jwks", "/official/.well-known/openid-configuration").permitAll()
+                .requestMatchers("/console/**").hasAuthority("CONSOLE_SUPER_ADMIN")
                 .requestMatchers("/", "/auth/health", "/auth/health/",
                     "/auth/csrf-token", "/auth/csrf-token/",
                     "/.well-known/openid-configuration",
@@ -79,6 +86,7 @@ public class SecurityConfig {
                     "/oauth2/userinfo", "/oauth2/userinfo/",
                     "/oauth2/authorize/context", "/oauth2/authorize/context/",
                     "/sso/token", "/sso/token/",
+                    "/official/token", "/official/token/",
                     "/sso/userinfo", "/sso/userinfo/",
                     "/sso/jwks", "/sso/jwks/",
                     "/sso/authorize/context", "/sso/authorize/context/",
@@ -165,10 +173,31 @@ public class SecurityConfig {
                     "/oauth/google/bind-pending", "/oauth/google/bind-pending/",
                     "/oauth2/token", "/oauth2/token/",
                     "/sso/token", "/sso/token/",
+                    "/official/token", "/official/token/",
                     "/sso/jwks", "/sso/jwks/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        ConsoleSessionFilter consoleFilter = consoleFilters.getIfAvailable();
+        if (consoleFilter != null) {
+            http.addFilterAfter(consoleFilter, JwtAuthenticationFilter.class);
+        }
         return http.build();
+    }
+
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration() {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(jwtAuthenticationFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<ConsoleSessionFilter> consoleFilterRegistration(ObjectProvider<ConsoleSessionFilter> filters) {
+        FilterRegistrationBean<ConsoleSessionFilter> registration = new FilterRegistrationBean<>();
+        registration.setEnabled(false);
+        ConsoleSessionFilter filter = filters.getIfAvailable();
+        if (filter != null) registration.setFilter(filter);
+        return registration;
     }
 }

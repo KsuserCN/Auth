@@ -4,6 +4,8 @@ import java.util.List;
 
 public class Oauth2AppsOverviewResponse {
     private String verificationType;
+    private String systemRole = "USER";
+    private String developerVerificationType = "none";
     private boolean verified;
     private int maxApps;
     private int currentCount;
@@ -22,6 +24,11 @@ public class Oauth2AppsOverviewResponse {
         this.canCreate = canCreate;
         this.apps = apps;
     }
+
+    public String getSystemRole() { return systemRole; }
+    public void setSystemRole(String value) { systemRole = value; }
+    public String getDeveloperVerificationType() { return developerVerificationType; }
+    public void setDeveloperVerificationType(String value) { developerVerificationType = value; }
 
     public String getVerificationType() {
         return verificationType;

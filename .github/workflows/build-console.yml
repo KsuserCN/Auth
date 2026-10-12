@@ -1,0 +1,38 @@
+name: Build Console
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['console/**', 'package.json', 'shared/api-result-codes.json', 'scripts/generate-api-result-codes.mjs', '.github/workflows/build-console.yml']
+  pull_request:
+    paths: ['console/**', 'package.json', 'shared/api-result-codes.json', 'scripts/generate-api-result-codes.mjs', '.github/workflows/build-console.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run build:console
+        working-directory: .
+      - run: npm run check:api-codes
+        working-directory: .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ksuser-console-web
+          path: build/console
+          if-no-files-found: error

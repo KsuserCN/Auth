@@ -276,6 +276,92 @@
       </el-col>
     </el-row>
 
+    <el-card class="card" shadow="never">
+      <div class="card-title">
+        <el-icon><Monitor /></el-icon>
+        <span>{{ t('ui.official.privacyTitle') }}</span>
+        <el-tag class="app-count" size="small" effect="plain">{{ officialApps.length }}</el-tag>
+      </div>
+      <p class="card-desc">{{ t('ui.official.privacyDescription') }}</p>
+      <div v-if="officialLoading" class="privacy-card-skeleton">
+        <el-skeleton :rows="2" animated />
+      </div>
+      <el-alert v-else-if="officialError" type="error" :closable="false" show-icon>
+        {{ officialError }}
+        <el-button link type="primary" @click="loadOfficialAuthorizations">{{
+          t('ui.devices.message035')
+        }}</el-button>
+      </el-alert>
+      <template v-else>
+        <div v-if="officialApps.length > PAGE_SIZE" class="list-toolbar">
+          <el-input
+            v-model="officialSearch"
+            class="app-search"
+            :placeholder="t('ui.official.privacySearch')"
+            clearable
+            :prefix-icon="Search"
+            @input="officialPage = 1"
+          />
+        </div>
+        <div v-if="pagedOfficialApps.length" class="app-list">
+          <div v-for="app in pagedOfficialApps" :key="app.clientId" class="app-item">
+            <div class="app-left">
+              <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">{{
+                app.clientName.slice(0, 1).toUpperCase()
+              }}</el-avatar>
+              <div class="app-info">
+                <div class="app-name-row">
+                  <span class="app-name">{{ app.clientName }}</span
+                  ><el-tag type="success" size="small">{{ t('ui.official.privacyTitle') }}</el-tag>
+                </div>
+                <div class="app-meta mono">{{ app.clientId }}</div>
+                <div class="scope-list">
+                  <el-tag v-for="scope in app.scopes" :key="scope" size="small" effect="plain">{{
+                    officialScopeLabel(scope)
+                  }}</el-tag>
+                </div>
+                <div class="app-meta">
+                  {{ t('ui.privacy.message012') }}{{ formatDateTime(app.lastAuthorizedAt) }}
+                </div>
+              </div>
+            </div>
+            <el-popconfirm
+              :title="t('ui.official.privacyRevoke')"
+              :confirm-button-text="t('ui.devices.message017')"
+              :cancel-button-text="t('ui.addPasskey.message009')"
+              @confirm="handleRevokeOfficial(app.clientId)"
+            >
+              <template #reference
+                ><el-button
+                  type="danger"
+                  plain
+                  size="small"
+                  :loading="revokingId === `official:${app.clientId}`"
+                  >{{ t('ui.devices.message017') }}</el-button
+                ></template
+              >
+            </el-popconfirm>
+          </div>
+        </div>
+        <el-empty
+          v-else
+          :description="
+            officialApps.length ? t('ui.privacy.message016') : t('ui.official.privacyEmpty')
+          "
+        />
+        <el-pagination
+          v-if="filteredOfficialApps.length > PAGE_SIZE"
+          v-model:current-page="officialPage"
+          class="app-pagination"
+          :page-size="PAGE_SIZE"
+          :total="filteredOfficialApps.length"
+          layout="prev, pager, next"
+          small
+          background
+        />
+      </template>
+    </el-card>
+
     <el-dialog
       v-model="ssoDetailDialogVisible"
       class="detail-dialog"
@@ -501,6 +587,12 @@ import {
   type SSOScope,
 } from '@/api/sso'
 import { checkSensitiveVerification } from '@/api/auth'
+import {
+  getOfficialAuthorizations,
+  revokeOfficialAuthorization,
+  officialScopeLabel,
+  type OfficialAuthorization,
+} from '@/api/official'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { downloadPrivacyExportFile, fetchPrivacyExportData } from '@/api/privacyExport'
@@ -509,8 +601,29 @@ import DangerZoneCard from '@/components/DangerZoneCard.vue'
 
 const loading = ref(false)
 const { user } = storeToRefs(useUserStore())
-const canCreateApps = computed(() =>
-  ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
+const canCreateApps = computed(
+  () =>
+    ['ADMIN', 'SUPER_ADMIN'].includes(user.value?.systemRole ?? '') ||
+    ['personal', 'enterprise'].includes(
+      user.value?.developerVerificationType ?? user.value?.verificationType ?? '',
+    ),
+)
+const officialApps = ref<OfficialAuthorization[]>([])
+const officialLoading = ref(true)
+const officialError = ref('')
+const officialSearch = ref('')
+const officialPage = ref(1)
+const filteredOfficialApps = computed(() => {
+  const query = officialSearch.value.trim().toLocaleLowerCase()
+  return officialApps.value.filter((app) =>
+    `${app.clientName} ${app.clientId}`.toLocaleLowerCase().includes(query),
+  )
+})
+const pagedOfficialApps = computed(() =>
+  filteredOfficialApps.value.slice(
+    (officialPage.value - 1) * PAGE_SIZE,
+    officialPage.value * PAGE_SIZE,
+  ),
 )
 const revokingId = ref('')
 const oauthApps = ref<OAuth2AuthorizedApp[]>([])
@@ -670,6 +783,36 @@ const loadAuthorizations = async () => {
   }
 }
 
+const loadOfficialAuthorizations = async () => {
+  officialLoading.value = true
+  officialError.value = ''
+  try {
+    officialApps.value = await getOfficialAuthorizations()
+  } catch (error) {
+    officialError.value =
+      error instanceof Error ? error.message : t('ui.official.privacyLoadFailed')
+  } finally {
+    officialLoading.value = false
+  }
+}
+
+const handleRevokeOfficial = async (clientId: string) => {
+  revokingId.value = `official:${clientId}`
+  try {
+    await revokeOfficialAuthorization(clientId)
+    officialApps.value = officialApps.value.filter((app) => app.clientId !== clientId)
+    officialPage.value = Math.min(
+      officialPage.value,
+      Math.max(1, Math.ceil(filteredOfficialApps.value.length / PAGE_SIZE)),
+    )
+    ElMessage.success(t('ui.official.privacyRevokeSuccess'))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message047'))
+  } finally {
+    revokingId.value = ''
+  }
+}
+
 const handleRevokeOauth = async (appId: string) => {
   revokingId.value = `oauth:${appId}`
   try {
@@ -715,7 +858,7 @@ const runWithSensitiveVerification = async (action: () => Promise<void>) => {
     pendingSensitiveAction = action
     sensitiveDialogVisible.value = true
     ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
-  } catch (error) {
+  } catch {
     pendingSensitiveAction = action
     sensitiveDialogVisible.value = true
     ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
@@ -762,6 +905,7 @@ const handleDeleteAccount = () => {
 
 onMounted(() => {
   void loadAuthorizations()
+  void loadOfficialAuthorizations()
 })
 </script>
 

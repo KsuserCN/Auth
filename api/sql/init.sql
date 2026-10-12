@@ -6,6 +6,9 @@
 -- ===========================
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS user_official_authorizations;
+DROP TABLE IF EXISTS official_applications;
+DROP TABLE IF EXISTS console_audit_logs;
 DROP TABLE IF EXISTS user_push_devices;
 DROP TABLE IF EXISTS user_sessions;
 DROP TABLE IF EXISTS user_sso_authorizations;
@@ -23,7 +26,7 @@ CREATE TABLE users (
     CHARACTER SET ascii
     COLLATE ascii_bin
     NOT NULL
-    COMMENT '公开用户ID(sub)，OAuth返回给第三方使用（严格大小写匹配）',
+    COMMENT '账号 UUID，仅官方授权直接返回；普通 OAuth/SSO 使用应用专属身份（严格大小写匹配）',
     
   username VARCHAR(50) NOT NULL COMMENT '登录用户名',
   email VARCHAR(255) DEFAULT NULL COMMENT '邮箱（可选）',
@@ -34,7 +37,8 @@ CREATE TABLE users (
   birth_date DATE DEFAULT NULL COMMENT '出生日期 YYYY-MM-DD',
   region VARCHAR(100) DEFAULT NULL COMMENT '地区',
   bio VARCHAR(200) DEFAULT NULL COMMENT '个人简介（最多200字）',
-  verification_type ENUM('none', 'personal', 'enterprise', 'admin') NOT NULL DEFAULT 'none' COMMENT '开发者认证状态（none=未认证 personal=个人认证 enterprise=企业认证 admin=管理员认证）',
+  verification_type ENUM('none', 'personal', 'enterprise', 'admin') NOT NULL DEFAULT 'none' COMMENT '开发者认证状态（admin仅保留用于旧数据迁移）',
+  system_role ENUM('USER','ADMIN','SUPER_ADMIN') NOT NULL DEFAULT 'USER' COMMENT '系统角色',
 
   avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像地址',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -143,6 +147,8 @@ CREATE TABLE user_oauth2_authorizations (
   contact_info VARCHAR(120) NOT NULL COMMENT '授权时的开发者联系方式',
   redirect_uri VARCHAR(500) NOT NULL COMMENT '最近一次授权使用的回调地址',
   scopes VARCHAR(255) NOT NULL DEFAULT '' COMMENT '用户已授予该应用的 scope 并集',
+  grant_mode VARCHAR(32) NOT NULL DEFAULT 'PERSISTENT' COMMENT '授权期限模式',
+  expires_at DATETIME DEFAULT NULL COMMENT '临时授权过期时间',
   authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次授权时间',
   last_authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一次授权时间',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -333,6 +339,8 @@ CREATE TABLE user_sso_authorizations (
   logo_url VARCHAR(255) DEFAULT NULL COMMENT '授权时的客户端 Logo 快照',
   redirect_uri VARCHAR(500) NOT NULL COMMENT '最近一次授权使用的回调地址',
   scopes VARCHAR(255) NOT NULL DEFAULT 'openid' COMMENT '用户已授予该客户端的 scope 并集',
+  grant_mode VARCHAR(32) NOT NULL DEFAULT 'PERSISTENT' COMMENT '授权期限模式',
+  expires_at DATETIME DEFAULT NULL COMMENT '临时授权过期时间',
   authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次授权时间',
   last_authorized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近一次授权时间',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -559,3 +567,53 @@ CREATE TABLE apple_revocation_tasks (
   next_attempt_at DATETIME NOT NULL,
   KEY idx_apple_revocations_due (next_attempt_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Console and official application schema (bootstrap is a separate explicit SQL step).
+CREATE TABLE IF NOT EXISTS official_applications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  client_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  client_secret_hash VARCHAR(255) DEFAULT NULL,
+  client_name VARCHAR(120) NOT NULL,
+  logo_url VARCHAR(500) DEFAULT NULL,
+  client_type VARCHAR(32) NOT NULL,
+  redirect_uris TEXT NOT NULL COMMENT '精确回调地址，多个以换行或分号分隔',
+  scopes VARCHAR(255) NOT NULL DEFAULT 'openid',
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  reserved TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_official_client (client_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='仅由超级管理员配置的官方应用，与 OAuth/SSO 开发者应用独立';
+
+CREATE TABLE IF NOT EXISTS user_official_authorizations (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  client_id VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  scopes VARCHAR(255) NOT NULL DEFAULT 'openid',
+  redirect_uri VARCHAR(2048) NOT NULL,
+  authorized_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_authorized_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_official_grant (user_id, client_id),
+  KEY idx_official_grants_user (user_id, last_authorized_at),
+  CONSTRAINT fk_official_grant_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_official_grant_app FOREIGN KEY (client_id) REFERENCES official_applications(client_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='用户授予官方应用的持久授权，删除记录立即撤销令牌与 Console 会话';
+
+CREATE TABLE IF NOT EXISTS console_audit_logs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  actor_uuid CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  target VARCHAR(128) NOT NULL,
+  action VARCHAR(64) NOT NULL,
+  details TEXT NOT NULL COMMENT '不包含密钥、令牌或认证凭据',
+  ip_address VARCHAR(45) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_console_audit_time (created_at),
+  KEY idx_console_audit_actor (actor_uuid, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Console 管理操作审计，保留历史操作者 UUID';

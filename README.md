@@ -200,3 +200,21 @@ npm run dev:web
 - 署名通知：`NOTICE`
 
 分发或二次修改时，请保留协议和通知文件中的版权与署名信息。
+
+## Console 管理面板
+
+新增独立 Vue 3 Web 管理端，部署到 `https://console.ksuser.cn`，开发端口 `5174`。
+通过 Ksuser 通行证官方应用授权登录，只有超级管理员可以访问。
+支持用户查询、普通管理员任免、官方应用配置和操作审计。
+
+部署新版 API 前，先执行 Console 增量迁移与初始化 SQL。
+完整步骤、初始超级管理员 UUID、官方应用接入和 Nginx 配置见 [Console 文档](console/README.md)。
+
+```bash
+npm --prefix console ci
+npm run dev:console
+npm run build:console
+npm run test:console
+```
+
+`dev:core` / `build:core` 现在包括 API、通行证 Web 和 Console。

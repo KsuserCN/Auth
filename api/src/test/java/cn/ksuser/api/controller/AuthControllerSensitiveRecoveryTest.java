@@ -33,6 +33,7 @@ class AuthControllerSensitiveRecoveryTest {
     private MockHttpServletRequest http;
     private Authentication authentication;
     private UserSession session;
+    private ConsoleSessionService console;
 
     @BeforeEach void setUp() {
         users=mock(UserService.class);sessions=mock(UserSessionService.class);jwt=mock(JwtUtil.class);
@@ -44,6 +45,8 @@ class AuthControllerSensitiveRecoveryTest {
             totp,encryption,mock(UserSettingsRepository.class),mock(MfaService.class),mock(SensitiveLogUtil.class),
             mock(SessionTransferService.class),mock(MobileBridgeService.class),mock(AccountRecoveryService.class),
             mock(QrChallengeService.class),mock(AdaptiveRiskOrchestrationService.class),mock(AdaptiveRiskMetricsService.class),mock(UserOauthAccountRepository.class));
+        console=mock(ConsoleSessionService.class);
+        controller.setConsoleSessionService(console);
         User user=new User("current-user","name","name@example.com",null);user.setId(17L);
         when(users.findByUuid("current-user")).thenReturn(Optional.of(user));
         when(totp.isTotpEnabled(17L)).thenReturn(true);
@@ -65,7 +68,7 @@ class AuthControllerSensitiveRecoveryTest {
         verify(totp).verifyRecoveryCode(17L,"ABCDEFGH");
         verify(sensitive).markVerified("current-user","127.0.0.1");
         verify(sessions).markStepUpVerified(session,"totp");
-        verify(totp,never()).verifyTotpCode(anyLong(),anyString(),any());verifyNoInteractions(encryption);
+        verify(totp,never()).verifyTotpCode(anyLong(),anyString(),any());verifyNoInteractions(encryption,console);
     }
     @Test void invalidOrAlreadyUsedRecoveryCodeDoesNotGrantSensitiveAccess() {
         when(totp.verifyRecoveryCode(17L,"ABCDEFGH")).thenReturn(false);
@@ -93,4 +96,33 @@ class AuthControllerSensitiveRecoveryTest {
         assertEquals(200,response.getStatusCode().value());verify(totp).verifyTotpCode(17L,"123456",key);
         verify(totp,never()).verifyRecoveryCode(anyLong(),anyString());verify(sensitive).markVerified("current-user","127.0.0.1");
     }
+    @Test void consoleProofRequiresAnActualSuccessfulCredentialVerification() {
+        VerifySensitiveOperationRequest request=recoveryRequest("ABCDEFGH");
+        request.setConsoleVerificationId("console-request");
+        when(totp.verifyRecoveryCode(17L,"ABCDEFGH")).thenReturn(true);
+        assertEquals(200,controller.verifySensitiveOperation(request,authentication,http).getStatusCode().value());
+        var order=inOrder(console,totp);
+        order.verify(console).validateVerificationRequest("console-request","current-user");
+        order.verify(totp).verifyRecoveryCode(17L,"ABCDEFGH");
+        order.verify(console).recordVerificationProof("console-request","current-user");
+    }
+    @Test void invalidConsoleCredentialNeverCreatesProof() {
+        VerifySensitiveOperationRequest request=recoveryRequest("ABCDEFGH");
+        request.setConsoleVerificationId("console-request");
+        assertEquals(400,controller.verifySensitiveOperation(request,authentication,http).getStatusCode().value());
+        verify(console).validateVerificationRequest("console-request","current-user");
+        verify(console,never()).recordVerificationProof(anyString(),anyString());
+    }
+    @Test void wrongConsoleChallengeIsRejectedBeforeCredentialsAreConsumed() {
+        VerifySensitiveOperationRequest request=recoveryRequest("ABCDEFGH");
+        request.setConsoleVerificationId("wrong-session-request");
+        doThrow(new cn.ksuser.api.exception.Oauth2Exception(org.springframework.http.HttpStatus.FORBIDDEN,
+            "access_denied",cn.ksuser.api.result.ApiResultCode.CONSOLE_ACCESS_DENIED))
+            .when(console).validateVerificationRequest("wrong-session-request","current-user");
+        assertThrows(cn.ksuser.api.exception.Oauth2Exception.class,
+            () -> controller.verifySensitiveOperation(request,authentication,http));
+        verify(totp,never()).verifyRecoveryCode(anyLong(),anyString());
+        verify(console,never()).recordVerificationProof(anyString(),anyString());
+    }
+
 }

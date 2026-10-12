@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
-import type { VerificationType } from '@/api/auth'
+import type { VerificationType, SystemRole } from '@/api/auth'
 
 export type OAuth2Scope = 'profile' | 'email'
 export type AuthorizationGrantMode = 'PERSISTENT' | 'ONE_TIME' | 'TIME_LIMITED'
@@ -18,6 +18,8 @@ export interface OAuth2App {
 
 export interface OAuth2AppsOverview {
   verificationType: VerificationType
+  developerVerificationType?: Exclude<VerificationType, 'admin'>
+  systemRole?: SystemRole
   verified: boolean
   maxApps: number
   currentCount: number

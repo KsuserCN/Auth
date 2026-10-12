@@ -359,6 +359,7 @@
 </template>
 
 <script setup lang="ts">
+import { verificationDisplayType } from '@/utils/userRoles'
 import { t } from '@/i18n'
 
 import { ref, reactive, onMounted, computed, onBeforeUnmount } from 'vue'
@@ -443,7 +444,8 @@ const form = reactive({
 })
 
 const verificationLabel = computed(() => {
-  const type = user.value?.verificationType
+  const type = verificationDisplayType(user.value)
+  if (user.value?.systemRole === 'SUPER_ADMIN') return t('ui.console.superAdmin')
   if (type === 'admin') return t('ui.mainLayout.message017')
   if (type === 'enterprise') return t('ui.mainLayout.message018')
   if (type === 'personal') return t('ui.mainLayout.message019')
@@ -451,7 +453,7 @@ const verificationLabel = computed(() => {
 })
 
 const verificationTagType = computed(() => {
-  const type = user.value?.verificationType
+  const type = verificationDisplayType(user.value)
   if (type === 'admin') return 'danger'
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'

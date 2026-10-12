@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class AuthorizationTokenServiceTest {
@@ -24,6 +25,9 @@ class AuthorizationTokenServiceTest {
         assertNotNull(parsed);
         assertEquals(42L, parsed.authorizationId());
         assertEquals("ksapp_demo", parsed.clientId());
+        assertEquals("openid", parsed.userUuid());
+        assertFalse(new String(java.util.Base64.getUrlDecoder().decode(token.split("\\.")[1]),
+            java.nio.charset.StandardCharsets.UTF_8).contains("user-uuid-demo"));
     }
 
     @Test

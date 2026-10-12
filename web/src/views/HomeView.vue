@@ -171,6 +171,7 @@
 </template>
 
 <script setup lang="ts">
+import { canCreateApplications } from '@/utils/userRoles'
 import { t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
 import { documentUrl } from '@/utils/documentLinks'
 
@@ -197,7 +198,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const { user } = storeToRefs(userStore)
 const canCreateApps = computed(() =>
-  ['personal', 'enterprise', 'admin'].includes(user.value?.verificationType ?? ''),
+  canCreateApplications(user.value),
 )
 
 const initialLoading = ref(true)

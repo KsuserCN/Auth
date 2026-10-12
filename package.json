@@ -4,11 +4,11 @@
   "private": true,
   "description": "Root task runner for auth multi-project repository",
   "scripts": {
-    "help": "node -e \"console.log(['Available scripts:','  npm run dev:web','  npm run dev:api','  npm run dev:desktop:macos','  npm run dev:mobile:android','  npm run dev:mobile:ios','  npm run build:web','  npm run build:api','  npm run build:desktop:macos','  npm run build:mobile:android:release','  npm run build:mobile:ios','  npm run test:mobile:ios','  npm run archive:mobile:ios','  npm run dev:demo:oauth','  npm run dev:demo:oidc','  npm run dev:demo:sspu','  npm run dev:core','  npm run build:core'].join('\\n'))\"",
+    "help": "node -e \"console.log(['Available scripts:','  npm run dev:web','  npm run dev:console','  npm run dev:api','  npm run dev:desktop:macos','  npm run dev:mobile:android','  npm run dev:mobile:ios','  npm run build:web','  npm run build:console','  npm run test:console','  npm run build:api','  npm run build:desktop:macos','  npm run build:mobile:android:release','  npm run build:mobile:ios','  npm run test:mobile:ios','  npm run archive:mobile:ios','  npm run dev:demo:oauth','  npm run dev:demo:oidc','  npm run dev:demo:sspu','  npm run dev:core','  npm run build:core'].join('\\n'))\"",
     "dev": "npm run dev:core",
     "build": "npm run build:core",
-    "dev:core": "node -e \"const {spawn}=require('node:child_process'); const ps=[]; const start=(name,cmd,args,opts={})=>{const p=spawn(cmd,args,{stdio:'inherit',shell:true,...opts}); p.on('exit',(code,signal)=>{if(signal||code){for(const x of ps){if(x!==p&&!x.killed)x.kill('SIGTERM');} process.exitCode=code||1;}}); ps.push(p);}; start('api','./gradlew',['bootRun'],{cwd:'api',env:{...process.env,KSUSER_ENV:'development'}}); start('web','npm',['--prefix','web','run','dev']); ['SIGINT','SIGTERM'].forEach(s=>process.on(s,()=>{for(const p of ps){if(!p.killed)p.kill('SIGTERM');} process.exit(130);}));\"",
-    "build:core": "npm run build:api && npm run build:web",
+    "dev:core": "node -e \"const {spawn}=require('node:child_process'); const ps=[]; const start=(name,cmd,args,opts={})=>{const p=spawn(cmd,args,{stdio:'inherit',shell:true,...opts}); p.on('exit',(code,signal)=>{if(signal||code){for(const x of ps){if(x!==p&&!x.killed)x.kill('SIGTERM');} process.exitCode=code||1;}}); ps.push(p);}; start('api','./gradlew',['bootRun'],{cwd:'api',env:{...process.env,KSUSER_ENV:'development'}}); start('web','npm',['--prefix','web','run','dev']); start('console','npm',['--prefix','console','run','dev']); ['SIGINT','SIGTERM'].forEach(s=>process.on(s,()=>{for(const p of ps){if(!p.killed)p.kill('SIGTERM');} process.exit(130);}));\"",
+    "build:core": "npm run build:api && npm run build:web && npm run build:console",
     "dev:web": "npm --prefix web run dev",
     "build:web": "npm --prefix web run build && npm run sync:build:web",
     "preview:web": "npm --prefix web run preview",
@@ -42,6 +42,12 @@
     "test:mobile:ios": "bash mobile/ios/scripts/ios.sh test",
     "archive:mobile:ios": "bash mobile/ios/scripts/ios.sh archive",
     "generate:api-codes": "node scripts/generate-api-result-codes.mjs",
-    "check:api-codes": "node scripts/generate-api-result-codes.mjs --check"
+    "check:api-codes": "node scripts/generate-api-result-codes.mjs --check",
+    "dev:console": "npm --prefix console run dev",
+    "build:console": "npm --prefix console run build && npm run sync:build:console",
+    "preview:console": "npm --prefix console run preview",
+    "test:console": "npm --prefix console run test:unit -- --run",
+    "lint:console": "npm --prefix console run lint",
+    "sync:build:console": "node -e \"const fs=require('node:fs'); fs.rmSync('build/console',{recursive:true,force:true}); fs.mkdirSync('build',{recursive:true}); fs.cpSync('console/dist','build/console',{recursive:true});\""
   }
 }

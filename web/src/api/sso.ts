@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/utils/request'
-import type { VerificationType } from '@/api/auth'
+import type { VerificationType, SystemRole } from '@/api/auth'
 import type { AuthorizationGrantMode } from '@/api/oauth2'
 
 export type SSOScope = 'openid' | 'profile' | 'email'
@@ -20,6 +20,8 @@ export interface SSOClient {
 
 export interface SSOClientsOverview {
   verificationType: VerificationType
+  developerVerificationType?: Exclude<VerificationType, 'admin'>
+  systemRole?: SystemRole
   admin: boolean
   maxClients: number
   currentCount: number

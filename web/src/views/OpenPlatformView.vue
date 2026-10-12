@@ -843,6 +843,7 @@
 </template>
 
 <script setup lang="ts">
+import { verificationDisplayType } from '@/utils/userRoles'
 import { intlLocale, t, LocalizedError } from '@/i18n'
 import { documentUrl } from '@/utils/documentLinks'
 
@@ -991,7 +992,7 @@ const oauthRedirectUris = (value: string) => normalizeSemicolonValues(value || '
 
 const verificationLabel = computed(() => {
   const type =
-    oauthOverview.value?.verificationType || ssoOverview.value?.verificationType || 'none'
+    verificationDisplayType(oauthOverview.value || ssoOverview.value)
   if (type === 'admin') return t('ui.mainLayout.message017')
   if (type === 'enterprise') return t('ui.mainLayout.message018')
   if (type === 'personal') return t('ui.mainLayout.message019')
@@ -1000,7 +1001,7 @@ const verificationLabel = computed(() => {
 
 const verificationTagType = computed(() => {
   const type =
-    oauthOverview.value?.verificationType || ssoOverview.value?.verificationType || 'none'
+    verificationDisplayType(oauthOverview.value || ssoOverview.value)
   if (type === 'admin') return 'danger'
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'

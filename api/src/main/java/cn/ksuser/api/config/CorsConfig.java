@@ -7,6 +7,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
+import cn.ksuser.api.repository.OfficialApplicationRepository;
+import cn.ksuser.api.service.OfficialAuthorizationService;
 
 /**
  * CORS 跨域配置
@@ -20,9 +22,11 @@ import java.util.Arrays;
 public class CorsConfig {
 
     private final AppProperties appProperties;
+    private final OfficialApplicationRepository officialApplications;
 
-    public CorsConfig(AppProperties appProperties) {
+    public CorsConfig(AppProperties appProperties, OfficialApplicationRepository officialApplications) {
         this.appProperties = appProperties;
+        this.officialApplications = officialApplications;
     }
 
     @Bean
@@ -34,9 +38,11 @@ public class CorsConfig {
         if (appProperties.isDebug()) {
             // 本地开发环境
             config.addAllowedOrigin("http://localhost:5173");
+            config.addAllowedOrigin("http://localhost:5174");
         } else {
             // 生产环境域名（根据实际情况修改）
             config.addAllowedOrigin("https://auth.ksuser.cn");
+            config.addAllowedOrigin("https://console.ksuser.cn");
         }
         
         // 明确指定允许的 HTTP 方法（不使用通配符）
@@ -77,6 +83,25 @@ public class CorsConfig {
         config.setMaxAge(3600L);
         
         source.registerCorsConfiguration("/**", config);
-        return new CorsFilter(source);
+        return new CorsFilter(request -> {
+            String path = request.getRequestURI().replaceAll("/+$", "");
+            if (!path.equals("/official/token") && !path.equals("/official/userinfo")) {
+                return source.getCorsConfiguration(request);
+            }
+            // An official application's origin is allowed only at its protocol endpoints.
+            // The endpoint also matches Origin against the specific client/token.
+            CorsConfiguration protocol = new CorsConfiguration(config);
+            // Spring's copy constructor shares the origin list. Detach it before adding
+            // an application's origin, otherwise later Console/passport requests inherit it.
+            protocol.setAllowedOrigins(new java.util.ArrayList<>(config.getAllowedOrigins()));
+            String origin = request.getHeader("Origin");
+            if (origin != null && (config.getAllowedOrigins() == null || !config.getAllowedOrigins().contains(origin))) {
+                boolean registered = officialApplications.findAllByIsActiveTrue().stream()
+                    .flatMap(app -> OfficialAuthorizationService.parseRedirectUris(app.getRedirectUris()).stream())
+                    .map(OfficialAuthorizationService::originOf).anyMatch(origin::equals);
+                if (registered) protocol.addAllowedOrigin(origin);
+            }
+            return protocol;
+        });
     }
 }

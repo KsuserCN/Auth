@@ -121,7 +121,13 @@
             <ul class="permission-list">
               <li v-for="item in permissionItems" :key="item">{{ item }}</li>
             </ul>
-            <div class="permission-footnote">{{ t('ui.oAuthAuthorize.message017') }}</div>
+            <div class="permission-footnote">
+              {{
+                mode === 'official'
+                  ? t('ui.official.identityNotice')
+                  : t('ui.oAuthAuthorize.message017')
+              }}
+            </div>
           </div>
         </div>
       </div>
@@ -155,7 +161,7 @@
             </button>
           </div>
 
-          <div class="grant-policy-card">
+          <div v-if="mode !== 'official'" class="grant-policy-card">
             <div class="grant-policy-header">
               <div class="grant-policy-title">{{ t('ui.oAuthAuthorize.message019') }}</div>
               <div class="grant-policy-subtitle">
@@ -194,6 +200,11 @@
             <div v-if="existingGrantSummary" class="grant-policy-footnote">
               {{ t('ui.oAuthAuthorize.message023') }}{{ existingGrantSummary }}
             </div>
+          </div>
+
+          <div v-else class="grant-policy-card">
+            <div class="grant-policy-title">{{ t('ui.official.consentTitle') }}</div>
+            <p class="grant-policy-note">{{ t('ui.official.consentNotice') }}</p>
           </div>
 
           <div class="consent-actions">
@@ -302,6 +313,11 @@ import {
   type AuthorizationGrantMode,
 } from '@/api/oauth2'
 import { approveSSOAuthorize, getSSOAuthorizeContext } from '@/api/sso'
+import {
+  approveOfficialAuthorize,
+  getOfficialAuthorizeContext,
+  officialScopeLabel,
+} from '@/api/official'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { clearAuthSession, getStoredAccessToken } from '@/utils/authSession'
@@ -388,7 +404,13 @@ const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
 const grantMode = ref<AuthorizationGrantMode>('PERSISTENT')
 const grantTtlSeconds = ref(3600)
 
-const mode = computed<'oauth' | 'sso'>(() => (route.path.startsWith('/sso/') ? 'sso' : 'oauth'))
+const mode = computed<'oauth' | 'sso' | 'official'>(() =>
+  route.path.startsWith('/official/')
+    ? 'official'
+    : route.path.startsWith('/sso/')
+      ? 'sso'
+      : 'oauth',
+)
 
 // 使用 VueUse 的 useDark 同步暗黑模式
 const isDark = useDark({
@@ -459,12 +481,17 @@ const hasConsentPrompt = computed(() => {
 })
 
 const leftSubtitle = computed(() =>
-  mode.value === 'sso' ? t('ui.oAuthAuthorize.message046') : t('ui.oAuthAuthorize.message047'),
+  mode.value === 'official'
+    ? t('ui.official.authorizeSubtitle')
+    : mode.value === 'sso'
+      ? t('ui.oAuthAuthorize.message046')
+      : t('ui.oAuthAuthorize.message047'),
 )
 
 const permissionItems = computed(() => {
   const currentContext = context.value
   if (!currentContext) return []
+  if (mode.value === 'official') return currentContext.requestedScopes.map(officialScopeLabel)
 
   const scopes = currentContext.requestedScopes
     .map((scope) => scope.trim().toLowerCase())
@@ -576,6 +603,20 @@ const loadAuthorizeContext = async () => {
   const { clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod } =
     requestParams.value
 
+  if (mode.value === 'official') {
+    const response = await getOfficialAuthorizeContext(requestParams.value)
+    context.value = {
+      clientId: response.clientId,
+      appName: response.clientName,
+      logoUrl: response.logoUrl,
+      redirectUri,
+      requestedScopes: response.requestedScopes,
+      alreadyAuthorized: response.loggedIn && !response.consentRequired,
+      existingGrantMode: 'PERSISTENT',
+    }
+    return
+  }
+
   if (mode.value === 'sso') {
     const response = await getSSOAuthorizeContext({
       clientId,
@@ -631,6 +672,7 @@ const loadContext = async () => {
     await loadAuthorizeContext()
 
     if (
+      mode.value !== 'official' &&
       isIOSAuthorizationSupported() &&
       !mobileTicket &&
       route.query.iosAuthorizationFallback !== '1'
@@ -638,7 +680,7 @@ const loadContext = async () => {
       try {
         const authorization = { ...requestParams.value }
         delete authorization.prompt
-        mobileTicket = await createMobileAuthorization(mode.value, {
+        mobileTicket = await createMobileAuthorization(mode.value as 'oauth' | 'sso', {
           ...authorization,
           responseType: 'code',
         })
@@ -654,6 +696,10 @@ const loadContext = async () => {
 
     const authenticated = await ensureAuthenticated()
     if (!authenticated) {
+      if (mode.value === 'official') {
+        redirectToLogin()
+        return
+      }
       await refreshDesktopBridgeStatus()
       return
     }
@@ -682,6 +728,15 @@ const handleApprove = async (silent = false) => {
 
   approving.value = true
   try {
+    if (mode.value === 'official') {
+      const response = await approveOfficialAuthorize({
+        ...requestParams.value,
+        responseType: 'code',
+        approved: true,
+      })
+      window.location.replace(response.redirectUrl)
+      return
+    }
     if (mode.value === 'sso') {
       const response = await approveSSOAuthorize({
         clientId: requestParams.value.clientId,
@@ -729,7 +784,24 @@ const handleApprove = async (silent = false) => {
   }
 }
 
-const handleDeny = () => {
+const handleDeny = async () => {
+  if (mode.value === 'official') {
+    if (approving.value) return
+    approving.value = true
+    try {
+      const response = await approveOfficialAuthorize({
+        ...requestParams.value,
+        responseType: 'code',
+        approved: false,
+      })
+      window.location.replace(response.redirectUrl)
+    } catch (error) {
+      errorMessage.value = localizedError(error, 'ui.oAuthAuthorize.message057')
+    } finally {
+      approving.value = false
+    }
+    return
+  }
   const deniedRedirect = buildDeniedRedirect()
   if (!deniedRedirect) {
     errorMessage.value = uiMessage('ui.oAuthAuthorize.message057')
