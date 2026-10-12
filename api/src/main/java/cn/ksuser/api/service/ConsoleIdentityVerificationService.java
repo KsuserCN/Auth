@@ -2,6 +2,7 @@ package cn.ksuser.api.service;
 
 import cn.ksuser.api.dto.PasskeyAuthenticationOptionsResponse;
 import cn.ksuser.api.dto.PasskeyAuthenticationVerifyRequest;
+import cn.ksuser.api.dto.QrChallengeInitResponse;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.UserPasskeyRepository;
@@ -14,6 +15,10 @@ import cn.ksuser.api.util.EncryptionUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Map;
+
 /** Verifies fresh credentials against the independent Console session. */
 @Service
 public class ConsoleIdentityVerificationService {
@@ -24,11 +29,12 @@ public class ConsoleIdentityVerificationService {
     private final TotpService totp;
     private final PasskeyService passkeyService;
     private final EncryptionUtil encryption;
+    private final QrChallengeService qrChallenges;
 
     public ConsoleIdentityVerificationService(ConsoleSessionService sessions, UserRepository users,
                                               UserPasskeyRepository passkeys, UserService userService,
                                               TotpService totp, PasskeyService passkeyService,
-                                              EncryptionUtil encryption) {
+                                              EncryptionUtil encryption, QrChallengeService qrChallenges) {
         this.sessions = sessions;
         this.users = users;
         this.passkeys = passkeys;
@@ -36,6 +42,7 @@ public class ConsoleIdentityVerificationService {
         this.totp = totp;
         this.passkeyService = passkeyService;
         this.encryption = encryption;
+        this.qrChallenges = qrChallenges;
     }
 
     public VerificationContext context(ConsolePrincipal principal, String requestId) {
@@ -95,6 +102,53 @@ public class ConsoleIdentityVerificationService {
         return sessions.completeDirectVerification(requestId, principal);
     }
 
+    public QrChallengeInitResponse startQrVerification(ConsolePrincipal principal, String requestId,
+                                                       String clientIp, String userAgent) {
+        User user = verificationUser(principal, requestId);
+        QrChallengeService.QrChallengePayload challenge = qrChallenges.createConsoleSensitiveChallenge(
+            user.getId(), requestId, SessionTransferService.TARGET_WEB, clientIp, userAgent);
+        long expiresInSeconds = qrChallenges.getRemainingSeconds(challenge.getChallengeId());
+        long ttl = expiresInSeconds > 0 ? expiresInSeconds : QrChallengeService.DEFAULT_TTL_SECONDS;
+        return new QrChallengeInitResponse(challenge.getChallengeId(), challenge.getPollToken(),
+            QrChallengeService.QR_TEXT_PREFIX + challenge.getApproveCode(), ttl);
+    }
+
+    public QrVerificationStatus pollQrVerification(ConsolePrincipal principal, String requestId,
+                                                  String challengeId, String pollToken) {
+        User user = verificationUser(principal, requestId);
+        QrChallengeService.QrChallengePayload challenge = qrChallenges.getByChallengeId(challengeId);
+        if (challenge == null) return new QrVerificationStatus("expired", 0L, null);
+
+        if (!constantTimeEquals(challenge.getPollToken(), pollToken)
+            || !QrChallengeService.ChallengeType.SENSITIVE.value().equals(challenge.getType())
+            || !constantTimeEquals(challenge.getConsoleVerificationRequestId(), requestId)
+            || challenge.getRequestedUserId() == null
+            || !challenge.getRequestedUserId().equals(user.getId())) {
+            throw flowFailure();
+        }
+
+        long expiresInSeconds = qrChallenges.getRemainingSeconds(challengeId);
+        if (expiresInSeconds <= 0) return new QrVerificationStatus("expired", 0L, null);
+
+        String status = challenge.getStatus() == null ? "pending" : challenge.getStatus();
+        if (!QrChallengeService.ChallengeStatus.APPROVED.value().equals(status)) {
+            return new QrVerificationStatus(status, expiresInSeconds, null);
+        }
+
+        Map<String, Object> result = challenge.getResult();
+        if (challenge.getApprovedByUserId() == null || !challenge.getApprovedByUserId().equals(user.getId())
+            || result == null || !Boolean.TRUE.equals(result.get("verified"))) {
+            throw flowFailure();
+        }
+        SessionView session = sessions.completeDirectVerification(requestId, principal);
+        return new QrVerificationStatus("approved", expiresInSeconds, session);
+    }
+
+    private static boolean constantTimeEquals(String first, String second) {
+        if (first == null || second == null) return false;
+        return MessageDigest.isEqual(first.getBytes(StandardCharsets.UTF_8), second.getBytes(StandardCharsets.UTF_8));
+    }
+
     private User verificationUser(ConsolePrincipal principal, String requestId) {
         sessions.validateVerificationRequest(requestId, principal);
         return users.findByUuid(principal.userUuid()).orElseThrow(ConsoleIdentityVerificationService::sessionFailure);
@@ -109,4 +163,5 @@ public class ConsoleIdentityVerificationService {
     }
 
     public record VerificationContext(String requestId, boolean hasPassword, boolean hasTotp, boolean hasPasskey) {}
+    public record QrVerificationStatus(String status, long expiresInSeconds, SessionView session) {}
 }

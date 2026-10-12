@@ -36,6 +36,21 @@ export interface ConsoleVerificationContext {
   hasTotp: boolean
   hasPasskey: boolean
 }
+export interface ConsoleVerificationStart {
+  requestId: string
+  authorizationUrl: string
+}
+export interface ConsoleQrChallenge {
+  challengeId: string
+  pollToken: string
+  qrText: string
+  expiresInSeconds: number
+}
+export interface ConsoleQrStatus {
+  status: 'pending' | 'approved' | 'rejected' | 'expired'
+  expiresInSeconds: number
+  session?: ConsoleSession | null
+}
 export interface ConsolePasskeyOptions {
   challenge: string
   challengeId: string
@@ -201,9 +216,9 @@ export const consoleApi = {
     await request.delete('/console/session')
     csrfToken = ''
   },
-  async verification(): Promise<{ authorizationUrl: string }> {
+  async verification(): Promise<ConsoleVerificationStart> {
     return (
-      await request.post<ApiResult<{ authorizationUrl: string }>>('/console/verification/start')
+      await request.post<ApiResult<ConsoleVerificationStart>>('/console/verification/start')
     ).data.data
   },
   async verificationExchange(ticket: string, state: string): Promise<ConsoleSession> {
@@ -254,6 +269,22 @@ export const consoleApi = {
         requestId,
         challengeId,
         credential,
+      })
+    ).data.data
+  },
+  async initQrVerification(requestId: string): Promise<ConsoleQrChallenge> {
+    return (
+      await request.post<ApiResult<ConsoleQrChallenge>>('/console/verification/qr/init', { requestId })
+    ).data.data
+  },
+  async pollQrVerification(
+    requestId: string,
+    challengeId: string,
+    pollToken: string,
+  ): Promise<ConsoleQrStatus> {
+    return (
+      await request.get<ApiResult<ConsoleQrStatus>>('/console/verification/qr/status', {
+        params: { request_id: requestId, challengeId, pollToken },
       })
     ).data.data
   },

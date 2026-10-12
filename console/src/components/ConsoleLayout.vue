@@ -34,6 +34,7 @@
       <main><RouterView /></main>
     </div>
   </div>
+  <ConsoleSensitiveVerificationDialog />
 </template>
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -44,6 +45,7 @@ import { consoleApi } from '@/api/console'
 import { avatarFallback } from '@/utils/avatar'
 import { useSessionStore } from '@/stores/session'
 import { clearConsoleNavigation } from '@/utils/navigation'
+import ConsoleSensitiveVerificationDialog from '@/components/ConsoleSensitiveVerificationDialog.vue'
 const store = useSessionStore()
 const router = useRouter()
 const loggingOut = ref(false)

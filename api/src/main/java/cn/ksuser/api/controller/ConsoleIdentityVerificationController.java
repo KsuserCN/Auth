@@ -3,10 +3,13 @@ package cn.ksuser.api.controller;
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.PasskeyAuthenticationOptionsResponse;
 import cn.ksuser.api.dto.PasskeyAuthenticationVerifyRequest;
+import cn.ksuser.api.dto.QrChallengeInitResponse;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.result.ApiResultCode;
 import cn.ksuser.api.service.ConsoleIdentityVerificationService;
 import cn.ksuser.api.service.ConsoleSessionService;
+import cn.ksuser.api.service.RateLimitService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -15,9 +18,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/console/verification")
 public class ConsoleIdentityVerificationController {
     private final ConsoleIdentityVerificationService verification;
+    private final RateLimitService rateLimit;
 
-    public ConsoleIdentityVerificationController(ConsoleIdentityVerificationService verification) {
+    public ConsoleIdentityVerificationController(ConsoleIdentityVerificationService verification, RateLimitService rateLimit) {
         this.verification = verification;
+        this.rateLimit = rateLimit;
     }
 
     @GetMapping("/context")
@@ -49,6 +54,20 @@ public class ConsoleIdentityVerificationController {
                                                                         Authentication authentication) {
         return success(verification.verifyPasskey(principal(authentication), body.requestId(), body.challengeId(),
             body.credential()));
+    }
+
+    @PostMapping("/qr/init")
+    public ApiResponse<QrChallengeInitResponse> qrInit(@RequestBody VerificationRequest body,
+                                                        Authentication authentication, HttpServletRequest request) {
+        return success(verification.startQrVerification(principal(authentication), body.requestId(),
+            rateLimit.getClientIp(request), rateLimit.getClientUserAgent(request)));
+    }
+
+    @GetMapping("/qr/status")
+    public ApiResponse<ConsoleIdentityVerificationService.QrVerificationStatus> qrStatus(
+        @RequestParam("request_id") String requestId, @RequestParam String challengeId,
+        @RequestParam String pollToken, Authentication authentication) {
+        return success(verification.pollQrVerification(principal(authentication), requestId, challengeId, pollToken));
     }
 
     private static ConsoleSessionService.ConsolePrincipal principal(Authentication authentication) {

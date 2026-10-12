@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 public class QrChallengeService {
 
     public static final long DEFAULT_TTL_SECONDS = 120L;
+    public static final String QR_TEXT_PREFIX = "KSUSER-AUTH-QR:";
     private static final String CHALLENGE_PREFIX = "auth:qr:challenge:";
     private static final String APPROVE_PREFIX = "auth:qr:approve:";
 
@@ -47,6 +48,27 @@ public class QrChallengeService {
             String target,
             String webIp,
             String userAgent) {
+        return createChallenge(type, requestedUserId, mfaChallengeId, target, webIp, userAgent, null);
+    }
+
+    public QrChallengePayload createConsoleSensitiveChallenge(
+            Long requestedUserId,
+            String verificationRequestId,
+            String target,
+            String webIp,
+            String userAgent) {
+        return createChallenge(ChallengeType.SENSITIVE, requestedUserId, null, target, webIp, userAgent,
+            verificationRequestId);
+    }
+
+    private QrChallengePayload createChallenge(
+            ChallengeType type,
+            Long requestedUserId,
+            String mfaChallengeId,
+            String target,
+            String webIp,
+            String userAgent,
+            String consoleVerificationRequestId) {
         long now = Instant.now().getEpochSecond();
         QrChallengePayload payload = new QrChallengePayload();
         payload.setChallengeId(UUID.randomUUID().toString());
@@ -56,6 +78,7 @@ public class QrChallengeService {
         payload.setStatus(ChallengeStatus.PENDING.value());
         payload.setRequestedUserId(requestedUserId);
         payload.setMfaChallengeId(mfaChallengeId);
+        payload.setConsoleVerificationRequestId(consoleVerificationRequestId);
         payload.setTarget(target);
         payload.setWebIp(webIp);
         payload.setUserAgent(userAgent);
@@ -220,6 +243,7 @@ public class QrChallengeService {
         private String status;
         private Long requestedUserId;
         private String mfaChallengeId;
+        private String consoleVerificationRequestId;
         private String target;
         private String webIp;
         private String ipLocation;
@@ -287,6 +311,14 @@ public class QrChallengeService {
 
         public void setMfaChallengeId(String mfaChallengeId) {
             this.mfaChallengeId = mfaChallengeId;
+        }
+
+        public String getConsoleVerificationRequestId() {
+            return consoleVerificationRequestId;
+        }
+
+        public void setConsoleVerificationRequestId(String consoleVerificationRequestId) {
+            this.consoleVerificationRequestId = consoleVerificationRequestId;
         }
 
         public String getTarget() {

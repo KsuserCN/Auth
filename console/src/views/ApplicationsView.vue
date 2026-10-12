@@ -227,23 +227,19 @@
 </template>
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   consoleApi,
-  ConsoleApiError,
   type ApplicationInput,
   type OfficialApplication,
   type OfficialScope,
 } from '@/api/console'
+import { VerificationCancelledError, withConsoleVerification } from '@/utils/consoleVerification'
 import {
-  beginVerification,
   clearApplicationDraft,
   consumeApplicationDraft,
-  preserveApplicationDraft,
   type ApplicationDraft,
 } from '@/utils/navigation'
-const route = useRoute()
 const scopeLabels: Record<OfficialScope, string> = {
   openid: '真实 UUID',
   profile: '用户名和头像',
@@ -330,25 +326,29 @@ const selectLogo = () => logoInput.value?.click()
 const uploadLogo = async (event: Event) => {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
-  input.value = ''
   if (!file) return
   if (file.size > 3 * 1024 * 1024) {
+    input.value = ''
     formError.value = '图片不能超过 3 MB'
     return
   }
   if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    input.value = ''
     formError.value = '仅支持 PNG、JPG、WebP 或 GIF 图片'
     return
   }
   uploadingLogo.value = true
   formError.value = ''
   try {
-    const result = await consoleApi.uploadOfficialApplicationLogo(file)
+    const result = await withConsoleVerification(() => consoleApi.uploadOfficialApplicationLogo(file))
     form.value.logoUrl = result.logoUrl
+    input.value = ''
     ElMessage.success('应用图片已上传')
   } catch (failure) {
-    if (!(await requireVerification(failure, true)))
+    if (!(failure instanceof VerificationCancelledError)) {
+      input.value = ''
       formError.value = failure instanceof Error ? failure.message : '图片上传失败'
+    }
   } finally {
     uploadingLogo.value = false
   }
@@ -388,29 +388,16 @@ const applicationInput = (): ApplicationInput => {
       : {}),
   }
 }
-const requireVerification = async (failure: unknown, preserveForm = false): Promise<boolean> => {
-  if (
-    !(failure instanceof ConsoleApiError) ||
-    failure.errorCode !== 'SENSITIVE_VERIFICATION_REQUIRED'
-  )
-    return false
-  if (preserveForm) preserveApplicationDraft(form.value)
-  try {
-    await beginVerification(route.fullPath)
-  } catch (startError) {
-    ElMessage.error(startError instanceof Error ? startError.message : '无法开始再次验证')
-  }
-  return true
-}
 const save = async () => {
   if (saving.value || uploadingLogo.value) return
   saving.value = true
   formError.value = ''
   try {
     const input = applicationInput()
-    if (form.value.editing) await consoleApi.updateApplication(form.value.clientId, input)
+    if (form.value.editing)
+      await withConsoleVerification(() => consoleApi.updateApplication(form.value.clientId, input))
     else {
-      const result = await consoleApi.createApplication(input)
+      const result = await withConsoleVerification(() => consoleApi.createApplication(input))
       if (result.clientSecret) {
         clientSecret.value = result.clientSecret
         secretApplicationName.value = result.application.clientName
@@ -421,7 +408,7 @@ const save = async () => {
     ElMessage.success('应用配置已保存')
     await load()
   } catch (failure) {
-    if (!(await requireVerification(failure, true)))
+    if (!(failure instanceof VerificationCancelledError))
       formError.value = failure instanceof Error ? failure.message : '配置保存失败'
   } finally {
     saving.value = false
@@ -442,17 +429,17 @@ const toggle = async (app: OfficialApplication) => {
   }
   busy.value = true
   try {
-    await consoleApi.updateApplication(app.clientId, {
+    await withConsoleVerification(() => consoleApi.updateApplication(app.clientId, {
       clientName: app.clientName,
       logoUrl: app.logoUrl,
       redirectUris: app.redirectUris,
       scopes: app.scopes,
       isActive: !app.isActive,
-    })
+    }))
     ElMessage.success('应用状态已更新')
     await load()
   } catch (failure) {
-    if (!(await requireVerification(failure)))
+    if (!(failure instanceof VerificationCancelledError))
       ElMessage.error(failure instanceof Error ? failure.message : '应用状态更新失败')
   } finally {
     busy.value = false
@@ -471,12 +458,12 @@ const rotate = async (app: OfficialApplication) => {
   }
   busy.value = true
   try {
-    const result = await consoleApi.rotateSecret(app.clientId)
+    const result = await withConsoleVerification(() => consoleApi.rotateSecret(app.clientId))
     clientSecret.value = result.clientSecret || ''
     secretApplicationName.value = result.application.clientName
     await load()
   } catch (failure) {
-    if (!(await requireVerification(failure)))
+    if (!(failure instanceof VerificationCancelledError))
       ElMessage.error(failure instanceof Error ? failure.message : '密钥轮换失败')
   } finally {
     busy.value = false

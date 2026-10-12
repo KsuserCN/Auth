@@ -190,18 +190,14 @@
 </template>
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { consoleApi, ConsoleApiError, type ConsoleUser, type SystemRole } from '@/api/console'
+import { consoleApi, type ConsoleUser, type SystemRole } from '@/api/console'
 import { avatarFallback } from '@/utils/avatar'
+import { VerificationCancelledError, withConsoleVerification } from '@/utils/consoleVerification'
 import {
-  beginVerification,
   consumeRoleDraft,
   consumeUserDeleteDraft,
-  preserveRoleDraft,
-  preserveUserDeleteDraft,
 } from '@/utils/navigation'
-const route = useRoute()
 const search = ref('')
 const role = ref('')
 const page = ref(1)
@@ -317,7 +313,7 @@ const saveDelete = async () => {
   if (!target || deleting.value || deleteConfirmation.value.trim() !== target.username) return
   deleting.value = true
   try {
-    await consoleApi.deleteUser(target.uuid)
+    await withConsoleVerification(() => consoleApi.deleteUser(target.uuid))
     deleteVisible.value = false
     if (detail.value?.uuid === target.uuid) detailVisible.value = false
     ElMessage.success('用户账号已删除')
@@ -327,41 +323,25 @@ const saveDelete = async () => {
       await load()
     }
   } catch (failure) {
-    if (
-      failure instanceof ConsoleApiError &&
-      failure.errorCode === 'SENSITIVE_VERIFICATION_REQUIRED'
-    ) {
-      preserveUserDeleteDraft(target.uuid)
-      try {
-        await beginVerification(route.fullPath)
-      } catch (startError) {
-        ElMessage.error(startError instanceof Error ? startError.message : '无法开始再次验证')
-      }
-    } else ElMessage.error(failure instanceof Error ? failure.message : '账号删除失败')
+    if (!(failure instanceof VerificationCancelledError))
+      ElMessage.error(failure instanceof Error ? failure.message : '账号删除失败')
   } finally {
     deleting.value = false
   }
 }
 const saveRole = async () => {
-  if (!roleUser.value || savingRole.value) return
+  const target = roleUser.value
+  if (!target || savingRole.value) return
+  const nextRole = pendingRole.value
   savingRole.value = true
   try {
-    await consoleApi.setRole(roleUser.value.uuid, pendingRole.value)
+    await withConsoleVerification(() => consoleApi.setRole(target.uuid, nextRole))
     roleVisible.value = false
     ElMessage.success('用户角色已更新')
     await load()
   } catch (failure) {
-    if (
-      failure instanceof ConsoleApiError &&
-      failure.errorCode === 'SENSITIVE_VERIFICATION_REQUIRED'
-    ) {
-      preserveRoleDraft(roleUser.value.uuid, pendingRole.value)
-      try {
-        await beginVerification(route.fullPath)
-      } catch (startError) {
-        ElMessage.error(startError instanceof Error ? startError.message : '无法开始再次验证')
-      }
-    } else ElMessage.error(failure instanceof Error ? failure.message : '角色更新失败')
+    if (!(failure instanceof VerificationCancelledError))
+      ElMessage.error(failure instanceof Error ? failure.message : '角色更新失败')
   } finally {
     savingRole.value = false
   }

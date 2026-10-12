@@ -142,7 +142,7 @@ public class ConsoleSessionService {
         VerificationRequest request = new VerificationRequest(current.sessionId(), current.userUuid(), randomToken(),
             now() + FLOW_TTL.toMillis());
         store("verification:" + hash(requestId), request, FLOW_TTL);
-        return Map.of("authorizationUrl", UriComponentsBuilder.fromUriString(consoleOrigin + "/verification")
+        return Map.of("requestId", requestId, "authorizationUrl", UriComponentsBuilder.fromUriString(consoleOrigin + "/verification")
             .queryParam("request_id", requestId).build().encode().toUriString());
     }
 

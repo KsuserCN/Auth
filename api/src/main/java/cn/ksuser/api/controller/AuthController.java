@@ -58,7 +58,6 @@ import java.util.UUID;
 public class AuthController {
     private static final long AVATAR_MAX_SIZE_BYTES = 3L * 1024 * 1024;
     private static final String AVATAR_STORAGE_DIR = "static/avatars";
-    private static final String QR_TEXT_PREFIX = "KSUSER-AUTH-QR:";
 
     private final cn.ksuser.api.repository.UserOauthAccountRepository appleAccounts;
 
@@ -1726,7 +1725,10 @@ public class AuthController {
                         .body(new ApiResponse<>(400, ApiResultCode.AUTH_095));
                 }
 
-                sensitiveOperationService.markVerifiedOnce(user.getUuid(), challenge.getWebIp());
+                if (challenge.getConsoleVerificationRequestId() == null
+                    || challenge.getConsoleVerificationRequestId().isBlank()) {
+                    sensitiveOperationService.markVerifiedOnce(user.getUuid(), challenge.getWebIp());
+                }
                 result.put("verified", true);
             }
 
@@ -3076,7 +3078,7 @@ public class AuthController {
         return new QrChallengeInitResponse(
             payload.getChallengeId(),
             payload.getPollToken(),
-            QR_TEXT_PREFIX + payload.getApproveCode(),
+            QrChallengeService.QR_TEXT_PREFIX + payload.getApproveCode(),
             ttl
         );
     }
