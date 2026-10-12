@@ -34,7 +34,11 @@
         <el-table-column label="应用" min-width="240"
           ><template #default="{ row }"
             ><div class="app-cell">
-              <el-avatar shape="square" :size="40" :src="row.logoUrl?.trim() || undefined">{{
+              <el-avatar
+                shape="square"
+                :size="40"
+                :src="row.logoUrl?.trim() || DEFAULT_APPLICATION_LOGO_URL"
+                >{{
                 row.clientName.slice(0, 1)
               }}</el-avatar>
               <div>
@@ -130,7 +134,11 @@
         <el-form-item label="应用图片">
           <div class="logo-editor">
             <div class="logo-upload-row">
-              <el-avatar shape="square" :size="64" :src="form.logoUrl.trim() || undefined">
+              <el-avatar
+                shape="square"
+                :size="64"
+                :src="form.logoUrl.trim() || DEFAULT_APPLICATION_LOGO_URL"
+              >
                 {{ form.clientName.trim().slice(0, 1) || '应用' }}
               </el-avatar>
               <div class="logo-upload-actions">
@@ -146,16 +154,16 @@
                     上传图片
                   </el-button>
                   <el-button
-                    v-if="form.logoUrl"
+                    v-if="form.logoUrl !== DEFAULT_APPLICATION_LOGO_URL"
                     link
-                    type="danger"
+                    type="primary"
                     :disabled="uploadingLogo"
-                    @click="form.logoUrl = ''"
+                    @click="form.logoUrl = DEFAULT_APPLICATION_LOGO_URL"
                   >
-                    清除图片
+                    恢复默认
                   </el-button>
                 </div>
-                <span class="muted">PNG、JPG、WebP 或 GIF，最大 3 MB</span>
+                <span class="muted">默认使用 Ksuser 标志；可上传 PNG、JPG、WebP 或 GIF（最大 3 MB）</span>
               </div>
             </div>
             <el-input v-model="form.logoUrl" placeholder="也可以填写图片 URL" />
@@ -240,6 +248,7 @@ import {
   consumeApplicationDraft,
   type ApplicationDraft,
 } from '@/utils/navigation'
+const DEFAULT_APPLICATION_LOGO_URL = 'https://static.ksuser.cn/favicon.png'
 const scopeLabels: Record<OfficialScope, string> = {
   openid: '真实 UUID',
   profile: '用户名和头像',
@@ -266,7 +275,7 @@ const filtered = computed(() =>
 const emptyForm = (): ApplicationDraft => ({
   clientId: '',
   clientName: '',
-  logoUrl: '',
+  logoUrl: DEFAULT_APPLICATION_LOGO_URL,
   clientType: 'public',
   redirectText: '',
   scopes: ['openid', 'profile', 'email'],
@@ -308,7 +317,7 @@ const openEdit = (app: OfficialApplication) => {
   form.value = {
     clientId: app.clientId,
     clientName: app.clientName,
-    logoUrl: app.logoUrl || '',
+    logoUrl: app.logoUrl || DEFAULT_APPLICATION_LOGO_URL,
     clientType: app.clientType,
     redirectText: app.redirectUris.join('\n'),
     scopes: [...app.scopes],
@@ -376,7 +385,7 @@ const applicationInput = (): ApplicationInput => {
   }
   return {
     clientName: form.value.clientName.trim(),
-    logoUrl: form.value.logoUrl.trim() || undefined,
+    logoUrl: form.value.logoUrl.trim() || DEFAULT_APPLICATION_LOGO_URL,
     redirectUris: [...new Set(redirects)],
     scopes: form.value.scopes as OfficialScope[],
     isActive: form.value.isActive,

@@ -27,6 +27,7 @@ import java.util.Map;
 
 @Service
 public class ConsoleAdminService {
+    private static final String DEFAULT_APPLICATION_LOGO_URL = "https://static.ksuser.cn/favicon.png";
     private final ConsoleUserRepository users;
     private final OfficialApplicationRepository applications;
     private final ConsoleAuditLogRepository audits;
@@ -101,7 +102,10 @@ public class ConsoleAdminService {
         if (applications.existsByClientId(id)) throw conflict();
         OfficialApplication app = new OfficialApplication();
         app.setClientId(id); app.setClientType(request.clientType()); app.setReserved(false);
-        apply(app, request);
+        ApplicationRequest normalized = new ApplicationRequest(request.clientId(), request.clientName(),
+            request.logoUrl()==null || request.logoUrl().isBlank() ? DEFAULT_APPLICATION_LOGO_URL : request.logoUrl(),
+            request.clientType(), request.redirectUris(), request.scopes(), request.isActive());
+        apply(app, normalized);
         String secret = null;
         if ("confidential".equals(app.getClientType())) {
             secret = OfficialAuthorizationService.randomValue("ofs_");
