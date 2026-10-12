@@ -56,3 +56,4 @@ docs/
 !api/docs/
 api/docs/*
 !api/docs/api-result-codes.md
+!api/docs/official-app-integration.md

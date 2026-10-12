@@ -91,15 +91,9 @@ Console Cookie 为 API 主机下的 HttpOnly Cookie，路径 `/console`，生产
 
 ## 官方应用接入
 
-超级管理员在「官方应用」中创建应用，配置精确回调和资料范围。`public` 适用于 SPA；`confidential` 适用于服务端应用，密钥仅创建和轮换时显示，数据库只保存哈希。
+超级管理员在「官方应用」中创建应用，配置精确回调和最小资料范围。`public` 不使用密钥；`confidential` 的密钥仅在创建和轮换时显示，数据库只保存哈希。完整的接入步骤、客户端类型对照、授权码 + PKCE 流程、scope 和令牌验证方法见[官方应用接入指南](../api/docs/official-app-integration.md)。
 
-Discovery：`https://api.ksuser.cn/official/.well-known/openid-configuration`。授权页面为 `https://auth.ksuser.cn/official/authorize`，协议 API 为 `/official/token`、`/official/userinfo` 和 `/official/jwks`。
-
-授权请求需要 `client_id`、`redirect_uri`、`response_type=code`、`scope`、随机 `state`/`nonce`、`code_challenge` 和 `code_challenge_method=S256`。兑换时提交相同回调、原 `code_verifier`；服务端客户端还需 client secret。客户端必须验证返回的 state 和 ID token 的签名、issuer、audience、nonce、有效期。
-
-官方 userinfo/ID token 的 `sub` 和 `uuid` 是真实 UUID。`profile` 返回用户名和头像，`email` 返回邮箱；`real_name / gender / birth_date / region / bio` 分别开放对应字段。用户首次同意、扩大范围再次同意，可在通行证隐私页撤销；撤销后旧访问令牌以及绑定该授权的 Console 会话失效。
-
-普通 OAuth 新访问令牌的 `sub` 改为应用专属 `openid`，客户端应使用协议返回的 `openid/unionid`。旧令牌在原有效期内继续被接受；新令牌不再携带真实 UUID。原 SSO 保持应用专属 `sub`。
+官方应用使用独立的 `/official` OIDC 接口，ID Token 和 UserInfo 中的 `sub` / `uuid` 是真实 UUID。开放平台 OAuth `/oauth2` 和内部 SSO `/sso` 使用不同的登记及标识规则；不要混用它们的客户端凭据。
 
 ## 检查
 

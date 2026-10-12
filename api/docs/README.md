@@ -182,6 +182,7 @@
 - 令牌刷新和撤销
 
 ## 文档导航
+- [Ksuser 官方应用接入指南](official-app-integration.md) - 官方应用 OAuth 2.0 / OIDC 接入、客户端类型与资料范围
 - [验证码系统设计约束](VERIFICATION_CODE_DESIGN.md) - 验证码系统的核心功能和设计原则
 - [请求类型处理指南](REQUEST_TYPE_HANDLING.md) - Content-Type 验证和错误处理说明
 - [Passkey (WebAuthn) 支持](passkey.md) - 现代身份验证方式，支持登录和敏感操作验证

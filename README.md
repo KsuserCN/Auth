@@ -218,3 +218,5 @@ npm run test:console
 ```
 
 `dev:core` / `build:core` 现在包括 API、通行证 Web 和 Console。
+
+外部服务接入 Ksuser 通行证官方应用的完整步骤、客户端类型、OIDC 授权、scope、令牌校验与撤销方法，见[官方应用接入指南](./api/docs/official-app-integration.md)。
