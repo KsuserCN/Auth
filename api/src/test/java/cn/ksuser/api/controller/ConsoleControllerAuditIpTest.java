@@ -14,7 +14,7 @@ class ConsoleControllerAuditIpTest {
     @Test
     void directClientCannotForgeAuditAddressWithForwardedHeaders() {
         ConsoleAdminService admin=mock(ConsoleAdminService.class);
-        ConsoleController controller=new ConsoleController(mock(ConsoleSessionService.class),admin);
+        ConsoleController controller=new ConsoleController(mock(ConsoleSessionService.class),admin,mock(cn.ksuser.api.service.RateLimitService.class));
         ConsoleSessionService.ConsolePrincipal actor=new ConsoleSessionService.ConsolePrincipal("id","uuid",7L,Long.MAX_VALUE,Long.MAX_VALUE);
         var authentication=new UsernamePasswordAuthenticationToken(actor,null,List.of());
         MockHttpServletRequest request=new MockHttpServletRequest();
@@ -28,7 +28,7 @@ class ConsoleControllerAuditIpTest {
     @Test
     void trustedLocalReverseProxyCanSupplyClientAddress() {
         ConsoleAdminService admin=mock(ConsoleAdminService.class);
-        ConsoleController controller=new ConsoleController(mock(ConsoleSessionService.class),admin);
+        ConsoleController controller=new ConsoleController(mock(ConsoleSessionService.class),admin,mock(cn.ksuser.api.service.RateLimitService.class));
         ConsoleSessionService.ConsolePrincipal actor=new ConsoleSessionService.ConsolePrincipal("id","uuid",7L,Long.MAX_VALUE,Long.MAX_VALUE);
         var authentication=new UsernamePasswordAuthenticationToken(actor,null,List.of());
         MockHttpServletRequest request=new MockHttpServletRequest();

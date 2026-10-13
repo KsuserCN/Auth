@@ -212,6 +212,25 @@ export const consoleApi = {
       })
     ).data.data
   },
+  async initQrLogin(): Promise<ConsoleQrChallenge> {
+    return (await request.post<ApiResult<ConsoleQrChallenge>>('/console/auth/qr/init')).data.data
+  },
+  async pollQrLogin(challengeId: string, pollToken: string): Promise<ConsoleQrStatus> {
+    return (
+      await request.get<ApiResult<ConsoleQrStatus>>('/console/auth/qr/status', {
+        params: { challengeId, pollToken },
+      })
+    ).data.data
+  },
+  async exchangeQrLogin(challengeId: string, pollToken: string): Promise<ConsoleSession> {
+    return (
+      await request.post<ApiResult<ConsoleSession>>('/console/auth/qr/exchange', { challengeId, pollToken })
+    ).data.data
+  },
+  async cancelQrLogin(challengeId?: string): Promise<void> {
+    if (challengeId) await request.delete('/console/auth/qr', { params: { challengeId } })
+    else await request.delete('/console/auth/qr')
+  },
   async logout(): Promise<void> {
     await request.delete('/console/session')
     csrfToken = ''

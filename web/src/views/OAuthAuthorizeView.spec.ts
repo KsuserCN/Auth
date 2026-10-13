@@ -6,6 +6,7 @@ import OAuthAuthorizeView from './OAuthAuthorizeView.vue'
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   ios: vi.fn(),
+  mobile: vi.fn(),
   create: vi.fn(),
   consume: vi.fn(),
   cancel: vi.fn(),
@@ -71,6 +72,7 @@ vi.mock('@/utils/desktopBridge', () => ({
 }))
 vi.mock('@/utils/mobileAuthorization', () => ({
   isIOSAuthorizationSupported: mocks.ios,
+  isMobileAuthorizationBrowser: mocks.mobile,
   createMobileAuthorization: mocks.create,
   consumeMobileAuthorization: mocks.consume,
   cancelMobileAuthorization: mocks.cancel,
@@ -97,6 +99,7 @@ const render = () => {
   const wrapper = mount(OAuthAuthorizeView, {
     global: {
       stubs: {
+        ApplicationQrAuthorization: true,
         'el-button': { template: '<button><slot /></button>' },
         'el-icon': true,
         'el-avatar': true,
@@ -113,9 +116,12 @@ const render = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.route.path = '/sso/authorize'
+  mocks.route.fullPath = '/sso/authorize?client_id=client'
+  Reflect.deleteProperty(mocks.route.query, 'login_method')
   mocks.token = null
   mocks.account = null
   mocks.ios.mockReturnValue(true)
+  mocks.mobile.mockReturnValue(false)
   mocks.ssoContext.mockResolvedValue(context)
   mocks.oauthContext.mockResolvedValue(context)
   mocks.create.mockResolvedValue(ticket)
@@ -142,6 +148,38 @@ describe('official application consent', () => {
     // Keep navigation pending while asserting the request sent before redirect.
     mocks.officialApprove.mockImplementation(() => new Promise(() => {}))
   })
+  it('defaults to web login and exposes a QR button without creating a request', async () => {
+    mocks.token = null
+    mocks.account = null
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'ApplicationQrAuthorization' }).exists()).toBe(false)
+    expect(wrapper.find('.qr-login-toggle').attributes('aria-label')).toBe('使用扫码登录')
+    expect(mocks.replace).not.toHaveBeenCalled()
+    expect(mocks.create).not.toHaveBeenCalled()
+  })
+  it('allows an existing browser account to switch to phone confirmation', async () => {
+    const wrapper = render()
+    await flushPromises()
+    await wrapper.find('.qr-login-toggle').trigger('click')
+    expect(wrapper.findComponent({ name: 'ApplicationQrAuthorization' }).exists()).toBe(true)
+    expect(mocks.officialApprove).not.toHaveBeenCalled()
+  })
+  it('removes forced QR mode when returning to Passport web login without losing OIDC parameters', async () => {
+    Object.assign(mocks.route.query, { login_method: 'qr' })
+    mocks.route.fullPath =
+      '/official/authorize?client_id=client&state=original-state&nonce=original-nonce&login_method=qr'
+    const wrapper = render()
+    await flushPromises()
+    wrapper.findComponent({ name: 'ApplicationQrAuthorization' }).vm.$emit('webLogin')
+    await flushPromises()
+    expect(mocks.replace).toHaveBeenCalledWith({
+      path: '/login',
+      query: {
+        redirect: '/official/authorize?client_id=client&state=original-state&nonce=original-nonce',
+      },
+    })
+  })
   it('displays exact profile fields and hides the ordinary grant policy', async () => {
     const wrapper = render()
     await flushPromises()
@@ -152,7 +190,7 @@ describe('official application consent', () => {
     expect(mocks.create).not.toHaveBeenCalled()
     expect(mocks.officialApprove).not.toHaveBeenCalled()
   })
-  it('remembers approved scopes and automatically resumes without consent prompt', async () => {
+  it('shows remembered scopes while leaving web and QR authorization selectable', async () => {
     const originalPrompt = mocks.route.query.prompt
     mocks.route.query.prompt = ''
     mocks.officialContext.mockResolvedValue({
@@ -166,15 +204,7 @@ describe('official application consent', () => {
     })
     render()
     await flushPromises()
-    expect(mocks.officialApprove).toHaveBeenCalledWith(
-      expect.objectContaining({
-        approved: true,
-        state: 'original-state',
-        nonce: 'original-nonce',
-        codeChallenge: 'original-challenge',
-        codeChallengeMethod: 'S256',
-      }),
-    )
+    expect(mocks.officialApprove).not.toHaveBeenCalled()
     mocks.route.query.prompt = originalPrompt
   })
   it('denies official consent through the validated server callback', async () => {
@@ -211,50 +241,59 @@ describe('official application consent', () => {
   })
 })
 afterEach(() => mounted.splice(0).forEach((wrapper) => wrapper.unmount()))
-describe('authorization handoff page', () => {
-  it('preserves OIDC parameters and attempts app launch before browser login', async () => {
-    const wrapper = render()
-    await flushPromises()
-    expect(mocks.create).toHaveBeenCalledWith(
-      'sso',
-      expect.objectContaining({
-        state: 'original-state',
-        nonce: 'original-nonce',
-        codeChallenge: 'original-challenge',
-        codeChallengeMethod: 'S256',
-      }),
-    )
-    expect(mocks.create.mock.calls[0]?.[1]).not.toHaveProperty('prompt')
-    expect(mocks.launch).toHaveBeenCalledWith(ticket)
-    expect(wrapper.text()).toContain('在 Ksuser App 中继续授权')
-    expect(mocks.consume).not.toHaveBeenCalled()
-    const fallback = wrapper.findAll('button').find((button) => button.text() === '继续网页授权')!
-    await fallback.trigger('click')
-    await flushPromises()
-    expect(mocks.cancel).toHaveBeenCalledWith(ticket)
-    expect(mocks.replace).toHaveBeenCalledWith(
-      expect.objectContaining({
-        query: expect.objectContaining({ iosAuthorizationFallback: '1' }),
-      }),
-    )
-    expect(mocks.create).toHaveBeenCalledTimes(1)
-    expect(wrapper.text()).toContain('当前浏览器尚未登录')
-  })
-  it('keeps browser consent available when handoff creation fails', async () => {
-    mocks.create.mockRejectedValue(new Error('offline'))
-    const wrapper = render()
-    await flushPromises()
-    expect(wrapper.text()).toContain('当前浏览器尚未登录')
-    expect(mocks.launch).not.toHaveBeenCalled()
-  })
-  it('retains ordinary OAuth web authorization on non-iOS devices', async () => {
-    mocks.route.path = '/oauth/authorize'
-    mocks.ios.mockReturnValue(false)
-    const wrapper = render()
-    await flushPromises()
-    expect(mocks.oauthContext).toHaveBeenCalled()
-    expect(mocks.create).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('校园日历')
-    expect(wrapper.text()).toContain('当前浏览器尚未登录')
-  })
+describe('authorization login methods', () => {
+  it.each(['/oauth/authorize', '/sso/authorize', '/official/authorize'])(
+    'defaults to the web on %s and starts QR only after selecting it',
+    async (path) => {
+      mocks.route.path = path
+      mocks.officialContext.mockResolvedValue({
+        clientId: 'client',
+        clientName: '校园日历',
+        requestedScopes: ['openid', 'profile', 'email'],
+        loggedIn: false,
+        consentRequired: true,
+        consoleApplication: false,
+      })
+      const wrapper = render()
+      await flushPromises()
+      expect(wrapper.text()).toContain('当前浏览器尚未登录')
+      expect(wrapper.findComponent({ name: 'ApplicationQrAuthorization' }).exists()).toBe(false)
+      expect(mocks.create).not.toHaveBeenCalled()
+      expect(mocks.launch).not.toHaveBeenCalled()
+      await wrapper.find('.qr-login-toggle').trigger('click')
+      const qr = wrapper.findComponent({ name: 'ApplicationQrAuthorization' })
+      expect(qr.props('mode')).toBe(
+        path.startsWith('/oauth') ? 'oauth' : path.startsWith('/sso') ? 'sso' : 'official',
+      )
+      expect(qr.props('authorization')).toEqual(
+        expect.objectContaining({
+          state: 'original-state',
+          nonce: 'original-nonce',
+          codeChallenge: 'original-challenge',
+          codeChallengeMethod: 'S256',
+        }),
+      )
+    },
+  )
+  it.each(['/oauth/authorize', '/sso/authorize', '/official/authorize'])(
+    'does not show or automatically launch QR for mobile UA on %s',
+    async (path) => {
+      mocks.route.path = path
+      mocks.mobile.mockReturnValue(true)
+      mocks.officialContext.mockResolvedValue({
+        clientId: 'client',
+        clientName: '校园日历',
+        requestedScopes: ['openid'],
+        loggedIn: false,
+        consentRequired: true,
+        consoleApplication: false,
+      })
+      const wrapper = render()
+      await flushPromises()
+      expect(wrapper.find('.qr-login-toggle').exists()).toBe(false)
+      expect(wrapper.findComponent({ name: 'ApplicationQrAuthorization' }).exists()).toBe(false)
+      expect(mocks.launch).not.toHaveBeenCalled()
+      expect(mocks.create).not.toHaveBeenCalled()
+    },
+  )
 })

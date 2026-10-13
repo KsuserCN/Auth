@@ -84,6 +84,18 @@ public class AuthController {
     private final AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService;
     private final AdaptiveRiskMetricsService adaptiveRiskMetricsService;
     private ConsoleSessionService consoleSessionService;
+    private OfficialQrAuthorizationService officialQrAuthorizationService;
+    private MobileAuthorizationService mobileAuthorizationService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMobileAuthorizationService(MobileAuthorizationService service) {
+        this.mobileAuthorizationService = service;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setOfficialQrAuthorizationService(OfficialQrAuthorizationService service) {
+        this.officialQrAuthorizationService = service;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     public void setConsoleSessionService(ConsoleSessionService service) {
@@ -742,6 +754,7 @@ public class AuthController {
         userInfo.setHasPassword(user.getHasPassword());
         userInfo.setSystemRole(user.getSystemRole());
         userInfo.setDeveloperVerificationType(user.getDeveloperVerificationType());
+        userInfo.setVerificationEntityName(user.getVerificationEntityName());
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, userInfo));
     }
@@ -1537,6 +1550,27 @@ public class AuthController {
                 challenge.getIpLocation(),
                 expiresInSeconds > 0 ? expiresInSeconds : 0L
             );
+            if (QrChallengeService.ChallengeType.CONSOLE_LOGIN.value().equals(challenge.getType())) {
+                response.setTargetName("Ksuser Console");
+                response.setTargetOrigin(consoleSessionService.consoleOrigin());
+            }
+            if (QrChallengeService.ChallengeType.OFFICIAL_AUTHORIZATION.value().equals(challenge.getType())) {
+                var context = officialQrAuthorizationService.preview(challenge);
+                response.setTargetName(context.clientName());
+                response.setTargetOrigin(OfficialAuthorizationService.originOf(officialQrAuthorizationService.redirectUri(challenge)));
+                response.setTargetLogoUrl(context.logoUrl());
+                response.setRequestedScopes(context.requestedScopes());
+                response.setConsoleApplication(context.consoleApplication());
+            }
+            if (QrChallengeService.ChallengeType.APPLICATION_AUTHORIZATION.value().equals(challenge.getType())) {
+                var context = mobileAuthorizationService.preview(challenge.getAuthorizationTicket(), null);
+                response.setAuthorizationTicket(context.ticket());
+                response.setTargetName(context.appName());
+                response.setTargetOrigin(OfficialAuthorizationService.originOf(context.redirectUri()));
+                response.setTargetLogoUrl(context.logoUrl());
+                response.setRequestedScopes(context.requestedScopes());
+                response.setConsoleApplication(context.consoleApplication());
+            }
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.APPLE_004, response));
         }
@@ -1600,7 +1634,14 @@ public class AuthController {
 
         Map<String, Object> result = new HashMap<>();
         try {
-            if (challengeType == QrChallengeService.ChallengeType.LOGIN) {
+            if (challengeType == QrChallengeService.ChallengeType.OFFICIAL_AUTHORIZATION
+                || challengeType == QrChallengeService.ChallengeType.APPLICATION_AUTHORIZATION) {
+                // Older scanner clients do not display official application scopes. Require the dedicated consent API.
+                return ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.AUTH_090));
+            } else if (challengeType == QrChallengeService.ChallengeType.CONSOLE_LOGIN) {
+                consoleSessionService.approveQrLogin(challenge, user);
+                result.put("verified", true);
+            } else if (challengeType == QrChallengeService.ChallengeType.LOGIN) {
                 UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
                 boolean mfaEnabled = settings != null && Boolean.TRUE.equals(settings.getMfaEnabled());
                 if (mfaEnabled) {
@@ -1742,6 +1783,33 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, ApiResultCode.AUTH_097));
         }
+    }
+
+    @PostMapping("/qr/official/approve")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> approveOfficialQr(
+            @RequestBody QrApproveRequest body, Authentication authentication) {
+        return decideOfficialQr(body, authentication, true);
+    }
+
+    @PostMapping("/qr/official/reject")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> rejectOfficialQr(
+            @RequestBody QrApproveRequest body, Authentication authentication) {
+        return decideOfficialQr(body, authentication, false);
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> decideOfficialQr(
+            QrApproveRequest body, Authentication authentication, boolean approved) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
+        }
+        if (body == null || body.getApproveCode() == null || body.getApproveCode().isBlank()) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.AUTH_088));
+        }
+        User user = userService.findByUuid(authentication.getPrincipal().toString()).orElse(null);
+        if (user == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
+        var challenge = qrChallengeService.getByApproveCode(body.getApproveCode().trim());
+        officialQrAuthorizationService.decide(challenge, user, approved);
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.REQUEST_SUCCESS, Map.of("verified", approved)));
     }
 
     @GetMapping("/qr/status")
@@ -2262,6 +2330,10 @@ public class AuthController {
 
         // 执行更新（一次只更新一个字段）
         RegisterResult result = userService.updateProfileSingleField(user, normalizedKey, value.trim(), parsedBirthDate);
+        if (result.getStatus() == RegisterResult.Status.BAD_REQUEST) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ApiResponse<>(400, ApiResultCode.AUTH_030));
+        }
         if (result.getStatus() == RegisterResult.Status.USERNAME_EXISTS) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new ApiResponse<>(409, ApiResultCode.AUTH_029));

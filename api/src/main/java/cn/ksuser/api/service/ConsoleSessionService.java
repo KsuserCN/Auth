@@ -2,6 +2,7 @@ package cn.ksuser.api.service;
 
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.entity.User;
+import cn.ksuser.api.dto.QrChallengeInitResponse;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.UserRepository;
 import cn.ksuser.api.result.ApiResultCode;
@@ -29,6 +30,7 @@ import java.util.Map;
 public class ConsoleSessionService {
     public static final String SESSION_COOKIE = "consoleSession";
     public static final String LOGIN_COOKIE = "consoleLogin";
+    public static final String QR_LOGIN_COOKIE = "consoleQrLogin";
     private static final Duration FLOW_TTL = Duration.ofMinutes(5);
     private static final Duration SESSION_TTL = Duration.ofHours(8);
     private static final Duration FRESH_TTL = Duration.ofMinutes(15);
@@ -37,19 +39,21 @@ public class ConsoleSessionService {
     private final ObjectMapper json;
     private final UserRepository users;
     private final OfficialAuthorizationService official;
+    private final QrChallengeService qr;
     private final AppProperties properties;
     private final String consoleOrigin;
     private final String passportOrigin;
     private final SecureRandom random = new SecureRandom();
 
     public ConsoleSessionService(StringRedisTemplate redis, ObjectMapper json, UserRepository users,
-                                 OfficialAuthorizationService official, AppProperties properties,
+                                 OfficialAuthorizationService official, QrChallengeService qr, AppProperties properties,
                                  @Value("${app.console.origin:}") String consoleOrigin,
                                  @Value("${app.console.passport-origin:}") String passportOrigin) {
         this.redis = redis;
         this.json = json;
         this.users = users;
         this.official = official;
+        this.qr = qr;
         this.properties = properties;
         this.consoleOrigin = trimOrigin(consoleOrigin.isBlank()
             ? (properties.isDebug() ? "http://localhost:5174" : "https://console.ksuser.cn") : consoleOrigin);
@@ -85,13 +89,110 @@ public class ConsoleSessionService {
         cookie(response, LOGIN_COOKIE, "", Duration.ZERO);
         OfficialAuthorizationService.ConsoleExchange exchange = official.exchangeForConsole(
             code, flow.redirectUri(), flow.verifier(), flow.nonce());
-        User user = exchange.user();
+        return createSession(exchange.user(), exchange.authorizationId(), request, response);
+    }
+
+    public QrChallengeInitResponse startQrLogin(HttpServletRequest request, HttpServletResponse response,
+                                               String ip, String userAgent) {
+        official.validateConsoleLogin(callbackUri());
+        invalidateQrLogin(request);
+        QrChallengeService.QrChallengePayload challenge = qr.createChallenge(
+            QrChallengeService.ChallengeType.CONSOLE_LOGIN, null, null, "console", ip, userAgent);
+        Duration ttl = Duration.ofSeconds(QrChallengeService.DEFAULT_TTL_SECONDS);
+        String browser = randomToken();
+        String browserHash = hash(browser);
+        QrLoginFlow flow = new QrLoginFlow(challenge.getChallengeId(), challenge.getPollToken(), now() + ttl.toMillis());
+        store("qr-login:" + browserHash, flow, ttl);
+        store("qr-approval:" + flow.challengeId(), new QrLoginApproval(browserHash, flow.expiresAt()), ttl);
+        cookie(response, QR_LOGIN_COOKIE, browser, ttl);
+        return new QrChallengeInitResponse(flow.challengeId(), flow.pollToken(),
+            QrChallengeService.QR_TEXT_PREFIX + challenge.getApproveCode(), ttl.toSeconds());
+    }
+
+    /** Called only by the authenticated mobile QR approval endpoint. */
+    public void approveQrLogin(QrChallengeService.QrChallengePayload challenge, User user) {
         requireSuperAdmin(user);
+        if (!QrChallengeService.ChallengeType.CONSOLE_LOGIN.value().equals(challenge.getType())
+            || !QrChallengeService.ChallengeStatus.PENDING.value().equals(challenge.getStatus())) throw flowFailure();
+        String key = "qr-approval:" + challenge.getChallengeId();
+        QrLoginApproval approval = read(key, QrLoginApproval.class);
+        if (approval == null || approval.expiresAt() <= now()) throw flowFailure();
+        QrLoginFlow flow = read("qr-login:" + approval.browserHash(), QrLoginFlow.class);
+        if (flow == null || !equal(flow.challengeId(), challenge.getChallengeId()) || flow.expiresAt() <= now()) throw flowFailure();
+        // Claim approval once, so simultaneous scans cannot replace the confirmed account.
+        approval = consume(key, QrLoginApproval.class);
+        if (approval == null || approval.expiresAt() <= now()) throw flowFailure();
+        OfficialAuthorizationService.ConsoleExchange grant = official.approveConsoleLogin(user, callbackUri());
+        store("qr-grant:" + challenge.getChallengeId(), new QrLoginGrant(grant.user().getUuid(), grant.authorizationId()),
+            Duration.ofMillis(Math.max(1, approval.expiresAt() - now())));
+    }
+
+    public QrLoginStatus qrLoginStatus(String challengeId, String pollToken, HttpServletRequest request) {
+        QrLoginFlow flow = qrLoginFlow(challengeId, pollToken, request);
+        if (flow == null) return new QrLoginStatus("expired", 0);
+        QrChallengeService.QrChallengePayload challenge = qr.getByChallengeId(flow.challengeId());
+        if (challenge == null) return new QrLoginStatus("expired", 0);
+        return new QrLoginStatus(challenge.getStatus(), Math.max(0, (flow.expiresAt() - now() + 999) / 1000));
+    }
+
+    public SessionView exchangeQrLogin(String challengeId, String pollToken, HttpServletRequest request,
+                                       HttpServletResponse response) {
+        QrLoginFlow flow = qrLoginFlow(challengeId, pollToken, request);
+        if (flow == null) throw flowFailure();
+        QrChallengeService.QrChallengePayload challenge = qr.getByChallengeId(flow.challengeId());
+        if (challenge == null || !QrChallengeService.ChallengeStatus.APPROVED.value().equals(challenge.getStatus())) throw flowFailure();
+        String browser = readCookie(request, QR_LOGIN_COOKIE);
+        flow = consume("qr-login:" + hash(browser), QrLoginFlow.class);
+        if (flow == null || flow.expiresAt() <= now() || !equal(flow.challengeId(), challengeId)
+            || !equal(flow.pollToken(), pollToken)) throw flowFailure();
+        QrLoginGrant grant = consume("qr-grant:" + flow.challengeId(), QrLoginGrant.class);
+        cookie(response, QR_LOGIN_COOKIE, "", Duration.ZERO);
+        if (grant == null) throw flowFailure();
+        User user = users.findByUuid(grant.userUuid()).orElseThrow(ConsoleSessionService::sessionFailure);
+        return createSession(user, grant.authorizationId(), request, response);
+    }
+
+    public void cancelQrLogin(HttpServletRequest request, HttpServletResponse response) {
+        cancelQrLogin(null, request, response);
+    }
+
+    public void cancelQrLogin(String challengeId, HttpServletRequest request, HttpServletResponse response) {
+        String browser = readCookie(request, QR_LOGIN_COOKIE);
+        if (challengeId != null && browser != null) {
+            QrLoginFlow flow = read("qr-login:" + hash(browser), QrLoginFlow.class);
+            // A late cancellation for an old tab must not cancel a newer login request.
+            if (flow != null && !equal(flow.challengeId(), challengeId)) return;
+        }
+        invalidateQrLogin(request);
+        // Clearing a cookie in a delayed response could overwrite a newer tab's cookie.
+        if (challengeId == null) cookie(response, QR_LOGIN_COOKIE, "", Duration.ZERO);
+    }
+
+    private void invalidateQrLogin(HttpServletRequest request) {
+        String browser = readCookie(request, QR_LOGIN_COOKIE);
+        if (browser == null) return;
+        QrLoginFlow flow = consume("qr-login:" + hash(browser), QrLoginFlow.class);
+        if (flow != null) redis.delete(java.util.List.of(PREFIX + "qr-approval:" + flow.challengeId(),
+            PREFIX + "qr-grant:" + flow.challengeId()));
+    }
+
+    private QrLoginFlow qrLoginFlow(String challengeId, String pollToken, HttpServletRequest request) {
+        String browser = readCookie(request, QR_LOGIN_COOKIE);
+        if (browser == null || challengeId == null || pollToken == null) throw flowFailure();
+        QrLoginFlow flow = read("qr-login:" + hash(browser), QrLoginFlow.class);
+        if (flow == null || flow.expiresAt() <= now()) return null;
+        if (!equal(flow.challengeId(), challengeId) || !equal(flow.pollToken(), pollToken)) throw flowFailure();
+        return flow;
+    }
+
+    private SessionView createSession(User user, Long authorizationId, HttpServletRequest request, HttpServletResponse response) {
+        requireSuperAdmin(user);
+        if (!official.isConsoleAuthorizationActive(user.getUuid(), authorizationId)) throw accessFailure();
         String previous = readCookie(request, SESSION_COOKIE);
         if (previous != null) deleteSession(hash(previous));
         String token = randomToken();
         String sessionId = hash(token);
-        SessionData data = new SessionData(user.getUuid(), exchange.authorizationId(), now() + SESSION_TTL.toMillis());
+        SessionData data = new SessionData(user.getUuid(), authorizationId, now() + SESSION_TTL.toMillis());
         store("session:" + sessionId, data, SESSION_TTL);
         cookie(response, SESSION_COOKIE, token, SESSION_TTL);
         return sessionView(new ConsolePrincipal(sessionId, user.getUuid(), data.authorizationId(), data.expiresAt(), 0));
@@ -271,6 +372,10 @@ public class ConsoleSessionService {
     public record SessionUser(String uuid, String username, String email, String avatarUrl, String systemRole) {}
     public record SessionView(SessionUser user, long expiresAt, long freshUntil) {}
     public record LoginFlow(String state, String nonce, String verifier, String redirectUri, long expiresAt) {}
+    public record QrLoginFlow(String challengeId, String pollToken, long expiresAt) {}
+    public record QrLoginApproval(String browserHash, long expiresAt) {}
+    public record QrLoginGrant(String userUuid, Long authorizationId) {}
+    public record QrLoginStatus(String status, long expiresInSeconds) {}
     public record SessionData(String userUuid, Long authorizationId, long expiresAt) {}
     public record VerificationRequest(String sessionId, String userUuid, String state, long expiresAt) {}
 }

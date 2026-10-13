@@ -36,7 +36,9 @@ public class ConsoleSessionFilter extends OncePerRequestFilter {
         response.setHeader("Cache-Control", "no-store");
         String path = request.getRequestURI().substring(request.getContextPath().length()).replaceAll("/+$", "");
         if ("OPTIONS".equals(request.getMethod()) || path.equals("/console/auth/start")
-            || path.equals("/console/auth/exchange") || path.equals("/console/csrf-token")) {
+            || path.equals("/console/auth/exchange") || path.equals("/console/csrf-token")
+            || path.equals("/console/auth/qr/init") || path.equals("/console/auth/qr/status")
+            || path.equals("/console/auth/qr/exchange") || path.equals("/console/auth/qr")) {
             chain.doFilter(request, response);
             return;
         }

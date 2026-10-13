@@ -3,6 +3,7 @@ package cn.ksuser.api.entity;
 import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -46,6 +47,10 @@ public class User {
 
     @Column(name = "verification_type", length = 20, nullable = false)
     private String verificationType = "none";
+
+    // Maintained by administrators in SQL. Ordinary entity saves must never overwrite it.
+    @Column(name = "verification_entity_name", length = 200, insertable = false, updatable = false)
+    private String verificationEntityName;
 
     @Column(name = "system_role", length = 20, nullable = false)
     private String systemRole = "USER";
@@ -189,6 +194,13 @@ public class User {
     public String getDeveloperVerificationType() {
         return "personal".equals(verificationType) || "enterprise".equals(verificationType)
             ? verificationType : "none";
+    }
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    public String getVerificationEntityName() {
+        if ("none".equals(getVerificationType()) || verificationEntityName == null) return null;
+        String name = verificationEntityName.trim();
+        return name.isEmpty() ? null : name;
     }
 
     public String getSystemRole() {

@@ -16,6 +16,11 @@ export const isIOSAuthorizationSupported = (): boolean =>
   /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
+export const isMobileAuthorizationBrowser = (): boolean =>
+  typeof navigator !== 'undefined' &&
+  (isIOSAuthorizationSupported() ||
+    /Android|Mobile|Windows Phone|IEMobile|BlackBerry|Opera Mini/i.test(navigator.userAgent))
+
 export const createMobileAuthorization = async (
   mode: 'oauth' | 'sso',
   authorization: SSOAuthorizeApproveRequest,

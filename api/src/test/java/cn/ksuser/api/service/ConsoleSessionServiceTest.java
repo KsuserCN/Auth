@@ -31,6 +31,7 @@ class ConsoleSessionServiceTest {
     @SuppressWarnings("unchecked") private final ValueOperations<String,String> values=mock(ValueOperations.class);
     private final UserRepository users=mock(UserRepository.class);
     private final OfficialAuthorizationService official=mock(OfficialAuthorizationService.class);
+    private final QrChallengeService qr=mock(QrChallengeService.class);
     private ConsoleSessionService service;
     private User admin;
 
@@ -48,7 +49,7 @@ class ConsoleSessionServiceTest {
         when(official.exchangeForConsole(anyString(),anyString(),anyString(),anyString()))
             .thenReturn(new OfficialAuthorizationService.ConsoleExchange(admin,7L,"ksuser_console"));
         AppProperties properties=new AppProperties(); properties.setDebug(true);
-        service=new ConsoleSessionService(redis,new ObjectMapper(),users,official,properties,"","");
+        service=new ConsoleSessionService(redis,new ObjectMapper(),users,official,qr,properties,"","");
     }
 
     @Test
@@ -130,6 +131,100 @@ class ConsoleSessionServiceTest {
         String sessionKey=storage.keySet().stream().filter(key->key.startsWith("console:session:")).findFirst().orElseThrow();
         storage.put(sessionKey,json.writeValueAsString(new ConsoleSessionService.SessionData(admin.getUuid(),7L,1)));
         assertThrows(Oauth2Exception.class,()->service.authenticate(browser));
+    }
+
+    @Test
+    void qrLoginRequiresOriginalBrowserPollTokenApprovalAndOneTimeExchange() {
+        var challenge=qrChallenge("first");
+        MockHttpServletRequest browser=startQr(challenge);
+        assertEquals("pending",service.qrLoginStatus("first","poll-first",browser).status());
+        assertThrows(Oauth2Exception.class,()->service.qrLoginStatus("first","poll-first",new MockHttpServletRequest()));
+        assertThrows(Oauth2Exception.class,()->service.qrLoginStatus("first","wrong-poll",browser));
+        assertThrows(Oauth2Exception.class,()->service.qrLoginStatus("other","poll-first",browser));
+        assertThrows(Oauth2Exception.class,()->service.exchangeQrLogin("first","poll-first",browser,new MockHttpServletResponse()));
+        when(official.approveConsoleLogin(admin,service.callbackUri()))
+            .thenReturn(new OfficialAuthorizationService.ConsoleExchange(admin,7L,"ksuser_console"));
+        service.approveQrLogin(challenge,admin);
+        assertThrows(Oauth2Exception.class,()->service.approveQrLogin(challenge,admin));
+        challenge.setStatus("approved");
+        assertEquals("approved",service.qrLoginStatus("first","poll-first",browser).status());
+        MockHttpServletResponse finish=new MockHttpServletResponse();
+        var session=service.exchangeQrLogin("first","poll-first",browser,finish);
+        assertEquals(admin.getUuid(),session.user().uuid());
+        assertEquals(0,session.freshUntil(),"Login approval must not grant permission for sensitive writes");
+        assertEquals(admin.getUuid(),service.authenticate(request(cookieValue(finish,ConsoleSessionService.SESSION_COOKIE),ConsoleSessionService.SESSION_COOKIE)).userUuid());
+        assertThrows(Oauth2Exception.class,()->service.exchangeQrLogin("first","poll-first",browser,new MockHttpServletResponse()));
+        verify(official,never()).exchangeForConsole(anyString(),anyString(),anyString(),anyString());
+    }
+
+    @Test
+    void refreshAndCancelInvalidateOldQrEvenWhenPhoneHasConfirmed() {
+        var first=qrChallenge("first");
+        MockHttpServletRequest browser=startQr(first);
+        when(official.approveConsoleLogin(admin,service.callbackUri()))
+            .thenReturn(new OfficialAuthorizationService.ConsoleExchange(admin,7L,"ksuser_console"));
+        service.approveQrLogin(first,admin);
+        first.setStatus("approved");
+        var second=qrChallenge("second");
+        when(qr.createChallenge(eq(QrChallengeService.ChallengeType.CONSOLE_LOGIN),isNull(),isNull(),eq("console"),anyString(),anyString()))
+            .thenReturn(second);
+        MockHttpServletResponse refreshed=new MockHttpServletResponse();
+        service.startQrLogin(browser,refreshed,"127.0.0.1","browser");
+        assertThrows(Oauth2Exception.class,()->service.exchangeQrLogin("first","poll-first",browser,new MockHttpServletResponse()));
+        assertFalse(storage.containsKey("console:qr-grant:first"));
+        MockHttpServletRequest next=request(cookieValue(refreshed,ConsoleSessionService.QR_LOGIN_COOKIE),ConsoleSessionService.QR_LOGIN_COOKIE);
+        MockHttpServletResponse lateCancel=new MockHttpServletResponse();
+        service.cancelQrLogin("first",next,lateCancel);
+        assertTrue(lateCancel.getHeaders("Set-Cookie").isEmpty());
+        assertEquals("pending",service.qrLoginStatus("second","poll-second",next).status());
+        assertThrows(Oauth2Exception.class,()->service.exchangeQrLogin("first","poll-first",next,new MockHttpServletResponse()));
+        MockHttpServletResponse cancelled=new MockHttpServletResponse();
+        service.cancelQrLogin("second",next,cancelled);
+        assertTrue(cancelled.getHeaders("Set-Cookie").isEmpty());
+        assertThrows(Oauth2Exception.class,()->service.approveQrLogin(second,admin));
+        assertTrue(storage.keySet().stream().noneMatch(key->key.startsWith("console:session:")));
+    }
+
+    @Test
+    void qrApprovalAndExchangeCheckCurrentRoleGrantAndExpiry() throws Exception {
+        var challenge=qrChallenge("first");
+        MockHttpServletRequest browser=startQr(challenge);
+        admin.setSystemRole("ADMIN");
+        assertThrows(Oauth2Exception.class,()->service.approveQrLogin(challenge,admin));
+        verify(official,never()).approveConsoleLogin(any(),anyString());
+        admin.setSystemRole("SUPER_ADMIN");
+        when(official.approveConsoleLogin(admin,service.callbackUri()))
+            .thenReturn(new OfficialAuthorizationService.ConsoleExchange(admin,7L,"ksuser_console"));
+        service.approveQrLogin(challenge,admin);
+        challenge.setStatus("approved");
+        when(official.isConsoleAuthorizationActive(admin.getUuid(),7L)).thenReturn(false);
+        assertThrows(Oauth2Exception.class,()->service.exchangeQrLogin("first","poll-first",browser,new MockHttpServletResponse()));
+        assertTrue(storage.keySet().stream().noneMatch(key->key.startsWith("console:session:")));
+
+        var expired=qrChallenge("expired");
+        MockHttpServletRequest old=startQr(expired);
+        String key=storage.keySet().stream().filter(value->value.startsWith("console:qr-login:")).findFirst().orElseThrow();
+        storage.put(key,new ObjectMapper().writeValueAsString(new ConsoleSessionService.QrLoginFlow("expired","poll-expired",1)));
+        assertEquals("expired",service.qrLoginStatus("expired","poll-expired",old).status());
+        assertThrows(Oauth2Exception.class,()->service.approveQrLogin(expired,admin));
+        assertThrows(Oauth2Exception.class,()->service.exchangeQrLogin("expired","poll-expired",old,new MockHttpServletResponse()));
+    }
+
+    private QrChallengeService.QrChallengePayload qrChallenge(String id) {
+        var challenge=new QrChallengeService.QrChallengePayload();
+        challenge.setChallengeId(id);challenge.setPollToken("poll-"+id);challenge.setApproveCode("approve-"+id);
+        challenge.setType("console_login");challenge.setStatus("pending");
+        when(qr.getByChallengeId(id)).thenReturn(challenge);
+        return challenge;
+    }
+    private MockHttpServletRequest startQr(QrChallengeService.QrChallengePayload challenge) {
+        when(qr.createChallenge(eq(QrChallengeService.ChallengeType.CONSOLE_LOGIN),isNull(),isNull(),eq("console"),anyString(),anyString()))
+            .thenReturn(challenge);
+        MockHttpServletResponse response=new MockHttpServletResponse();
+        var init=service.startQrLogin(new MockHttpServletRequest(),response,"127.0.0.1","browser");
+        assertEquals("KSUSER-AUTH-QR:"+challenge.getApproveCode(),init.getQrText());
+        assertEquals(120,init.getExpiresInSeconds());
+        return request(cookieValue(response,ConsoleSessionService.QR_LOGIN_COOKIE),ConsoleSessionService.QR_LOGIN_COOKIE);
     }
 
     private MockHttpServletRequest login() {

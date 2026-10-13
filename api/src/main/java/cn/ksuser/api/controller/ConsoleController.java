@@ -6,6 +6,8 @@ import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.result.ApiResultCode;
 import cn.ksuser.api.service.ConsoleAdminService;
 import cn.ksuser.api.service.ConsoleSessionService;
+import cn.ksuser.api.dto.QrChallengeInitResponse;
+import cn.ksuser.api.service.RateLimitService;
 import cn.ksuser.api.util.IpUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -22,11 +24,36 @@ import java.util.Map;
 public class ConsoleController {
     private final ConsoleSessionService sessions;
     private final ConsoleAdminService admin;
-    public ConsoleController(ConsoleSessionService sessions,ConsoleAdminService admin) { this.sessions=sessions; this.admin=admin; }
+    private final RateLimitService rateLimit;
+    public ConsoleController(ConsoleSessionService sessions,ConsoleAdminService admin,RateLimitService rateLimit) {
+        this.sessions=sessions; this.admin=admin; this.rateLimit=rateLimit;
+    }
     @GetMapping("/csrf-token")
     public ApiResponse<Map<String,String>> csrf(CsrfToken token) { return success(Map.of("token",token.getToken())); }
     @PostMapping("/auth/start")
-    public ApiResponse<Map<String,String>> start(HttpServletResponse response) { return success(sessions.startLogin(response)); }
+    public ApiResponse<Map<String,String>> start(HttpServletRequest request,HttpServletResponse response) {
+        sessions.cancelQrLogin(request,response);
+        return success(sessions.startLogin(response));
+    }
+    @PostMapping("/auth/qr/init")
+    public ApiResponse<QrChallengeInitResponse> qrInit(HttpServletRequest request,HttpServletResponse response) {
+        return success(sessions.startQrLogin(request,response,clientIp(request),rateLimit.getClientUserAgent(request)));
+    }
+    @GetMapping("/auth/qr/status")
+    public ApiResponse<ConsoleSessionService.QrLoginStatus> qrStatus(@RequestParam String challengeId,
+        @RequestParam String pollToken,HttpServletRequest request) {
+        return success(sessions.qrLoginStatus(challengeId,pollToken,request));
+    }
+    @PostMapping("/auth/qr/exchange")
+    public ApiResponse<ConsoleSessionService.SessionView> qrExchange(@RequestBody QrLoginExchange body,
+        HttpServletRequest request,HttpServletResponse response) {
+        return success(sessions.exchangeQrLogin(body.challengeId(),body.pollToken(),request,response));
+    }
+    @DeleteMapping("/auth/qr")
+    public ApiResponse<Void> qrCancel(@RequestParam(required=false) String challengeId,
+        HttpServletRequest request,HttpServletResponse response) {
+        sessions.cancelQrLogin(challengeId,request,response); return success(null);
+    }
     @PostMapping("/auth/exchange")
     public ApiResponse<ConsoleSessionService.SessionView> exchange(@RequestBody LoginExchange body,HttpServletRequest request,HttpServletResponse response) {
         return success(sessions.exchangeLogin(body.code(),body.state(),request,response));
@@ -91,6 +118,7 @@ public class ConsoleController {
     }
     private static <T> ApiResponse<T> success(T value) { return new ApiResponse<>(200,ApiResultCode.REQUEST_SUCCESS,value); }
     public record LoginExchange(String code,String state) {}
+    public record QrLoginExchange(String challengeId,String pollToken) {}
     public record VerificationExchange(String ticket,String state) {}
     public record RoleRequest(String systemRole) {}
 }

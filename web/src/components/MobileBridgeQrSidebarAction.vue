@@ -68,8 +68,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { effectiveLocale, t } from '@/i18n'
+import { onBeforeUnmount, ref } from 'vue'
+import { t } from '@/i18n'
+import { ksuserIosAppStoreUrl as appStoreUrl } from '@/utils/appStore'
 
 import QRCode from 'qrcode'
 import { ElMessage } from 'element-plus'
@@ -104,11 +105,6 @@ const isAppleMobile =
     navigator.maxTouchPoints > 1)
 const isMobileBrowser =
   /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(userAgent) || isAppleMobile
-const appStoreUrl = computed(() =>
-  effectiveLocale.value === 'zh-Hans'
-    ? 'https://apps.apple.com/cn/app/ksuser%E5%AE%89%E5%85%A8/id6776157121'
-    : 'https://apps.apple.com/us/app/ksuser%E5%AE%89%E5%85%A8/id6776157121',
-)
 
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 let mobileBridgeQrCountdownTimer: number | null = null

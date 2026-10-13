@@ -2,6 +2,14 @@
 
 Vue 3 Web 管理面板，生产地址为 **https://console.ksuser.cn**。登录和再次验证都由 Ksuser 通行证完成；只有 `SUPER_ADMIN` 能进入面板。普通 `ADMIN` 保留通行证开放平台中的 OAuth/SSO 管理资格。
 
+## iOS App 扫码登录
+
+登录页默认展示扫码入口。打开已登录的 Ksuser iOS App，点击「扫码」，扫描后核对 **Ksuser Console**、目标网站和当前账号，点击「确认登录管理中心」，浏览器自动进入管理面板。也可切换到原有通行证登录。
+
+二维码有效期为两分钟，过期或网络异常可刷新；刷新、取消和切换登录方式会使旧请求失效。扫码确认授予官方应用 `ksuser_console` 的 `openid profile email` 范围，沿用既有的应用启用状态、回调白名单和超级管理员权限检查。领取后台会话必须同时提供发起浏览器的 HttpOnly Cookie、challenge ID 和轮询凭据，且仅可领取一次；手机和 Console 之间不传递通行证访问令牌。扫码登录不授予敏感写操作的再次验证权限。
+
+本功能接入 iOS App，Android 不在本次接入范围。发布时同步更新 API、Console 和 iOS App，无新增数据库迁移；官方应用仍需按下文完成初始化。
+
 ## 数据库升级和首次初始化
 
 API 默认使用 Hibernate `validate`，部署新版 API 前必须先升级数据库。备份现有数据库，然后在仓库根目录执行以下命令；`-p` 会提示输入密码，不把密码写入命令。

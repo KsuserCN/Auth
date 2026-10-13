@@ -61,6 +61,14 @@ public class QrChallengeService {
             verificationRequestId);
     }
 
+    public QrChallengePayload createApplicationAuthorizationChallenge(String ticket, String webIp, String userAgent) {
+        QrChallengePayload payload = createChallenge(ChallengeType.APPLICATION_AUTHORIZATION, null, null,
+            SessionTransferService.TARGET_WEB, webIp, userAgent, null);
+        payload.setAuthorizationTicket(ticket);
+        save(payload, DEFAULT_TTL_SECONDS);
+        return payload;
+    }
+
     private QrChallengePayload createChallenge(
             ChallengeType type,
             Long requestedUserId,
@@ -191,6 +199,9 @@ public class QrChallengeService {
 
     public enum ChallengeType {
         LOGIN("login"),
+        CONSOLE_LOGIN("console_login"),
+        OFFICIAL_AUTHORIZATION("official"),
+        APPLICATION_AUTHORIZATION("application"),
         MFA("mfa"),
         SENSITIVE("sensitive"),
         RECOVERY("recovery");
@@ -244,6 +255,10 @@ public class QrChallengeService {
         private Long requestedUserId;
         private String mfaChallengeId;
         private String consoleVerificationRequestId;
+        private String authorizationTicket;
+
+        public String getAuthorizationTicket() { return authorizationTicket; }
+        public void setAuthorizationTicket(String value) { authorizationTicket = value; }
         private String target;
         private String webIp;
         private String ipLocation;

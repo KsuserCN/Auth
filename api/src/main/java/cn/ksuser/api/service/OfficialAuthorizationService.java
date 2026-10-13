@@ -78,19 +78,45 @@ public class OfficialAuthorizationService {
         if (!Boolean.TRUE.equals(request.approved())) {
             return Map.of("redirectUrl", callback(request.redirectUri(), request.state(), "error", "access_denied"));
         }
+        UserOfficialAuthorization grant = saveAuthorization(current, app, requested, request.redirectUri());
+        String code = randomValue("ofc_");
+        store(CODE_PREFIX + hashOpaque(code), new CodePayload(app.getClientId(), current.getId(), grant.getId(),
+            request.redirectUri(), String.join(" ", requested), request.nonce(), request.codeChallenge(),
+            System.currentTimeMillis() + CODE_TTL.toMillis()), CODE_TTL);
+        return Map.of("redirectUrl", callback(request.redirectUri(), request.state(), "code", code));
+    }
+
+    public void validateConsoleLogin(String redirectUri) {
+        validateRequest(activeClient(CONSOLE_CLIENT_ID), consoleLoginRequest(redirectUri));
+    }
+
+    /** Native confirmation grants Console access without issuing Passport or OAuth bearer tokens. */
+    @Transactional
+    public ConsoleExchange approveConsoleLogin(User user, String redirectUri) {
+        OfficialApplication app = apps.findByClientIdForUpdate(CONSOLE_CLIENT_ID)
+            .filter(item -> Boolean.TRUE.equals(item.getIsActive())).orElseThrow(() -> invalidClient());
+        List<String> requested = validateRequest(app, consoleLoginRequest(redirectUri));
+        User current = currentUser(user.getId());
+        checkConsoleRole(app, current);
+        UserOfficialAuthorization grant = saveAuthorization(current, app, requested, redirectUri);
+        return new ConsoleExchange(current, grant.getId(), app.getClientId());
+    }
+
+    private static OfficialAuthorizeRequest consoleLoginRequest(String redirectUri) {
+        return new OfficialAuthorizeRequest(CONSOLE_CLIENT_ID, redirectUri, "code", "openid profile email",
+            randomValue(""), randomValue(""), PkceUtil.toS256CodeChallenge(randomValue("")), "S256", true);
+    }
+
+    private UserOfficialAuthorization saveAuthorization(User current, OfficialApplication app,
+                                                        List<String> requested, String redirectUri) {
         UserOfficialAuthorization grant = grants.findByUserIdAndClientId(current.getId(), app.getClientId())
             .orElseGet(UserOfficialAuthorization::new);
         LinkedHashSet<String> combined = new LinkedHashSet<>(parseScopes(grant.getScopes()));
         combined.addAll(requested);
         grant.setUserId(current.getId()); grant.setClientId(app.getClientId());
         grant.setScopes(String.join(" ", ALL_SCOPES.stream().filter(combined::contains).toList()));
-        grant.setRedirectUri(request.redirectUri()); grant.setLastAuthorizedAt(LocalDateTime.now());
-        grant = grants.saveAndFlush(grant);
-        String code = randomValue("ofc_");
-        store(CODE_PREFIX + hashOpaque(code), new CodePayload(app.getClientId(), current.getId(), grant.getId(),
-            request.redirectUri(), String.join(" ", requested), request.nonce(), request.codeChallenge(),
-            System.currentTimeMillis() + CODE_TTL.toMillis()), CODE_TTL);
-        return Map.of("redirectUrl", callback(request.redirectUri(), request.state(), "code", code));
+        grant.setRedirectUri(redirectUri); grant.setLastAuthorizedAt(LocalDateTime.now());
+        return grants.saveAndFlush(grant);
     }
 
     public Map<String, Object> exchangeAuthorizationCode(String grantType, String code, String clientId,

@@ -54,6 +54,8 @@ public class SecurityConfig {
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/console/auth/start", "/console/auth/exchange", "/console/csrf-token",
+                    "/console/auth/qr/init", "/console/auth/qr/status", "/console/auth/qr/exchange", "/console/auth/qr",
+                    "/official/qr/init", "/official/qr/status", "/official/qr/exchange", "/official/qr/cancel",
                     "/official/authorize/context", "/official/token", "/official/userinfo",
                     "/official/jwks", "/official/.well-known/openid-configuration").permitAll()
                 .requestMatchers("/console/**").hasAuthority("CONSOLE_SUPER_ADMIN")
@@ -64,6 +66,8 @@ public class SecurityConfig {
                     "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/session-transfer/exchange", "/auth/session-transfer/exchange/",
                     "/auth/mobile-authorization/create", "/auth/mobile-authorization/create/",
+                    "/auth/mobile-authorization/qr/create", "/auth/mobile-authorization/qr/create/",
+                    "/auth/mobile-authorization/qr/status", "/auth/mobile-authorization/qr/status/",
                     "/auth/mobile-authorization/consume", "/auth/mobile-authorization/consume/",
                     "/auth/mobile-authorization/cancel", "/auth/mobile-authorization/cancel/",
                     "/auth/mobile-bridge/create", "/auth/mobile-bridge/create/",

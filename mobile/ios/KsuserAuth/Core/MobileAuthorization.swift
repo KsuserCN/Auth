@@ -10,9 +10,13 @@ struct MobileAuthorizationContext: Decodable, Sendable, Identifiable {
     let alreadyAuthorized: Bool
     let existingGrantMode: String
     let expiresInSeconds: Int
+    var qr: Bool? = nil
+    var officialApplication: Bool? = nil
+    var consoleApplication: Bool? = nil
+    var webOrigin: String? = nil
     var id: String { ticket }
 }
-struct MobileAuthorizationReturn: Decodable, Sendable { let returnUrl: String }
+struct MobileAuthorizationReturn: Decodable, Sendable { let returnUrl: String?; let completed: Bool? }
 
 enum MobileAuthorizationReturnBrowser {
     case system
@@ -66,8 +70,8 @@ extension KsuserRepositoryProviding {
     func mobileAuthorization(_ ticket: String) async throws -> MobileAuthorizationContext {
         try await client.request("/auth/mobile-authorization/context", query: ["ticket": ticket])
     }
-    func decideMobileAuthorization(_ ticket: String, approve: Bool, mode: String, ttl: Int) async throws -> MobileAuthorizationReturn {
-        var body: [String: JSONValue] = ["ticket": .string(ticket), "approve": .bool(approve), "grantMode": .string(mode)]
+    func decideMobileAuthorization(_ ticket: String, approve: Bool, mode: String, ttl: Int, loginWeb: Bool = false) async throws -> MobileAuthorizationReturn {
+        var body: [String: JSONValue] = ["ticket": .string(ticket), "approve": .bool(approve), "grantMode": .string(mode), "loginWeb": .bool(approve && loginWeb)]
         if mode == "TIME_LIMITED" { body["grantTtlSeconds"] = .number(Double(ttl)) }
         return try await client.request("/auth/mobile-authorization/decide", method: "POST", body: body)
     }

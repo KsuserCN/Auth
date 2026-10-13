@@ -38,6 +38,7 @@ CREATE TABLE users (
   region VARCHAR(100) DEFAULT NULL COMMENT '地区',
   bio VARCHAR(200) DEFAULT NULL COMMENT '个人简介（最多200字）',
   verification_type ENUM('none', 'personal', 'enterprise', 'admin') NOT NULL DEFAULT 'none' COMMENT '开发者认证状态（admin仅保留用于旧数据迁移）',
+  verification_entity_name VARCHAR(200) DEFAULT NULL COMMENT '认证实体：个人及管理员真实姓名、企业名称，仅管理员通过数据库维护',
   system_role ENUM('USER','ADMIN','SUPER_ADMIN') NOT NULL DEFAULT 'USER' COMMENT '系统角色',
 
   avatar_url VARCHAR(255) DEFAULT NULL COMMENT '头像地址',
@@ -313,6 +314,7 @@ CREATE TABLE oidc_clients (
   client_id VARCHAR(128) NOT NULL COMMENT '客户端 ID',
   client_secret_hash VARCHAR(255) DEFAULT NULL COMMENT '机密客户端密钥哈希',
   client_name VARCHAR(120) NOT NULL COMMENT '客户端名称',
+  owner_user_id BIGINT UNSIGNED DEFAULT NULL COMMENT 'SSO应用归属认证账号ID（users.id）',
   logo_url VARCHAR(255) DEFAULT NULL COMMENT '客户端 Logo 地址',
   client_type VARCHAR(32) NOT NULL DEFAULT 'public' COMMENT '客户端类型（public/confidential）',
   application_type VARCHAR(32) NOT NULL DEFAULT 'native' COMMENT '应用类型（web/native/spa/service）',
@@ -326,6 +328,7 @@ CREATE TABLE oidc_clients (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (id),
+  KEY idx_oidc_clients_owner_user_id (owner_user_id),
   UNIQUE KEY uk_oidc_clients_client_id (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='内部 OIDC 客户端注册表';

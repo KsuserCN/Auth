@@ -224,6 +224,64 @@ final class CoreTests: XCTestCase {
         XCTAssertThrowsError(try QRCodeParser.parse("https://evil.invalid/?approveCode=approval"))
         XCTAssertThrowsError(try QRCodeParser.parse("KSUSER-AUTH-QR:"))
     }
+    @MainActor func testConsoleQRShowsServerTargetAndOnlyApprovesWithoutReplacingMobileSession() async throws {
+        let transport = FixtureTransport(mode: .consoleQrLogin)
+        var original = snapshot(token: "fresh")
+        original.profile = UserProfile(uuid: "console-admin", username: "admin", email: "admin@example.invalid")
+        let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        model.user = original.profile
+        await model.previewQRCode("KSUSER-AUTH-QR:console-approval")
+        let confirmation = try XCTUnwrap(model.qrConfirmation)
+        XCTAssertTrue(confirmation.preview.isConsoleLogin)
+        XCTAssertEqual(confirmation.preview.targetName, "Ksuser Console")
+        XCTAssertEqual(confirmation.preview.targetOrigin, "https://console.ksuser.cn")
+        XCTAssertFalse(confirmation.isTransfer)
+        await model.approveQRCode()
+        XCTAssertNil(model.qrConfirmation)
+        XCTAssertNil(model.errorMessage)
+        let approval = await transport.lastMutation
+        XCTAssertEqual(approval?.url?.path, "/auth/qr/approve")
+        XCTAssertEqual(approval?.value(forHTTPHeaderField: "Authorization"), "Bearer fresh")
+        let body = try JSONSerialization.jsonObject(with: XCTUnwrap(approval?.httpBody)) as? [String: String]
+        XCTAssertEqual(body?["approveCode"], "console-approval")
+        let current = await client.snapshot()
+        XCTAssertEqual(current.accessToken, original.accessToken)
+        XCTAssertEqual(model.user?.uuid, "console-admin")
+    }
+    func testLegacyQRPreviewDecodesWithoutConsoleTarget() throws {
+        let preview = try JSONDecoder().decode(QrScanPreview.self, from: Data(#"{"codeType":"approve_login","expiresInSeconds":120}"#.utf8))
+        XCTAssertFalse(preview.isConsoleLogin)
+        XCTAssertNil(preview.targetOrigin)
+    }
+    @MainActor func testPublicOfficialQRUsesExactScopesAndApproveOrRejectNeverChangesAppAccount() async throws {
+        let transport = FixtureTransport(mode: .officialQrLogin)
+        var original = snapshot(token: "fresh")
+        original.profile = UserProfile(uuid: "ordinary-user", username: "public-user", email: "user@example.invalid")
+        let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        model.user = original.profile
+        await model.previewQRCode("KSUSER-AUTH-QR:public-approval")
+        let preview = try XCTUnwrap(model.qrConfirmation?.preview)
+        XCTAssertTrue(preview.isOfficialAuthorization)
+        XCTAssertFalse(preview.isConsoleLogin)
+        XCTAssertEqual(preview.targetName, "公共校园服务")
+        XCTAssertEqual(preview.requestedScopes, ["openid", "real_name", "region"])
+        await model.approveQRCode()
+        XCTAssertNil(model.qrConfirmation)
+        var mutation = await transport.lastMutation
+        XCTAssertEqual(mutation?.url?.path, "/auth/qr/official/approve")
+        await model.previewQRCode("KSUSER-AUTH-QR:public-denial")
+        await model.rejectOfficialQRCode()
+        mutation = await transport.lastMutation
+        XCTAssertEqual(mutation?.url?.path, "/auth/qr/official/reject")
+        XCTAssertEqual(mutation?.value(forHTTPHeaderField: "Authorization"), "Bearer fresh")
+        XCTAssertNil(model.qrConfirmation)
+        XCTAssertNil(model.errorMessage)
+        let stored = await client.snapshot()
+        XCTAssertEqual(stored.accessToken, original.accessToken)
+        XCTAssertEqual(model.user?.uuid, "ordinary-user")
+    }
     func testRecoveryQRUsesExistingWebFlow() {
         let ticket = AccountRecoveryTicket(recoveryCode: "a+b /c", expiresInSeconds: 300, username: nil, maskedEmail: nil, sponsorClientName: nil, sponsorBrowser: nil, sponsorSystem: nil, sponsorIpLocation: nil)
         let url = URLComponents(string: ticket.qrContent!)!
@@ -562,6 +620,42 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(MobileAuthorizationLink.browserReturn("https://evil.example/app/authorize-return#ticket=\(ticket)&secret=\(ticket)", environment: environment))
         XCTAssertNil(MobileAuthorizationLink.browserReturn(environment.webURL.absoluteString + "/login", environment: environment))
     }
+    @MainActor func testApplicationQRDefaultsToConsentOnlyAndHonorsExplicitWebLoginChoice() async throws {
+        for (approve, loginWeb) in [(true, false), (true, true), (false, true)] {
+            let transport = FixtureTransport(mode: .applicationQr)
+            var original = snapshot(token: "current-access")
+            original.profile = UserProfile(uuid: "current", username: "current", email: "current@example.invalid")
+            let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+            let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+            model.user = original.profile
+            await model.previewQRCode("KSUSER-AUTH-QR:application-approval")
+            let context = try XCTUnwrap(model.mobileAuthorization)
+            XCTAssertTrue(context.qr == true)
+            XCTAssertEqual(context.webOrigin, "https://auth.ksuser.cn")
+            XCTAssertEqual(context.requestedScopes, ["openid", "profile", "email"])
+            XCTAssertNil(model.qrConfirmation)
+            let returnURL: URL?
+            if approve && !loginWeb {
+                returnURL = await model.decideMobileAuthorization(approve: true, mode: "TIME_LIMITED", ttl: 3600)
+            } else {
+                returnURL = await model.decideMobileAuthorization(approve: approve, mode: "TIME_LIMITED", ttl: 3600, loginWeb: loginWeb)
+            }
+            XCTAssertNil(returnURL)
+            XCTAssertNil(model.errorMessage)
+            XCTAssertNil(model.mobileAuthorization)
+            let mutation = await transport.lastMutation
+            let request = try XCTUnwrap(mutation)
+            XCTAssertEqual(request.url?.path, "/auth/mobile-authorization/decide")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer current-access")
+            let body = try JSONDecoder().decode([String: JSONValue].self, from: XCTUnwrap(request.httpBody))
+            XCTAssertEqual(body["loginWeb"], .bool(approve && loginWeb))
+            XCTAssertEqual(body["grantTtlSeconds"], .number(3600))
+            XCTAssertNil(body["redirectUri"])
+            let current = await client.snapshot()
+            XCTAssertEqual(current.accessToken, original.accessToken)
+            XCTAssertEqual(model.user?.uuid, "current")
+        }
+    }
     @MainActor func testMobileAuthorizationWaitsForLoginThenUsesCurrentAccount() async throws {
         let transport = FixtureTransport(mode: .mobileAuthorization)
         let client = APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "current-access")), transport: transport)
@@ -610,7 +704,7 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
@@ -630,6 +724,34 @@ private actor FixtureTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let path = request.url!.path
         if path == "/auth/csrf-token" { return response(request, 200, #"{"code":200,"data":{"csrfToken":"csrf-fixture"}}"#, cookie: "XSRF-TOKEN=csrf-fixture; Path=/; Secure; SameSite=Lax") }
+        if mode == .applicationQr {
+            let ticket = String(repeating: "a", count: 32)
+            if path == "/auth/qr/preview" {
+                lastQRPreview = request
+                return response(request, 200, "{\"code\":200,\"data\":{\"codeType\":\"approve_application\",\"authorizationTicket\":\"\(ticket)\",\"expiresInSeconds\":120}}")
+            }
+            if path == "/auth/mobile-authorization/context" {
+                return response(request, 200, "{\"code\":200,\"data\":{\"ticket\":\"\(ticket)\",\"appName\":\"校园日历\",\"redirectUri\":\"https://calendar.example.invalid/callback\",\"requestedScopes\":[\"openid\",\"profile\",\"email\"],\"alreadyAuthorized\":false,\"existingGrantMode\":\"PERSISTENT\",\"expiresInSeconds\":120,\"qr\":true,\"officialApplication\":false,\"webOrigin\":\"https://auth.ksuser.cn\"}}")
+            }
+            lastMutation = request
+            return response(request, 200, #"{"code":200,"data":{"completed":true}}"#)
+        }
+        if mode == .consoleQrLogin {
+            if path == "/auth/qr/preview" {
+                lastQRPreview = request
+                return response(request, 200, #"{"code":200,"data":{"codeType":"approve_console_login","targetName":"Ksuser Console","targetOrigin":"https://console.ksuser.cn","clientName":"Safari","expiresInSeconds":120}}"#)
+            }
+            lastMutation = request
+            return response(request, 200, #"{"code":200,"data":{"verified":true}}"#)
+        }
+        if mode == .officialQrLogin {
+            if path == "/auth/qr/preview" {
+                lastQRPreview = request
+                return response(request, 200, #"{"code":200,"data":{"codeType":"approve_official","targetName":"公共校园服务","targetOrigin":"https://campus.example.invalid","requestedScopes":["openid","real_name","region"],"consoleApplication":false,"expiresInSeconds":120}}"#)
+            }
+            lastMutation = request
+            return response(request, 200, #"{"code":200,"data":{"verified":true}}"#)
+        }
         if mode == .bridgeLogin || mode == .bridgeExpired {
             let challenge = String(repeating: "a", count: 32)
             if path == "/auth/mobile-bridge/status" {

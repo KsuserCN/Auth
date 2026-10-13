@@ -171,6 +171,8 @@ public class Oauth2PlatformService {
         List<String> requestedScopes = resolveRequestedScopes(application, scope);
         UserOauth2Authorization existingAuthorization = findReusableAuthorization(user, application.getAppId(), requestedScopes)
             .orElse(null);
+        User owner = application.getOwnerUserId() == null ? null
+            : userRepository.findById(application.getOwnerUserId()).orElse(null);
         return new Oauth2AuthorizeContextResponse(
             application.getAppId(),
             application.getAppName(),
@@ -180,7 +182,9 @@ public class Oauth2PlatformService {
             requestedScopes,
             existingAuthorization != null,
             existingAuthorization == null ? AuthorizationGrantPolicy.MODE_PERSISTENT : existingAuthorization.getGrantMode(),
-            existingAuthorization == null ? null : existingAuthorization.getExpiresAt()
+            existingAuthorization == null ? null : existingAuthorization.getExpiresAt(),
+            owner == null ? null : owner.getVerificationEntityName(),
+            owner == null ? null : normalizeOptional(owner.getVerificationType())
         );
     }
 
@@ -518,7 +522,7 @@ public class Oauth2PlatformService {
         if (application != null && application.getOwnerUserId() != null) {
             creator = userRepository.findById(application.getOwnerUserId()).orElse(null);
         }
-        String creatorName = creator != null ? normalizeOptional(creator.getUsername()) : null;
+        String creatorName = creator != null ? creator.getVerificationEntityName() : null;
         String creatorVerificationType = creator != null ? normalizeOptional(creator.getVerificationType()) : null;
         return new Oauth2AuthorizedAppResponse(
             authorization.getAppId(),

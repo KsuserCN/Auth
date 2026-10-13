@@ -50,6 +50,8 @@ export interface SSOAuthorizeContext {
   logoUrl?: string
   redirectUri: string
   requestedScopes: SSOScope[]
+  subjectName?: string | null
+  subjectVerificationType?: VerificationType | null
   alreadyAuthorized: boolean
   existingGrantMode: AuthorizationGrantMode
   existingGrantExpiresAt?: string | null

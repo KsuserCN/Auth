@@ -467,6 +467,17 @@ struct LoadingActivity: Identifiable {
             }
             let preview = try await self.repository.previewQRCode(code: parsed.code, transfer: parsed.transfer)
             guard preview.expiresInSeconds > 0 else { throw APIError.server(410, "二维码已过期") }
+            if preview.isApplicationAuthorization {
+                guard let ticket = preview.authorizationTicket,
+                      self.pendingMobileAuthorizationTicket == nil || self.pendingMobileAuthorizationTicket == ticket else { throw APIError.server(409, "请先完成当前授权请求") }
+                let context = try await self.repository.mobileAuthorization(ticket)
+                guard context.qr == true, context.ticket == ticket, context.expiresInSeconds > 0 else { throw APIError.invalidResponse }
+                self.qrConfirmation = nil
+                self.pendingMobileAuthorizationTicket = ticket
+                self.mobileAuthorization = context
+                self.mobileAuthorizationExpiresAt = Date().addingTimeInterval(Double(min(preview.expiresInSeconds, context.expiresInSeconds)))
+                return
+            }
             self.qrConfirmation = QRConfirmation(code: parsed.code, isTransfer: parsed.transfer, preview: preview, expiresAt: Date().addingTimeInterval(Double(preview.expiresInSeconds)))
         }
     }
@@ -480,12 +491,22 @@ struct LoadingActivity: Identifiable {
                 try await self.finishAuthentication(token: token, staged: staged, source: "session-transfer")
                 self.noticeMessage = "此设备已登录新账号"
             } else {
-                try await self.repository.approveQRCode(pending.code); self.noticeMessage = "请求已批准"
+                if pending.preview.isOfficialAuthorization { try await self.repository.approveOfficialQRCode(pending.code) }
+                else { try await self.repository.approveQRCode(pending.code) }
+                self.noticeMessage = "请求已批准"
             }
             self.qrConfirmation = nil
         }
     }
     func dismissQR() { qrConfirmation = nil; pendingRawQRCode = nil }
+    func rejectOfficialQRCode() async {
+        guard let pending = qrConfirmation, pending.preview.isOfficialAuthorization else { return }
+        await run {
+            try await self.repository.rejectOfficialQRCode(pending.code)
+            self.qrConfirmation = nil
+            self.noticeMessage = "已拒绝登录请求"
+        }
+    }
     func loadMobileAuthorization() async {
         guard isAuthenticated, let ticket = pendingMobileAuthorizationTicket, !mobileAuthorizationLoading else { return }
         mobileAuthorizationLoading = true
@@ -498,13 +519,19 @@ struct LoadingActivity: Identifiable {
             self.mobileAuthorizationExpiresAt = Date().addingTimeInterval(Double(context.expiresInSeconds))
         }
     }
-    func decideMobileAuthorization(approve: Bool, mode: String, ttl: Int) async -> URL? {
+    func decideMobileAuthorization(approve: Bool, mode: String, ttl: Int, loginWeb: Bool = false) async -> URL? {
         guard let context = mobileAuthorization, isAuthenticated else { return nil }
         var browserURL: URL?
         await run {
             guard let expires = self.mobileAuthorizationExpiresAt, expires > Date() else { throw APIError.server(410, "授权请求已过期，请返回网页重新发起") }
-            let result = try await self.repository.decideMobileAuthorization(context.ticket, approve: approve, mode: mode, ttl: ttl)
-            guard let url = MobileAuthorizationLink.browserReturn(result.returnUrl, environment: self.environment) else { throw APIError.invalidResponse }
+            let result = try await self.repository.decideMobileAuthorization(context.ticket, approve: approve, mode: mode, ttl: ttl, loginWeb: context.qr == true && loginWeb)
+            if context.qr == true {
+                guard result.completed == true, result.returnUrl == nil else { throw APIError.invalidResponse }
+                self.dismissMobileAuthorization()
+                self.noticeMessage = approve ? "扫码授权已确认，请返回发起请求的设备" : "已拒绝登录请求"
+                return
+            }
+            guard let returnUrl = result.returnUrl, let url = MobileAuthorizationLink.browserReturn(returnUrl, environment: self.environment) else { throw APIError.invalidResponse }
             browserURL = url
         }
         return browserURL
@@ -659,6 +686,10 @@ struct LoadingActivity: Identifiable {
         user = UserProfile(uuid: "ui-fixture-only", username: "ios_test_user", email: "ios.fixture@example.invalid", realName: "体验账号", region: "上海", bio: "这个账号只用于本地界面测试", settings: UserSettings(mfaEnabled: true), hasPassword: true, appleBound: true)
         if ProcessInfo.processInfo.arguments.contains("--ui-test-application-consent") {
             mobileAuthorization = MobileAuthorizationContext(ticket: String(repeating: "a", count: 32), appName: "校园日历", logoUrl: nil, contactInfo: "support@calendar.example.invalid", redirectUri: "https://calendar.example.invalid/callback", requestedScopes: ["openid", "profile", "email"], alreadyAuthorized: false, existingGrantMode: "PERSISTENT", expiresInSeconds: 300)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-qr-consent") {
+                mobileAuthorization?.qr = true
+                mobileAuthorization?.webOrigin = "https://auth.ksuser.cn"
+            }
             mobileAuthorizationExpiresAt = Date().addingTimeInterval(300)
         }
         appleBound = true

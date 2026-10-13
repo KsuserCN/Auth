@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class SsoPlatformServiceTest {
@@ -92,6 +93,42 @@ class SsoPlatformServiceTest {
     }
 
     @Test
+    void authorizationSubjectUsesTheAdministratorsCertifiedName() {
+        OidcClient client = buildClient();
+        client.setOwnerUserId(99L);
+        User owner = new User();
+        owner.setId(99L);
+        owner.setSystemRole("ADMIN");
+        owner.setUsername("editable-admin-username");
+        owner.setRealName("editable-profile-name");
+        ReflectionTestUtils.setField(owner, "verificationEntityName", "已核验管理员姓名");
+        when(oidcClientRepository.findByClientId("ksuser_auth_1")).thenReturn(Optional.of(client));
+        when(userRepository.findById(99L)).thenReturn(Optional.of(owner));
+
+        var context = service.buildAuthorizeContext(null, "ksuser_auth_1",
+            "https://ezbookkeeping.example.com/oauth2/callback/ksuser", "code", "openid profile", "demo-nonce", null, null);
+        assertEquals("已核验管理员姓名", context.getSubjectName());
+        assertEquals("admin", context.getSubjectVerificationType());
+
+        ReflectionTestUtils.setField(owner, "verificationEntityName", null);
+        assertEquals(null, service.buildAuthorizeContext(null, "ksuser_auth_1",
+            "https://ezbookkeeping.example.com/oauth2/callback/ksuser", "code", "openid", "demo-nonce", null, null).getSubjectName());
+    }
+
+    @Test
+    void legacyClientWithoutOwnerDoesNotUseTheAuthorizingAdministratorsIdentity() {
+        when(oidcClientRepository.findByClientId("ksuser_auth_1")).thenReturn(Optional.of(buildClient()));
+        User authorizingAdmin = buildAdminUser();
+        ReflectionTestUtils.setField(authorizingAdmin, "verificationEntityName", "当前授权管理员的姓名");
+
+        var context = service.buildAuthorizeContext(authorizingAdmin, "ksuser_auth_1",
+            "https://ezbookkeeping.example.com/oauth2/callback/ksuser", "code", "openid profile", "demo-nonce", null, null);
+        assertEquals(null, context.getSubjectName());
+        assertEquals(null, context.getSubjectVerificationType());
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
     void shouldCreateClientWithSemicolonSeparatedRedirectUris() {
         when(oidcClientRepository.count()).thenReturn(0L);
         when(oidcClientRepository.existsByClientId(anyString())).thenReturn(false);
@@ -116,6 +153,7 @@ class SsoPlatformServiceTest {
 
         ArgumentCaptor<OidcClient> captor = ArgumentCaptor.forClass(OidcClient.class);
         verify(oidcClientRepository).save(captor.capture());
+        assertEquals(1L, captor.getValue().getOwnerUserId());
         assertEquals("https://demo.example.com/callback;http://localhost:9002/callback", captor.getValue().getRedirectUris());
         assertEquals("https://demo.example.com/logout;http://localhost:9002/logout", captor.getValue().getPostLogoutRedirectUris());
     }

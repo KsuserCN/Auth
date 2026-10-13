@@ -12,6 +12,8 @@ public class Oauth2AuthorizeContextResponse {
     private String contactInfo;
     private String redirectUri;
     private List<String> requestedScopes;
+    private String subjectName;
+    private String subjectVerificationType;
     private boolean alreadyAuthorized;
     private String existingGrantMode;
     private LocalDateTime existingGrantExpiresAt;
@@ -23,12 +25,23 @@ public class Oauth2AuthorizeContextResponse {
                                           String redirectUri, List<String> requestedScopes,
                                           boolean alreadyAuthorized, String existingGrantMode,
                                           LocalDateTime existingGrantExpiresAt) {
+        this(clientId, appName, logoUrl, contactInfo, redirectUri, requestedScopes, alreadyAuthorized,
+            existingGrantMode, existingGrantExpiresAt, null, null);
+    }
+
+    public Oauth2AuthorizeContextResponse(String clientId, String appName, String logoUrl, String contactInfo,
+                                          String redirectUri, List<String> requestedScopes,
+                                          boolean alreadyAuthorized, String existingGrantMode,
+                                          LocalDateTime existingGrantExpiresAt, String subjectName,
+                                          String subjectVerificationType) {
         this.clientId = clientId;
         this.appName = appName;
         this.logoUrl = logoUrl;
         this.contactInfo = contactInfo;
         this.redirectUri = redirectUri;
         this.requestedScopes = requestedScopes;
+        this.subjectName = subjectName;
+        this.subjectVerificationType = subjectVerificationType;
         this.alreadyAuthorized = alreadyAuthorized;
         this.existingGrantMode = existingGrantMode == null || existingGrantMode.isBlank()
             ? AuthorizationGrantPolicy.MODE_PERSISTENT
@@ -83,6 +96,11 @@ public class Oauth2AuthorizeContextResponse {
     public void setRequestedScopes(List<String> requestedScopes) {
         this.requestedScopes = requestedScopes;
     }
+
+    public String getSubjectName() { return subjectName; }
+    public void setSubjectName(String subjectName) { this.subjectName = subjectName; }
+    public String getSubjectVerificationType() { return subjectVerificationType; }
+    public void setSubjectVerificationType(String subjectVerificationType) { this.subjectVerificationType = subjectVerificationType; }
 
     public boolean isAlreadyAuthorized() {
         return alreadyAuthorized;

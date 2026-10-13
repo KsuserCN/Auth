@@ -1,3 +1,21 @@
+# iOS 应用扫码授权（OAuth / SSO / 官方应用）
+
+`/oauth/authorize`、`/sso/authorize`、`/official/authorize` 默认展示网页登录及授权。电脑浏览器可选择「使用扫码登录」，手机 UA（含 iPad 桌面模式）隐藏该按钮，授权页不自动唤起 App。App Store 超链接在新标签页打开，简体中文使用中国区、English 使用美国区。
+
+App 的「扫码」识别 `approve_application`，从 `/auth/qr/preview` 获得临时授权 ticket，再从 `/auth/mobile-authorization/context` 读取真实应用、回调网站和完整范围，进入原生应用授权页。未登录先完成 App 登录。OAuth / SSO 用户可选择长期、一次性或限时授权；官方应用沿用可撤销的资料授权。公共官方应用允许普通账号，Console 的超级管理员权限限制仍有效。
+
+手机提供「同时登录通行证网页端」开关，默认关闭。默认只完成此应用授权，不改变原浏览器的通行证账号；开启后原浏览器可用一次性凭据建立当前手机账号的通行证会话。拒绝授权不会登录网页。手机提交 `/auth/mobile-authorization/decide` 的 `loginWeb` 字段，确认后停留在 App，不打开第三方回调；App 自身会话保持不变。
+
+二维码有效两分钟，仅包含手机审批码。原浏览器通过独立 ticket / secret 轮询 `/qr/status` 并一次性 `consume` 授权结果，随后回到已登记第三方回调。网页登录凭据仅在这份私有结果中提供，不写入二维码、手机链接或第三方回调。刷新或切换网页登录通过 `cancel` 取消旧请求。写请求仍要求 CSRF，`context` / `decide` 要求登录，网页来源沿用 `APP_MOBILE_BRIDGE_ALLOWED_RETURN_ORIGINS` 白名单。原始 state、nonce、PKCE 由服务端保存，第三方无需调整令牌兑换。
+
+旧版 `approve_official` 和 `/auth/qr/official/approve`、`reject` 保留兼容；旧版通用扫码确认不能批准应用授权，避免未展示申请范围就完成授权。发布需同步更新 API、通行证 Web 和 iOS App，无新增数据库迁移。
+
+# iOS Console 扫码登录
+
+在 Console 登录页选择「App 扫码登录」，用 iOS App 的「扫码」扫描。App 通过现有 `/auth/qr/preview` 读取 `approve_console_login` 请求，展示服务端给出的应用、目标网站、当前账号和授权资料，用户点击「确认登录管理中心」后调用 `/auth/qr/approve`。未登录时先完成 App 登录，再继续扫码确认。只有超级管理员可批准登录。
+
+二维码仅包含 `KSUSER-AUTH-QR:` 审批码，确认后浏览器通过独立的 Console Cookie 领取一次性后台会话，App 的账号与访问令牌保持原状态。二维码两分钟过期；刷新或取消后旧请求不能领取会话。API、Console 与 iOS App 需同步发布，无新增数据库结构。
+
 # iOS 网页登录
 
 iPhone、iPad 的网页登录页在 Passkey 下方显示“通过 Ksuser 安全 App 登录”。点击后创建两分钟临时网页登录请求，并通过已注册的 `ksuserauth://bridge-login?challengeId=…` 唤起 App。未登录的 App 会先要求用户登录，随后显示目标站点、当前账号与请求有效期，用户确认后返回浏览器完成网页登录。iOS Chrome 发起的请求附带 `returnBrowser=chrome`，优先回到 Chrome；其他浏览器使用系统默认浏览器。
@@ -6,20 +24,13 @@ iPhone、iPad 的网页登录页在 Passkey 下方显示“通过 Ksuser 安全 
 
 上线时需同时更新网页和 iOS App；旧版 App 只识别网页登录 Universal Link，不能处理新增的 `bridge-login` URL scheme 路由。
 
-# iOS 第三方应用授权（OAuth / OIDC）
+# iOS 旧版应用授权链接兼容
 
-网页 `/oauth/authorize` 和 `/sso/authorize` 在 iPhone、iPad 上校验授权请求后，会尝试通过 `ksuserauth://authorize?ticket=…` 打开原生 App。未安装 App、浏览器限制跳转或用户希望在网页操作时，可以选择“继续网页授权”。网页继续前会取消临时 App 请求，避免同时提交两份授权。
+App 继续接收 `ksuserauth://authorize?ticket=…` 与 `/app/authorize?ticket=…` Universal Link。旧版五分钟临时请求保留原生授权与 `/app/authorize-return` 浏览器回跳流程，网页不再自动发起此交接。`/app/authorize-return` 仍由网页承接，AASA 不应将该路径直接唤起 App。
 
-App 接收服务端生成的五分钟临时请求，登录后读取真实的应用图标、名称、联系方式、返回网站及授权范围，并明确确认使用的账号。用户可选择长期、一次性或限时授权。OAuth 的联系方式来自注册应用；OIDC 客户端目前没有单独的联系方式字段，可用 API 的 `APP_SSO_CONTACT_INFO` 配置统一联系方式，未配置时页面显示“应用未提供联系方式”。
+OAuth 联系方式来自注册应用；SSO 可通过 `APP_SSO_CONTACT_INFO` 配置统一联系方式，未配置时显示“应用未提供联系方式”。
 
-同意或拒绝后，App 自动打开可信网页 `/app/authorize-return`。网页从 URL fragment 读取临时请求及校验密钥，立即移除 fragment，再一次性领取服务端结果并跳转至已注册的第三方回调地址。网页不会登录到 App 账号，也不会接收 App 的访问令牌。原始 `state`、OIDC `nonce`、PKCE challenge 与 method 全程由服务端保存。
-
-- API `/auth/mobile-authorization/create`、`consume`、`cancel` 可在浏览器未登录时使用，写请求仍要求 CSRF 校验；`context`、`decide` 要求登录。
-- 网页来源复用 `APP_MOBILE_BRIDGE_ALLOWED_RETURN_ORIGINS` 白名单。生产 App 允许回跳 `https://auth.ksuser.cn`、`https://www.ksuser.cn` 的固定 `/app/authorize-return` 路径。
-- 保持 `/app/authorize-return` 由网页承接，网站 AASA 配置不要将此回跳路径直接唤起 App。App 同时识别 `/app/authorize?ticket=…` Universal Link，网页默认使用已注册的 URL scheme。
-- 自动唤起是否成功取决于 iOS 浏览器与是否安装新版 App。网页保留“打开 Ksuser App”“已在 App 完成，继续”和网页授权入口。自动领取仅发生于回跳页，避免原标签页和回跳页争抢同一份结果。
-
-本地验证：`npm --prefix web run test:unit -- --run`、API 的 `MobileAuthorizationServiceTest`，以及 iOS 的 `CoreTests` / `testApplicationConsentShowsMetadataScopesAndDuration`。UI 测试通过 `--ui-testing --ui-test-authenticated --ui-test-application-consent` 启用隔离的界面预览数据。
+验证覆盖 API `MobileAuthorizationServiceTest`、Web 授权页与扫码组件测试、iOS `CoreTests` 和 `testQRApplicationConsentWebLoginIsOffByDefaultAndCanBeSelected`。隔离 UI 预览使用 `--ui-testing --ui-test-authenticated --ui-test-application-consent --ui-test-qr-consent`。
 
 # iOS 显示语言
 

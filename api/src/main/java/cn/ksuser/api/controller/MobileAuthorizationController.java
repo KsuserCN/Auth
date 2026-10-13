@@ -7,6 +7,8 @@ import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.service.MobileAuthorizationService;
 import cn.ksuser.api.service.UserService;
+import cn.ksuser.api.service.RateLimitService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -16,8 +18,17 @@ import org.springframework.web.bind.annotation.*;
 public class MobileAuthorizationController {
     private final MobileAuthorizationService service;
     private final UserService users;
-    public MobileAuthorizationController(MobileAuthorizationService service, UserService users) { this.service = service; this.users = users; }
+    private final RateLimitService rateLimit;
+    public MobileAuthorizationController(MobileAuthorizationService service, UserService users, RateLimitService rateLimit) {
+        this.service = service; this.users = users; this.rateLimit = rateLimit;
+    }
     @PostMapping("/create") public ResponseEntity<?> create(@RequestBody MobileAuthorizationService.CreateRequest input) { return ok(service.create(input)); }
+    @PostMapping("/qr/create") public ResponseEntity<?> createQr(@RequestBody MobileAuthorizationService.CreateRequest input, HttpServletRequest request) {
+        return ok(service.createQr(input, rateLimit.getClientIp(request), rateLimit.getClientUserAgent(request)));
+    }
+    @GetMapping("/qr/status") public ResponseEntity<?> qrStatus(@RequestParam String ticket, @RequestParam String secret) {
+        return ok(service.qrStatus(new MobileAuthorizationService.BrowserRequest(ticket, secret)));
+    }
     @GetMapping("/context") public ResponseEntity<?> context(@RequestParam String ticket, Authentication auth) { return ok(service.preview(ticket, user(auth))); }
     @PostMapping("/decide") public ResponseEntity<?> decide(@RequestBody MobileAuthorizationService.Decision input, Authentication auth) { return ok(service.decide(input, user(auth))); }
     @PostMapping("/consume") public ResponseEntity<?> consume(@RequestBody MobileAuthorizationService.BrowserRequest input) { return ok(service.consume(input)); }

@@ -4,6 +4,10 @@ import {
   approveOfficialAuthorize,
   getOfficialAuthorizations,
   revokeOfficialAuthorization,
+  initOfficialQr,
+  pollOfficialQr,
+  exchangeOfficialQr,
+  cancelOfficialQr,
 } from './official'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn() }))
@@ -24,6 +28,17 @@ beforeEach(() => {
   mocks.post.mockResolvedValue({ data: { redirectUrl: params.redirectUri } })
 })
 describe('official authorization API', () => {
+  it('creates a QR from the original OIDC request and keeps its receipt out of mobile data', async () => {
+    const browser = { challengeId: 'challenge', pollToken: 'private-poll-token' }
+    await initOfficialQr(params)
+    await pollOfficialQr(browser)
+    await exchangeOfficialQr(browser)
+    await cancelOfficialQr(browser)
+    expect(mocks.post).toHaveBeenCalledWith('/official/qr/init', params)
+    expect(mocks.get).toHaveBeenCalledWith('/official/qr/status', { params: browser })
+    expect(mocks.post).toHaveBeenCalledWith('/official/qr/exchange', browser)
+    expect(mocks.post).toHaveBeenCalledWith('/official/qr/cancel', browser)
+  })
   it('preserves the full PKCE and OIDC request in context and approval', async () => {
     await getOfficialAuthorizeContext(params)
     await approveOfficialAuthorize({ ...params, approved: true })

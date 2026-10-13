@@ -14,6 +14,7 @@ public class UpdateProfileResponse {
     private String region;
     private String bio;
     private String verificationType;
+    private String verificationEntityName;
     private String systemRole = "USER";
     private String developerVerificationType = "none";
     private LocalDateTime updatedAt;
@@ -61,6 +62,7 @@ public class UpdateProfileResponse {
         );
         response.setSystemRole(user.getSystemRole());
         response.setDeveloperVerificationType(user.getDeveloperVerificationType());
+        response.setVerificationEntityName(user.getVerificationEntityName());
         return response;
     }
 
@@ -129,6 +131,9 @@ public class UpdateProfileResponse {
     public String getVerificationType() {
         return verificationType;
     }
+
+    public String getVerificationEntityName() { return verificationEntityName; }
+    public void setVerificationEntityName(String value) { verificationEntityName = value; }
 
     public void setVerificationType(String verificationType) {
         this.verificationType = verificationType;

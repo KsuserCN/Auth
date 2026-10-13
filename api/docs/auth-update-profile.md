@@ -34,6 +34,8 @@ Authorization: Bearer <accessToken>
 
 > 注意：一次只能更新一个字段
 
+`verificationEntityName` 为管理员通过数据库维护的认证实体，不能通过此接口修改。修改 `realName` 或 `username` 不会改变认证实体；不支持的 key 返回 HTTP 400。详见 [认证实体说明](user-verification-entity.md)。
+
 ## 请求示例
 
 ### 更新用户名

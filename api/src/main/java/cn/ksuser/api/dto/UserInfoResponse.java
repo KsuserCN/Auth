@@ -17,6 +17,7 @@ public class UserInfoResponse {
     private String region;
     private String bio;
     private String verificationType;
+    private String verificationEntityName;
     private String systemRole = "USER";
     private String developerVerificationType = "none";
     private LocalDateTime updatedAt;
@@ -134,6 +135,9 @@ public class UserInfoResponse {
     public String getVerificationType() {
         return verificationType;
     }
+
+    public String getVerificationEntityName() { return verificationEntityName; }
+    public void setVerificationEntityName(String value) { verificationEntityName = value; }
 
     public void setVerificationType(String verificationType) {
         this.verificationType = verificationType;

@@ -10,6 +10,7 @@ export interface User {
   email: string
   avatarUrl?: string | null
   verificationType?: VerificationType
+  readonly verificationEntityName?: string | null
   developerVerificationType?: Exclude<VerificationType, 'admin'>
   systemRole?: SystemRole
   settings?: UserSettings

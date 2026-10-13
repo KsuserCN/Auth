@@ -120,6 +120,9 @@ class SecurityConfigConsoleTest {
         List<WriteRoute> writes=List.of(
             new WriteRoute(HttpMethod.POST,"/console/auth/start"),
             new WriteRoute(HttpMethod.POST,"/console/auth/exchange"),
+            new WriteRoute(HttpMethod.POST,"/console/auth/qr/init"),
+            new WriteRoute(HttpMethod.POST,"/console/auth/qr/exchange"),
+            new WriteRoute(HttpMethod.DELETE,"/console/auth/qr"),
             new WriteRoute(HttpMethod.DELETE,"/console/session"),
             new WriteRoute(HttpMethod.POST,"/console/verification/start"),
             new WriteRoute(HttpMethod.POST,"/console/verification/exchange"),
@@ -134,6 +137,36 @@ class SecurityConfigConsoleTest {
             mvc.perform(write.request().cookie(CONSOLE_COOKIE).with(csrf().useInvalidToken()))
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.errorCode").value("SECURITY_CSRF_INVALID"));
             mvc.perform(write.request().cookie(CONSOLE_COOKIE).with(csrf())).andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void qrBootstrapAndStatusArePublicButNeverInheritPassportIdentity() throws Exception {
+        for (String path:List.of("/console/auth/qr/init","/console/auth/qr/exchange")) {
+            mvc.perform(post(path).with(csrf())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.passportAuthenticationInherited").value(false));
+            mvc.perform(post(path).with(csrf()).header("Authorization","Bearer passport-token"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.passportAuthenticationInherited").value(false));
+        }
+        mvc.perform(get("/console/auth/qr/status")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.passportAuthenticationInherited").value(false));
+        mvc.perform(delete("/console/auth/qr").with(csrf())).andExpect(status().isOk());
+        verifyNoInteractions(consoleSessions);
+        mvc.perform(post("/console/auth/qr/unknown").with(csrf())).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void officialQrBrowserEndpointsArePublicButWritesKeepCsrfAndMobileDecisionsRequirePassport() throws Exception {
+        for (String path:List.of("/official/qr/init","/official/qr/exchange","/official/qr/cancel","/auth/mobile-authorization/qr/create","/auth/mobile-authorization/consume","/auth/mobile-authorization/cancel")) {
+            mvc.perform(post(path)).andExpect(status().isForbidden()).andExpect(jsonPath("$.errorCode").value("SECURITY_CSRF_INVALID"));
+            mvc.perform(post(path).with(csrf())).andExpect(status().isOk());
+        }
+        mvc.perform(get("/official/qr/status")).andExpect(status().isOk());
+        mvc.perform(get("/auth/mobile-authorization/qr/status")).andExpect(status().isOk());
+        for (String path:List.of("/auth/qr/official/approve","/auth/qr/official/reject","/auth/mobile-authorization/decide")) {
+            mvc.perform(post(path).with(csrf())).andExpect(status().isUnauthorized());
+            mvc.perform(post(path).header("Authorization","Bearer passport-token")).andExpect(status().isForbidden());
+            mvc.perform(post(path).header("Authorization","Bearer passport-token").with(csrf())).andExpect(status().isOk());
         }
     }
 
@@ -180,15 +213,19 @@ class SecurityConfigConsoleTest {
             ConsoleSessionService.ConsolePrincipal principal=(ConsoleSessionService.ConsolePrincipal)auth.getPrincipal();
             return Map.of("uuid",principal.userUuid(),"authority",auth.getAuthorities().iterator().next().getAuthority());
         }
-        @RequestMapping(value={"/console/auth/start","/console/auth/exchange"},method=RequestMethod.POST)
+        @RequestMapping(value={"/console/auth/start","/console/auth/exchange","/console/auth/qr/init","/console/auth/qr/exchange"},method=RequestMethod.POST)
         Map<String,Object> publicLogin(Authentication auth) { return Map.of("passportAuthenticationInherited",auth!=null); }
+        @RequestMapping(value={"/console/auth/qr/status","/console/auth/qr"},method={RequestMethod.GET,RequestMethod.DELETE})
+        Map<String,Object> publicQr(Authentication auth) { return Map.of("passportAuthenticationInherited",auth!=null); }
+        @RequestMapping(value={"/official/qr/init","/official/qr/status","/official/qr/exchange","/official/qr/cancel","/auth/mobile-authorization/qr/create","/auth/mobile-authorization/qr/status","/auth/mobile-authorization/consume","/auth/mobile-authorization/cancel"},method={RequestMethod.GET,RequestMethod.POST})
+        Map<String,Object> officialQr() { return Map.of("protocolReached",true); }
         @RequestMapping(value={"/console/session","/console/verification/start","/console/verification/exchange",
             "/console/users/{uuid}/role","/console/official-applications","/console/official-applications/{clientId}",
             "/console/official-applications/{clientId}/rotate-secret"},method={RequestMethod.POST,RequestMethod.PUT,RequestMethod.DELETE})
         Map<String,Object> write() { return Map.of("accepted",true); }
         @GetMapping({"/auth/test-profile","/auth/console-verification/context"})
         Map<String,Object> passport(Authentication auth) { return Map.of("uuid",auth.getPrincipal().toString()); }
-        @PostMapping({"/auth/console-verification/complete","/auth/verify-sensitive","/auth/passkey/sensitive-verification-verify"})
+        @PostMapping({"/auth/console-verification/complete","/auth/verify-sensitive","/auth/passkey/sensitive-verification-verify","/auth/qr/official/approve","/auth/qr/official/reject","/auth/mobile-authorization/decide"})
         Map<String,Object> complete(Authentication auth) { return passport(auth); }
         @PostMapping("/official/token")
         Map<String,Object> token() { return Map.of("protocolReached",true); }

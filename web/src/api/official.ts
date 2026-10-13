@@ -42,6 +42,29 @@ export interface OfficialAuthorization {
   lastAuthorizedAt: string
 }
 
+export interface OfficialQrChallenge {
+  challenge: { challengeId: string; pollToken: string; qrText: string; expiresInSeconds: number }
+  application: OfficialAuthorizeContext
+  redirectUri: string
+}
+export interface OfficialQrBrowserRequest {
+  challengeId: string
+  pollToken: string
+}
+export const initOfficialQr = async (
+  authorization: OfficialAuthorizeRequest,
+): Promise<OfficialQrChallenge> => (await request.post('/official/qr/init', authorization)).data
+export const pollOfficialQr = async (
+  input: OfficialQrBrowserRequest,
+): Promise<{ status: 'pending' | 'approved' | 'rejected' | 'expired'; expiresInSeconds: number }> =>
+  (await request.get('/official/qr/status', { params: input })).data
+export const exchangeOfficialQr = async (
+  input: OfficialQrBrowserRequest,
+): Promise<{ redirectUrl: string }> => (await request.post('/official/qr/exchange', input)).data
+export const cancelOfficialQr = async (input: OfficialQrBrowserRequest): Promise<void> => {
+  await request.post('/official/qr/cancel', input)
+}
+
 export const officialScopeLabel = (scope: string) => {
   const labels: Record<OfficialScope, [string, string]> = {
     openid: ['真实用户 UUID', 'Real user UUID'],

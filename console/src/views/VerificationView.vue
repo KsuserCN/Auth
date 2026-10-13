@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { consoleApi, type ConsolePasskeyCredential, type ConsolePasskeyOptions, type ConsoleVerificationContext } from '@/api/console'
+import { consoleApi, type ConsolePasskeyCredential, type ConsoleVerificationContext } from '@/api/console'
 import { consumeVerificationReturn } from '@/utils/navigation'
 import { useSessionStore } from '@/stores/session'
 

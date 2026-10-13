@@ -1,36 +1,11 @@
 <template>
   <div class="consent-container" :class="{ dark: isDark }">
-    <div v-if="mobileWaiting" class="consent-box consent-box--loading consent-box--mobile-handoff">
-      <div class="loading-stage loading-stage--mobile-handoff">
-        <div class="brand-line">
-          <img src="/favicon.ico" alt="Ksuser" class="brand-logo" /><span class="brand-text">{{
-            t('ui.oAuthAuthorize.message001')
-          }}</span>
-        </div>
-        <div class="loading-card loading-card--mobile-handoff">
-          <h1 class="loading-title">{{ t('ui.oAuthAuthorize.message002') }}</h1>
-          <p class="loading-description">
-            {{ t('ui.oAuthAuthorize.message003') }}
-          </p>
-          <p v-if="mobileError" class="loading-description" role="alert">
-            {{ renderMessage(mobileError) }}
-          </p>
-          <div class="consent-actions mobile-consent-actions">
-            <el-button type="primary" @click="openMobileApp">{{
-              t('ui.oAuthAuthorize.message004')
-            }}</el-button>
-            <el-button @click="completeMobileAuthorization">{{
-              t('ui.oAuthAuthorize.message005')
-            }}</el-button>
-            <el-button :loading="mobileFallingBack" @click="continueInBrowser">{{
-              t('ui.oAuthAuthorize.message006')
-            }}</el-button>
-          </div>
-          <p class="loading-description">{{ t('ui.oAuthAuthorize.message007') }}</p>
-          <p class="loading-description">{{ t('ui.oAuthAuthorize.message008') }}</p>
-        </div>
-      </div>
-    </div>
+    <ApplicationQrAuthorization
+      v-if="qrVisible && qrSupported"
+      :authorization="requestParams"
+      :mode="mode"
+      @web-login="resumeWebLogin"
+    />
     <div v-else-if="loading || autoRedirecting" class="consent-box consent-box--loading">
       <div class="loading-stage">
         <div class="brand-line">
@@ -74,59 +49,42 @@
     </div>
 
     <div v-else class="consent-box">
+      <button
+        v-if="qrSupported"
+        class="qr-login-toggle"
+        type="button"
+        :aria-label="t('ui.applicationQr.button')"
+        :title="t('ui.applicationQr.button')"
+        :disabled="approving || desktopSigningIn"
+        @click="qrVisible = true"
+      >
+        <i class="fa-solid fa-qrcode" aria-hidden="true"></i>
+      </button>
       <!-- 左侧：应用信息与授权内容 -->
       <div class="consent-left">
-        <div class="brand-line">
-          <img src="/favicon.ico" alt="Ksuser" class="brand-logo" />
-          <span class="brand-text">{{ t('ui.mainLayout.message001') }}</span>
-        </div>
-
-        <div class="left-body">
-          <div v-if="context" class="app-header">
-            <div class="app-logo-box">
-              <img
-                v-if="context.logoUrl"
-                :src="context.logoUrl"
-                :alt="context.appName"
-                class="app-logo"
-              />
-              <div v-else class="app-logo app-logo-fallback">
-                {{ context.appName.slice(0, 1).toUpperCase() }}
-              </div>
-            </div>
-            <div class="app-meta">
-              <h1 class="app-name">{{ context.appName }}</h1>
-              <p class="app-subtitle">{{ leftSubtitle }}</p>
-              <p v-if="context.contactInfo" class="app-support">
-                {{ t('ui.oAuthAuthorize.message013') }}{{ context.contactInfo }}
-              </p>
-            </div>
+        <ApplicationAuthorizationInfo
+          v-if="context"
+          :app-name="context.appName"
+          :logo-url="context.logoUrl"
+          :redirect-uri="context.redirectUri"
+          :requested-scopes="context.requestedScopes"
+          :console-application="context.consoleApplication"
+          :subject-name="context.subjectName"
+          :subject-verification-type="context.subjectVerificationType"
+          :mode="mode"
+        />
+        <div v-else class="left-placeholder">
+          <div class="brand-line">
+            <img src="/favicon.ico" alt="Ksuser" class="brand-logo" />
+            <span class="brand-text">{{ t('ui.mainLayout.message001') }}</span>
           </div>
-
-          <div v-else class="app-header app-header--placeholder">
+          <div class="app-header app-header--placeholder">
             <div class="app-logo-box">
               <div class="app-logo app-logo-fallback">?</div>
             </div>
             <div class="app-meta">
               <h1 class="app-name">{{ t('ui.oAuthAuthorize.message014') }}</h1>
               <p class="app-subtitle">{{ t('ui.oAuthAuthorize.message015') }}</p>
-            </div>
-          </div>
-
-          <div
-            v-if="context && user && !loading && !autoRedirecting && !errorMessage"
-            class="permission-box"
-          >
-            <div class="permission-title">{{ t('ui.oAuthAuthorize.message016') }}</div>
-            <ul class="permission-list">
-              <li v-for="item in permissionItems" :key="item">{{ item }}</li>
-            </ul>
-            <div class="permission-footnote">
-              {{
-                mode === 'official'
-                  ? t('ui.official.identityNotice')
-                  : t('ui.oAuthAuthorize.message017')
-              }}
             </div>
           </div>
         </div>
@@ -292,20 +250,14 @@
 import { localizedError } from '@/utils/apiResult'
 import { intlLocale, t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
 
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
+import ApplicationQrAuthorization from '@/components/ApplicationQrAuthorization.vue'
+import ApplicationAuthorizationInfo from '@/components/ApplicationAuthorizationInfo.vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CircleCloseFilled, Loading } from '@element-plus/icons-vue'
-import {
-  isIOSAuthorizationSupported,
-  launchMobileAuthorization,
-  createMobileAuthorization,
-  consumeMobileAuthorization,
-  cancelMobileAuthorization,
-  continueMobileAuthorization,
-  type MobileAuthorizationTicket,
-} from '@/utils/mobileAuthorization'
+import { isMobileAuthorizationBrowser } from '@/utils/mobileAuthorization'
 import { logout } from '@/api/auth'
 import {
   approveOAuth2Authorize,
@@ -316,7 +268,6 @@ import { approveSSOAuthorize, getSSOAuthorizeContext } from '@/api/sso'
 import {
   approveOfficialAuthorize,
   getOfficialAuthorizeContext,
-  officialScopeLabel,
 } from '@/api/official'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
@@ -332,9 +283,11 @@ type NormalizedAuthorizeContext = {
   clientId: string
   appName: string
   logoUrl?: string
-  contactInfo?: string
   redirectUri: string
   requestedScopes: string[]
+  consoleApplication: boolean
+  subjectName?: string | null
+  subjectVerificationType?: string | null
   alreadyAuthorized: boolean
   existingGrantMode: AuthorizationGrantMode
   existingGrantExpiresAt?: string | null
@@ -351,49 +304,6 @@ const router = useRouter()
 const userStore = useUserStore()
 const { user } = storeToRefs(userStore)
 
-const mobileWaiting = ref(false)
-const mobileFallingBack = ref(false)
-const mobileError = ref<LocalizedMessage>('')
-let mobileTicket: MobileAuthorizationTicket | null = null
-let mobileDisposed = false
-let mobileExpiresAt = 0
-const openMobileApp = () => {
-  if (mobileTicket) launchMobileAuthorization(mobileTicket)
-}
-const completeMobileAuthorization = async () => {
-  if (!mobileTicket || mobileDisposed || !mobileWaiting.value) return
-  try {
-    if (!continueMobileAuthorization(await consumeMobileAuthorization(mobileTicket)))
-      mobileError.value = uiMessage('ui.oAuthAuthorize.message033')
-  } catch (e) {
-    mobileError.value = localizedError(e, 'ui.oAuthAuthorize.message034')
-    return
-  }
-}
-const continueInBrowser = async () => {
-  if (!mobileTicket || mobileFallingBack.value) return
-  mobileFallingBack.value = true
-  try {
-    // Cancel the app request before enabling browser consent to avoid two concurrent grants.
-    if (Date.now() < mobileExpiresAt) {
-      if (continueMobileAuthorization(await consumeMobileAuthorization(mobileTicket))) return
-      await cancelMobileAuthorization(mobileTicket)
-    }
-    mobileWaiting.value = false
-    await router.replace({
-      path: route.path,
-      query: { ...route.query, iosAuthorizationFallback: '1' },
-    })
-    await loadContext()
-  } catch (e) {
-    mobileError.value = localizedError(e, 'ui.oAuthAuthorize.message035')
-  } finally {
-    mobileFallingBack.value = false
-  }
-}
-onUnmounted(() => {
-  mobileDisposed = true
-})
 const loading = ref(true)
 const approving = ref(false)
 const desktopSigningIn = ref(false)
@@ -401,6 +311,18 @@ const autoRedirecting = ref(false)
 const errorMessage = ref<LocalizedMessage>('')
 const context = ref<NormalizedAuthorizeContext | null>(null)
 const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
+const qrVisible = ref(false)
+const qrSupported = !isMobileAuthorizationBrowser()
+const resumeWebLogin = async () => {
+  qrVisible.value = false
+  // Do not force QR again when Passport returns after the user explicitly chose web login.
+  const destination = new URL(route.fullPath, window.location.origin)
+  destination.searchParams.delete('login_method')
+  await router.replace({
+    path: '/login',
+    query: { redirect: `${destination.pathname}${destination.search}${destination.hash}` },
+  })
+}
 const grantMode = ref<AuthorizationGrantMode>('PERSISTENT')
 const grantTtlSeconds = ref(3600)
 
@@ -478,42 +400,6 @@ const hasConsentPrompt = computed(() => {
   const prompt = requestParams.value.prompt?.toLowerCase()
   if (!prompt) return false
   return prompt.split(/\s+/).includes('consent')
-})
-
-const leftSubtitle = computed(() =>
-  mode.value === 'official'
-    ? t('ui.official.authorizeSubtitle')
-    : mode.value === 'sso'
-      ? t('ui.oAuthAuthorize.message046')
-      : t('ui.oAuthAuthorize.message047'),
-)
-
-const permissionItems = computed(() => {
-  const currentContext = context.value
-  if (!currentContext) return []
-  if (mode.value === 'official') return currentContext.requestedScopes.map(officialScopeLabel)
-
-  const scopes = currentContext.requestedScopes
-    .map((scope) => scope.trim().toLowerCase())
-    .filter(Boolean)
-
-  const items: string[] = [t('ui.oAuthAuthorize.message048')]
-
-  if (scopes.includes('email')) {
-    items.push(t('ui.oAuthAuthorize.message049'))
-  }
-
-  if (scopes.includes('profile')) {
-    items.push(t('ui.oAuthAuthorize.message050'))
-  }
-
-  const knownScopes = new Set(['openid', 'email', 'profile'])
-  const hasUnknownScope = scopes.some((scope) => !knownScopes.has(scope))
-  if (hasUnknownScope) {
-    items.push(t('ui.oAuthAuthorize.message051'))
-  }
-
-  return items
 })
 
 const grantModeDescription = computed(() => {
@@ -611,6 +497,7 @@ const loadAuthorizeContext = async () => {
       logoUrl: response.logoUrl,
       redirectUri,
       requestedScopes: response.requestedScopes,
+      consoleApplication: response.consoleApplication,
       alreadyAuthorized: response.loggedIn && !response.consentRequired,
       existingGrantMode: 'PERSISTENT',
     }
@@ -633,6 +520,9 @@ const loadAuthorizeContext = async () => {
       logoUrl: response.logoUrl,
       redirectUri: response.redirectUri,
       requestedScopes: response.requestedScopes,
+      consoleApplication: false,
+      subjectName: response.subjectName,
+      subjectVerificationType: response.subjectVerificationType,
       alreadyAuthorized: response.alreadyAuthorized,
       existingGrantMode: response.existingGrantMode,
       existingGrantExpiresAt: response.existingGrantExpiresAt,
@@ -650,9 +540,11 @@ const loadAuthorizeContext = async () => {
     clientId: response.clientId,
     appName: response.appName,
     logoUrl: response.logoUrl,
-    contactInfo: response.contactInfo,
     redirectUri: response.redirectUri,
     requestedScopes: response.requestedScopes,
+    consoleApplication: false,
+    subjectName: response.subjectName,
+    subjectVerificationType: response.subjectVerificationType,
     alreadyAuthorized: response.alreadyAuthorized,
     existingGrantMode: response.existingGrantMode,
     existingGrantExpiresAt: response.existingGrantExpiresAt,
@@ -671,47 +563,13 @@ const loadContext = async () => {
   try {
     await loadAuthorizeContext()
 
-    if (
-      mode.value !== 'official' &&
-      isIOSAuthorizationSupported() &&
-      !mobileTicket &&
-      route.query.iosAuthorizationFallback !== '1'
-    ) {
-      try {
-        const authorization = { ...requestParams.value }
-        delete authorization.prompt
-        mobileTicket = await createMobileAuthorization(mode.value as 'oauth' | 'sso', {
-          ...authorization,
-          responseType: 'code',
-        })
-        if (mobileDisposed) return
-        mobileExpiresAt = Date.now() + mobileTicket.expiresInSeconds * 1000
-        mobileWaiting.value = true
-        openMobileApp()
-        return
-      } catch {
-        /* Keep browser consent available when app handoff cannot be created. */
-      }
-    }
-
     const authenticated = await ensureAuthenticated()
     if (!authenticated) {
-      if (mode.value === 'official') {
-        redirectToLogin()
-        return
-      }
       await refreshDesktopBridgeStatus()
       return
     }
 
     await loadAuthorizeContext()
-
-    if (context.value?.alreadyAuthorized && !hasConsentPrompt.value) {
-      loading.value = false
-      autoRedirecting.value = true
-      await handleApprove(true)
-      return
-    }
   } catch (error) {
     errorMessage.value = localizedError(error, 'ui.oAuthAuthorize.message054')
   } finally {
@@ -866,18 +724,28 @@ const switchAccount = async () => {
 }
 
 onMounted(() => {
-  void loadContext()
+  if (qrSupported && route.query.login_method === 'qr') {
+    qrVisible.value = true
+    loading.value = false
+  } else void loadContext()
 })
 </script>
 
 <style scoped>
 .consent-container {
+  --consent-card-width: 1000px;
+  --consent-card-radius: 20px;
+  --consent-card-shadow: 0 8px 24px rgb(0 0 0 / 12%), 0 16px 40px rgb(0 0 0 / 8%);
+  --consent-panel-bg: linear-gradient(135deg, #fff8f0, #fffbf5);
+  --passport-link-color: #805c00;
+  --passport-link-hover: #5e4200;
+  box-sizing: border-box;
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: safe center;
+  justify-content: safe center;
   padding: 24px;
   background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
   font-family:
@@ -887,18 +755,20 @@ onMounted(() => {
 }
 
 .consent-container.dark {
+  --consent-panel-bg: var(--el-bg-color-overlay);
+  --passport-link-color: #ffd36b;
+  --passport-link-hover: #ffe29b;
   background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
 }
 
 .consent-box {
+  position: relative;
   width: 100%;
-  max-width: 1000px;
+  max-width: var(--consent-card-width);
   display: flex;
   background: var(--el-bg-color);
-  border-radius: 20px;
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.12),
-    0 16px 40px rgba(0, 0, 0, 0.08);
+  border-radius: var(--consent-card-radius);
+  box-shadow: var(--consent-card-shadow);
   backdrop-filter: blur(10px);
   border: 1px solid var(--el-border-color-light);
   overflow: hidden;
@@ -1003,14 +873,10 @@ onMounted(() => {
 .consent-left {
   flex: 1;
   padding: 56px 48px;
-  background: linear-gradient(135deg, #fff8f0, #fffbf5);
+  background: var(--consent-panel-bg);
   border-right: 1px solid var(--el-border-color-light);
   display: flex;
   flex-direction: column;
-}
-
-.consent-container.dark .consent-left {
-  background: var(--el-bg-color-overlay) !important;
 }
 
 .consent-right {
@@ -1426,6 +1292,42 @@ onMounted(() => {
   transform: scale(0.98);
 }
 
+.qr-login-toggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--passport-link-color);
+  font-size: 22px;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+
+.qr-login-toggle:hover:not(:disabled) {
+  color: var(--passport-link-hover);
+  background: var(--el-fill-color-light);
+}
+
+.qr-login-toggle:focus-visible {
+  outline: 2px solid var(--passport-link-color);
+  outline-offset: 2px;
+}
+
+.qr-login-toggle:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .right-note {
   width: min(560px, 100%);
   align-self: center;
@@ -1441,7 +1343,6 @@ onMounted(() => {
 
 @media (max-width: 900px) {
   .consent-container {
-    height: auto;
     align-items: flex-start;
     justify-content: flex-start;
     padding: 0;

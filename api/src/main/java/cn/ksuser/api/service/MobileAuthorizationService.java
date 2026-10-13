@@ -22,7 +22,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/** Immutable authorization handoff; no browser login credentials are transferred. */
+/** Immutable mobile consent. Browser login is issued only after an explicit choice on a QR request. */
 @Service
 public class MobileAuthorizationService {
     private static final Duration TTL = Duration.ofMinutes(5);
@@ -32,28 +32,55 @@ public class MobileAuthorizationService {
     private final AppProperties properties;
     private final Oauth2PlatformService oauth;
     private final SsoPlatformService sso;
+    private final OfficialAuthorizationService official;
+    private final QrChallengeService qr;
+    private final SessionTransferService transfers;
     private final SecureRandom random = new SecureRandom();
     @Value("${app.sso.contact-info:}") private String ssoContactInfo = "";
 
     public MobileAuthorizationService(StringRedisTemplate redis, ObjectMapper mapper, AppProperties properties,
-                                      Oauth2PlatformService oauth, SsoPlatformService sso) {
+                                      Oauth2PlatformService oauth, SsoPlatformService sso,
+                                      OfficialAuthorizationService official, QrChallengeService qr, SessionTransferService transfers) {
         this.redis = redis; this.mapper = mapper; this.properties = properties; this.oauth = oauth; this.sso = sso;
+        this.official = official; this.qr = qr; this.transfers = transfers;
     }
     public record CreateRequest(String mode, String returnOrigin, SsoAuthorizeRequest authorization) {}
     public record Created(String ticket, String secret, String appLink, int expiresInSeconds) {}
-    public record Stored(String mode, String returnOrigin, String secret, SsoAuthorizeRequest authorization) {}
+    public record QrCreated(String ticket, String secret, String qrText, int expiresInSeconds, Context application) {}
+    public record Stored(String mode, String returnOrigin, String secret, SsoAuthorizeRequest authorization,
+                         boolean qr, String qrChallengeId, String requesterIp, String requesterUserAgent) {
+        public Stored(String mode, String returnOrigin, String secret, SsoAuthorizeRequest authorization) {
+            this(mode, returnOrigin, secret, authorization, false, null, null, null);
+        }
+    }
     public record Context(String ticket, String appName, String logoUrl, String contactInfo, String redirectUri,
                           List<String> requestedScopes, boolean alreadyAuthorized, String existingGrantMode,
-                          int expiresInSeconds) {}
-    public record Decision(String ticket, boolean approve, String grantMode, Integer grantTtlSeconds) {}
+                          int expiresInSeconds, boolean qr, boolean officialApplication, boolean consoleApplication,
+                          String webOrigin, String subjectName, String subjectVerificationType) {
+        public Context(String ticket, String appName, String logoUrl, String contactInfo, String redirectUri,
+                       List<String> requestedScopes, boolean alreadyAuthorized, String existingGrantMode,
+                       int expiresInSeconds, boolean qr, boolean officialApplication, boolean consoleApplication,
+                       String webOrigin) {
+            this(ticket, appName, logoUrl, contactInfo, redirectUri, requestedScopes, alreadyAuthorized,
+                existingGrantMode, expiresInSeconds, qr, officialApplication, consoleApplication, webOrigin, null, null);
+        }
+    }
+    public record Decision(String ticket, boolean approve, String grantMode, Integer grantTtlSeconds, Boolean loginWeb) {
+        public Decision(String ticket, boolean approve, String grantMode, Integer grantTtlSeconds) {
+            this(ticket, approve, grantMode, grantTtlSeconds, false);
+        }
+    }
     public record BrowserRequest(String ticket, String secret) {}
-    public record Result(String status, String redirectUrl) {}
-    public record Return(String returnUrl) {}
+    public record Result(String status, String redirectUrl, String webLoginTransferCode) {
+        public Result(String status, String redirectUrl) { this(status, redirectUrl, null); }
+    }
+    public record Return(String returnUrl, boolean completed) {
+        public Return(String returnUrl) { this(returnUrl, true); }
+    }
+    public record QrStatus(String status, int expiresInSeconds) {}
 
     public Created create(CreateRequest input) {
-        if (input == null || input.authorization() == null || (input.mode() == null || !List.of("oauth", "sso").contains(input.mode()))) {
-            throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
-        }
+        validateInput(input);
         String origin = validateOrigin(input.returnOrigin());
         String serialized = encode(input.authorization());
         if (serialized.length() > 8192) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_002);
@@ -63,6 +90,25 @@ public class MobileAuthorizationService {
         // Only the ticket is handed to the app; the browser result secret is kept out of this link.
         return new Created(ticket, secret, "ksuserauth://authorize?ticket=" + ticket, 300);
     }
+    public QrCreated createQr(CreateRequest input, String ip, String userAgent) {
+        validateInput(input);
+        String origin = validateOrigin(input.returnOrigin());
+        String serialized = encode(input.authorization());
+        if (serialized.length() > 8192) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_002);
+        // Freeze the original request before any phone-controlled policy is added.
+        SsoAuthorizeRequest authorization = decode(serialized, SsoAuthorizeRequest.class);
+        context("", new Stored(input.mode(), origin, "", authorization), null, 120);
+        String ticket = opaque(), secret = opaque();
+        var challenge = qr.createApplicationAuthorizationChallenge(ticket, ip, userAgent);
+        Stored stored = new Stored(input.mode(), origin, secret, authorization, true, challenge.getChallengeId(), ip, userAgent);
+        redis.opsForValue().set(key(ticket), encode(stored), Duration.ofSeconds(120));
+        return new QrCreated(ticket, secret, QrChallengeService.QR_TEXT_PREFIX + challenge.getApproveCode(), 120,
+            context(ticket, stored, null, 120));
+    }
+    private void validateInput(CreateRequest input) {
+        if (input == null || input.authorization() == null || input.mode() == null
+            || !List.of("oauth", "sso", "official").contains(input.mode())) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
+    }
     public Context preview(String ticket, User user) {
         Stored stored = stored(ticket);
         if (redis.hasKey(key(ticket) + ":result")) throw expired();
@@ -70,34 +116,43 @@ public class MobileAuthorizationService {
     }
     private Context context(String ticket, Stored stored, User user, int seconds) {
         var a = stored.authorization();
+        if (stored.mode().equals("official")) {
+            var c = official.buildAuthorizeContext(user, officialRequest(a, null));
+            return new Context(ticket, c.clientName(), c.logoUrl(), null, a.getRedirectUri(), c.requestedScopes(),
+                user != null && !c.consentRequired(), "PERSISTENT", seconds, stored.qr(), true, c.consoleApplication(),
+                stored.returnOrigin(), null, null);
+        }
         if (stored.mode().equals("sso")) {
             var c = sso.buildAuthorizeContext(user, a.getClientId(), a.getRedirectUri(), a.getResponseType(),
                 a.getScope(), a.getNonce(), a.getCodeChallenge(), a.getCodeChallengeMethod());
             return new Context(ticket, c.getClientName(), c.getLogoUrl(), ssoContactInfo, c.getRedirectUri(),
-                c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds);
+                c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds, stored.qr(), false,
+                false, stored.returnOrigin(), c.getSubjectName(), c.getSubjectVerificationType());
         }
         var c = oauth.buildAuthorizeContext(user, a.getClientId(), a.getRedirectUri(), a.getResponseType(), a.getScope());
         return new Context(ticket, c.getAppName(), c.getLogoUrl(), c.getContactInfo(), c.getRedirectUri(),
-            c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds);
+            c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds, stored.qr(), false,
+            false, stored.returnOrigin(), c.getSubjectName(), c.getSubjectVerificationType());
     }
     public Return decide(Decision decision, User user) {
         if (decision == null || user == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_003);
         Stored stored = stored(decision.ticket());
-        if (decision.approve()) {
+        if (decision.approve() && !stored.mode().equals("official")) {
             String mode = AuthorizationGrantPolicy.normalizeGrantMode(decision.grantMode());
             AuthorizationGrantPolicy.resolveTtlSeconds(mode, decision.grantTtlSeconds());
         }
+        Context context = context(decision.ticket(), stored, user, remaining(decision.ticket()));
         String lock = key(decision.ticket()) + ":decision";
         if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(lock, user.getUuid(), TTL))) {
-            if (user.getUuid().equals(redis.opsForValue().get(lock)) && redis.hasKey(key(decision.ticket()) + ":result")) return new Return(returnUrl(decision.ticket(), stored));
+            if (user.getUuid().equals(redis.opsForValue().get(lock)) && redis.hasKey(key(decision.ticket()) + ":result")) return completed(decision.ticket(), stored);
             throw new Oauth2Exception(HttpStatus.CONFLICT, "invalid_request", ApiResultCode.MOBILE_AUTHORIZATION_007);
         }
-        Context context = context(decision.ticket(), stored, user, remaining(decision.ticket()));
         String redirect;
         var a = stored.authorization();
         if (decision.approve()) {
             a.setGrantMode(decision.grantMode()); a.setGrantTtlSeconds(decision.grantTtlSeconds());
-            if (stored.mode().equals("sso")) redirect = sso.approveAuthorization(user, a).getRedirectUrl();
+            if (stored.mode().equals("official")) redirect = official.approveAuthorization(user, officialRequest(a, true)).get("redirectUrl");
+            else if (stored.mode().equals("sso")) redirect = sso.approveAuthorization(user, a).getRedirectUrl();
             else {
                 var request = new Oauth2AuthorizeRequest();
                 request.setClientId(a.getClientId()); request.setRedirectUri(a.getRedirectUri());
@@ -114,9 +169,36 @@ public class MobileAuthorizationService {
                     .map(value -> java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8)))
                 .build(true).toUriString();
         }
-        redis.opsForValue().set(key(decision.ticket()) + ":result", encode(new Result("completed", redirect)),
+        String webLoginCode = null;
+        if (decision.approve() && stored.qr() && Boolean.TRUE.equals(decision.loginWeb())) {
+            webLoginCode = transfers.createTransfer(user.getId(), SessionTransferService.TARGET_WEB,
+                SessionTransferService.PURPOSE_BRIDGE_LOGIN, stored.requesterIp(), stored.requesterUserAgent()).getTransferCode();
+        }
+        redis.opsForValue().set(key(decision.ticket()) + ":result", encode(new Result("completed", redirect, webLoginCode)),
             Duration.ofSeconds(remaining(decision.ticket())));
-        return new Return(returnUrl(decision.ticket(), stored));
+        if (stored.qr()) {
+            if (decision.approve()) qr.approveChallenge(stored.qrChallengeId(), user.getId(), java.util.Map.of("verified", true));
+            else qr.rejectChallenge(stored.qrChallengeId(), user.getId(), java.util.Map.of("verified", false));
+        }
+        return completed(decision.ticket(), stored);
+    }
+    public QrStatus qrStatus(BrowserRequest input) {
+        if (input == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
+        Stored stored = readStored(input.ticket());
+        if (stored == null) return new QrStatus("expired", 0);
+        checkSecret(stored, input.secret());
+        if (!stored.qr()) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
+        var challenge = qr.getByChallengeId(stored.qrChallengeId());
+        if (challenge == null) return new QrStatus("expired", 0);
+        return new QrStatus(challenge.getStatus(), remaining(input.ticket()));
+    }
+    private Return completed(String ticket, Stored stored) {
+        // A QR confirmation stays on the phone; its browser receipt and login code never go into a return link.
+        return new Return(stored.qr() ? null : returnUrl(ticket, stored));
+    }
+    private OfficialAuthorizeRequest officialRequest(SsoAuthorizeRequest a, Boolean approved) {
+        return new OfficialAuthorizeRequest(a.getClientId(), a.getRedirectUri(), a.getResponseType(), a.getScope(),
+            a.getState(), a.getNonce(), a.getCodeChallenge(), a.getCodeChallengeMethod(), approved);
     }
     public Result consume(BrowserRequest input) {
         if (input == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
@@ -129,7 +211,13 @@ public class MobileAuthorizationService {
     }
     public void cancel(BrowserRequest input) {
         if (input == null) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
-        Stored stored = stored(input.ticket()); checkSecret(stored, input.secret());
+        Stored stored = readStored(input.ticket());
+        if (stored == null) return;
+        checkSecret(stored, input.secret());
+        if (stored.qr()) {
+            redis.delete(List.of(key(input.ticket()), key(input.ticket()) + ":result", key(input.ticket()) + ":decision"));
+            return;
+        }
         if (!Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key(input.ticket()) + ":decision", "cancelled", TTL))) {
             throw new Oauth2Exception(HttpStatus.CONFLICT, "invalid_request", ApiResultCode.MOBILE_AUTHORIZATION_008);
         }
@@ -153,9 +241,14 @@ public class MobileAuthorizationService {
         } catch (IllegalArgumentException | NullPointerException e) { throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_005); }
     }
     private Stored stored(String ticket) {
+        Stored value = readStored(ticket);
+        if (value == null) throw expired();
+        return value;
+    }
+    private Stored readStored(String ticket) {
         if (ticket == null || !ticket.matches("[A-Za-z0-9_-]{32}")) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_006);
         String raw = redis.opsForValue().get(key(ticket));
-        if (raw == null) throw expired();
+        if (raw == null) return null;
         return decode(raw, Stored.class);
     }
     private int remaining(String ticket) {

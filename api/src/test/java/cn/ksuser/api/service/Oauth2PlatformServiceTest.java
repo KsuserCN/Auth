@@ -90,6 +90,30 @@ class Oauth2PlatformServiceTest {
     }
 
     @Test
+    void authorizationSubjectUsesTheOwnersCertifiedEntityInsteadOfEditableNames() {
+        Oauth2Application application = buildApplication();
+        User owner = new User();
+        owner.setId(99L);
+        owner.setUsername("editable-owner-username");
+        owner.setRealName("editable-profile-name");
+        owner.setVerificationType("enterprise");
+        ReflectionTestUtils.setField(owner, "verificationEntityName", "核验企业有限公司");
+        when(applicationRepository.findByAppId("ksapp_demo")).thenReturn(Optional.of(application));
+        when(userRepository.findById(99L)).thenReturn(Optional.of(owner));
+        when(authorizationRepository.findAllByUserIdOrderByLastAuthorizedAtDesc(1L))
+            .thenReturn(List.of(authorization(42L)));
+
+        var context = service.buildAuthorizeContext(buildUser(), "ksapp_demo", "http://localhost:9000/callback", "code", "profile email");
+        assertEquals("核验企业有限公司", context.getSubjectName());
+        assertEquals("enterprise", context.getSubjectVerificationType());
+        assertEquals("核验企业有限公司", service.listAuthorizations(buildUser()).get(0).getCreatorName());
+
+        ReflectionTestUtils.setField(owner, "verificationEntityName", null);
+        assertEquals(null, service.buildAuthorizeContext(null, "ksapp_demo", "http://localhost:9000/callback", "code", "profile").getSubjectName());
+        assertEquals(null, service.listAuthorizations(buildUser()).get(0).getCreatorName());
+    }
+
+    @Test
     void shouldExchangeAuthorizationCodeForPureOauthToken() {
         Oauth2Application application = buildApplication();
         User user = buildUser();

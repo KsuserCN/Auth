@@ -16,6 +16,10 @@
 
 ## 成功示例
 
+OAuth、SSO 授权上下文的 `subjectName` 为应用归属账号的认证实体（真实姓名 / 企业名称），`subjectVerificationType` 为 `personal`、`enterprise`、`admin` 或 `none`。归属未关联、实体未补录或归属账号未认证时名称为 `null`，不会回退为可自行编辑的用户名或个人资料姓名。扫码授权上下文使用相同字段，见 [认证实体与 SSO 归属维护](user-verification-entity.md)。
+
+没有关联到有效归属账号时，`subjectVerificationType` 也为 `null`；已有认证账号但名称尚未补录时，仍返回该账号的认证类型。
+
 ```bash
 curl 'http://localhost:8000/oauth2/authorize/context?client_id=ksapp_xxx&redirect_uri=http%3A%2F%2Flocalhost%3A9002%2Fcallback&response_type=code&scope=openid%20profile%20email&nonce=demo-nonce&code_challenge=demo_challenge&code_challenge_method=S256'
 ```

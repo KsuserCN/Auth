@@ -6,6 +6,9 @@
 - 需要认证：是（AccessToken）
 
 ## 查询参数
+
+基础与详细响应均包含只读的 `verificationEntityName`：个人认证和管理员为核验后的真实姓名，企业认证为企业名称；未认证或尚未补录时为 `null`。该字段仅由管理员通过数据库维护，见 [认证实体说明](user-verification-entity.md)。
+
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | type | string | 否 | basic | basic 仅返回基础字段；details 返回全部字段 |

@@ -134,6 +134,7 @@ public class SsoPlatformService {
 
         OidcClient client = new OidcClient();
         client.setClientId(clientId);
+        client.setOwnerUserId(user.getId());
         client.setClientSecretHash(passwordEncoder.encode(clientSecret));
         client.setClientName(clientName);
         client.setRedirectUris(joinUriValues(redirectUris));
@@ -196,6 +197,8 @@ public class SsoPlatformService {
         List<String> requestedScopes = resolveRequestedScopes(client, scope);
         UserSsoAuthorization existingAuthorization = findReusableAuthorization(user, client.getClientId(), requestedScopes)
             .orElse(null);
+        User owner = client.getOwnerUserId() == null ? null
+            : userRepository.findById(client.getOwnerUserId()).orElse(null);
         return new SsoAuthorizeContextResponse(
             client.getClientId(),
             client.getClientName(),
@@ -204,7 +207,9 @@ public class SsoPlatformService {
             requestedScopes,
             existingAuthorization != null,
             existingAuthorization == null ? AuthorizationGrantPolicy.MODE_PERSISTENT : existingAuthorization.getGrantMode(),
-            existingAuthorization == null ? null : existingAuthorization.getExpiresAt()
+            existingAuthorization == null ? null : existingAuthorization.getExpiresAt(),
+            owner == null ? null : owner.getVerificationEntityName(),
+            owner == null ? null : normalizeOptional(owner.getVerificationType())
         );
     }
 

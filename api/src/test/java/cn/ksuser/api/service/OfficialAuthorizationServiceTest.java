@@ -91,6 +91,39 @@ class OfficialAuthorizationServiceTest {
     }
 
     @Test
+    void publicOfficialApplicationAllowsOrdinaryAccountsButConsoleStillRequiresSuperAdmin() {
+        user.setSystemRole("USER");
+        var publicContext=service.buildAuthorizeContext(user,request("openid email"));
+        assertFalse(publicContext.consoleApplication());
+        String code=issue("openid email");
+        assertEquals(user.getUuid(),service.buildUserInfo((String)exchange(code).get("access_token"),"https://example.test").get("uuid"));
+        app.setClientId(OfficialAuthorizationService.CONSOLE_CLIENT_ID);
+        assertThrows(Oauth2Exception.class,()->service.buildAuthorizeContext(user,request("openid email")));
+        assertThrows(Oauth2Exception.class,()->service.approveAuthorization(user,request("openid email")));
+    }
+
+    @Test
+    void nativeConsoleConfirmationGrantsOnlyRegisteredScopesAndRemainsRevocable() {
+        app.setClientId(OfficialAuthorizationService.CONSOLE_CLIENT_ID);
+        service.validateConsoleLogin(CALLBACK);
+        var grant=service.approveConsoleLogin(user,CALLBACK);
+        assertEquals("openid profile email",currentGrant.get().getScopes());
+        assertTrue(service.isConsoleAuthorizationActive(user.getUuid(),grant.authorizationId()));
+        assertTrue(storage.isEmpty(),"Native confirmation must not mint bearer tokens or authorization codes");
+        service.revokeAuthorization(user,app.getClientId());
+        assertFalse(service.isConsoleAuthorizationActive(user.getUuid(),grant.authorizationId()));
+        user.setSystemRole("ADMIN");
+        assertThrows(Oauth2Exception.class,()->service.approveConsoleLogin(user,CALLBACK));
+        assertNull(currentGrant.get());
+        user.setSystemRole("SUPER_ADMIN");
+        assertThrows(Oauth2Exception.class,()->service.approveConsoleLogin(user,CALLBACK+"?wrong=1"));
+        app.setScopes("openid profile");
+        assertThrows(Oauth2Exception.class,()->service.validateConsoleLogin(CALLBACK));
+        app.setIsActive(false);
+        assertThrows(Oauth2Exception.class,()->service.approveConsoleLogin(user,CALLBACK));
+    }
+
+    @Test
     void firstConsentIsRequiredRememberedScopesSkipConsentAndExpandedScopesRequireConsent() {
         assertTrue(service.buildAuthorizeContext(user, request("openid profile")).consentRequired());
         issue("openid profile");

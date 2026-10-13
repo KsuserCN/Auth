@@ -10,6 +10,7 @@ struct ApplicationConsentView: View {
     @State private var submitting = false
     @State private var returnURL: URL?
     @State private var returnError = false
+    @State private var loginWeb = false
 
     var body: some View {
         PageScroll {
@@ -31,6 +32,10 @@ struct ApplicationConsentView: View {
                 consentDetail(title: L10n.text("应用名称"), value: context.appName)
                 consentDetail(title: L10n.text("联系方式"), value: context.contactInfo?.isEmpty == false ? context.contactInfo! : L10n.text("应用未提供联系方式"))
                 consentDetail(title: L10n.text("返回网站"), value: URL(string: context.redirectUri)?.host ?? context.redirectUri)
+                if context.consoleApplication == true {
+                    Text(L10n.text("仅超级管理员可登录管理中心。确认后，浏览器将以当前账号登录。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             AppCard {
                 CardHeader(title: L10n.text("授权范围"), subtitle: L10n.text("该应用将获得以下权限"), icon: "hand.raised.fill")
@@ -58,20 +63,38 @@ struct ApplicationConsentView: View {
                     }
                 }
             }
-            AppCard {
-                CardHeader(title: L10n.text("授权有效期"), subtitle: L10n.text("你可以随时在安全中心撤销授权"), icon: "clock")
-                Picker(L10n.text("授权方式"), selection: $mode) {
-                    Text(L10n.text("长期")).tag("PERSISTENT")
-                    Text(L10n.text("一次性")).tag("ONE_TIME")
-                    Text(L10n.text("限时")).tag("TIME_LIMITED")
-                }.pickerStyle(.segmented)
-                Text(mode == "ONE_TIME" ? L10n.text("仅本次有效，下次需要再次确认。") : mode == "TIME_LIMITED" ? L10n.text("有效期内可继续使用，过期后需要再次确认。") : L10n.text("后续相同权限的请求可以继续使用，直到你撤销授权。"))
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                if mode == "TIME_LIMITED" {
-                    Picker(L10n.text("有效期"), selection: $ttl) {
-                        Text(L10n.text("5 分钟")).tag(300); Text(L10n.text("1 小时")).tag(3600)
-                        Text(L10n.text("24 小时")).tag(86400); Text(L10n.text("7 天")).tag(604800)
-                    }.tint(Brand.gold).accessibilityIdentifier("applicationConsentDuration")
+            if context.qr == true {
+                AppCard {
+                    Toggle(L10n.text("同时登录通行证网页端"), isOn: $loginWeb)
+                        .tint(Brand.gold).frame(minHeight: 50)
+                        .accessibilityIdentifier("applicationConsentLoginWeb")
+                    if let origin = context.webOrigin { consentDetail(title: L10n.text("网页登录网站"), value: origin) }
+                    Text(L10n.text("默认仅授权此应用。开启后，发起请求的浏览器也会登录当前 Ksuser 账号。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            if context.officialApplication == true {
+                AppCard {
+                    CardHeader(title: L10n.text("官方应用授权"), subtitle: L10n.text("授权可在通行证隐私设置中撤销"), icon: "hand.raised.fill")
+                    Text(L10n.text("仅共享本次确认的资料范围，新增资料范围需要再次确认。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                AppCard {
+                    CardHeader(title: L10n.text("授权有效期"), subtitle: L10n.text("你可以随时在安全中心撤销授权"), icon: "clock")
+                    Picker(L10n.text("授权方式"), selection: $mode) {
+                        Text(L10n.text("长期")).tag("PERSISTENT")
+                        Text(L10n.text("一次性")).tag("ONE_TIME")
+                        Text(L10n.text("限时")).tag("TIME_LIMITED")
+                    }.pickerStyle(.segmented).tint(Brand.gold)
+                    Text(mode == "ONE_TIME" ? L10n.text("仅本次有效，下次需要再次确认。") : mode == "TIME_LIMITED" ? L10n.text("有效期内可继续使用，过期后需要再次确认。") : L10n.text("后续相同权限的请求可以继续使用，直到你撤销授权。"))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if mode == "TIME_LIMITED" {
+                        Picker(L10n.text("有效期"), selection: $ttl) {
+                            Text(L10n.text("5 分钟")).tag(300); Text(L10n.text("1 小时")).tag(3600)
+                            Text(L10n.text("24 小时")).tag(86400); Text(L10n.text("7 天")).tag(604800)
+                        }.tint(Brand.gold).accessibilityIdentifier("applicationConsentDuration")
+                    }
                 }
             }
             if let error = model.errorMessage {
@@ -90,9 +113,9 @@ struct ApplicationConsentView: View {
                         HStack { if submitting { ProgressView() }; Text(submitting ? L10n.text("正在提交…") : L10n.text("同意并继续")) }
                     }.buttonStyle(GoldButtonStyle()).accessibilityIdentifier("applicationConsentApprove")
                     Button(L10n.text("拒绝授权")) { submit(approve: false) }.font(.subheadline).foregroundStyle(.secondary)
-                        .frame(minHeight: 36).accessibilityIdentifier("applicationConsentDeny")
+                        .frame(minHeight: 44).accessibilityIdentifier("applicationConsentDeny")
                 }
-                Text(L10n.text("完成后将自动返回网页")).font(.caption2).foregroundStyle(.secondary)
+                Text(context.qr == true ? L10n.text("确认后请返回发起扫码请求的设备") : L10n.text("完成后将自动返回网页")).font(.caption2).foregroundStyle(.secondary)
             }.padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
         }
         .disabled(submitting)
@@ -113,7 +136,7 @@ struct ApplicationConsentView: View {
         guard !submitting else { return }
         submitting = true
         Task {
-            if let url = await model.decideMobileAuthorization(approve: approve, mode: mode, ttl: ttl) {
+            if let url = await model.decideMobileAuthorization(approve: approve, mode: mode, ttl: ttl, loginWeb: loginWeb) {
                 returnURL = url
                 returnToBrowser(url)
             }
@@ -135,7 +158,17 @@ struct ApplicationConsentView: View {
         }
     }
     private func scopeTitle(_ scope: String) -> String {
-        switch scope { case "openid": L10n.text("确认你的账号身份"); case "profile": L10n.text("读取你的昵称与头像"); case "email": L10n.text("读取你的邮箱地址"); default: L10n.format("访问权限：{0}", [String(describing: scope)]) }
+        switch scope {
+        case "openid": context.officialApplication == true ? L10n.text("真实用户 UUID") : L10n.text("确认你的账号身份")
+        case "profile": L10n.text("读取你的昵称与头像")
+        case "email": L10n.text("读取你的邮箱地址")
+        case "real_name": L10n.text("真实姓名")
+        case "gender": L10n.text("性别")
+        case "birth_date": L10n.text("出生日期")
+        case "region": L10n.text("所在地区")
+        case "bio": L10n.text("个人简介")
+        default: L10n.format("访问权限：{0}", [String(describing: scope)])
+        }
     }
     private func scopeIcon(_ scope: String) -> String {
         switch scope { case "openid": "checkmark.shield"; case "profile": "person.crop.rectangle"; case "email": "envelope"; default: "key" }

@@ -152,6 +152,8 @@ extension KsuserRepositoryProviding {
     func generateRecoveryTicket() async throws -> AccountRecoveryTicket { try await client.request("/auth/account-recovery/issue", method: "POST", body: [:]) }
     func previewQRCode(code: String, transfer: Bool) async throws -> QrScanPreview { try await client.request("/auth/qr/preview", query: [transfer ? "transferCode" : "approveCode": code]) }
     func approveQRCode(_ code: String) async throws { let _: EmptyPayload = try await client.request("/auth/qr/approve", method: "POST", body: ["approveCode": .string(code)]) }
+    func approveOfficialQRCode(_ code: String) async throws { let _: EmptyPayload = try await client.request("/auth/qr/official/approve", method: "POST", body: ["approveCode": .string(code)]) }
+    func rejectOfficialQRCode(_ code: String) async throws { let _: EmptyPayload = try await client.request("/auth/qr/official/reject", method: "POST", body: ["approveCode": .string(code)]) }
     func exchangeTransfer(_ code: String) async throws -> String {
         let token: TokenPayload = try await client.request("/auth/session-transfer/exchange", method: "POST", body: ["transferCode": .string(code), "target": .string("mobile")], authenticated: false)
         return token.accessToken

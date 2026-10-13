@@ -28,6 +28,10 @@ public class OidcClient {
     @Column(name = "client_name", length = 120, nullable = false)
     private String clientName;
 
+    // Assigned at registration; later ownership corrections are administrator SQL only.
+    @Column(name = "owner_user_id", updatable = false)
+    private Long ownerUserId;
+
     @Column(name = "logo_url", length = 255)
     private String logoUrl;
 
@@ -130,6 +134,14 @@ public class OidcClient {
 
     public String getClientName() {
         return clientName;
+    }
+
+    public Long getOwnerUserId() {
+        return ownerUserId;
+    }
+
+    public void setOwnerUserId(Long ownerUserId) {
+        this.ownerUserId = ownerUserId;
     }
 
     public void setClientName(String clientName) {

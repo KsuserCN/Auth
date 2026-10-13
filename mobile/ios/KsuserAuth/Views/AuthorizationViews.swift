@@ -89,6 +89,22 @@ struct QRConfirmationView: View {
                 AppCard {
                     CardHeader(title: title, subtitle: confirmation.isTransfer ? L10n.text("即将把这台设备切换到二维码所属的账号。") : L10n.text("请核对请求来源，确认是你正在使用的设备。"), icon: confirmation.isTransfer ? "person.crop.circle.badge.checkmark" : "qrcode")
                     InfoRow(title: L10n.text("请求类型"), value: typeLabel)
+                    if confirmation.preview.isConsoleLogin || confirmation.preview.isOfficialAuthorization {
+                        if let logo = confirmation.preview.targetLogoUrl, let url = URL(string: logo) {
+                            AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Color.clear }
+                                .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
+                        }
+                        InfoRow(title: L10n.text("登录应用"), value: confirmation.preview.targetName ?? "Ksuser Console")
+                        if let origin = confirmation.preview.targetOrigin { InfoRow(title: L10n.text("登录网站"), value: origin) }
+                        InfoRow(title: L10n.text("授权资料"), value: confirmation.preview.requestedScopes?.map(scopeLabel).joined(separator: "、") ?? L10n.text("账号信息、邮箱"))
+                        if confirmation.preview.isConsoleLogin {
+                            Text(L10n.text("仅超级管理员可登录管理中心。确认后，浏览器将以当前账号登录。"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Text(L10n.text("确认后，发起请求的设备将登录此应用。授权可在通行证隐私设置中撤销。"))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
                     InfoRow(title: L10n.text("客户端"), value: confirmation.preview.clientName ?? L10n.text("未知客户端"))
                     InfoRow(title: L10n.text("设备"), value: [confirmation.preview.system, confirmation.preview.browser].compactMap { $0 }.joined(separator: " · "))
                     InfoRow(title: "IP", value: confirmation.preview.ipAddress ?? L10n.text("未知"))
@@ -99,7 +115,7 @@ struct QRConfirmationView: View {
                         Text(L10n.text("请先登录，再确认授权。")).foregroundStyle(.secondary)
                         NavigationLink { AuthenticationView() } label: { Text(L10n.text("登录后继续")).frame(maxWidth: .infinity, minHeight: 50) }.buttonStyle(GoldButtonStyle())
                     } else {
-                        AsyncActionButton(title: confirmation.isTransfer ? L10n.text("确认切换账号") : L10n.text("确认授权"), isBusy: model.isBusy, disabled: remaining <= 0) {
+                        AsyncActionButton(title: confirmation.isTransfer ? L10n.text("确认切换账号") : (confirmation.preview.isConsoleLogin ? L10n.text("确认登录管理中心") : (confirmation.preview.isOfficialAuthorization ? L10n.text("确认登录应用") : L10n.text("确认授权"))), isBusy: model.isBusy, disabled: remaining <= 0) {
                             if confirmation.isTransfer && model.isAuthenticated { confirmTransfer = true }
                             else { await model.approveQRCode() }
                         }
@@ -107,6 +123,10 @@ struct QRConfirmationView: View {
                             Button(L10n.text("确认切换")) { Task { await model.approveQRCode() } }
                         } message: {
                             Text(L10n.text("完成验证后，这台设备会显示新账号的资料。"))
+                        }
+                        if confirmation.preview.isOfficialAuthorization {
+                            Button(L10n.text("拒绝登录"), role: .cancel) { Task { await model.rejectOfficialQRCode() } }
+                                .disabled(model.isBusy || remaining <= 0)
                         }
                     }
                 }
@@ -116,9 +136,24 @@ struct QRConfirmationView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { model.dismissQR() } } }
             .sensitiveVerification()
     }
-    private var title: String { confirmation.isTransfer ? L10n.text("确认账号切换") : L10n.text("确认扫码授权") }
+    private var title: String { confirmation.isTransfer ? L10n.text("确认账号切换") : (confirmation.preview.isConsoleLogin ? L10n.text("登录管理中心") : (confirmation.preview.isOfficialAuthorization ? L10n.text("官方应用登录") : L10n.text("确认扫码授权"))) }
+    private func scopeLabel(_ scope: String) -> String {
+        switch scope {
+        case "openid": L10n.text("真实用户 UUID")
+        case "profile": L10n.text("用户名和头像")
+        case "email": L10n.text("邮箱")
+        case "real_name": L10n.text("真实姓名")
+        case "gender": L10n.text("性别")
+        case "birth_date": L10n.text("出生日期")
+        case "region": L10n.text("所在地区")
+        case "bio": L10n.text("个人简介")
+        default: scope
+        }
+    }
     private var typeLabel: String {
         switch confirmation.preview.codeType {
+        case "approve_console_login": L10n.text("管理中心登录")
+        case "approve_official": L10n.text("官方应用登录")
         case "login", "LOGIN", "approve_login": L10n.text("登录授权")
         case "mfa", "MFA", "approve_mfa": L10n.text("双重验证")
         case "sensitive", "SENSITIVE", "approve_sensitive": L10n.text("敏感操作")

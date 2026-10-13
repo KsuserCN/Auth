@@ -182,6 +182,15 @@ struct SensitiveLogItem: Codable, Sendable, Identifiable {
 struct PaginatedSensitiveLogs: Codable, Sendable { let data: [SensitiveLogItem]; let page: Int; let pageSize: Int; let total: Int; let totalPages: Int }
 struct QrScanPreview: Codable, Sendable {
     let codeType: String; let clientName: String?; let browser: String?; let system: String?; let ipAddress: String?; let ipLocation: String?; let expiresInSeconds: Int
+    var targetName: String? = nil
+    var targetOrigin: String? = nil
+    var targetLogoUrl: String? = nil
+    var requestedScopes: [String]? = nil
+    var consoleApplication: Bool? = nil
+    var authorizationTicket: String? = nil
+    var isApplicationAuthorization: Bool { codeType == "approve_application" }
+    var isOfficialAuthorization: Bool { codeType == "approve_official" }
+    var isConsoleLogin: Bool { codeType == "approve_console_login" || (isOfficialAuthorization && consoleApplication == true) }
 }
 struct QRConfirmation: Identifiable, Sendable { let code: String; let isTransfer: Bool; let preview: QrScanPreview; let expiresAt: Date; var id: String { code } }
 struct AccountRecoveryTicket: Codable, Sendable {

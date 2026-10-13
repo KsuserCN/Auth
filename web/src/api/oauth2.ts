@@ -51,6 +51,8 @@ export interface OAuth2AuthorizeContext {
   contactInfo: string
   redirectUri: string
   requestedScopes: OAuth2Scope[]
+  subjectName?: string | null
+  subjectVerificationType?: VerificationType | null
   alreadyAuthorized: boolean
   existingGrantMode: AuthorizationGrantMode
   existingGrantExpiresAt?: string | null

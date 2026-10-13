@@ -93,6 +93,20 @@ https://auth.ksuser.cn/official/authorize
 
 授权成功后 Ksuser 回到已登记回调并带上 `code` 和原 `state`。用户拒绝时回调带 `error=access_denied` 和 `state`，不会返回授权码。服务必须先校验 `state`，再处理 `code` 或错误；不得把 state、nonce 或 PKCE verifier 写入长期日志。
 
+## 通过 iOS App 扫码快捷登录
+
+所有通过 `/official` 注册的官方应用（`public` 和 `confidential`）均可使用统一扫码登录，无需为每个应用单独开发手机授权逻辑。继续按第 3 节生成原有的 `state`、`nonce` 和 PKCE 请求并导航到 `/official/authorize`：默认展示网页登录与授权，电脑浏览器提供「使用扫码登录」按钮，手机 UA（包括 iPad 桌面模式）不显示该按钮，也不会自动唤起 App。在电脑授权 URL 加上 `login_method=qr` 可直接展示扫码入口；这个参数只选择页面登录方式，不参与 token 兑换。
+
+用户用 Ksuser iOS App 的「扫码」扫描二维码，核对服务端提供的应用名称、图标、回调网站、当前账号和具体资料范围后，选择同意或拒绝。手机确认后，原浏览器自动返回已登记回调，收到原 `state` 和一次性 `code`（拒绝则收到 `error=access_denied`）。应用按下文的原有流程兑换令牌，客户端密钥、nonce 校验和 PKCE 要求保持一致。手机确认页的「同时登录通行证网页端」默认关闭：默认只授权当前应用，不改变浏览器的通行证账号。用户主动开启后，原浏览器通过私有结果中的一次性凭据建立当前手机账号的通行证网页会话；凭据不会放入二维码、手机回跳链接或第三方回调。拒绝授权不会建立网页会话。
+
+公共官方应用允许普通用户扫码登录；Console 仍要求 `SUPER_ADMIN`，手机扫码不会绕过应用既有的账号权限检查。创建、手机确认和令牌兑换都会校验应用是否启用、精确回调和资料范围；撤销授权与应用停用沿用原有规则。
+
+二维码有效两分钟，刷新或切换网页登录会取消旧请求。二维码仅携带手机审批码；读取和领取回调的轮询凭据仅保存在发起浏览器，领取回调只能成功一次。OAuth、SSO 和官方应用统一复用 `/auth/mobile-authorization/qr/create`、`qr/status`、`consume`、`cancel`，手机读取 `context` 并提交 `decide`。写请求需要 CSRF，手机确认需要通行证登录；二维码应通过统一授权页展示，这些接口不对任意应用页面额外开放 CORS。旧版 `/official/qr/*` 协议仍保留兼容。
+
+扫码页的「Ksuser iOS App」是新标签页 App Store 链接：当前语言为简体中文时使用中国区，为 English 时使用美国区。
+
+发布此功能需同步更新 API、通行证 Web 和 iOS App，无新增数据库迁移。Console 自身的直接扫码入口继续可用。
+
 ## 4. 用授权码兑换令牌
 
 通过 HTTPS 对 Discovery 的 token endpoint 发出 `application/x-www-form-urlencoded` POST。授权码五分钟有效且只能使用一次；`redirect_uri` 必须和授权请求、登记值完全一致。

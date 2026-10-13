@@ -8,6 +8,26 @@ public class QrScanPreviewResponse {
     private String ipAddress;
     private String ipLocation;
     private Long expiresInSeconds;
+    private String targetName;
+    private String targetOrigin;
+    private String targetLogoUrl;
+    private java.util.List<String> requestedScopes;
+    private Boolean consoleApplication;
+    private String authorizationTicket;
+    public String getAuthorizationTicket() { return authorizationTicket; }
+    public void setAuthorizationTicket(String value) { authorizationTicket = value; }
+
+    public String getTargetLogoUrl() { return targetLogoUrl; }
+    public void setTargetLogoUrl(String value) { targetLogoUrl = value; }
+    public java.util.List<String> getRequestedScopes() { return requestedScopes; }
+    public void setRequestedScopes(java.util.List<String> value) { requestedScopes = value; }
+    public Boolean getConsoleApplication() { return consoleApplication; }
+    public void setConsoleApplication(Boolean value) { consoleApplication = value; }
+
+    public String getTargetName() { return targetName; }
+    public void setTargetName(String targetName) { this.targetName = targetName; }
+    public String getTargetOrigin() { return targetOrigin; }
+    public void setTargetOrigin(String targetOrigin) { this.targetOrigin = targetOrigin; }
 
     public QrScanPreviewResponse() {
     }

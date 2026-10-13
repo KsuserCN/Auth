@@ -85,6 +85,23 @@ import XCTest
         XCTAssertEqual(app.staticTexts["welcomeUsername"].label, "ios_test_user")
     }
 
+    func testQRApplicationConsentWebLoginIsOffByDefaultAndCanBeSelected() {
+        let app = launch(authenticated: true, arguments: ["--ui-test-application-consent", "--ui-test-qr-consent"])
+        XCTAssertTrue(app.navigationBars["应用授权"].waitForExistence(timeout: 10))
+        let toggle = app.switches["applicationConsentLoginWeb"]
+        for _ in 0..<6 {
+            if toggle.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(toggle.isHittable)
+        XCTAssertEqual(toggle.value as? String, "0")
+        XCTAssertTrue(app.staticTexts["https://auth.ksuser.cn"].exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "QR consent default web login off"; screenshot.lifetime = .keepAlways; add(screenshot)
+        toggle.tap()
+        XCTAssertEqual(toggle.value as? String, "1")
+    }
+
     func testApplicationConsentShowsMetadataScopesAndDuration() {
         let app = launch(authenticated: true, arguments: ["--ui-test-application-consent"])
         XCTAssertTrue(app.navigationBars["应用授权"].waitForExistence(timeout: 10))

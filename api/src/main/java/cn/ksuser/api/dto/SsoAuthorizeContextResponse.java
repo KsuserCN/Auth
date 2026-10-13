@@ -11,6 +11,8 @@ public class SsoAuthorizeContextResponse {
     private String logoUrl;
     private String redirectUri;
     private List<String> requestedScopes;
+    private String subjectName;
+    private String subjectVerificationType;
     private boolean alreadyAuthorized;
     private String existingGrantMode;
     private LocalDateTime existingGrantExpiresAt;
@@ -21,11 +23,21 @@ public class SsoAuthorizeContextResponse {
     public SsoAuthorizeContextResponse(String clientId, String clientName, String logoUrl, String redirectUri,
                                        List<String> requestedScopes, boolean alreadyAuthorized,
                                        String existingGrantMode, LocalDateTime existingGrantExpiresAt) {
+        this(clientId, clientName, logoUrl, redirectUri, requestedScopes, alreadyAuthorized,
+            existingGrantMode, existingGrantExpiresAt, null, null);
+    }
+
+    public SsoAuthorizeContextResponse(String clientId, String clientName, String logoUrl, String redirectUri,
+                                       List<String> requestedScopes, boolean alreadyAuthorized,
+                                       String existingGrantMode, LocalDateTime existingGrantExpiresAt,
+                                       String subjectName, String subjectVerificationType) {
         this.clientId = clientId;
         this.clientName = clientName;
         this.logoUrl = logoUrl;
         this.redirectUri = redirectUri;
         this.requestedScopes = requestedScopes;
+        this.subjectName = subjectName;
+        this.subjectVerificationType = subjectVerificationType;
         this.alreadyAuthorized = alreadyAuthorized;
         this.existingGrantMode = existingGrantMode == null || existingGrantMode.isBlank()
             ? AuthorizationGrantPolicy.MODE_PERSISTENT
@@ -72,6 +84,11 @@ public class SsoAuthorizeContextResponse {
     public void setRequestedScopes(List<String> requestedScopes) {
         this.requestedScopes = requestedScopes;
     }
+
+    public String getSubjectName() { return subjectName; }
+    public void setSubjectName(String subjectName) { this.subjectName = subjectName; }
+    public String getSubjectVerificationType() { return subjectVerificationType; }
+    public void setSubjectVerificationType(String subjectVerificationType) { this.subjectVerificationType = subjectVerificationType; }
 
     public boolean isAlreadyAuthorized() {
         return alreadyAuthorized;

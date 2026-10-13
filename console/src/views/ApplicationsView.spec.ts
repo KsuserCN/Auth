@@ -57,7 +57,10 @@ const stubs = {
   ElSwitch: true,
   ElRadioGroup: true,
   ElRadio: true,
-  ElTable: true,
+  ElTable: defineComponent({
+    setup(_props, { expose }) { expose({ clearSelection: vi.fn() }) },
+    template: '<div />',
+  }),
   ElTableColumn: true,
 }
 beforeEach(() => {
