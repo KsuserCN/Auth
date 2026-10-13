@@ -1181,10 +1181,10 @@
   "ui.applicationQr.timeLeft": "Time left",
   "ui.applicationQr.refreshShort": "Refresh",
   "ui.applicationQr.waiting": "Ready to scan",
-  "ui.applicationInfo.trustLabels": "Application owner and verification",
+  "ui.applicationInfo.trustLabels": "Application developer and verification",
   "ui.applicationInfo.official": "Official Ksuser app",
-  "ui.applicationInfo.subjectName": "Owner: {name}",
-  "ui.applicationInfo.subjectUnknown": "Owner details unavailable",
+  "ui.applicationInfo.subjectName": "Developer: {name}",
+  "ui.applicationInfo.subjectUnknown": "Developer details unavailable",
   "ui.applicationInfo.personal": "Personally verified",
   "ui.applicationInfo.enterprise": "Organization verified",
   "ui.applicationInfo.admin": "Administrator"

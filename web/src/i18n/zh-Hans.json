@@ -1181,10 +1181,10 @@
   "ui.applicationQr.timeLeft": "剩余时间",
   "ui.applicationQr.refreshShort": "刷新",
   "ui.applicationQr.waiting": "等待扫码",
-  "ui.applicationInfo.trustLabels": "应用主体与认证类型",
+  "ui.applicationInfo.trustLabels": "应用开发者与认证类型",
   "ui.applicationInfo.official": "Ksuser官方应用",
-  "ui.applicationInfo.subjectName": "主体：{name}",
-  "ui.applicationInfo.subjectUnknown": "主体资料未登记",
+  "ui.applicationInfo.subjectName": "开发者：{name}",
+  "ui.applicationInfo.subjectUnknown": "开发者资料未登记",
   "ui.applicationInfo.personal": "个人认证",
   "ui.applicationInfo.enterprise": "企业认证",
   "ui.applicationInfo.admin": "管理员"

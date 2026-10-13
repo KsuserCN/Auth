@@ -814,6 +814,7 @@ onMounted(() => {
 }
 
 .consent-box {
+  box-sizing: border-box;
   position: relative;
   width: 100%;
   max-width: var(--consent-card-width);
@@ -1422,6 +1423,10 @@ onMounted(() => {
   align-self: center;
 }
 
+.consent-actions :deep(.el-button) {
+  margin: 0;
+}
+
 .consent-primary-btn,
 .consent-secondary-btn {
   min-width: 120px;
@@ -1519,25 +1524,29 @@ onMounted(() => {
 
 @media (max-width: 900px) {
   .consent-container {
+    flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
     padding: 0;
   }
 
   .consent-box {
+    flex-shrink: 0;
     flex-direction: column;
-    min-height: 100dvh;
+    min-height: 100%;
     border-radius: 0;
   }
 
   .consent-left {
+    flex: none;
     border-right: none;
     border-bottom: 1px solid var(--el-border-color-light);
     padding: 40px 32px;
   }
 
   .consent-right {
-    padding: 32px;
+    flex: none;
+    padding: 32px 32px max(32px, env(safe-area-inset-bottom));
     justify-content: flex-start;
   }
 
@@ -1551,6 +1560,7 @@ onMounted(() => {
 
   .consent-primary-btn,
   .consent-secondary-btn {
+    flex: none;
     width: 100%;
   }
 
