@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   ssoContext: vi.fn(),
   officialContext: vi.fn(),
   officialApprove: vi.fn(),
+  oauthApprove: vi.fn(),
+  ssoApprove: vi.fn(),
   token: null as string | null,
   account: null as { username: string; email: string } | null,
   desktopStatus: vi.fn(),
@@ -51,11 +53,11 @@ vi.mock('@/utils/authSession', () => ({
 vi.mock('@/api/auth', () => ({ logout: vi.fn() }))
 vi.mock('@/api/oauth2', () => ({
   getOAuth2AuthorizeContext: mocks.oauthContext,
-  approveOAuth2Authorize: vi.fn(),
+  approveOAuth2Authorize: mocks.oauthApprove,
 }))
 vi.mock('@/api/sso', () => ({
   getSSOAuthorizeContext: mocks.ssoContext,
-  approveSSOAuthorize: vi.fn(),
+  approveSSOAuthorize: mocks.ssoApprove,
 }))
 vi.mock('@/api/official', () => ({
   getOfficialAuthorizeContext: mocks.officialContext,
@@ -103,10 +105,16 @@ const render = () => {
         'el-button': { template: '<button><slot /></button>' },
         'el-icon': true,
         'el-avatar': true,
-        'el-radio-button': true,
-        'el-radio-group': true,
-        'el-option': true,
-        'el-select': true,
+        'el-tooltip': { template: '<div><slot /></div>' },
+        'el-option': {
+          props: ['value', 'label'],
+          template: '<option :value="value">{{ label }}</option>',
+        },
+        'el-select': {
+          props: ['modelValue'],
+          emits: ['update:modelValue'],
+          template: `<select :value="modelValue" @change="$emit('update:modelValue', Number($event.target.value))"><slot /></select>`,
+        },
       },
     },
   })
@@ -129,6 +137,66 @@ beforeEach(() => {
   mocks.continue.mockReturnValue(false)
   mocks.cancel.mockResolvedValue(undefined)
   mocks.desktopStatus.mockResolvedValue(null)
+  mocks.oauthApprove.mockImplementation(() => new Promise(() => {}))
+  mocks.ssoApprove.mockImplementation(() => new Promise(() => {}))
+})
+
+describe('compact authorization mode controls', () => {
+  beforeEach(() => {
+    mocks.token = 'passport-session'
+    mocks.account = { username: 'Ksuser', email: 'ksuser@example.com' }
+  })
+
+  it.each([
+    ['/oauth/authorize', 'PERSISTENT'],
+    ['/oauth/authorize', 'ONE_TIME'],
+    ['/oauth/authorize', 'TIME_LIMITED'],
+    ['/sso/authorize', 'PERSISTENT'],
+    ['/sso/authorize', 'ONE_TIME'],
+    ['/sso/authorize', 'TIME_LIMITED'],
+  ])('keeps the grant payload intact for %s with %s', async (path, mode) => {
+    mocks.route.path = path
+    const wrapper = render()
+    await flushPromises()
+    expect((wrapper.get('input[value="PERSISTENT"]').element as HTMLInputElement).checked).toBe(
+      true,
+    )
+    await wrapper.get(`input[value="${mode}"]`).setValue(true)
+    if (mode === 'TIME_LIMITED') {
+      expect(
+        wrapper.findAll('.grant-ttl-select option').map((option) => option.attributes('value')),
+      ).toEqual(['300', '3600', '86400', '604800'])
+      expect((wrapper.get('.grant-ttl-select').element as HTMLSelectElement).value).toBe('3600')
+      await wrapper.get('.grant-ttl-select').setValue('604800')
+    } else {
+      expect(wrapper.find('.grant-ttl-select').exists()).toBe(false)
+    }
+    await wrapper.get('.consent-primary-btn').trigger('click')
+    const approve = path.startsWith('/sso') ? mocks.ssoApprove : mocks.oauthApprove
+    expect(approve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: 'client',
+        state: 'original-state',
+        grantMode: mode,
+        grantTtlSeconds: mode === 'TIME_LIMITED' ? 604800 : undefined,
+      }),
+    )
+  })
+
+  it('keeps existing authorization distinct from the newly selected mode', async () => {
+    mocks.ssoContext.mockResolvedValue({
+      ...context,
+      alreadyAuthorized: true,
+      existingGrantMode: 'TIME_LIMITED',
+      existingGrantExpiresAt: '2099-01-01T00:00:00Z',
+    })
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.get('.grant-policy-existing').text()).toContain('已有：限时')
+    await wrapper.get('input[value="ONE_TIME"]').setValue(true)
+    expect(wrapper.get('.grant-policy-existing').text()).toContain('已有：限时')
+    expect(wrapper.get('.grant-policy-note').text()).toContain('仅本次有效')
+  })
 })
 
 describe('official application consent', () => {

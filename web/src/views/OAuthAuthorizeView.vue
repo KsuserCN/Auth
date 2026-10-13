@@ -119,44 +119,87 @@
             </button>
           </div>
 
-          <div v-if="mode !== 'official'" class="grant-policy-card">
+          <div v-if="mode !== 'official'" class="grant-policy-card grant-policy-card--compact">
             <div class="grant-policy-header">
-              <div class="grant-policy-title">{{ t('ui.oAuthAuthorize.message019') }}</div>
-              <div class="grant-policy-subtitle">
-                {{ t('ui.oAuthAuthorize.message020') }}
+              <div class="grant-policy-heading">
+                <div class="grant-policy-title">{{ t('ui.oAuthAuthorize.grantTitle') }}</div>
+                <el-tooltip placement="top" trigger="click">
+                  <template #content>
+                    <div class="grant-policy-help-content">
+                      <p>{{ t('ui.oAuthAuthorize.message020') }}</p>
+                      <div
+                        v-for="option in grantModeOptions"
+                        :key="option.value"
+                        class="grant-help-option"
+                      >
+                        <strong>{{ option.label }}</strong>
+                        <span>{{ option.description }}</span>
+                      </div>
+                      <p v-if="context.alreadyAuthorized && hasConsentPrompt">
+                        {{ t('ui.oAuthAuthorize.message021') }}
+                      </p>
+                    </div>
+                  </template>
+                  <button
+                    class="grant-policy-help"
+                    type="button"
+                    :aria-label="t('ui.oAuthAuthorize.grantHelp')"
+                  >
+                    <i class="fa-regular fa-circle-question" aria-hidden="true"></i>
+                  </button>
+                </el-tooltip>
+              </div>
+              <div
+                class="grant-policy-options"
+                role="radiogroup"
+                :aria-label="t('ui.oAuthAuthorize.message019')"
+              >
+                <label
+                  v-for="option in grantModeOptions"
+                  :key="option.value"
+                  class="grant-policy-option"
+                  :class="{ 'is-active': grantMode === option.value }"
+                >
+                  <input
+                    v-model="grantMode"
+                    type="radio"
+                    name="authorization-grant-mode"
+                    :value="option.value"
+                    :aria-label="option.label"
+                  />
+                  <span>{{ option.shortLabel }}</span>
+                </label>
               </div>
             </div>
-
-            <div v-if="context.alreadyAuthorized && hasConsentPrompt" class="grant-policy-banner">
-              {{ t('ui.oAuthAuthorize.message021') }}
-            </div>
-
-            <el-radio-group v-model="grantMode" class="grant-policy-options">
-              <el-radio-button
-                v-for="option in grantModeOptions"
-                :key="option.value"
-                :label="option.value"
+            <div class="grant-policy-detail">
+              <div v-if="grantMode === 'TIME_LIMITED'" class="grant-ttl-row">
+                <span class="grant-ttl-label">{{ t('ui.oAuthAuthorize.message022') }}</span>
+                <el-select
+                  v-model="grantTtlSeconds"
+                  class="grant-ttl-select"
+                  size="small"
+                  :aria-label="t('ui.oAuthAuthorize.message022')"
+                >
+                  <el-option
+                    v-for="option in grantTtlOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
+                </el-select>
+              </div>
+              <div v-else class="grant-policy-note" role="status">{{ grantModeDescription }}</div>
+              <el-tooltip
+                v-if="existingGrantSummary"
+                :content="t('ui.oAuthAuthorize.message023') + existingGrantSummary"
+                :trigger="['hover', 'focus']"
+                placement="top"
               >
-                {{ option.label }}
-              </el-radio-button>
-            </el-radio-group>
-
-            <div class="grant-policy-note">{{ grantModeDescription }}</div>
-
-            <div v-if="grantMode === 'TIME_LIMITED'" class="grant-ttl-row">
-              <span class="grant-ttl-label">{{ t('ui.oAuthAuthorize.message022') }}</span>
-              <el-select v-model="grantTtlSeconds" class="grant-ttl-select">
-                <el-option
-                  v-for="option in grantTtlOptions"
-                  :key="option.value"
-                  :label="option.label"
-                  :value="option.value"
-                />
-              </el-select>
-            </div>
-
-            <div v-if="existingGrantSummary" class="grant-policy-footnote">
-              {{ t('ui.oAuthAuthorize.message023') }}{{ existingGrantSummary }}
+                <button class="grant-policy-existing" type="button">
+                  <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+                  {{ t('ui.oAuthAuthorize.grantExisting', { mode: existingGrantLabel }) }}
+                </button>
+              </el-tooltip>
             </div>
           </div>
 
@@ -265,10 +308,7 @@ import {
   type AuthorizationGrantMode,
 } from '@/api/oauth2'
 import { approveSSOAuthorize, getSSOAuthorizeContext } from '@/api/sso'
-import {
-  approveOfficialAuthorize,
-  getOfficialAuthorizeContext,
-} from '@/api/official'
+import { approveOfficialAuthorize, getOfficialAuthorizeContext } from '@/api/official'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { clearAuthSession, getStoredAccessToken } from '@/utils/authSession'
@@ -296,7 +336,9 @@ type NormalizedAuthorizeContext = {
 type GrantModeOption = {
   value: AuthorizationGrantMode
   label: string
+  shortLabel: string
   description: string
+  summary: string
 }
 
 const route = useRoute()
@@ -375,17 +417,23 @@ const grantModeOptions = computed<GrantModeOption[]>(() => [
   {
     value: 'PERSISTENT',
     label: t('ui.oAuthAuthorize.message036'),
+    shortLabel: t('ui.oAuthAuthorize.grantPersistent'),
     description: t('ui.oAuthAuthorize.message037'),
+    summary: t('ui.oAuthAuthorize.grantPersistentNote'),
   },
   {
     value: 'ONE_TIME',
     label: t('ui.oAuthAuthorize.message038'),
+    shortLabel: t('ui.oAuthAuthorize.grantOnce'),
     description: t('ui.oAuthAuthorize.message039'),
+    summary: t('ui.oAuthAuthorize.grantOnceNote'),
   },
   {
     value: 'TIME_LIMITED',
     label: t('ui.oAuthAuthorize.message040'),
+    shortLabel: t('ui.oAuthAuthorize.grantTimed'),
     description: t('ui.oAuthAuthorize.message041'),
+    summary: t('ui.oAuthAuthorize.grantTimedNote'),
   },
 ])
 
@@ -403,9 +451,7 @@ const hasConsentPrompt = computed(() => {
 })
 
 const grantModeDescription = computed(() => {
-  return (
-    grantModeOptions.value.find((option) => option.value === grantMode.value)?.description ?? ''
-  )
+  return grantModeOptions.value.find((option) => option.value === grantMode.value)?.summary ?? ''
 })
 
 const formatGrantDateTime = (value?: string | null) => {
@@ -435,6 +481,12 @@ const existingGrantSummary = computed(() => {
   }
   return t('ui.oAuthAuthorize.message036')
 })
+
+const existingGrantLabel = computed(
+  () =>
+    grantModeOptions.value.find((option) => option.value === context.value?.existingGrantMode)
+      ?.shortLabel ?? t('ui.oAuthAuthorize.grantPersistent'),
+)
 
 const buildDeniedRedirect = () => {
   if (!context.value) {
@@ -1078,8 +1130,64 @@ onMounted(() => {
 
 .grant-policy-header {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.grant-policy-card--compact {
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.grant-policy-heading {
+  display: flex;
+  align-items: center;
   gap: 4px;
+  flex-shrink: 0;
+}
+
+.grant-policy-card--compact .grant-policy-title {
+  font-size: 13px;
+}
+
+.grant-policy-help {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.grant-policy-help:hover {
+  color: var(--passport-link-color);
+  background: var(--el-fill-color-light);
+}
+
+.grant-policy-help-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(300px, calc(100vw - 48px));
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.grant-policy-help-content p {
+  margin: 0;
+}
+
+.grant-help-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .grant-policy-title {
@@ -1088,43 +1196,111 @@ onMounted(() => {
   color: var(--el-text-color-primary);
 }
 
-.grant-policy-subtitle,
-.grant-policy-note,
-.grant-policy-footnote {
+.grant-policy-note {
   color: var(--el-text-color-secondary);
   line-height: 1.7;
   font-size: 13px;
 }
 
-.grant-policy-banner {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(31, 157, 108, 0.08);
-  color: #1f7a56;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
 .grant-policy-options {
   display: flex;
+  flex: 1;
+  min-width: 190px;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--el-fill-color);
+}
+
+.grant-policy-option {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 7px;
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.grant-policy-option input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.grant-policy-option:hover {
+  background: var(--el-fill-color-light);
+}
+
+.grant-policy-option.is-active {
+  background: var(--el-bg-color);
+  color: var(--passport-link-color);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 10%);
+}
+
+.grant-policy-option:has(input:focus-visible),
+.grant-policy-help:focus-visible,
+.grant-policy-existing:focus-visible {
+  outline: 2px solid var(--passport-link-color);
+  outline-offset: 2px;
+}
+
+.grant-policy-detail {
+  display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.grant-policy-card--compact .grant-policy-note {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.grant-policy-existing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  line-height: 20px;
+  cursor: help;
+}
+
+.grant-policy-existing i {
+  color: var(--el-color-success);
 }
 
 .grant-ttl-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .grant-ttl-label {
-  color: var(--el-text-color-primary);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .grant-ttl-select {
-  width: 160px;
+  width: 110px;
 }
 
 .account-picker {
