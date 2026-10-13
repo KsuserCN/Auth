@@ -42,7 +42,7 @@
         >{{ t('ui.applicationQr.instructionsSuffix') }}
       </p>
       <el-alert
-        v-if="error"
+        v-if="error && !image"
         :title="renderMessage(error)"
         type="error"
         :closable="false"
@@ -78,7 +78,7 @@
           />
           <div v-if="state !== 'pending'" class="qr-overlay">
             <el-icon v-if="busy" class="qr-spinner" :size="28"><Loading /></el-icon>
-            <span role="status" aria-live="polite">{{ statusLabel }}</span>
+            <span role="status" aria-live="polite">{{ error ? renderMessage(error) : statusLabel }}</span>
           </div>
         </div>
         <button
@@ -361,8 +361,15 @@ h2 {
   align-items: center;
   justify-content: center;
   gap: 16px;
+  padding: 20px;
+  background: rgb(255 255 255 / 88%);
   color: #475569;
   font-size: 13px;
+}
+.qr-overlay span {
+  max-width: 260px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .qr-spinner {
   color: var(--el-color-primary-dark-2);
