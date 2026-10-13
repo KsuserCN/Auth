@@ -35,9 +35,13 @@
         <el-table-column label="用户" min-width="200">
           <template #default="{ row }">
             <div class="user-cell">
-              <el-avatar :size="36" :src="row.avatarUrl?.trim() || undefined">{{
-                avatarFallback(row.username)
-              }}</el-avatar>
+              <el-avatar
+                class="user-avatar"
+                :size="36"
+                :src="row.avatarUrl?.trim() || undefined"
+              >
+                {{ avatarFallback(row.username) }}
+              </el-avatar>
               <div>
                 <strong>{{ row.username }}</strong>
                 <div class="muted">{{ row.email }}</div>
@@ -293,6 +297,13 @@ onMounted(load)
   align-items: center;
   gap: 12px;
   padding: 6px 0;
+}
+.user-avatar {
+  color: var(--console-link);
+  background-color: var(--el-color-primary-light-9);
+  border: 1px solid var(--el-color-primary-light-8);
+  font-weight: 600;
+  flex-shrink: 0;
 }
 .user-cell .muted,
 .user-cell .mono {
