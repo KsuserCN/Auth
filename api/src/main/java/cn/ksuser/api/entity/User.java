@@ -45,10 +45,11 @@ public class User {
     @Column(name = "bio", length = 200)
     private String bio;
 
-    @Column(name = "verification_type", length = 20, nullable = false)
+    // Console uses an explicit query; stale profile saves must not revert administrator changes.
+    @Column(name = "verification_type", length = 20, nullable = false, updatable = false)
     private String verificationType = "none";
 
-    // Maintained by administrators in SQL. Ordinary entity saves must never overwrite it.
+    // Maintained by Console's explicit administrator query or SQL; ordinary saves never overwrite it.
     @Column(name = "verification_entity_name", length = 200, insertable = false, updatable = false)
     private String verificationEntityName;
 

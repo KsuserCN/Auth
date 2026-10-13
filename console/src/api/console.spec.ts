@@ -47,6 +47,19 @@ beforeEach(async () => {
   mocks.get.mockResolvedValue(result({ token: 'csrf-token' }))
 })
 describe('console API boundary', () => {
+  it('uses an encoded user path for certification updates and owned application reads', async () => {
+    const { consoleApi } = await import('./console')
+    mocks.put.mockResolvedValue(result({ uuid: 'user/path' }))
+    mocks.get.mockResolvedValue(result({ user: { uuid: 'user/path' }, applications: [] }))
+    const input = {
+      developerVerificationType: 'enterprise' as const,
+      verificationEntityName: '认证企业',
+    }
+    await consoleApi.setVerification('user/path', input)
+    await consoleApi.userApplications('user/path')
+    expect(mocks.put).toHaveBeenCalledWith('/console/users/user%2Fpath/verification', input)
+    expect(mocks.get).toHaveBeenCalledWith('/console/users/user%2Fpath/applications')
+  })
   it('uses cookies and places a server CSRF value on mutating requests without adding a bearer token', async () => {
     await import('./console')
     expect(mocks.create).toHaveBeenCalledWith(
@@ -103,9 +116,16 @@ describe('console API boundary', () => {
     await consoleApi.cancelQrLogin()
     await consoleApi.cancelQrLogin('challenge')
     expect(mocks.post).toHaveBeenNthCalledWith(1, '/console/auth/qr/init')
-    expect(mocks.get).toHaveBeenCalledWith('/console/auth/qr/status', { params: { challengeId: 'challenge', pollToken: 'poll-secret' } })
-    expect(mocks.post).toHaveBeenNthCalledWith(2, '/console/auth/qr/exchange', { challengeId: 'challenge', pollToken: 'poll-secret' })
+    expect(mocks.get).toHaveBeenCalledWith('/console/auth/qr/status', {
+      params: { challengeId: 'challenge', pollToken: 'poll-secret' },
+    })
+    expect(mocks.post).toHaveBeenNthCalledWith(2, '/console/auth/qr/exchange', {
+      challengeId: 'challenge',
+      pollToken: 'poll-secret',
+    })
     expect(mocks.del).toHaveBeenCalledWith('/console/auth/qr')
-    expect(mocks.del).toHaveBeenCalledWith('/console/auth/qr', { params: { challengeId: 'challenge' } })
+    expect(mocks.del).toHaveBeenCalledWith('/console/auth/qr', {
+      params: { challengeId: 'challenge' },
+    })
   })
 })

@@ -71,11 +71,21 @@ public class ConsoleController {
     @GetMapping("/users")
     public ApiResponse<ConsoleAdminService.PageView<ConsoleAdminService.UserView>> users(@RequestParam(defaultValue="0") int page,
         @RequestParam(defaultValue="20") int size,@RequestParam(required=false) String search,@RequestParam(required=false) String role,
-        @RequestParam(defaultValue="createdAt") String sort,@RequestParam(defaultValue="desc") String direction) {
-        return success(admin.listUsers(page,size,search,role,sort,direction));
+        @RequestParam(defaultValue="createdAt") String sort,@RequestParam(defaultValue="desc") String direction,
+        @RequestParam(required=false) String verification) {
+        return success(admin.listUsers(page,size,search,role,sort,direction,verification));
     }
     @GetMapping("/users/{uuid}")
     public ApiResponse<ConsoleAdminService.UserView> user(@PathVariable String uuid) { return success(admin.user(uuid)); }
+    @PutMapping("/users/{uuid}/verification")
+    public ApiResponse<ConsoleAdminService.UserView> verification(@PathVariable String uuid,
+        @RequestBody ConsoleAdminService.VerificationRequest body,Authentication auth,HttpServletRequest request) {
+        return success(admin.changeVerification(principal(auth),uuid,body,clientIp(request)));
+    }
+    @GetMapping("/users/{uuid}/applications")
+    public ApiResponse<ConsoleAdminService.UserApplicationsView> userApplications(@PathVariable String uuid) {
+        return success(admin.userApplications(uuid));
+    }
     @PutMapping("/users/{uuid}/role")
     public ApiResponse<ConsoleAdminService.UserView> role(@PathVariable String uuid,@RequestBody RoleRequest body,Authentication auth,HttpServletRequest request) {
         return success(admin.changeRole(principal(auth),uuid,body.systemRole(),clientIp(request)));

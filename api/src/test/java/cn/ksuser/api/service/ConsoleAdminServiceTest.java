@@ -30,7 +30,8 @@ class ConsoleAdminServiceTest {
     @BeforeEach
     void setup() {
         ObjectMapper json=new ObjectMapper().findAndRegisterModules();
-        service=new ConsoleAdminService(users,apps,audits,sessions,passwords,json);
+        service=new ConsoleAdminService(users,apps,audits,sessions,passwords,json,
+            mock(cn.ksuser.api.repository.Oauth2ApplicationRepository.class), mock(cn.ksuser.api.repository.OidcClientRepository.class));
         when(sessions.callbackUri()).thenReturn("https://console.ksuser.cn/auth/callback");
     }
 
@@ -97,6 +98,8 @@ class ConsoleAdminServiceTest {
         doThrow(new Oauth2Exception(org.springframework.http.HttpStatus.FORBIDDEN,"access_denied",cn.ksuser.api.result.ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED))
             .when(sessions).requireFresh(actor);
         assertThrows(Oauth2Exception.class,()->service.changeRole(actor,"user-uuid","ADMIN","127.0.0.1"));
+        assertThrows(Oauth2Exception.class,()->service.changeVerification(actor,"user-uuid",
+            new ConsoleAdminService.VerificationRequest("personal", "已核验的姓名"), "127.0.0.1"));
         assertThrows(Oauth2Exception.class,()->service.createApplication(actor,request(true,List.of("https://test.example/callback"),List.of("openid")),"127.0.0.1"));
         verifyNoInteractions(users,apps,audits);
     }

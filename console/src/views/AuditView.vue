@@ -32,15 +32,16 @@
           }}</template></el-table-column
         ><el-table-column label="操作" prop="action" min-width="190" sortable="custom"
           ><template #default="{ row }">{{ actionLabel(row.action) }}</template></el-table-column
-        ><el-table-column
-          label="操作者"
-          prop="actorUuid"
-          min-width="270"
-          sortable="custom"
+        ><el-table-column label="操作者" prop="actorUuid" min-width="270" sortable="custom"
           ><template #default="{ row }"
             ><span class="mono">{{ row.actorUuid }}</span></template
           ></el-table-column
-        ><el-table-column prop="target" label="目标" min-width="250" sortable="custom" /><el-table-column
+        ><el-table-column
+          prop="target"
+          label="目标"
+          min-width="250"
+          sortable="custom"
+        /><el-table-column
           prop="ipAddress"
           label="IP 地址"
           width="140"
@@ -66,7 +67,9 @@
       @update:model-value="selected = null"
       ><template v-if="selected"
         ><el-descriptions :column="1" border
-          ><el-descriptions-item label="操作">{{ actionLabel(selected.action) }}</el-descriptions-item
+          ><el-descriptions-item label="操作">{{
+            actionLabel(selected.action)
+          }}</el-descriptions-item
           ><el-descriptions-item label="操作者"
             ><span class="mono">{{ selected.actorUuid }}</span></el-descriptions-item
           ><el-descriptions-item label="目标">{{ selected.target }}</el-descriptions-item
@@ -97,14 +100,15 @@ const direction = ref<'asc' | 'desc'>('desc')
 let loadGeneration = 0
 const actionLabel = (action: string) =>
   (
-    {
+    ({
       'user.role.update': '更新用户角色',
+      'user.verification.update': '更新用户认证',
       'user.delete': '删除用户账号',
       'official.application.create': '创建官方应用',
       'official.application.update': '更新官方应用',
       'official.application.delete': '删除官方应用',
       'official.application.secret.rotate': '轮换应用密钥',
-    } as Record<string, string>
+    }) as Record<string, string>
   )[action] ?? action
 const details = (raw: string) => {
   try {

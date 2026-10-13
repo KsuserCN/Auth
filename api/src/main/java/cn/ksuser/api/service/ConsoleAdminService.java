@@ -2,11 +2,15 @@ package cn.ksuser.api.service;
 
 import cn.ksuser.api.entity.ConsoleAuditLog;
 import cn.ksuser.api.entity.OfficialApplication;
+import cn.ksuser.api.entity.Oauth2Application;
+import cn.ksuser.api.entity.OidcClient;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.ConsoleAuditLogRepository;
 import cn.ksuser.api.repository.ConsoleUserRepository;
 import cn.ksuser.api.repository.OfficialApplicationRepository;
+import cn.ksuser.api.repository.Oauth2ApplicationRepository;
+import cn.ksuser.api.repository.OidcClientRepository;
 import cn.ksuser.api.result.ApiResultCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,21 +38,27 @@ public class ConsoleAdminService {
     private final ConsoleSessionService sessions;
     private final PasswordEncoder passwords;
     private final ObjectMapper json;
+    private final Oauth2ApplicationRepository oauthApplications;
+    private final OidcClientRepository ssoApplications;
     private UserService userService;
     public ConsoleAdminService(ConsoleUserRepository users, OfficialApplicationRepository applications,
                                ConsoleAuditLogRepository audits, ConsoleSessionService sessions,
-                               PasswordEncoder passwords, ObjectMapper json) {
+                               PasswordEncoder passwords, ObjectMapper json,
+                               Oauth2ApplicationRepository oauthApplications, OidcClientRepository ssoApplications) {
         this.users=users; this.applications=applications; this.audits=audits;
         this.sessions=sessions; this.passwords=passwords; this.json=json;
+        this.oauthApplications=oauthApplications; this.ssoApplications=ssoApplications;
     }
 
     @Autowired
     void setUserService(UserService userService) { this.userService=userService; }
 
     @Transactional(readOnly=true)
-    public PageView<UserView> listUsers(int page, int size, String search, String role, String sort, String direction) {
+    public PageView<UserView> listUsers(int page, int size, String search, String role, String sort, String direction, String verification) {
         if (search != null && search.length() > 255) throw invalid();
         if (role != null && !role.isBlank() && !List.of("USER","ADMIN","SUPER_ADMIN").contains(role)) throw invalid();
+        if (verification != null && !verification.isBlank()
+            && !List.of("none", "personal", "enterprise", "admin", "verified").contains(verification)) throw invalid();
         String sortProperty = switch (sort == null ? "" : sort) {
             case "username" -> "username";
             case "uuid" -> "uuid";
@@ -70,6 +80,16 @@ public class ConsoleAdminService {
                     builder.like(root.get("username"), pattern, '\\'), builder.like(root.get("email"), pattern, '\\')));
             }
             if (role != null && !role.isBlank()) predicates.add(builder.equal(root.get("systemRole"), role));
+            if (verification != null && !verification.isBlank()) {
+                var admin = root.get("systemRole").in("ADMIN", "SUPER_ADMIN");
+                if ("verified".equals(verification)) {
+                    predicates.add(builder.or(root.get("verificationType").in("personal", "enterprise"), admin));
+                } else if ("admin".equals(verification)) {
+                    predicates.add(admin);
+                } else {
+                    predicates.add(builder.equal(root.get("verificationType"), verification));
+                }
+            }
             return builder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
         if (page < 0 || size < 1 || size > 100) throw invalid();
@@ -80,6 +100,38 @@ public class ConsoleAdminService {
     }
     @Transactional(readOnly=true)
     public UserView user(String uuid) { return UserView.of(users.findByUuid(uuid).orElseThrow(ConsoleAdminService::userMissing)); }
+
+    @Transactional
+    public UserView changeVerification(ConsoleSessionService.ConsolePrincipal actor, String uuid,
+                                       VerificationRequest request, String ip) {
+        sessions.requireFresh(actor);
+        if (request == null || !List.of("none", "personal", "enterprise").contains(
+            request.developerVerificationType() == null ? "" : request.developerVerificationType())) throw invalidVerification();
+        User target = users.findByUuidForUpdate(uuid).orElseThrow(ConsoleAdminService::userMissing);
+        String name = request.verificationEntityName() == null ? "" : request.verificationEntityName().trim();
+        boolean needsName = target.isSystemAdmin() || !"none".equals(request.developerVerificationType());
+        if (name.length() > 200 || (needsName && name.isBlank())) throw invalidVerification();
+        VerificationRequest previous = new VerificationRequest(target.getDeveloperVerificationType(), target.getVerificationEntityName());
+        if (users.updateVerification(target.getId(), request.developerVerificationType(), needsName ? name : null,
+            LocalDateTime.now()) != 1) throw userMissing();
+        UserView updated = user(uuid);
+        audit(actor, uuid, "user.verification.update", Map.of("previous", previous,
+            "verification", new VerificationRequest(updated.developerVerificationType(), updated.verificationEntityName())), ip);
+        return updated;
+    }
+
+    @Transactional(readOnly=true)
+    public UserApplicationsView userApplications(String uuid) {
+        User owner = users.findByUuid(uuid).orElseThrow(ConsoleAdminService::userMissing);
+        List<OwnedApplicationView> apps = java.util.stream.Stream.concat(
+            oauthApplications.findAllByOwnerUserIdOrderByCreatedAtDesc(owner.getId()).stream().map(OwnedApplicationView::of),
+            ssoApplications.findAllByOwnerUserIdOrderByCreatedAtDesc(owner.getId()).stream().map(OwnedApplicationView::of))
+            .sorted(java.util.Comparator.comparing(OwnedApplicationView::createdAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
+                .thenComparing(OwnedApplicationView::protocol).thenComparing(OwnedApplicationView::clientId))
+            .toList();
+        return new UserApplicationsView(UserView.of(owner), apps);
+    }
 
     @Transactional
     public UserView changeRole(ConsoleSessionService.ConsolePrincipal actor, String uuid, String role, String ip) {
@@ -237,6 +289,7 @@ public class ConsoleAdminService {
         catch (com.fasterxml.jackson.core.JsonProcessingException ex) { throw new IllegalStateException("Audit serialization failed",ex); }
     }
     private static Oauth2Exception invalid() { return new Oauth2Exception(HttpStatus.BAD_REQUEST,"invalid_request",ApiResultCode.CONSOLE_APPLICATION_INVALID); }
+    private static Oauth2Exception invalidVerification() { return new Oauth2Exception(HttpStatus.BAD_REQUEST,"invalid_request",ApiResultCode.BAD_REQUEST); }
     private static Oauth2Exception denied() { return new Oauth2Exception(HttpStatus.FORBIDDEN,"access_denied",ApiResultCode.CONSOLE_ACCESS_DENIED); }
     private static Oauth2Exception conflict() { return new Oauth2Exception(HttpStatus.CONFLICT,"invalid_request",ApiResultCode.REQUEST_CONFLICT); }
     private static Oauth2Exception userMissing() { return new Oauth2Exception(HttpStatus.NOT_FOUND,"invalid_request",ApiResultCode.CONSOLE_USER_NOT_FOUND); }
@@ -244,6 +297,23 @@ public class ConsoleAdminService {
     public record PageView<T>(List<T> items,long total,int page,int size) {}
     public record ApplicationRequest(String clientId,String clientName,String logoUrl,String clientType,List<String> redirectUris,List<String> scopes,Boolean isActive) {}
     public record ApplicationSecret(ApplicationView application,String clientSecret) {}
+    public record VerificationRequest(String developerVerificationType, String verificationEntityName) {}
+    public record UserApplicationsView(UserView user, List<OwnedApplicationView> applications) {}
+    public record OwnedApplicationView(String protocol, String clientId, String clientName, String logoUrl,
+                                       List<String> redirectUris, List<String> scopes, String contactInfo,
+                                       Boolean isActive, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        public static OwnedApplicationView of(Oauth2Application app) {
+            return new OwnedApplicationView("oauth2", app.getAppId(), app.getAppName(), app.getLogoUrl(),
+                OfficialAuthorizationService.parseRedirectUris(app.getRedirectUri()), OfficialAuthorizationService.parseScopes(app.getScopes()), app.getContactInfo(),
+                app.getIsActive(), app.getCreatedAt(), app.getUpdatedAt());
+        }
+        public static OwnedApplicationView of(OidcClient app) {
+            return new OwnedApplicationView("sso", app.getClientId(), app.getClientName(), app.getLogoUrl(),
+                OfficialAuthorizationService.parseRedirectUris(app.getRedirectUris()),
+                OfficialAuthorizationService.parseScopes(app.getScopes()), null,
+                app.getIsActive(), app.getCreatedAt(), app.getUpdatedAt());
+        }
+    }
     public record ApplicationView(String clientId,String clientName,String logoUrl,String clientType,List<String> redirectUris,List<String> scopes,
                                   Boolean isActive,Boolean reserved,LocalDateTime createdAt,LocalDateTime updatedAt) {
         public static ApplicationView of(OfficialApplication app) { return new ApplicationView(app.getClientId(),app.getClientName(),app.getLogoUrl(),app.getClientType(),
@@ -251,8 +321,8 @@ public class ConsoleAdminService {
     }
     /** Deliberate field allowlist: credentials, session verifiers and MFA/Passkey material never enter Console responses. */
     public record UserView(String uuid,String username,String email,String avatarUrl,String realName,String gender,LocalDate birthDate,String region,String bio,
-                           String developerVerificationType,String systemRole,LocalDateTime createdAt,LocalDateTime updatedAt) {
+                           String developerVerificationType,String verificationEntityName,String systemRole,LocalDateTime createdAt,LocalDateTime updatedAt) {
         public static UserView of(User user) { return new UserView(user.getUuid(),user.getUsername(),user.getEmail(),user.getAvatarUrl(),user.getRealName(),user.getGender(),
-            user.getBirthDate(),user.getRegion(),user.getBio(),user.getDeveloperVerificationType(),user.getSystemRole(),user.getCreatedAt(),user.getUpdatedAt()); }
+            user.getBirthDate(),user.getRegion(),user.getBio(),user.getDeveloperVerificationType(),user.getVerificationEntityName(),user.getSystemRole(),user.getCreatedAt(),user.getUpdatedAt()); }
     }
 }

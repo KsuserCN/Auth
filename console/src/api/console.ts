@@ -18,6 +18,7 @@ export class ConsoleApiError extends Error {
 }
 
 export type SystemRole = 'USER' | 'ADMIN' | 'SUPER_ADMIN'
+export type DeveloperVerificationType = 'none' | 'personal' | 'enterprise'
 export interface SessionUser {
   uuid: string
   username: string
@@ -71,7 +72,8 @@ export interface ConsoleUser extends SessionUser {
   birthDate?: string
   region?: string
   bio?: string
-  developerVerificationType: string
+  developerVerificationType: DeveloperVerificationType
+  verificationEntityName?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -80,6 +82,26 @@ export interface PageResult<T> {
   total: number
   page: number
   size: number
+}
+export interface VerificationInput {
+  developerVerificationType: DeveloperVerificationType
+  verificationEntityName: string | null
+}
+export interface OwnedApplication {
+  protocol: 'oauth2' | 'sso'
+  clientId: string
+  clientName: string
+  logoUrl?: string | null
+  redirectUris: string[]
+  scopes: string[]
+  contactInfo?: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+export interface UserApplications {
+  user: ConsoleUser
+  applications: OwnedApplication[]
 }
 export type OfficialScope =
   | 'openid'
@@ -224,7 +246,10 @@ export const consoleApi = {
   },
   async exchangeQrLogin(challengeId: string, pollToken: string): Promise<ConsoleSession> {
     return (
-      await request.post<ApiResult<ConsoleSession>>('/console/auth/qr/exchange', { challengeId, pollToken })
+      await request.post<ApiResult<ConsoleSession>>('/console/auth/qr/exchange', {
+        challengeId,
+        pollToken,
+      })
     ).data.data
   },
   async cancelQrLogin(challengeId?: string): Promise<void> {
@@ -236,9 +261,8 @@ export const consoleApi = {
     csrfToken = ''
   },
   async verification(): Promise<ConsoleVerificationStart> {
-    return (
-      await request.post<ApiResult<ConsoleVerificationStart>>('/console/verification/start')
-    ).data.data
+    return (await request.post<ApiResult<ConsoleVerificationStart>>('/console/verification/start'))
+      .data.data
   },
   async verificationExchange(ticket: string, state: string): Promise<ConsoleSession> {
     return (
@@ -263,7 +287,10 @@ export const consoleApi = {
       })
     ).data.data
   },
-  async verifyTotp(requestId: string, input: { code?: string; recoveryCode?: string }): Promise<ConsoleSession> {
+  async verifyTotp(
+    requestId: string,
+    input: { code?: string; recoveryCode?: string },
+  ): Promise<ConsoleSession> {
     return (
       await request.post<ApiResult<ConsoleSession>>('/console/verification/totp', {
         requestId,
@@ -273,9 +300,12 @@ export const consoleApi = {
   },
   async passkeyVerificationOptions(requestId: string): Promise<ConsolePasskeyOptions> {
     return (
-      await request.post<ApiResult<ConsolePasskeyOptions>>('/console/verification/passkey/options', {
-        requestId,
-      })
+      await request.post<ApiResult<ConsolePasskeyOptions>>(
+        '/console/verification/passkey/options',
+        {
+          requestId,
+        },
+      )
     ).data.data
   },
   async verifyPasskey(
@@ -293,7 +323,9 @@ export const consoleApi = {
   },
   async initQrVerification(requestId: string): Promise<ConsoleQrChallenge> {
     return (
-      await request.post<ApiResult<ConsoleQrChallenge>>('/console/verification/qr/init', { requestId })
+      await request.post<ApiResult<ConsoleQrChallenge>>('/console/verification/qr/init', {
+        requestId,
+      })
     ).data.data
   },
   async pollQrVerification(
@@ -312,6 +344,7 @@ export const consoleApi = {
     size: number
     search?: string
     role?: string
+    verification?: DeveloperVerificationType | 'admin' | 'verified' | ''
     sort?: 'username' | 'uuid' | 'systemRole' | 'createdAt'
     direction?: 'asc' | 'desc'
   }): Promise<PageResult<ConsoleUser>> {
@@ -330,6 +363,21 @@ export const consoleApi = {
       await request.put<ApiResult<ConsoleUser>>(`/console/users/${encodeURIComponent(uuid)}/role`, {
         systemRole,
       })
+    ).data.data
+  },
+  async setVerification(uuid: string, input: VerificationInput): Promise<ConsoleUser> {
+    return (
+      await request.put<ApiResult<ConsoleUser>>(
+        `/console/users/${encodeURIComponent(uuid)}/verification`,
+        input,
+      )
+    ).data.data
+  },
+  async userApplications(uuid: string): Promise<UserApplications> {
+    return (
+      await request.get<ApiResult<UserApplications>>(
+        `/console/users/${encodeURIComponent(uuid)}/applications`,
+      )
     ).data.data
   },
   async deleteUser(uuid: string): Promise<void> {

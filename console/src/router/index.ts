@@ -27,6 +27,7 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/users' },
         { path: 'users', component: () => import('@/views/UsersView.vue') },
+        { path: 'user-applications', component: () => import('@/views/UserApplicationsView.vue') },
         {
           path: 'applications',
           component: () => import('@/views/ApplicationsView.vue'),

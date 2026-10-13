@@ -127,6 +127,7 @@ class SecurityConfigConsoleTest {
             new WriteRoute(HttpMethod.POST,"/console/verification/start"),
             new WriteRoute(HttpMethod.POST,"/console/verification/exchange"),
             new WriteRoute(HttpMethod.PUT,"/console/users/user-uuid/role"),
+            new WriteRoute(HttpMethod.PUT,"/console/users/user-uuid/verification"),
             new WriteRoute(HttpMethod.POST,"/console/official-applications"),
             new WriteRoute(HttpMethod.PUT,"/console/official-applications/client"),
             new WriteRoute(HttpMethod.DELETE,"/console/official-applications/client"),
@@ -220,7 +221,7 @@ class SecurityConfigConsoleTest {
         @RequestMapping(value={"/official/qr/init","/official/qr/status","/official/qr/exchange","/official/qr/cancel","/auth/mobile-authorization/qr/create","/auth/mobile-authorization/qr/status","/auth/mobile-authorization/consume","/auth/mobile-authorization/cancel"},method={RequestMethod.GET,RequestMethod.POST})
         Map<String,Object> officialQr() { return Map.of("protocolReached",true); }
         @RequestMapping(value={"/console/session","/console/verification/start","/console/verification/exchange",
-            "/console/users/{uuid}/role","/console/official-applications","/console/official-applications/{clientId}",
+            "/console/users/{uuid}/role","/console/users/{uuid}/verification","/console/official-applications","/console/official-applications/{clientId}",
             "/console/official-applications/{clientId}/rotate-secret"},method={RequestMethod.POST,RequestMethod.PUT,RequestMethod.DELETE})
         Map<String,Object> write() { return Map.of("accepted",true); }
         @GetMapping({"/auth/test-profile","/auth/console-verification/context"})

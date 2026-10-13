@@ -11,6 +11,8 @@
           ><el-icon><User /></el-icon>用户管理</RouterLink
         ><RouterLink to="/applications"
           ><el-icon><Grid /></el-icon>官方应用</RouterLink
+        ><RouterLink to="/user-applications"
+          ><el-icon><Collection /></el-icon>认证用户应用</RouterLink
         ><RouterLink to="/audit"
           ><el-icon><Document /></el-icon>操作记录</RouterLink
         >
@@ -56,7 +58,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Grid, Document, Monitor, Moon, Sunny } from '@element-plus/icons-vue'
+import { User, Grid, Collection, Document, Monitor, Moon, Sunny } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { consoleApi } from '@/api/console'
 import { avatarFallback } from '@/utils/avatar'
@@ -236,6 +238,7 @@ main {
   }
   nav {
     flex-direction: row;
+    flex-wrap: wrap;
     gap: 4px;
   }
   nav a {

@@ -11,5 +11,6 @@ import java.util.Optional;
 public interface OidcClientRepository extends JpaRepository<OidcClient, Long> {
     Optional<OidcClient> findByClientId(String clientId);
     List<OidcClient> findAllByOrderByCreatedAtDesc();
+    List<OidcClient> findAllByOwnerUserIdOrderByCreatedAtDesc(Long ownerUserId);
     boolean existsByClientId(String clientId);
 }

@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <h1>用户管理</h1>
-        <p>查询用户资料，管理角色或手动删除账号。</p>
+        <p>查询用户资料，设置个人／企业认证、任免普通管理员或删除账号。</p>
       </div>
       <el-button @click="load">刷新</el-button>
     </div>
@@ -16,7 +16,7 @@
           aria-label="搜索用户"
         /><el-select v-model="role" placeholder="全部角色" clearable aria-label="角色筛选"
           ><el-option label="普通用户" value="USER" /><el-option
-            label="管理员"
+            label="普通管理员"
             value="ADMIN" /><el-option label="超级管理员" value="SUPER_ADMIN" /></el-select
         ><el-button native-type="submit" type="primary">查询</el-button
         ><span class="muted">共 {{ total }} 位用户</span>
@@ -27,13 +27,17 @@
           size="small"
           :disabled="assignableUsers.length === 0 || bulkRoleSaving"
           @click="requestBulkRole('ADMIN')"
-          >批量任命管理员<span v-if="assignableUsers.length">（{{ assignableUsers.length }}）</span></el-button
+          >批量任命管理员<span v-if="assignableUsers.length"
+            >（{{ assignableUsers.length }}）</span
+          ></el-button
         >
         <el-button
           size="small"
           :disabled="revokableUsers.length === 0 || bulkRoleSaving"
           @click="requestBulkRole('USER')"
-          >批量撤销管理员<span v-if="revokableUsers.length">（{{ revokableUsers.length }}）</span></el-button
+          >批量撤销管理员<span v-if="revokableUsers.length"
+            >（{{ revokableUsers.length }}）</span
+          ></el-button
         >
         <el-button
           size="small"
@@ -41,7 +45,9 @@
           plain
           :disabled="deletableUsers.length === 0 || bulkDeleting"
           @click="requestBulkDelete"
-          >批量删除<span v-if="deletableUsers.length">（{{ deletableUsers.length }}）</span></el-button
+          >批量删除<span v-if="deletableUsers.length"
+            >（{{ deletableUsers.length }}）</span
+          ></el-button
         >
         <el-button size="small" text @click="clearSelection">取消选择</el-button>
       </div>
@@ -62,12 +68,9 @@
         <el-table-column label="用户" prop="username" min-width="180" sortable="custom"
           ><template #default="{ row }"
             ><div class="user-cell">
-              <el-avatar
-                class="user-avatar"
-                :size="36"
-                :src="row.avatarUrl?.trim() || undefined"
-                >{{ avatarFallback(row.username) }}</el-avatar
-              >
+              <el-avatar class="user-avatar" :size="36" :src="row.avatarUrl?.trim() || undefined">{{
+                avatarFallback(row.username)
+              }}</el-avatar>
               <div>
                 <strong>{{ row.username }}</strong>
                 <div class="muted">{{ row.email }}</div>
@@ -95,18 +98,38 @@
             ></template
           ></el-table-column
         >
+        <el-table-column label="开发者认证" min-width="180">
+          <template #default="{ row }">
+            <el-tag
+              :type="row.developerVerificationType === 'none' ? 'info' : 'success'"
+              effect="plain"
+            >
+              {{ verificationLabel(row.developerVerificationType) }}
+            </el-tag>
+            <div class="muted">
+              {{ row.verificationEntityName || (isVerifiedUser(row) ? '主体资料未登记' : '—') }}
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="注册时间" prop="createdAt" min-width="160" sortable="custom"
           ><template #default="{ row }">{{ date(row.createdAt) }}</template></el-table-column
         >
-        <el-table-column label="操作" width="285" fixed="right"
+        <el-table-column label="操作" width="390" fixed="right"
           ><template #default="{ row }"
             ><el-button link type="primary" @click="showDetail(row.uuid)">详情</el-button
+            ><el-button link type="primary" @click="requestVerification(row)">认证设置</el-button
+            ><el-button
+              v-if="isVerifiedUser(row)"
+              link
+              type="primary"
+              @click="showApplications(row.uuid)"
+              >应用</el-button
             ><el-button
               v-if="row.systemRole !== 'SUPER_ADMIN'"
               link
               :type="row.systemRole === 'ADMIN' ? 'danger' : 'primary'"
               @click="requestRole(row)"
-              >{{ row.systemRole === 'ADMIN' ? '撤销管理员' : '任命管理员' }}</el-button
+              >{{ row.systemRole === 'ADMIN' ? '撤销管理员' : '任命普通管理员' }}</el-button
             ><el-button
               v-if="row.systemRole !== 'SUPER_ADMIN'"
               link
@@ -148,9 +171,73 @@
               detailValue(field.key)
             }}</span></el-descriptions-item
           ></el-descriptions
-        ></template
-      >
+        >
+        <el-button class="detail-actions" type="primary" @click="requestVerification(detail)"
+          >认证设置</el-button
+        >
+        <el-button v-if="isVerifiedUser(detail)" @click="showApplications(detail.uuid)"
+          >查看创建的应用</el-button
+        >
+      </template>
     </el-drawer>
+    <el-dialog
+      v-model="certificationVisible"
+      title="认证设置"
+      width="500px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!savingCertification"
+      :show-close="!savingCertification"
+    >
+      <template v-if="certificationUser">
+        <p>
+          设置 <strong>{{ certificationUser.username }}</strong
+          >（{{ certificationUser.email }}）的开发者认证。
+        </p>
+        <el-form label-position="top" @submit.prevent="saveCertification">
+          <el-form-item label="开发者认证">
+            <el-select
+              v-model="certificationType"
+              :disabled="savingCertification"
+              aria-label="开发者认证类型"
+            >
+              <el-option label="未认证" value="none" />
+              <el-option label="个人认证" value="personal" />
+              <el-option label="企业认证" value="enterprise" />
+            </el-select>
+          </el-form-item>
+          <el-form-item
+            v-if="certificationNeedsName"
+            :label="certificationType === 'enterprise' ? '已核验的企业名称' : '已核验的真实姓名'"
+            required
+          >
+            <el-input
+              v-model="certificationName"
+              :disabled="savingCertification"
+              maxlength="200"
+              show-word-limit
+              aria-label="认证主体名称"
+            />
+          </el-form-item>
+        </el-form>
+        <p class="muted">
+          请填写已核验的主体名称，该名称会展示在应用授权页。系统角色单独通过任免管理员操作设置。
+        </p>
+        <el-alert
+          v-if="certificationError"
+          :title="certificationError"
+          type="error"
+          :closable="false"
+        />
+      </template>
+      <template #footer>
+        <el-button :disabled="savingCertification" @click="certificationVisible = false"
+          >取消</el-button
+        >
+        <el-button type="primary" :loading="savingCertification" @click="saveCertification"
+          >保存认证</el-button
+        >
+      </template>
+    </el-dialog>
     <el-dialog
       v-model="roleVisible"
       :title="pendingRole === 'ADMIN' ? '任命管理员' : '撤销管理员'"
@@ -166,7 +253,8 @@
         <p>将以下 {{ roleTargets.length }} 位用户设为{{ roleLabel(pendingRole) }}：</p>
         <ul>
           <li v-for="user in roleTargets" :key="user.uuid">
-            <strong>{{ user.username }}</strong><span class="muted">（{{ user.email }}）</span>
+            <strong>{{ user.username }}</strong
+            ><span class="muted">（{{ user.email }}）</span>
           </li>
         </ul>
       </div>
@@ -179,7 +267,8 @@
         type="success"
         :closable="false"
       /><template #footer
-        ><el-button :disabled="savingRole || bulkRoleSaving" @click="roleVisible = false">取消</el-button
+        ><el-button :disabled="savingRole || bulkRoleSaving" @click="roleVisible = false"
+          >取消</el-button
         ><el-button type="primary" :loading="savingRole || bulkRoleSaving" @click="saveRole"
           >确认{{ pendingRole === 'ADMIN' ? '任命' : '撤销' }}</el-button
         ></template
@@ -197,7 +286,9 @@
           即将永久删除 <strong>{{ deleteTarget.username }}</strong
           >（{{ deleteTarget.email }}）及其账号资料、登录凭证、会话和授权。此操作无法撤销。
         </p>
-        <p class="muted">输入用户名 <strong>{{ deleteTarget.username }}</strong> 以确认删除。</p>
+        <p class="muted">
+          输入用户名 <strong>{{ deleteTarget.username }}</strong> 以确认删除。
+        </p>
         <el-input
           v-model="deleteConfirmation"
           :disabled="deleting"
@@ -233,11 +324,13 @@
       :show-close="!bulkDeleting"
       @closed="clearBulkDeleteDialog"
       ><p>
-        即将永久删除以下 {{ bulkDeleteTargets.length }} 位用户及其账号资料、登录凭证、会话和授权。此操作无法撤销。
+        即将永久删除以下
+        {{ bulkDeleteTargets.length }} 位用户及其账号资料、登录凭证、会话和授权。此操作无法撤销。
       </p>
       <ul class="delete-user-list">
         <li v-for="user in bulkDeleteTargets" :key="user.uuid">
-          <strong>{{ user.username }}</strong><span class="muted">（{{ user.email }}）</span>
+          <strong>{{ user.username }}</strong
+          ><span class="muted">（{{ user.email }}）</span>
         </li>
       </ul>
       <p class="muted">输入 DELETE 以确认删除所列账号。</p>
@@ -265,15 +358,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { consoleApi, type ConsoleUser, type SystemRole } from '@/api/console'
+import { useRouter } from 'vue-router'
+import { consoleApi, type ConsoleUser, type DeveloperVerificationType } from '@/api/console'
 import { useSessionStore } from '@/stores/session'
 import { avatarFallback } from '@/utils/avatar'
+import { isVerifiedUser, roleLabel, verificationLabel } from '@/utils/userIdentity'
 import { VerificationCancelledError, withConsoleVerification } from '@/utils/consoleVerification'
-import {
-  consumeRoleDraft,
-  consumeUserDeleteDraft,
-} from '@/utils/navigation'
+import { consumeRoleDraft, consumeUserDeleteDraft } from '@/utils/navigation'
 const search = ref('')
+const router = useRouter()
 const role = ref('')
 const page = ref(1)
 const size = 20
@@ -287,8 +380,12 @@ const loading = ref(true)
 const error = ref('')
 const tableRef = ref<{ clearSelection: () => void } | null>(null)
 const selectedUsers = ref<ConsoleUser[]>([])
-const assignableUsers = computed(() => selectedUsers.value.filter((user) => user.systemRole === 'USER'))
-const revokableUsers = computed(() => selectedUsers.value.filter((user) => user.systemRole === 'ADMIN'))
+const assignableUsers = computed(() =>
+  selectedUsers.value.filter((user) => user.systemRole === 'USER'),
+)
+const revokableUsers = computed(() =>
+  selectedUsers.value.filter((user) => user.systemRole === 'ADMIN'),
+)
 const deletableUsers = computed(() =>
   selectedUsers.value.filter(
     (user) => user.systemRole !== 'SUPER_ADMIN' && user.uuid !== store.session?.user.uuid,
@@ -298,6 +395,15 @@ const detail = ref<ConsoleUser | null>(null)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailError = ref('')
+const certificationVisible = ref(false)
+const certificationUser = ref<ConsoleUser | null>(null)
+const certificationType = ref<DeveloperVerificationType>('none')
+const certificationName = ref('')
+const certificationError = ref('')
+const savingCertification = ref(false)
+const certificationNeedsName = computed(
+  () => certificationType.value !== 'none' || certificationUser.value?.systemRole !== 'USER',
+)
 const roleVisible = ref(false)
 const roleUser = ref<ConsoleUser | null>(null)
 const roleTargets = ref<ConsoleUser[]>([])
@@ -314,13 +420,12 @@ const bulkDeleteVisible = ref(false)
 const bulkDeleteTargets = ref<ConsoleUser[]>([])
 const bulkDeleteConfirmation = ref('')
 const bulkDeleting = ref(false)
-const roleLabel = (value: SystemRole) =>
-  ({ USER: '普通用户', ADMIN: '管理员', SUPER_ADMIN: '超级管理员' })[value]
 const date = (value?: string) => (value ? new Date(value).toLocaleString('zh-CN') : '—')
 const detailFields: { key: keyof ConsoleUser; label: string }[] = [
   { key: 'uuid', label: 'UUID' },
   { key: 'systemRole', label: '系统角色' },
   { key: 'developerVerificationType', label: '开发者认证' },
+  { key: 'verificationEntityName', label: '认证主体' },
   { key: 'realName', label: '真实姓名' },
   { key: 'gender', label: '性别' },
   { key: 'birthDate', label: '出生日期' },
@@ -333,16 +438,7 @@ const detailValue = (key: keyof ConsoleUser) => {
   if (!detail.value) return '—'
   if (key === 'systemRole') return roleLabel(detail.value.systemRole)
   if (key === 'createdAt' || key === 'updatedAt') return date(detail.value[key])
-  if (key === 'developerVerificationType')
-    return (
-      (
-        {
-          none: '未认证',
-          personal: '个人开发者',
-          enterprise: '企业开发者',
-        } as Record<string, string>
-      )[detail.value[key]] ?? detail.value[key]
-    )
+  if (key === 'developerVerificationType') return verificationLabel(detail.value[key])
   return detail.value[key] || '—'
 }
 let loadGeneration = 0
@@ -406,6 +502,46 @@ const showDetail = async (uuid: string) => {
     detailError.value = failure instanceof Error ? failure.message : '用户详情加载失败'
   } finally {
     detailLoading.value = false
+  }
+}
+const showApplications = (uuid: string) => {
+  void router.push({ path: '/user-applications', query: { user: uuid } })
+}
+const requestVerification = (user: ConsoleUser) => {
+  certificationUser.value = user
+  certificationType.value = user.developerVerificationType
+  certificationName.value = user.verificationEntityName || ''
+  certificationError.value = ''
+  certificationVisible.value = true
+}
+const saveCertification = async () => {
+  const target = certificationUser.value
+  if (!target || savingCertification.value) return
+  const name = certificationName.value.trim()
+  certificationError.value = ''
+  if (certificationNeedsName.value && !name) {
+    certificationError.value =
+      certificationType.value === 'enterprise' ? '请输入已核验的企业名称' : '请输入已核验的真实姓名'
+    return
+  }
+  const input = {
+    developerVerificationType: certificationType.value,
+    verificationEntityName: certificationNeedsName.value ? name : null,
+  }
+  savingCertification.value = true
+  try {
+    const updated = await withConsoleVerification(() =>
+      consoleApi.setVerification(target.uuid, input),
+    )
+    if (detail.value?.uuid === updated.uuid) detail.value = updated
+    certificationVisible.value = false
+    ElMessage.success('用户认证已更新')
+    await load()
+  } catch (failure) {
+    if (!(failure instanceof VerificationCancelledError))
+      certificationError.value = failure instanceof Error ? failure.message : '认证更新失败'
+  } finally {
+    savingCertification.value = false
   }
 }
 const requestRole = (user: ConsoleUser) => {
@@ -504,7 +640,9 @@ const saveRole = async () => {
     roleUser.value = null
     roleTargets.value = []
     if (failures.length) {
-      ElMessage.warning(`已更新 ${succeeded} 位用户，${failures.length} 位失败：${failures.join('、')}`)
+      ElMessage.warning(
+        `已更新 ${succeeded} 位用户，${failures.length} 位失败：${failures.join('、')}`,
+      )
     } else if (canceled) {
       ElMessage.warning(`已更新 ${succeeded} 位用户，其余操作已取消。`)
     } else {
@@ -528,11 +666,7 @@ const clearBulkDeleteDialog = () => {
 }
 const saveBulkDelete = async () => {
   const targets = [...bulkDeleteTargets.value]
-  if (
-    !targets.length ||
-    bulkDeleting.value ||
-    bulkDeleteConfirmation.value.trim() !== 'DELETE'
-  )
+  if (!targets.length || bulkDeleting.value || bulkDeleteConfirmation.value.trim() !== 'DELETE')
     return
   bulkDeleting.value = true
   const deleted: string[] = []
@@ -553,7 +687,9 @@ const saveBulkDelete = async () => {
     }
     bulkDeleteVisible.value = false
     if (failures.length) {
-      ElMessage.warning(`已删除 ${deleted.length} 位用户，${failures.length} 位失败：${failures.join('、')}`)
+      ElMessage.warning(
+        `已删除 ${deleted.length} 位用户，${failures.length} 位失败：${failures.join('、')}`,
+      )
     } else if (canceled) {
       ElMessage.warning(`已删除 ${deleted.length} 位用户，其余操作已取消。`)
     } else {
@@ -637,6 +773,9 @@ onMounted(async () => {
   gap: 18px;
   align-items: center;
   margin-bottom: 25px;
+}
+.detail-actions {
+  margin-top: 20px;
 }
 h2 {
   margin: 0;

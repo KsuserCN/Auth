@@ -24,7 +24,19 @@
 历史已认证账号需要管理员核验后手动补录；缺失名称时，授权页显示“主体资料未登记”。
 历史 SSO 应用还需要关联到正确的认证账号；仅补录用户实体名称，不会自动确定应用归属。
 
-## 手动认证
+## Console 认证管理
+
+超级管理员可在 Console「用户管理 → 认证设置」设置个人认证、企业认证或撤销开发者认证，并填写核验后的姓名 / 企业名称。管理员姓名也可以在此补录。个人、企业和管理员主体名称必填，最长 200 个字符；普通用户撤销认证时清空旧主体名称。
+
+开发者认证与系统角色独立。任免普通管理员使用用户行上的「任命普通管理员 / 撤销管理员」，保留已有开发者认证；认证设置不会改变系统角色，也不能授予超级管理员。普通管理员仍不能登录 Console。
+
+`PUT /console/users/{uuid}/verification` 接收 `developerVerificationType`（`none / personal / enterprise`）与 `verificationEntityName`。接口仅接受超级管理员的 Console 会话，要求 CSRF 和有效的再次验证；通过显式数据库更新写入认证字段，并与 `user.verification.update` 操作记录一同提交，记录失败时整体回滚。
+
+「认证用户应用」页列出个人认证、企业认证和管理员账号，支持用户名、邮箱、UUID 搜索与认证类型筛选。`GET /console/users?verification=verified` 返回这些账号；`GET /console/users/{uuid}/applications` 按实际 `owner_user_id` 返回该账号的 OAuth / SSO 应用，以及名称、客户端 ID、启用状态、回调地址、权限范围、联系信息和时间。应用密钥及哈希不会返回。未登记归属的历史 SSO 应用不会归入任何用户；官方应用继续在独立页面管理。
+
+本次功能沿用已有认证实体和应用归属字段，无新增数据库迁移；尚未执行下列迁移的旧数据库仍需先升级。
+
+## SQL 手动认证
 
 以下是维护模板，请替换 UUID 和已核验的姓名 / 企业名称后执行。认证状态与实体名称应在同一条语句中更新。
 
@@ -59,7 +71,8 @@ WHERE (verification_type IN ('personal', 'enterprise') OR system_role IN ('ADMIN
 - 官方应用继续显示“Ksuser官方应用”标签。
 - `/auth/update/profile` 不接受 `verificationEntityName`、`verification_type` 或其他认证字段；不支持的 key 返回 HTTP 400。
 - `User` 实体不提供该名称的 setter，JSON 输入忽略该字段，JPA 插入与更新均不会写入该列。
-- 用户编辑资料里的姓名、用户名、头像，不会改变认证实体。当前没有认证实体的 Console 编辑入口或认证写入接口，仅通过管理员 SQL 维护。
+- `verification_type` 的 JPA 普通更新也禁用写入，避免从旧用户实例保存资料时覆盖管理员刚设置的认证状态；Console 使用显式更新查询维护它。
+- 用户编辑资料里的姓名、用户名、头像，不会改变认证实体。认证实体仅通过上述 Console 管理接口的显式数据库更新或管理员 SQL 维护。
 
 ## SSO 应用归属与历史数据补录
 
