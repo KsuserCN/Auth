@@ -1,249 +1,263 @@
 <template>
   <div class="open-platform-page">
-    <header class="platform-hero">
-      <div class="hero-copy">
-        <div class="hero-eyebrow">
-          <span class="hero-eyebrow-dot" />{{ t('ui.openPlatform.message001') }}
-        </div>
-        <h1 class="page-title">{{ t('ui.mainLayout.message016') }}</h1>
-        <p class="page-subtitle">{{ t('ui.openPlatform.message002') }}</p>
-      </div>
-      <div class="hero-hint">
-        <span class="hero-hint-label">{{ t('ui.openPlatform.message003') }}</span>
-        <span>{{ t('ui.openPlatform.message004') }}</span
-        ><span class="step-divider">›</span> <span>{{ t('ui.openPlatform.message005') }}</span
-        ><span class="step-divider">›</span>
-        <span>{{ t('ui.openPlatform.message006') }}</span>
-      </div>
+    <header class="page-header">
+      <h1 class="page-title">{{ t('ui.mainLayout.message016') }}</h1>
+      <p class="page-subtitle">{{ t('ui.openPlatform.message002') }}</p>
     </header>
 
-    <el-row :gutter="16" class="summary-grid">
-      <el-col :xs="24" :md="8">
-        <el-card class="card summary-card" shadow="never">
-          <div class="summary-label">{{ t('ui.openPlatform.message007') }}</div>
-          <div class="summary-value">
-            <el-tag :type="verificationTagType" effect="light" size="large">
-              {{ verificationLabel }}
+    <section class="identity-panel" :aria-label="t('ui.openPlatform.accountIdentity')">
+      <el-skeleton v-if="identityLoading && !userStore.user" :rows="2" animated />
+      <div v-else-if="identityLoadFailed" class="load-error" role="alert">
+        <span>{{ t('ui.openPlatform.identityLoadFailed') }}</span>
+        <el-button text type="primary" @click="loadIdentity">{{
+          t('ui.openPlatform.retry')
+        }}</el-button>
+      </div>
+      <template v-else>
+        <div class="identity-main">
+          <div class="identity-icon" aria-hidden="true">
+            <el-icon :size="24"><OfficeBuilding v-if="isEnterprise" /><User v-else /></el-icon>
+          </div>
+          <div class="identity-copy">
+            <div class="identity-label">{{ t('ui.openPlatform.realSubject') }}</div>
+            <div class="identity-title-row">
+              <h2 class="identity-name" :class="{ 'identity-name--empty': !subjectName }">
+                {{ subjectName || t('ui.openPlatform.subjectMissing') }}
+              </h2>
+              <el-tag :type="verificationTagType" effect="light" size="small">
+                {{ verificationLabel }}
+              </el-tag>
+            </div>
+            <p class="identity-description">
+              {{
+                t(
+                  subjectName
+                    ? 'ui.openPlatform.subjectHint'
+                    : 'ui.openPlatform.subjectMissingHint',
+                )
+              }}
+            </p>
+          </div>
+        </div>
+        <div class="identity-account">
+          <span class="identity-label">{{ t('ui.openPlatform.currentAccount') }}</span>
+          <div class="identity-account-name">
+            <span>{{ userStore.user?.username || '—' }}</span>
+            <el-tag v-if="isAdmin" type="info" effect="plain" size="small">
+              {{ t('ui.mainLayout.message017') }}
             </el-tag>
           </div>
-          <div class="summary-desc">{{ t('ui.openPlatform.message008') }}</div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :md="8">
-        <el-card class="card summary-card" shadow="never">
-          <div class="summary-label">{{ t('ui.openPlatform.message009') }}</div>
-          <div class="summary-count">
-            <span class="summary-number">{{ oauthOverview?.currentCount ?? '—' }}</span>
-            <span v-if="oauthOverview" class="summary-total">/ {{ oauthOverview.maxApps }}</span>
-          </div>
-          <div class="summary-desc">{{ t('ui.openPlatform.message010') }}</div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :md="8">
-        <el-card class="card summary-card" shadow="never">
-          <div class="summary-label">{{ t('ui.openPlatform.message011') }}</div>
-          <div class="summary-count">
-            <span class="summary-number">{{ ssoOverview?.currentCount ?? '—' }}</span>
-            <span v-if="ssoOverview" class="summary-total">/ {{ ssoOverview.maxClients }}</span>
-          </div>
-          <div class="summary-desc">{{ t('ui.openPlatform.message012') }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-alert
-      v-if="oauthOverview && !oauthOverview.verified"
-      type="warning"
-      :closable="false"
-      show-icon
-      class="notice-banner"
-      :title="t('ui.openPlatform.message013')"
-      :description="t('ui.openPlatform.message014')"
-    />
-
-    <el-alert
-      v-if="ssoOverview && !ssoOverview.admin"
-      type="info"
-      :closable="false"
-      show-icon
-      class="notice-banner"
-      :title="t('ui.openPlatform.message015')"
-      :description="t('ui.openPlatform.message016')"
-    />
-
-    <el-card class="card app-list-card" shadow="never">
-      <template #header>
-        <div class="section-header">
-          <div class="section-heading">
-            <div class="section-title">{{ t('ui.openPlatform.message009') }}</div>
-            <div class="section-subtitle">{{ t('ui.openPlatform.message017') }}</div>
-          </div>
-          <div class="section-actions">
-            <a
-              class="docs-link"
-              :href="documentUrl('auth/oauth')"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {{ t('ui.openPlatform.message018') }} <span aria-hidden="true">↗</span>
-            </a>
-            <el-button text @click="loadOAuthApps" :loading="oauthLoading">{{
-              t('ui.devices.message002')
-            }}</el-button>
-            <el-button
-              class="primary-btn"
-              type="primary"
-              :disabled="!oauthOverview?.canCreate"
-              @click="openOAuthCreateDialog"
-            >
-              {{ t('ui.openPlatform.message019') }}
-            </el-button>
-          </div>
         </div>
       </template>
+    </section>
 
-      <el-skeleton v-if="oauthLoading" :rows="5" animated />
-      <el-empty
-        v-else-if="!oauthOverview?.apps.length"
-        :description="t('ui.openPlatform.message020')"
-      />
-
-      <div v-else class="app-list">
-        <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item app-item--compact">
-          <div
-            class="app-title-wrap"
-            role="button"
-            tabindex="0"
-            @click="openOAuthDetailDialog(app.appId)"
-            @keydown.enter.prevent="openOAuthDetailDialog(app.appId)"
-          >
-            <el-avatar
-              shape="square"
-              :size="46"
-              :src="app.logoUrl || ''"
-              :class="['app-logo', { 'app-logo--image': !!app.logoUrl }]"
-            >
-              {{ app.appName.slice(0, 1).toUpperCase() }}
-            </el-avatar>
-            <div class="app-title-body">
-              <div class="app-name">{{ app.appName }}</div>
-              <div class="app-id">AppID: {{ app.appId }}</div>
-            </div>
-          </div>
-
-          <div class="app-item-actions">
-            <el-button size="small" @click="openOAuthDetailDialog(app.appId)">{{
-              t('ui.openPlatform.message021')
-            }}</el-button>
-            <el-popconfirm
-              :title="t('ui.openPlatform.message022')"
-              :description="t('ui.openPlatform.message023')"
-              :confirm-button-text="t('ui.loginOptions.message020')"
-              :cancel-button-text="t('ui.addPasskey.message009')"
-              @confirm="handleOAuthDelete(app.appId)"
-            >
-              <template #reference>
-                <el-button size="small" type="danger" plain>{{
-                  t('ui.loginOptions.message020')
-                }}</el-button>
-              </template>
-            </el-popconfirm>
-          </div>
-        </div>
+    <section class="applications-panel" :aria-label="t('ui.openPlatform.applications')">
+      <div class="applications-heading">
+        <h2>{{ t('ui.openPlatform.applications') }}</h2>
+        <a class="docs-link" :href="activeDocumentUrl" target="_blank" rel="noopener noreferrer">
+          <el-icon><Document /></el-icon>
+          {{
+            t(
+              activeProtocol === 'oauth'
+                ? 'ui.openPlatform.message018'
+                : 'ui.openPlatform.message026',
+            )
+          }}
+          <span aria-hidden="true">↗</span>
+        </a>
       </div>
-    </el-card>
-
-    <el-card class="card app-list-card" shadow="never">
-      <template #header>
-        <div class="section-header">
-          <div class="section-heading">
-            <div class="section-title">{{ t('ui.openPlatform.message024') }}</div>
-            <div class="section-subtitle">{{ t('ui.openPlatform.message025') }}</div>
-          </div>
-          <div class="section-actions">
-            <a
-              class="docs-link"
-              :href="documentUrl('auth/sso')"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {{ t('ui.openPlatform.message026') }} <span aria-hidden="true">↗</span>
-            </a>
-            <el-button text @click="loadSSOClients" :loading="ssoLoading">{{
-              t('ui.devices.message002')
-            }}</el-button>
-            <el-button
-              class="primary-btn"
-              type="primary"
-              :disabled="!ssoOverview?.canCreate"
-              @click="openSSOCreateDialog"
-            >
-              {{ t('ui.openPlatform.message027') }}
-            </el-button>
-          </div>
-        </div>
-      </template>
-
-      <el-skeleton v-if="ssoLoading" :rows="5" animated />
-      <el-empty
-        v-else-if="ssoOverview?.admin && !ssoOverview.clients.length"
-        :description="t('ui.openPlatform.message028')"
-      />
-      <el-empty
-        v-else-if="ssoOverview && !ssoOverview.admin"
-        :description="t('ui.openPlatform.message029')"
-      />
-
-      <div v-else class="app-list">
-        <div
-          v-for="client in ssoOverview?.clients"
-          :key="client.clientId"
-          class="app-item app-item--compact"
-        >
-          <div
-            class="app-title-wrap"
-            role="button"
-            tabindex="0"
-            @click="openSSODetailDialog(client.clientId)"
-            @keydown.enter.prevent="openSSODetailDialog(client.clientId)"
-          >
-            <el-avatar
-              shape="square"
-              :size="46"
-              :src="client.logoUrl || ''"
-              :class="['app-logo', { 'app-logo--image': !!client.logoUrl }]"
-            >
-              {{ client.clientName.slice(0, 1).toUpperCase() }}
-            </el-avatar>
-            <div class="app-title-body">
-              <div class="app-name">{{ client.clientName }}</div>
-              <div class="app-id">ClientID: {{ client.clientId }}</div>
+      <el-tabs v-model="activeProtocol" class="protocol-tabs">
+        <el-tab-pane v-for="protocol in protocols" :key="protocol" :name="protocol">
+          <template #label>
+            <span class="protocol-label">
+              {{
+                t(
+                  protocol === 'oauth'
+                    ? 'ui.openPlatform.message009'
+                    : 'ui.openPlatform.message011',
+                )
+              }}
+              <span v-if="protocol === 'oauth' && oauthOverview" class="protocol-count">{{
+                oauthOverview.currentCount
+              }}</span>
+              <span v-else-if="protocol === 'sso' && ssoOverview?.admin" class="protocol-count">{{
+                ssoOverview.currentCount
+              }}</span>
+              <el-icon v-else-if="protocol === 'sso' && ssoOverview" aria-hidden="true"
+                ><Lock
+              /></el-icon>
+            </span>
+          </template>
+          <template v-if="activeProtocol === protocol">
+            <div class="applications-toolbar">
+              <div class="applications-description">
+                <p>
+                  {{
+                    t(
+                      activeProtocol === 'oauth'
+                        ? 'ui.openPlatform.message010'
+                        : 'ui.openPlatform.message012',
+                    )
+                  }}
+                </p>
+                <span v-if="activeQuota" class="quota-text">{{ activeQuota }}</span>
+              </div>
+              <div class="toolbar-actions">
+                <el-button
+                  :icon="Refresh"
+                  :loading="activeLoading"
+                  @click="refreshActiveApplications"
+                >
+                  {{ t('ui.devices.message002') }}
+                </el-button>
+                <el-button
+                  type="primary"
+                  :icon="Plus"
+                  :disabled="!canCreateActive"
+                  @click="openActiveCreateDialog"
+                >
+                  {{ t('ui.openPlatform.message005') }}
+                </el-button>
+              </div>
             </div>
-          </div>
 
-          <div class="app-item-actions">
-            <el-button size="small" @click="openSSODetailDialog(client.clientId)">{{
-              t('ui.openPlatform.message021')
-            }}</el-button>
-            <el-popconfirm
-              :title="t('ui.openPlatform.message030')"
-              :description="t('ui.openPlatform.message031')"
-              :confirm-button-text="t('ui.loginOptions.message020')"
-              :cancel-button-text="t('ui.addPasskey.message009')"
-              @confirm="handleSSODelete(client.clientId)"
-            >
-              <template #reference>
-                <el-button size="small" type="danger" plain>{{
-                  t('ui.loginOptions.message020')
+            <div class="applications-content" :aria-busy="activeLoading">
+              <el-skeleton v-if="activeLoading" :rows="4" animated />
+              <div v-else-if="activeLoadFailed" class="load-error" role="alert">
+                <span>{{ t('ui.openPlatform.applicationsLoadFailed') }}</span>
+                <el-button text type="primary" @click="refreshActiveApplications">{{
+                  t('ui.openPlatform.retry')
                 }}</el-button>
+              </div>
+              <template v-else-if="activeProtocol === 'oauth' && oauthOverview">
+                <div v-if="!oauthOverview.verified" class="permission-note" role="status">
+                  <el-icon><Lock /></el-icon>
+                  <span>{{ t('ui.openPlatform.message008') }}</span>
+                </div>
+                <div v-else-if="!oauthOverview.canCreate" class="permission-note" role="status">
+                  <span>{{ t('ui.openPlatform.limitReached') }}</span>
+                </div>
+                <el-empty
+                  v-if="!oauthOverview.apps.length"
+                  :image-size="72"
+                  :description="t('ui.openPlatform.message020')"
+                >
+                  <p class="empty-hint">{{ t('ui.openPlatform.oauthEmptyHint') }}</p>
+                </el-empty>
+                <div v-else class="app-list">
+                  <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item">
+                    <button
+                      class="app-title-wrap"
+                      type="button"
+                      @click="openOAuthDetailDialog(app.appId)"
+                    >
+                      <el-avatar
+                        shape="square"
+                        :size="44"
+                        :src="app.logoUrl || ''"
+                        :class="['app-logo', { 'app-logo--image': !!app.logoUrl }]"
+                      >
+                        {{ app.appName.slice(0, 1).toUpperCase() }}
+                      </el-avatar>
+                      <span class="app-title-body">
+                        <span class="app-name">{{ app.appName }}</span>
+                        <span class="app-id">AppID: {{ app.appId }}</span>
+                      </span>
+                    </button>
+                    <div class="app-item-actions">
+                      <el-button text type="primary" @click="openOAuthDetailDialog(app.appId)">{{
+                        t('ui.openPlatform.manage')
+                      }}</el-button>
+                      <el-popconfirm
+                        :title="t('ui.openPlatform.message022')"
+                        :description="t('ui.openPlatform.message023')"
+                        :confirm-button-text="t('ui.loginOptions.message020')"
+                        :cancel-button-text="t('ui.addPasskey.message009')"
+                        @confirm="handleOAuthDelete(app.appId)"
+                      >
+                        <template #reference>
+                          <el-button text type="danger">{{
+                            t('ui.loginOptions.message020')
+                          }}</el-button>
+                        </template>
+                      </el-popconfirm>
+                    </div>
+                  </div>
+                </div>
               </template>
-            </el-popconfirm>
-          </div>
-        </div>
-      </div>
-    </el-card>
+              <template v-else-if="ssoOverview">
+                <div v-if="!ssoOverview.admin" class="restricted-state">
+                  <div class="restricted-icon" aria-hidden="true">
+                    <el-icon :size="24"><Lock /></el-icon>
+                  </div>
+                  <h3>{{ t('ui.openPlatform.ssoRestricted') }}</h3>
+                  <p>{{ t('ui.openPlatform.message016') }}</p>
+                </div>
+                <template v-else>
+                  <div v-if="!ssoOverview.canCreate" class="permission-note" role="status">
+                    <span>{{ t('ui.openPlatform.limitReached') }}</span>
+                  </div>
+                  <el-empty
+                    v-if="!ssoOverview.clients.length"
+                    :image-size="72"
+                    :description="t('ui.openPlatform.message028')"
+                  >
+                    <p class="empty-hint">{{ t('ui.openPlatform.ssoEmptyHint') }}</p>
+                  </el-empty>
+                  <div v-else class="app-list">
+                    <div
+                      v-for="client in ssoOverview.clients"
+                      :key="client.clientId"
+                      class="app-item"
+                    >
+                      <button
+                        class="app-title-wrap"
+                        type="button"
+                        @click="openSSODetailDialog(client.clientId)"
+                      >
+                        <el-avatar
+                          shape="square"
+                          :size="44"
+                          :src="client.logoUrl || ''"
+                          :class="['app-logo', { 'app-logo--image': !!client.logoUrl }]"
+                        >
+                          {{ client.clientName.slice(0, 1).toUpperCase() }}
+                        </el-avatar>
+                        <span class="app-title-body">
+                          <span class="app-name">{{ client.clientName }}</span>
+                          <span class="app-id">ClientID: {{ client.clientId }}</span>
+                        </span>
+                      </button>
+                      <div class="app-item-actions">
+                        <el-button
+                          text
+                          type="primary"
+                          @click="openSSODetailDialog(client.clientId)"
+                          >{{ t('ui.openPlatform.manage') }}</el-button
+                        >
+                        <el-popconfirm
+                          :title="t('ui.openPlatform.message030')"
+                          :description="t('ui.openPlatform.message031')"
+                          :confirm-button-text="t('ui.loginOptions.message020')"
+                          :cancel-button-text="t('ui.addPasskey.message009')"
+                          @confirm="handleSSODelete(client.clientId)"
+                        >
+                          <template #reference>
+                            <el-button text type="danger">{{
+                              t('ui.loginOptions.message020')
+                            }}</el-button>
+                          </template>
+                        </el-popconfirm>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </template>
+            </div>
+          </template>
+        </el-tab-pane>
+      </el-tabs>
+    </section>
 
     <el-dialog
       v-model="oauthDetailDialogVisible"
@@ -478,8 +492,8 @@
 
         <el-form-item :label="t('ui.openPlatform.message049')" prop="scopes">
           <el-checkbox-group v-model="oauthCreateForm.scopes">
-            <el-checkbox label="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
-            <el-checkbox label="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
+            <el-checkbox value="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
+            <el-checkbox value="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
@@ -620,9 +634,9 @@
 
         <el-form-item :label="t('ui.openPlatform.message049')" prop="scopes">
           <el-checkbox-group v-model="ssoCreateForm.scopes">
-            <el-checkbox label="openid">{{ t('ui.openPlatform.message062') }}</el-checkbox>
-            <el-checkbox label="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
-            <el-checkbox label="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
+            <el-checkbox value="openid">{{ t('ui.openPlatform.message062') }}</el-checkbox>
+            <el-checkbox value="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
+            <el-checkbox value="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
@@ -709,9 +723,9 @@
 
         <el-form-item :label="t('ui.openPlatform.message049')" prop="scopes">
           <el-checkbox-group v-model="ssoEditForm.scopes">
-            <el-checkbox label="openid">{{ t('ui.openPlatform.message062') }}</el-checkbox>
-            <el-checkbox label="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
-            <el-checkbox label="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
+            <el-checkbox value="openid">{{ t('ui.openPlatform.message062') }}</el-checkbox>
+            <el-checkbox value="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
+            <el-checkbox value="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
       </el-form>
@@ -843,9 +857,11 @@
 </template>
 
 <script setup lang="ts">
-import { verificationDisplayType } from '@/utils/userRoles'
+import { isSystemAdmin } from '@/utils/userRoles'
 import { intlLocale, t, LocalizedError } from '@/i18n'
 import { documentUrl } from '@/utils/documentLinks'
+import { useUserStore } from '@/stores/user'
+import { Document, Lock, OfficeBuilding, Plus, Refresh, User } from '@element-plus/icons-vue'
 
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
@@ -872,8 +888,15 @@ import {
   type SSOScope,
 } from '@/api/sso'
 
-const oauthLoading = ref(false)
-const ssoLoading = ref(false)
+const userStore = useUserStore()
+const protocols = ['oauth', 'sso'] as const
+const activeProtocol = ref<(typeof protocols)[number]>('oauth')
+const identityLoading = ref(true)
+const identityLoadFailed = ref(false)
+const oauthLoading = ref(true)
+const ssoLoading = ref(true)
+const oauthLoadFailed = ref(false)
+const ssoLoadFailed = ref(false)
 const oauthSubmitting = ref(false)
 const oauthEditSubmitting = ref(false)
 const ssoSubmitting = ref(false)
@@ -990,23 +1013,66 @@ const normalizeSemicolonValues = (value: string) =>
 
 const oauthRedirectUris = (value: string) => normalizeSemicolonValues(value || '')
 
-const verificationLabel = computed(() => {
+const accountAccess = computed(() => oauthOverview.value ?? ssoOverview.value ?? userStore.user)
+const developerVerificationType = computed(() => {
   const type =
-    verificationDisplayType(oauthOverview.value || ssoOverview.value)
-  if (type === 'admin') return t('ui.mainLayout.message017')
+    accountAccess.value?.developerVerificationType ?? accountAccess.value?.verificationType
+  return type === 'personal' || type === 'enterprise' ? type : 'none'
+})
+const isEnterprise = computed(() => developerVerificationType.value === 'enterprise')
+const isAdmin = computed(
+  () => isSystemAdmin(accountAccess.value) || ssoOverview.value?.admin === true,
+)
+const subjectName = computed(() => {
+  if (developerVerificationType.value === 'none' && !isAdmin.value) return ''
+  return userStore.user?.verificationEntityName?.trim() || ''
+})
+
+const verificationLabel = computed(() => {
+  const type = developerVerificationType.value
   if (type === 'enterprise') return t('ui.mainLayout.message018')
   if (type === 'personal') return t('ui.mainLayout.message019')
   return t('ui.openPlatform.message070')
 })
 
 const verificationTagType = computed(() => {
-  const type =
-    verificationDisplayType(oauthOverview.value || ssoOverview.value)
-  if (type === 'admin') return 'danger'
+  const type = developerVerificationType.value
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'
   return 'info'
 })
+
+const activeLoading = computed(() =>
+  activeProtocol.value === 'oauth' ? oauthLoading.value : ssoLoading.value,
+)
+const activeLoadFailed = computed(() =>
+  activeProtocol.value === 'oauth' ? oauthLoadFailed.value : ssoLoadFailed.value,
+)
+const canCreateActive = computed(() => {
+  if (activeLoading.value || activeLoadFailed.value) return false
+  return activeProtocol.value === 'oauth'
+    ? oauthOverview.value?.canCreate
+    : ssoOverview.value?.canCreate
+})
+const activeQuota = computed(() => {
+  const overview = activeProtocol.value === 'oauth' ? oauthOverview.value : ssoOverview.value
+  if (!overview || activeLoadFailed.value) return ''
+  if (activeProtocol.value === 'sso' && !ssoOverview.value?.admin) return ''
+  return t('ui.openPlatform.quota', {
+    count: overview.currentCount,
+    max: 'maxApps' in overview ? overview.maxApps : overview.maxClients,
+  })
+})
+const activeDocumentUrl = computed(() =>
+  documentUrl(activeProtocol.value === 'oauth' ? 'auth/oauth' : 'auth/sso'),
+)
+const refreshActiveApplications = () =>
+  activeProtocol.value === 'oauth' ? loadOAuthApps() : loadSSOClients()
+const openActiveCreateDialog = () => {
+  if (!canCreateActive.value) return
+  if (activeProtocol.value === 'oauth') openOAuthCreateDialog()
+  else openSSOCreateDialog()
+}
 
 const secretDialogTitle = computed(() => {
   if (oauthCreatedApp.value) return t('ui.openPlatform.message071')
@@ -1167,11 +1233,26 @@ const resetSSOEditForm = () => {
   ssoEditFormRef.value?.clearValidate()
 }
 
+const loadIdentity = async () => {
+  identityLoading.value = true
+  identityLoadFailed.value = false
+  try {
+    await userStore.fetchUserInfo()
+  } catch {
+    identityLoadFailed.value = true
+  } finally {
+    identityLoading.value = false
+  }
+}
+
 const loadOAuthApps = async () => {
   oauthLoading.value = true
+  oauthLoadFailed.value = false
   try {
     oauthOverview.value = await getOAuth2Apps()
     ensureOAuthDetailExists()
+  } catch {
+    oauthLoadFailed.value = true
   } finally {
     oauthLoading.value = false
   }
@@ -1179,9 +1260,12 @@ const loadOAuthApps = async () => {
 
 const loadSSOClients = async () => {
   ssoLoading.value = true
+  ssoLoadFailed.value = false
   try {
     ssoOverview.value = await getSSOClients()
     ensureSSODetailExists()
+  } catch {
+    ssoLoadFailed.value = true
   } finally {
     ssoLoading.value = false
   }
@@ -1607,7 +1691,7 @@ const copyText = async (value: string) => {
 }
 
 onMounted(() => {
-  void Promise.all([loadOAuthApps(), loadSSOClients()])
+  void Promise.all([loadIdentity(), loadOAuthApps(), loadSSOClients()])
 })
 
 onBeforeUnmount(() => {
@@ -1665,52 +1749,20 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.platform-hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 20px;
-  padding: 22px 24px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 18px;
-  background:
-    radial-gradient(
-      circle at 92% 12%,
-      color-mix(in srgb, var(--el-color-primary) 10%, transparent),
-      transparent 32%
-    ),
-    var(--el-bg-color-overlay);
+.open-platform-page {
+  max-width: 1120px;
+  margin: 0 auto;
 }
 
-.hero-copy {
-  min-width: 0;
-}
-
-.hero-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-  color: var(--el-color-primary);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.hero-eyebrow-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--el-color-primary);
-  box-shadow: 0 0 0 4px var(--el-color-primary-light-9);
+.page-header {
+  margin-bottom: 24px;
 }
 
 .page-title {
   margin: 0;
-  font-size: 28px;
-  line-height: 1.25;
-  font-weight: 700;
+  font-size: 26px;
+  line-height: 1.35;
+  font-weight: 650;
   color: var(--el-text-color-primary);
 }
 
@@ -1721,176 +1773,305 @@ onBeforeUnmount(() => {
   line-height: 1.6;
 }
 
-.hero-hint {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 9px;
-  padding: 11px 14px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
-  color: var(--el-text-color-regular);
-  background: color-mix(in srgb, var(--el-bg-color) 82%, transparent);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.hero-hint-label {
-  margin-right: 2px;
-  color: var(--el-text-color-secondary);
-}
-
-.step-divider {
-  color: var(--el-color-primary);
-  font-size: 17px;
-}
-
-.summary-grid,
-.notice-banner,
-.app-list-card {
-  margin-bottom: 16px;
-}
-
-.card {
-  border-radius: 16px;
+.identity-panel,
+.applications-panel {
   border: 1px solid var(--el-border-color-light);
-}
-
-.summary-card {
-  min-height: 142px;
+  border-radius: 12px;
   background: var(--el-bg-color-overlay);
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
 }
 
-.summary-card:hover {
-  border-color: var(--el-color-primary-light-7);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
-  transform: translateY(-1px);
-}
-
-.summary-card :deep(.el-card__body) {
-  padding: 16px;
-}
-
-.summary-label {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 12px;
-}
-
-.summary-value {
-  margin-bottom: 12px;
-}
-
-.summary-count {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.summary-number {
-  font-size: 30px;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-}
-
-.summary-total {
-  color: var(--el-text-color-secondary);
-}
-
-.summary-desc {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.section-header {
+.identity-panel {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 24px;
 }
 
-.section-heading {
+.identity-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+  flex: 1;
+}
+
+.identity-icon,
+.restricted-icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+}
+
+.identity-copy {
   min-width: 0;
 }
 
-.section-actions {
+.identity-label {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+
+.identity-title-row,
+.identity-account-name {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.identity-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  color: var(--el-text-color-primary);
+}
+
+.identity-name--empty {
+  color: var(--el-text-color-regular);
+  font-size: 17px;
+}
+
+.identity-title-row :deep(.el-tag),
+.identity-account-name :deep(.el-tag) {
   flex-shrink: 0;
 }
 
-.section-title {
+.identity-description {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+
+.identity-account {
+  max-width: 28%;
+  padding-left: 24px;
+  border-left: 1px solid var(--el-border-color-lighter);
+}
+
+.identity-account-name {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+  overflow-wrap: anywhere;
+}
+
+.applications-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px 8px;
+}
+
+.applications-heading h2 {
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
 
-.section-subtitle {
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.5;
-}
-
 .docs-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-height: 32px;
-  padding: 0 9px;
-  border-radius: 8px;
-  color: var(--el-color-primary);
   font-size: 13px;
-  font-weight: 600;
+  line-height: 1.5;
+  color: var(--el-text-color-regular);
   text-decoration: none;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease;
 }
 
 .docs-link:hover {
-  color: var(--el-color-primary-dark-2);
-  background: var(--el-color-primary-light-9);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
-.docs-link:focus-visible {
+.docs-link:focus-visible,
+.app-title-wrap:focus-visible {
   outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.protocol-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0 24px;
+}
+
+.protocol-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background: var(--el-border-color-lighter);
+}
+
+.protocol-tabs :deep(.el-tabs__item) {
+  height: 48px;
+  font-size: 14px;
+  color: var(--el-text-color-secondary);
+}
+
+.protocol-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--el-text-color-primary);
+  font-weight: 600;
+}
+
+.protocol-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.protocol-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
+}
+
+.applications-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.applications-description p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+
+.quota-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.toolbar-actions :deep(.el-button) {
+  height: 36px;
+  margin: 0;
+  border-radius: 8px;
+}
+
+.toolbar-actions :deep(.el-button--primary:not(.is-disabled)) {
+  color: #252525;
+}
+
+.applications-content {
+  padding: 0 24px 12px;
+}
+
+.applications-content > .el-skeleton {
+  padding: 12px 0 24px;
+}
+
+.permission-note,
+.load-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.permission-note {
+  margin-bottom: 8px;
+}
+
+.permission-note .el-icon {
+  flex-shrink: 0;
+}
+
+.load-error {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.load-error :deep(.el-button) {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.empty-hint {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.applications-content :deep(.el-empty) {
+  padding: 32px 0 40px;
+}
+
+.applications-content :deep(.el-empty__bottom) {
+  margin-top: 8px;
+}
+
+.restricted-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 12px 48px;
+  text-align: center;
+}
+
+.restricted-state h3 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--el-text-color-primary);
+}
+
+.restricted-state p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
 }
 
 .app-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .app-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color-overlay);
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    transform 160ms ease;
-}
-
-.app-item:hover {
-  border-color: var(--el-border-color);
-  background: var(--el-fill-color-light);
+  gap: 16px;
+  padding: 18px 0;
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .app-title-wrap {
@@ -1901,15 +2082,18 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.app-title-wrap[role='button'] {
+button.app-title-wrap {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
-  user-select: none;
 }
 
-.app-title-wrap[role='button']:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-  border-radius: 12px;
+button.app-title-wrap:hover .app-name {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .app-title-body {
@@ -1918,8 +2102,8 @@ onBeforeUnmount(() => {
 
 .app-logo {
   flex-shrink: 0;
-  background: linear-gradient(140deg, #1f9d6c 0%, #2fbf7d 100%);
-  color: #fff;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-regular);
   font-weight: 700;
   border-radius: 12px;
   overflow: hidden;
@@ -1937,7 +2121,8 @@ onBeforeUnmount(() => {
 }
 
 .app-name {
-  font-size: 18px;
+  display: block;
+  font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
   overflow: hidden;
@@ -1946,6 +2131,7 @@ onBeforeUnmount(() => {
 }
 
 .app-id {
+  display: block;
   margin-top: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
@@ -2282,20 +2468,43 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .platform-hero {
+  .identity-panel {
     align-items: stretch;
     flex-direction: column;
     gap: 16px;
     padding: 20px;
   }
 
-  .hero-hint {
-    align-self: flex-start;
-    flex-wrap: wrap;
-    white-space: normal;
+  .identity-account {
+    max-width: none;
+    padding: 14px 0 0;
+    border-left: none;
+    border-top: 1px solid var(--el-border-color-lighter);
   }
 
-  .section-header,
+  .applications-heading {
+    flex-wrap: wrap;
+    padding: 16px 20px 8px;
+  }
+
+  .protocol-tabs :deep(.el-tabs__header) {
+    padding: 0 20px;
+  }
+
+  .applications-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 20px;
+  }
+
+  .toolbar-actions {
+    justify-content: flex-end;
+  }
+
+  .applications-content {
+    padding: 0 20px 8px;
+  }
+
   .app-item,
   .detail-head,
   .secret-value {
@@ -2303,18 +2512,9 @@ onBeforeUnmount(() => {
     align-items: stretch;
   }
 
-  .section-actions {
-    justify-content: flex-start;
-  }
-
-  .section-heading,
-  .section-actions {
-    width: 100%;
-  }
-
   .app-item-actions,
   .detail-actions {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   :deep(.app-dialog .el-dialog__header) {
