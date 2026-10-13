@@ -1,6 +1,7 @@
 import { computed, defineComponent, inject, provide, type Ref } from 'vue'
 
 const Slot = defineComponent({ template: '<div><slot /><slot name="footer" /></div>' })
+const dropdownCommand = Symbol('dropdown-command')
 const Dialog = defineComponent({
   props: ['modelValue'],
   template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>',
@@ -38,6 +39,23 @@ export const componentStubs = {
   ElOption: defineComponent({
     props: ['value', 'label'],
     template: '<option :value="value">{{ label }}</option>',
+  }),
+  ElDropdown: defineComponent({
+    emits: ['command'],
+    setup(_props, { emit, slots }) {
+      provide(dropdownCommand, (command: string) => emit('command', command))
+      return { slots }
+    },
+    template: '<div><slot /><div class="dropdown-stub"><slot name="dropdown" /></div></div>',
+  }),
+  ElDropdownMenu: Slot,
+  ElDropdownItem: defineComponent({
+    props: ['command', 'disabled'],
+    setup(props) {
+      const emitCommand = inject<(command: string) => void>(dropdownCommand)
+      return { props, emitCommand }
+    },
+    template: '<button :disabled="disabled" @click="emitCommand?.(command)"><slot /></button>',
   }),
   ElTable: defineComponent({
     props: { data: { type: Array, default: () => [] } },

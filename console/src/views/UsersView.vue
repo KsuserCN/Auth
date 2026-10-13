@@ -22,33 +22,39 @@
         ><span class="muted">共 {{ total }} 位用户</span>
       </form>
       <div v-if="selectedUsers.length" class="bulk-toolbar">
-        <span class="muted">本页已选择 {{ selectedUsers.length }} 位用户</span>
-        <el-button
-          size="small"
-          :disabled="assignableUsers.length === 0 || bulkRoleSaving"
-          @click="requestBulkRole('ADMIN')"
-          >批量任命管理员<span v-if="assignableUsers.length"
-            >（{{ assignableUsers.length }}）</span
-          ></el-button
-        >
-        <el-button
-          size="small"
-          :disabled="revokableUsers.length === 0 || bulkRoleSaving"
-          @click="requestBulkRole('USER')"
-          >批量撤销管理员<span v-if="revokableUsers.length"
-            >（{{ revokableUsers.length }}）</span
-          ></el-button
-        >
-        <el-button
-          size="small"
-          type="danger"
-          plain
-          :disabled="deletableUsers.length === 0 || bulkDeleting"
-          @click="requestBulkDelete"
-          >批量删除<span v-if="deletableUsers.length"
-            >（{{ deletableUsers.length }}）</span
-          ></el-button
-        >
+        <div class="bulk-selection-summary">
+          <strong>{{ selectedUsers.length }}</strong>
+          <span>位用户已选择</span>
+        </div>
+        <el-dropdown trigger="click" @command="handleBulkCommand">
+          <el-button size="small" :disabled="bulkRoleSaving || bulkDeleting">
+            批量操作<el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                command="assign-admin"
+                :disabled="assignableUsers.length === 0 || bulkRoleSaving"
+              >
+                任命普通管理员<span v-if="assignableUsers.length">（{{ assignableUsers.length }}）</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                command="revoke-admin"
+                :disabled="revokableUsers.length === 0 || bulkRoleSaving"
+              >
+                撤销管理员<span v-if="revokableUsers.length">（{{ revokableUsers.length }}）</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                command="delete"
+                divided
+                class="danger-menu-item"
+                :disabled="deletableUsers.length === 0 || bulkDeleting"
+              >
+                删除账号<span v-if="deletableUsers.length">（{{ deletableUsers.length }}）</span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button size="small" text @click="clearSelection">取消选择</el-button>
       </div>
       <el-alert v-if="error" :title="error" type="error" show-icon :closable="false" />
@@ -114,29 +120,36 @@
         <el-table-column label="注册时间" prop="createdAt" min-width="160" sortable="custom"
           ><template #default="{ row }">{{ date(row.createdAt) }}</template></el-table-column
         >
-        <el-table-column label="操作" width="390" fixed="right"
+        <el-table-column label="操作" width="144" fixed="right"
           ><template #default="{ row }"
-            ><el-button link type="primary" @click="showDetail(row.uuid)">详情</el-button
-            ><el-button link type="primary" @click="requestVerification(row)">认证设置</el-button
-            ><el-button
-              v-if="isVerifiedUser(row)"
-              link
-              type="primary"
-              @click="showApplications(row.uuid)"
-              >应用</el-button
-            ><el-button
-              v-if="row.systemRole !== 'SUPER_ADMIN'"
-              link
-              :type="row.systemRole === 'ADMIN' ? 'danger' : 'primary'"
-              @click="requestRole(row)"
-              >{{ row.systemRole === 'ADMIN' ? '撤销管理员' : '任命普通管理员' }}</el-button
-            ><el-button
-              v-if="row.systemRole !== 'SUPER_ADMIN'"
-              link
-              type="danger"
-              @click="requestDelete(row)"
-              >删除账号</el-button
-            ></template
+            ><div class="row-actions">
+              <el-button link type="primary" @click="showDetail(row.uuid)">详情</el-button>
+              <el-dropdown trigger="click" @command="handleRowCommand($event, row)">
+                <el-button link type="primary" class="more-action">
+                  更多<el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="verification">认证设置</el-dropdown-item>
+                    <el-dropdown-item v-if="isVerifiedUser(row)" command="applications">
+                      查看应用
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="row.systemRole !== 'SUPER_ADMIN'"
+                      command="role"
+                    >
+                      {{ row.systemRole === 'ADMIN' ? '撤销管理员' : '任命普通管理员' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="row.systemRole !== 'SUPER_ADMIN'"
+                      command="delete"
+                      divided
+                      class="danger-menu-item"
+                    >删除账号</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div></template
           ></el-table-column
         >
       </el-table>
@@ -358,6 +371,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { consoleApi, type ConsoleUser, type DeveloperVerificationType } from '@/api/console'
 import { useSessionStore } from '@/stores/session'
@@ -506,6 +520,17 @@ const showDetail = async (uuid: string) => {
 }
 const showApplications = (uuid: string) => {
   void router.push({ path: '/user-applications', query: { user: uuid } })
+}
+const handleRowCommand = (command: string, user: ConsoleUser) => {
+  if (command === 'verification') requestVerification(user)
+  else if (command === 'applications') showApplications(user.uuid)
+  else if (command === 'role') requestRole(user)
+  else if (command === 'delete') requestDelete(user)
+}
+const handleBulkCommand = (command: string) => {
+  if (command === 'assign-admin') requestBulkRole('ADMIN')
+  else if (command === 'revoke-admin') requestBulkRole('USER')
+  else if (command === 'delete') requestBulkDelete()
 }
 const requestVerification = (user: ConsoleUser) => {
   certificationUser.value = user
@@ -757,6 +782,34 @@ onMounted(async () => {
 .user-cell .muted {
   font-size: 12px;
   margin-top: 3px;
+}
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.more-action {
+  padding-inline: 5px;
+}
+.dropdown-icon {
+  margin-left: 4px;
+  font-size: 11px;
+}
+.bulk-selection-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-right: auto;
+  color: var(--console-text-secondary);
+  font-size: 13px;
+}
+.bulk-selection-summary strong {
+  color: var(--console-text);
+  font-size: 15px;
+}
+:global(.el-dropdown-menu__item.danger-menu-item) {
+  color: var(--el-color-danger);
 }
 .bulk-confirm-list ul,
 .delete-user-list {
