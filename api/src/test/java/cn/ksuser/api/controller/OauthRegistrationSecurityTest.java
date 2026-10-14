@@ -155,7 +155,7 @@ class OauthRegistrationSecurityTest {
         verify(users, never()).register(anyString(), anyString(), anyString());
         verify(accounts, never()).save(any());
         verifyNoInteractions(sessions, jwt);
-        verify(rateLimit, never()).recordRegisterSuccess(anyString(), anyString());
+        verify(rateLimit, never()).recordRegisterSuccess(anyString());
         assertTrue(redisState.containsKey(PENDING_KEY), "Rejected registration must preserve its OAuth identity ticket");
         assertNull(servletResponse.getHeader("Set-Cookie"));
     }
@@ -213,7 +213,7 @@ class OauthRegistrationSecurityTest {
     void registrationLockCannotBeBypassedThroughOAuth(String provider) throws Exception {
         OauthRegisterBindRequest body = requestFor(provider);
         when(rateLimit.getClientIp(any())).thenReturn(CHANGED_IP);
-        when(rateLimit.isRegisterLocked(CHANGED_IP, USER_AGENT)).thenReturn(true);
+        when(rateLimit.isRegisterLocked(CHANGED_IP)).thenReturn(true);
 
         assertRejected(register(body), 429, ApiResultCode.AUTH_011);
         assertEquals(CODE, redisState.get("verification:code:" + EMAIL));
@@ -301,7 +301,7 @@ class OauthRegistrationSecurityTest {
     void ordinaryAndOAuthRegistrationApplyTheSamePolicy(String scenario) throws Exception {
         OauthRegisterBindRequest body = requestFor("github");
         switch (scenario) {
-            case "registration-lock" -> when(rateLimit.isRegisterLocked(IP, USER_AGENT)).thenReturn(true);
+            case "registration-lock" -> when(rateLimit.isRegisterLocked(IP)).thenReturn(true);
             case "invalid-username" -> body.setUsername("a!");
             case "weak-password" -> body.setPassword("alllowercase");
             case "missing-code" -> body.setCode(null);
@@ -367,8 +367,8 @@ class OauthRegistrationSecurityTest {
         for (String field : new String[] {"code", "sent", "email", "ip", "error"}) {
             assertFalse(redisState.containsKey("verification:" + field + ":" + EMAIL));
         }
-        verify(rateLimit).isRegisterLocked(currentIp, USER_AGENT);
-        verify(rateLimit).recordRegisterSuccess(currentIp, USER_AGENT);
+        verify(rateLimit).isRegisterLocked(currentIp);
+        verify(rateLimit).recordRegisterSuccess(currentIp);
         verify(sessions).createSession(user, "refresh-fixture", currentIp, USER_AGENT);
         assertEquals(0, codes.getErrorCount(EMAIL));
         verify(logs).logRegister(eq(http), eq(17L), eq(true), isNull(), anyLong());
@@ -380,7 +380,7 @@ class OauthRegistrationSecurityTest {
         verify(users, times(1)).register(anyString(), anyString(), anyString());
         verify(accounts, times(1)).save(any());
         verify(sessions, times(1)).createSession(any(), anyString(), anyString(), anyString());
-        verify(rateLimit, times(1)).recordRegisterSuccess(currentIp, USER_AGENT);
+        verify(rateLimit, times(1)).recordRegisterSuccess(currentIp);
     }
 
     @Test
@@ -394,8 +394,8 @@ class OauthRegistrationSecurityTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(ApiResultCode.AUTH_032, response.getBody().getErrorCode());
         verify(users).register("Verified_User", EMAIL, PASSWORD);
-        verify(rateLimit).isRegisterLocked(CHANGED_IP, USER_AGENT);
-        verify(rateLimit).recordRegisterSuccess(CHANGED_IP, USER_AGENT);
+        verify(rateLimit).isRegisterLocked(CHANGED_IP);
+        verify(rateLimit).recordRegisterSuccess(CHANGED_IP);
         verify(sessions).createSession(user, "refresh-fixture", CHANGED_IP, USER_AGENT);
         assertEquals(0, codes.getErrorCount(EMAIL));
         assertEquals(4, codes.verifyRegistrationCode(EMAIL, CODE));

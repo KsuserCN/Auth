@@ -125,7 +125,8 @@ OAuth registration (`POST /oauth/{provider}/register-bind`, where `provider` is
 `{"email":"you@example.com","type":"register"}`. Registration remains available
 if the user's network changes after the code is sent.
 The endpoint uses the same username/password checks, email verification failure
-limits, and registration IP/User-Agent locks as `POST /auth/register`. A third-party
+limits, and registration IP locks as `POST /auth/register`. User-Agent is retained
+as client information for sessions and security logs, not as a registration lock key. A third-party
 OAuth identity alone does not verify the submitted email address.
 
 ---
@@ -201,4 +202,5 @@ OAuth 注册并绑定接口 `POST /oauth/{provider}/register-bind`（`qq`、`git
 `microsoft`、`google`）必须提交 `bindToken`、`username`、`email`、`password` 和
 `code`。先通过 `/auth/send-code` 发送 `type=register` 的邮箱验证码，接收验证码后
 更换网络仍可完成注册。接口与 `/auth/register` 共用用户名、密码、邮箱验证码失败次数限制和
-注册 IP/User-Agent 锁定规则，不能仅凭第三方 OAuth 身份证明所填写邮箱的归属。
+注册 IP 锁定规则。User-Agent 仅作为会话和安全日志的客户端信息，不作为注册锁定依据。
+不能仅凭第三方 OAuth 身份证明所填写邮箱的归属。

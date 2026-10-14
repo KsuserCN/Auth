@@ -6,8 +6,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -258,46 +256,34 @@ public class RateLimitService {
     }
 
     /**
-     * 注册功能是否被锁定（按 IP 或 UA 任一命中即锁定）
+     * 注册功能是否被锁定（按当前 IP）
      * @param ip IP
-     * @param userAgent User-Agent
      * @return 是否锁定
      */
-    public boolean isRegisterLocked(String ip, String userAgent) {
-        return getRegisterLockRemainingSeconds(ip, userAgent) > 0;
+    public boolean isRegisterLocked(String ip) {
+        return getRegisterLockRemainingSeconds(ip) > 0;
     }
 
     /**
      * 获取注册锁定剩余时间（秒）
      * @param ip IP
-     * @param userAgent User-Agent
      * @return 剩余秒数，0 表示未锁定
      */
-    public long getRegisterLockRemainingSeconds(String ip, String userAgent) {
+    public long getRegisterLockRemainingSeconds(String ip) {
         String ipKey = REGISTER_LOCK_PREFIX + "ip:" + ip;
-        String uaKey = REGISTER_LOCK_PREFIX + "ua:" + normalizeUserAgent(userAgent);
-        long ipTtl = getTtlSeconds(ipKey);
-        long uaTtl = getTtlSeconds(uaKey);
-        return Math.max(ipTtl, uaTtl);
+        return getTtlSeconds(ipKey);
     }
 
     /**
-     * 记录注册成功次数，并根据次数设置锁定
+     * 按 IP 记录注册成功次数，并根据次数设置锁定
      * @param ip IP
-     * @param userAgent User-Agent
      */
-    public void recordRegisterSuccess(String ip, String userAgent) {
-        String uaKey = normalizeUserAgent(userAgent);
+    public void recordRegisterSuccess(String ip) {
         String dateKey = LocalDate.now().toString();
 
         String ipCountKey = REGISTER_SUCCESS_PREFIX + "ip:" + ip + ":" + dateKey;
-        String uaCountKey = REGISTER_SUCCESS_PREFIX + "ua:" + uaKey + ":" + dateKey;
-
         long ipCount = incrementWithDailyExpiry(ipCountKey);
-        long uaCount = incrementWithDailyExpiry(uaCountKey);
-
-        applyRegisterLockIfNeeded("ip", ip, ipCount);
-        applyRegisterLockIfNeeded("ua", uaKey, uaCount);
+        applyRegisterLockIfNeeded(ip, ipCount);
     }
 
     private int getRemainingMinuteRequests(String identifier, int limit) {
@@ -316,18 +302,18 @@ public class RateLimitService {
         return count == null ? 0 : count;
     }
 
-    private void applyRegisterLockIfNeeded(String scope, String identifier, long count) {
+    private void applyRegisterLockIfNeeded(String ip, long count) {
         if (count == 2) {
-            setRegisterLock(scope, identifier, REGISTER_LOCK_10_MIN);
+            setRegisterLock(ip, REGISTER_LOCK_10_MIN);
         } else if (count == 3) {
-            setRegisterLock(scope, identifier, REGISTER_LOCK_1_HOUR);
+            setRegisterLock(ip, REGISTER_LOCK_1_HOUR);
         } else if (count >= 4) {
-            setRegisterLock(scope, identifier, REGISTER_LOCK_1_DAY);
+            setRegisterLock(ip, REGISTER_LOCK_1_DAY);
         }
     }
 
-    private void setRegisterLock(String scope, String identifier, Duration duration) {
-        String key = REGISTER_LOCK_PREFIX + scope + ":" + identifier;
+    private void setRegisterLock(String ip, Duration duration) {
+        String key = REGISTER_LOCK_PREFIX + "ip:" + ip;
         redisTemplate.opsForValue().set(key, "locked", duration);
     }
 
@@ -341,21 +327,6 @@ public class RateLimitService {
         LocalDateTime endOfDay = now.toLocalDate().plusDays(1).atStartOfDay();
         long seconds = Duration.between(now, endOfDay).getSeconds();
         return Math.max(1, seconds);
-    }
-
-    private String normalizeUserAgent(String userAgent) {
-        String ua = userAgent == null || userAgent.trim().isEmpty() ? "unknown" : userAgent.trim();
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(ua.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return Integer.toHexString(ua.hashCode());
-        }
     }
 
     /**

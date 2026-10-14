@@ -254,11 +254,8 @@ public class AuthController {
         // 获取IP
         String clientIp = rateLimitService.getClientIp(request);
 
-        // 获取 User-Agent
-        String userAgent = rateLimitService.getClientUserAgent(request);
-
-        // 注册功能锁定检查（按 IP/UA）
-        if ("register".equals(type) && rateLimitService.isRegisterLocked(clientIp, userAgent)) {
+        // 注册功能锁定检查（按 IP）
+        if ("register".equals(type) && rateLimitService.isRegisterLocked(clientIp)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                 .body(new ApiResponse<>(429, ApiResultCode.AUTH_011));
         }
@@ -334,7 +331,7 @@ public class AuthController {
         String userAgent = rateLimitService.getClientUserAgent(request);
 
         RegistrationValidationService.Rejection rejection = registrationValidationService.validatePasswordRegistration(
-            username, email, password, code, clientIp, userAgent);
+            username, email, password, code, clientIp);
         if (rejection != null) {
             sensitiveLogUtil.logRegister(request, null, false, rejection.reason(), startTime);
             return ResponseEntity.status(rejection.status())
@@ -380,8 +377,8 @@ public class AuthController {
         // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
         setRefreshTokenCookie(response, refreshToken);
 
-        // 记录注册成功次数（按 IP/UA）
-        rateLimitService.recordRegisterSuccess(clientIp, userAgent);
+        // 记录注册成功次数（按 IP）
+        rateLimitService.recordRegisterSuccess(clientIp);
 
         // 记录注册成功日志
         sensitiveLogUtil.logRegister(request, result.getUser().getId(), true, null, startTime);

@@ -26,8 +26,8 @@ public class RegistrationValidationService {
 
     /** Returns a rejection, or null after validating and consuming the email verification code. */
     public Rejection validatePasswordRegistration(String username, String email, String password, String code,
-                                                  String clientIp, String userAgent) {
-        if (rateLimit.isRegisterLocked(clientIp, userAgent)) {
+                                                  String clientIp) {
+        if (rateLimit.isRegisterLocked(clientIp)) {
             return reject(HttpStatus.TOO_MANY_REQUESTS, ApiResultCode.AUTH_011, "Registration locked");
         }
         if (username == null || username.isBlank()) {
