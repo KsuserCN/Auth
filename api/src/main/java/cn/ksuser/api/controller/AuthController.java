@@ -66,6 +66,7 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final EmailService emailService;
     private final VerificationCodeService verificationCodeService;
+    private final RegistrationValidationService registrationValidationService;
     private final RateLimitService rateLimitService;
     private final SensitiveOperationService sensitiveOperationService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -116,13 +117,15 @@ public class AuthController {
                           QrChallengeService qrChallengeService,
                           AdaptiveRiskOrchestrationService adaptiveRiskOrchestrationService,
                           AdaptiveRiskMetricsService adaptiveRiskMetricsService,
-                          cn.ksuser.api.repository.UserOauthAccountRepository appleAccounts) {
+                          cn.ksuser.api.repository.UserOauthAccountRepository appleAccounts,
+                          RegistrationValidationService registrationValidationService) {
         this.userService = userService;
         this.appleAccounts = appleAccounts;
         this.userSessionService = userSessionService;
         this.jwtUtil = jwtUtil;
         this.emailService = emailService;
         this.verificationCodeService = verificationCodeService;
+        this.registrationValidationService = registrationValidationService;
         this.rateLimitService = rateLimitService;
         this.sensitiveOperationService = sensitiveOperationService;
         this.tokenBlacklistService = tokenBlacklistService;
@@ -330,123 +333,12 @@ public class AuthController {
 
         String userAgent = rateLimitService.getClientUserAgent(request);
 
-        // 注册功能锁定检查（按 IP/UA）
-        if (rateLimitService.isRegisterLocked(clientIp, userAgent)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Registration locked", startTime);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, ApiResultCode.AUTH_011));
-        }
-
-        // 参数校验
-        if (username == null || username.trim().isEmpty()) {
-            sensitiveLogUtil.logRegister(request, null, false, "Empty username", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_002));
-        }
-        if (email == null || email.trim().isEmpty()) {
-            sensitiveLogUtil.logRegister(request, null, false, "Empty email", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_007));
-        }
-        if (!securityValidator.isValidEmail(email)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Invalid email format", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
-        }
-        if (password == null || password.trim().isEmpty()) {
-            sensitiveLogUtil.logRegister(request, null, false, "Empty password", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_017));
-        }
-        if (code == null || code.trim().isEmpty()) {
-            sensitiveLogUtil.logRegister(request, null, false, "Empty verification code", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
-        }
-
-        // 使用 SecurityValidator 进行安全验证
-        if (!securityValidator.isValidUsername(username)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Invalid username format", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_019));
-        }
-
-        if (!securityValidator.isValidEmail(email)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Invalid email format", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_008));
-        }
-
-        if (!securityValidator.isValidPasswordLength(password)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Invalid password length", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_020.withParams("min", appProperties.getPassword().getMinLength(), "max", appProperties.getPassword().getMaxLength())));
-        }
-
-        if (!securityValidator.isStrongPassword(password)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Weak password", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, buildPasswordRequirementMessage()));
-        }
-
-        if (securityValidator.isCommonWeakPassword(password)) {
-            sensitiveLogUtil.logRegister(request, null, false, "Common weak password", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_021));
-        }
-
-        // 检查 SQL 注入
-        if (securityValidator.possibleSqlInjection(username) || 
-            securityValidator.possibleSqlInjection(email)) {
-            sensitiveLogUtil.logRegister(request, null, false, "SQL injection detected", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_022));
-        }
-
-        // 验证验证码
-        int verifyResult = verificationCodeService.verifyCode(email, code, clientIp);
-        if (verifyResult != 0) {
-            // 0 = 成功，1 = 已过期，2 = 错误，3 = 被锁定，4 = 未发送，5 = 邮箱不匹配，6 = IP不匹配
-            if (verifyResult == 3) {
-                sensitiveLogUtil.logRegister(request, null, false, "Verification code locked", startTime);
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
-            } else if (verifyResult == 4) {
-                sensitiveLogUtil.logRegister(request, null, false, "No verification code sent", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_023));
-            } else if (verifyResult == 5) {
-                int errorCount = verificationCodeService.getErrorCount(email);
-                sensitiveLogUtil.logRegister(request, null, false, "Email mismatch", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_024.withParams("count", errorCount)));
-            } else if (verifyResult == 6) {
-                int errorCount = verificationCodeService.getErrorCount(email);
-                sensitiveLogUtil.logRegister(request, null, false, "Device mismatch", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_025.withParams("count", errorCount)));
-            } else if (verifyResult == 1) {
-                // 验证码已过期，但需要检查是否因错误次数导致锁定
-                if (verificationCodeService.isLocked(email)) {
-                    sensitiveLogUtil.logRegister(request, null, false, "Verification code locked", startTime);
-                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
-                }
-                int errorCount = verificationCodeService.getErrorCount(email);
-                sensitiveLogUtil.logRegister(request, null, false, "Verification code expired", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_026.withParams("count", errorCount)));
-            } else {
-                if (verificationCodeService.isLocked(email)) {
-                    sensitiveLogUtil.logRegister(request, null, false, "Verification code locked", startTime);
-                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
-                }
-                int errorCount = verificationCodeService.getErrorCount(email);
-                sensitiveLogUtil.logRegister(request, null, false, "Invalid verification code", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_027.withParams("count", errorCount)));
-            }
+        RegistrationValidationService.Rejection rejection = registrationValidationService.validatePasswordRegistration(
+            username, email, password, code, clientIp, userAgent);
+        if (rejection != null) {
+            sensitiveLogUtil.logRegister(request, null, false, rejection.reason(), startTime);
+            return ResponseEntity.status(rejection.status())
+                .body(new ApiResponse<>(rejection.status().value(), rejection.result()));
         }
 
         // 验证码验证成功后，检查邮箱是否已注册

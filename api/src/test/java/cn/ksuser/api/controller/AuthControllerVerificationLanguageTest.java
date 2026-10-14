@@ -41,7 +41,7 @@ class AuthControllerVerificationLanguageTest {
             mock(UserSettingsRepository.class), mock(MfaService.class), mock(SensitiveLogUtil.class),
             mock(SessionTransferService.class), mock(MobileBridgeService.class), mock(AccountRecoveryService.class),
             mock(QrChallengeService.class), mock(AdaptiveRiskOrchestrationService.class), mock(AdaptiveRiskMetricsService.class),
-            mock(UserOauthAccountRepository.class));
+            mock(UserOauthAccountRepository.class), mock(RegistrationValidationService.class));
         when(users.findByUuid("current-user")).thenReturn(Optional.of(new User("current-user", "fixture", "bound@example.com", null)));
     }
 

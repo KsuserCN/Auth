@@ -14,6 +14,7 @@ import cn.ksuser.api.entity.UserSession;
 import cn.ksuser.api.repository.UserOauthAccountRepository;
 import cn.ksuser.api.repository.UserRepository;
 import cn.ksuser.api.service.RateLimitService;
+import cn.ksuser.api.service.RegistrationValidationService;
 import cn.ksuser.api.service.UserSessionService;
 import cn.ksuser.api.util.JwtUtil;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -64,6 +65,7 @@ public class OauthController {
     private final JwtUtil jwtUtil;
     private final UserSessionService userSessionService;
     private final RateLimitService rateLimitService;
+    private final RegistrationValidationService registrationValidationService;
     private final cn.ksuser.api.repository.UserSettingsRepository userSettingsRepository;
     private final cn.ksuser.api.service.TotpService totpService;
     private final cn.ksuser.api.service.MfaService mfaService;
@@ -118,7 +120,8 @@ public class OauthController {
                            cn.ksuser.api.util.SensitiveLogUtil sensitiveLogUtil,
                            cn.ksuser.api.repository.UserPasskeyRepository userPasskeyRepository,
                            cn.ksuser.api.service.SensitiveOperationService sensitiveOperationService,
-                           StringRedisTemplate redisTemplate) {
+                           StringRedisTemplate redisTemplate,
+                           RegistrationValidationService registrationValidationService) {
         this.appProperties = appProperties;
         this.oauthRepo = oauthRepo;
         this.userRepository = userRepository;
@@ -126,6 +129,7 @@ public class OauthController {
         this.jwtUtil = jwtUtil;
         this.userSessionService = userSessionService;
         this.rateLimitService = rateLimitService;
+        this.registrationValidationService = registrationValidationService;
         this.userSettingsRepository = userSettingsRepository;
         this.totpService = totpService;
         this.mfaService = mfaService;
@@ -921,17 +925,18 @@ public class OauthController {
     }
 
     /**
-     * 注册并绑定（前端传入 openid, username, email, password）
+     * 注册并绑定：邮箱验证码与普通注册使用同一套安全校验。
      */
     @PostMapping({"/qq/register-bind", "/github/register-bind", "/microsoft/register-bind", "/google/register-bind"})
     public ResponseEntity<ApiResponse<Object>> registerAndBind(@RequestBody cn.ksuser.api.dto.OauthRegisterBindRequest req,
                                                                HttpServletRequest request,
                                                                HttpServletResponse response) {
+        long startTime = System.currentTimeMillis();
         String provider = resolveProviderFromRequest(request, req.getProvider());
         String username = req.getUsername();
         String email = req.getEmail();
         String password = req.getPassword();
-        if (provider == null || username == null || username.isEmpty() || email == null || email.isEmpty() || password == null || password.isEmpty()) {
+        if (provider == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
 
@@ -943,6 +948,16 @@ public class OauthController {
         }
         if (findExistingOauthBinding(provider, pending).isPresent()) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_033.withParams("provider", providerDisplayName(provider))));
+        }
+
+        String clientIp = rateLimitService.getClientIp(request);
+        String userAgent = rateLimitService.getClientUserAgent(request);
+        RegistrationValidationService.Rejection rejection = registrationValidationService.validatePasswordRegistration(
+            username, email, password, req.getCode(), clientIp, userAgent);
+        if (rejection != null) {
+            sensitiveLogUtil.logRegister(request, null, false, rejection.reason(), startTime);
+            return ResponseEntity.status(rejection.status())
+                .body(new ApiResponse<>(rejection.status().value(), rejection.result()));
         }
 
         // 使用 UserService 注册
@@ -965,8 +980,10 @@ public class OauthController {
 
         linkOauthAccount(provider, newUser, pending);
         consumePendingOauthIdentity(req.getBindToken());
+        rateLimitService.recordRegisterSuccess(clientIp, userAgent);
+        sensitiveLogUtil.logRegister(request, newUser.getId(), true, null, startTime);
 
-        return issueOauthLoginResponse(newUser, provider, request, response, System.currentTimeMillis(), ApiResultCode.OAUTH_003);
+        return issueOauthLoginResponse(newUser, provider, request, response, startTime, ApiResultCode.OAUTH_003);
     }
 
     @PostMapping({"/qq/bind-pending", "/github/bind-pending", "/microsoft/bind-pending", "/google/bind-pending"})

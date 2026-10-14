@@ -50,7 +50,8 @@ class AuthControllerConsoleVerificationTest {
             sensitive,mock(TokenBlacklistService.class),new SecurityValidator(properties),properties,passkeys,
             mock(TotpService.class),mock(EncryptionUtil.class),mock(UserSettingsRepository.class),mfa,mock(SensitiveLogUtil.class),
             transfers,mock(MobileBridgeService.class),mock(AccountRecoveryService.class),qr,
-            mock(AdaptiveRiskOrchestrationService.class),mock(AdaptiveRiskMetricsService.class),mock(UserOauthAccountRepository.class));
+            mock(AdaptiveRiskOrchestrationService.class),mock(AdaptiveRiskMetricsService.class),mock(UserOauthAccountRepository.class),
+            mock(RegistrationValidationService.class));
         controller.setConsoleSessionService(console);
         controller.setOfficialQrAuthorizationService(officialQr);
         controller.setMobileAuthorizationService(mobileAuthorization);

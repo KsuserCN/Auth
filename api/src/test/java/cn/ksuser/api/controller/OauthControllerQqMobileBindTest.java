@@ -11,6 +11,7 @@ import cn.ksuser.api.repository.UserRepository;
 import cn.ksuser.api.repository.UserSettingsRepository;
 import cn.ksuser.api.service.MfaService;
 import cn.ksuser.api.service.RateLimitService;
+import cn.ksuser.api.service.RegistrationValidationService;
 import cn.ksuser.api.service.SensitiveOperationService;
 import cn.ksuser.api.service.TotpService;
 import cn.ksuser.api.service.UserService;
@@ -65,7 +66,7 @@ class OauthControllerQqMobileBindTest {
         controller = new OauthController(properties, accounts, mock(UserRepository.class), users,
             mock(JwtUtil.class), sessions, rateLimit, mock(UserSettingsRepository.class),
             mock(TotpService.class), mock(MfaService.class), mock(SensitiveLogUtil.class),
-            mock(UserPasskeyRepository.class), sensitive, redis);
+            mock(UserPasskeyRepository.class), sensitive, redis, mock(RegistrationValidationService.class));
         ReflectionTestUtils.setField(controller, "qqMobileAppId", "12345");
         ReflectionTestUtils.setField(controller, "qqMobileAllowedAppIds", "");
         ReflectionTestUtils.setField(controller, "restTemplate", qq);

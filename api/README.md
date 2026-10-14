@@ -119,6 +119,15 @@ iOS 会话安全推送使用 APNs，默认关闭。启用与迁移步骤见 [iOS
 - Do not commit real secrets. Use `.env.example` as a template and keep env files private.
 - WebAuthn/Passkey requires correct `origin` and `rpId` to match your frontend host.
 
+OAuth registration (`POST /oauth/{provider}/register-bind`, where `provider` is
+`qq`, `github`, `microsoft`, or `google`) requires `bindToken`, `username`, `email`,
+`password`, and `code`. Obtain the email code through `POST /auth/send-code` with
+`{"email":"you@example.com","type":"register"}`. Registration remains available
+if the user's network changes after the code is sent.
+The endpoint uses the same username/password checks, email verification failure
+limits, and registration IP/User-Agent locks as `POST /auth/register`. A third-party
+OAuth identity alone does not verify the submitted email address.
+
 ---
 
 # Ksuser Auth API（中文）
@@ -187,3 +196,9 @@ cd api
 
 - 不要提交真实密钥/密码；请以 `.env.example` 为模板，并确保 env 文件不对外公开。
 - Passkey（WebAuthn）对 `origin` 与 `rpId` 要求严格，需与前端域名/端口一致。
+
+OAuth 注册并绑定接口 `POST /oauth/{provider}/register-bind`（`qq`、`github`、
+`microsoft`、`google`）必须提交 `bindToken`、`username`、`email`、`password` 和
+`code`。先通过 `/auth/send-code` 发送 `type=register` 的邮箱验证码，接收验证码后
+更换网络仍可完成注册。接口与 `/auth/register` 共用用户名、密码、邮箱验证码失败次数限制和
+注册 IP/User-Agent 锁定规则，不能仅凭第三方 OAuth 身份证明所填写邮箱的归属。

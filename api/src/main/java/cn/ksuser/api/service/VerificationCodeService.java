@@ -86,6 +86,18 @@ public class VerificationCodeService {
      * @return 验证结果，0-成功，1-验证码已过期，2-验证码错误，3-邮箱被锁定，4-未发送验证码，5-邮箱不匹配，6-IP不匹配
      */
     public int verifyCode(String email, String code, String clientIp) {
+        return verifyCode(email, code, clientIp, true);
+    }
+
+    /**
+     * 注册时仅验证邮箱归属，允许用户在接收验证码后更换网络。
+     * 保留有效期、邮箱匹配、错误次数限制和成功后的验证码消费。
+     */
+    public int verifyRegistrationCode(String email, String code) {
+        return verifyCode(email, code, null, false);
+    }
+
+    private int verifyCode(String email, String code, String clientIp, boolean requireIpMatch) {
         // 检查是否被锁定
         if (isLocked(email)) {
             return 3;
@@ -97,7 +109,6 @@ public class VerificationCodeService {
         String ipKey = IP_PREFIX + email;
         String storedCode = redisTemplate.opsForValue().get(codeKey);
         String storedEmail = redisTemplate.opsForValue().get(emailKey);
-        String storedIp = redisTemplate.opsForValue().get(ipKey);
         boolean hasSent = Boolean.TRUE.equals(redisTemplate.hasKey(sentKey));
 
         // 如果从未发送过验证码
@@ -111,10 +122,12 @@ public class VerificationCodeService {
             return 5; // 邮箱不匹配
         }
 
-        // 验证IP是否匹配
-        if (storedIp == null || !storedIp.equals(clientIp)) {
-            incrementErrorCount(email);
-            return 6; // IP不匹配
+        if (requireIpMatch) {
+            String storedIp = redisTemplate.opsForValue().get(ipKey);
+            if (storedIp == null || !storedIp.equals(clientIp)) {
+                incrementErrorCount(email);
+                return 6; // IP不匹配
+            }
         }
 
         // 如果验证码不存在但曾经发送过，说明验证码已过期

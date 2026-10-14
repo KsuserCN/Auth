@@ -44,7 +44,8 @@ class AuthControllerSensitiveRecoveryTest {
             sensitive,mock(TokenBlacklistService.class),new SecurityValidator(properties),properties,mock(PasskeyService.class),
             totp,encryption,mock(UserSettingsRepository.class),mock(MfaService.class),mock(SensitiveLogUtil.class),
             mock(SessionTransferService.class),mock(MobileBridgeService.class),mock(AccountRecoveryService.class),
-            mock(QrChallengeService.class),mock(AdaptiveRiskOrchestrationService.class),mock(AdaptiveRiskMetricsService.class),mock(UserOauthAccountRepository.class));
+            mock(QrChallengeService.class),mock(AdaptiveRiskOrchestrationService.class),mock(AdaptiveRiskMetricsService.class),mock(UserOauthAccountRepository.class),
+            mock(RegistrationValidationService.class));
         console=mock(ConsoleSessionService.class);
         controller.setConsoleSessionService(console);
         User user=new User("current-user","name","name@example.com",null);user.setId(17L);

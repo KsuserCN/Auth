@@ -1238,6 +1238,7 @@ export interface OAuthRegisterBindRequest {
   username: string
   email: string
   password: string
+  code: string
 }
 
 export interface OAuthBindCallbackResponse extends ApiResultPayload {
