@@ -86,55 +86,130 @@ struct QRConfirmationView: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(0, Int(confirmation.expiresAt.timeIntervalSince(context.date)))
             PageScroll {
-                AppCard {
-                    CardHeader(title: title, subtitle: confirmation.isTransfer ? L10n.text("即将把这台设备切换到二维码所属的账号。") : L10n.text("请核对请求来源，确认是你正在使用的设备。"), icon: confirmation.isTransfer ? "person.crop.circle.badge.checkmark" : "qrcode")
-                    InfoRow(title: L10n.text("请求类型"), value: typeLabel)
-                    if confirmation.preview.isConsoleLogin || confirmation.preview.isOfficialAuthorization {
-                        if let logo = confirmation.preview.targetLogoUrl, let url = URL(string: logo) {
-                            AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Color.clear }
-                                .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 12)).accessibilityHidden(true)
-                        }
-                        InfoRow(title: L10n.text("登录应用"), value: confirmation.preview.targetName ?? "Ksuser Console")
-                        if let origin = confirmation.preview.targetOrigin { InfoRow(title: L10n.text("登录网站"), value: origin) }
-                        InfoRow(title: L10n.text("授权资料"), value: confirmation.preview.requestedScopes?.map(scopeLabel).joined(separator: "、") ?? L10n.text("账号信息、邮箱"))
-                        if confirmation.preview.isConsoleLogin {
-                            Text(L10n.text("仅超级管理员可登录管理中心。确认后，浏览器将以当前账号登录。"))
-                                .font(.caption).foregroundStyle(.secondary)
-                        } else {
-                            Text(L10n.text("确认后，发起请求的设备将登录此应用。授权可在通行证隐私设置中撤销。"))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    InfoRow(title: L10n.text("客户端"), value: confirmation.preview.clientName ?? L10n.text("未知客户端"))
-                    InfoRow(title: L10n.text("设备"), value: [confirmation.preview.system, confirmation.preview.browser].compactMap { $0 }.joined(separator: " · "))
-                    InfoRow(title: "IP", value: confirmation.preview.ipAddress ?? L10n.text("未知"))
-                    InfoRow(title: L10n.text("位置"), value: confirmation.preview.ipLocation ?? L10n.text("未知"))
-                    InfoRow(title: L10n.text("有效期"), value: remaining > 0 ? L10n.format("{0} 秒", [String(describing: remaining)]) : L10n.text("已过期"))
-                    if let user = model.user, !confirmation.isTransfer { InfoRow(title: L10n.text("授权账号"), value: user.displayName) }
-                    if !model.isAuthenticated && !confirmation.isTransfer {
-                        Text(L10n.text("请先登录，再确认授权。")).foregroundStyle(.secondary)
-                        NavigationLink { AuthenticationView() } label: { Text(L10n.text("登录后继续")).frame(maxWidth: .infinity, minHeight: 50) }.buttonStyle(GoldButtonStyle())
-                    } else {
-                        AsyncActionButton(title: confirmation.isTransfer ? L10n.text("确认切换账号") : (confirmation.preview.isConsoleLogin ? L10n.text("确认登录管理中心") : (confirmation.preview.isOfficialAuthorization ? L10n.text("确认登录应用") : L10n.text("确认授权"))), isBusy: model.isBusy, disabled: remaining <= 0) {
-                            if confirmation.isTransfer && model.isAuthenticated { confirmTransfer = true }
-                            else { await model.approveQRCode() }
-                        }
-                        .confirmationDialog(L10n.text("切换到二维码所属账号？"), isPresented: $confirmTransfer, titleVisibility: .visible) {
-                            Button(L10n.text("确认切换")) { Task { await model.approveQRCode() } }
-                        } message: {
-                            Text(L10n.text("完成验证后，这台设备会显示新账号的资料。"))
-                        }
-                        if confirmation.preview.isOfficialAuthorization {
-                            Button(L10n.text("拒绝登录"), role: .cancel) { Task { await model.rejectOfficialQRCode() } }
-                                .disabled(model.isBusy || remaining <= 0)
+                confirmationHero(remaining: remaining)
+                if confirmation.preview.isConsoleLogin || confirmation.preview.isOfficialAuthorization {
+                    applicationRequestCard
+                }
+                requestSourceCard
+                if let user = model.user, !confirmation.isTransfer {
+                    AppCard {
+                        CardHeader(title: L10n.text("授权账号"), subtitle: L10n.text("请确认正在使用正确的账号"), icon: "person.crop.circle")
+                        HStack(spacing: 12) {
+                            AvatarView(url: user.avatarUrl, name: user.displayName, size: 48)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(user.displayName).font(.headline)
+                                Text(user.email).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Brand.success)
                         }
                     }
                 }
-                Text(L10n.text("只批准你本人发起的请求。陌生二维码可能导致其他设备访问你的账号。")).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 4)
+                Label(L10n.text("只批准你本人发起的请求。陌生二维码可能导致其他设备访问你的账号。"), systemImage: "exclamationmark.shield.fill")
+                    .font(.caption).foregroundStyle(Brand.gold).fixedSize(horizontal: false, vertical: true)
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Brand.subtleGold, in: RoundedRectangle(cornerRadius: 16))
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) { confirmationActions(remaining: remaining) }
         }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { model.dismissQR() } } }
             .sensitiveVerification()
+    }
+    private func confirmationHero(remaining: Int) -> some View {
+        AppCard {
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle().fill(Brand.subtleGold).frame(width: 76, height: 76)
+                    Image(systemName: confirmation.isTransfer ? "person.crop.circle.badge.checkmark" : "qrcode.viewfinder")
+                        .font(.system(size: 34, weight: .medium)).foregroundStyle(Brand.gold)
+                }
+                Text(title).font(.title2.bold()).multilineTextAlignment(.center)
+                Text(confirmation.isTransfer ? L10n.text("即将把这台设备切换到二维码所属的账号。") : L10n.text("请核对请求来源，确认是你正在使用的设备。"))
+                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    StatusPill(title: typeLabel, positive: true)
+                    StatusPill(title: remaining > 0 ? L10n.format("{0} 秒", [String(describing: remaining)]) : L10n.text("已过期"), positive: remaining > 0)
+                }
+            }.frame(maxWidth: .infinity).padding(.vertical, 8)
+        }
+    }
+    private var applicationRequestCard: some View {
+        AppCard {
+            CardHeader(title: L10n.text("应用信息"), subtitle: L10n.text("确认应用身份和授权资料"), icon: "square.stack.3d.up")
+            HStack(spacing: 12) {
+                targetApplicationLogo
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(confirmation.preview.targetName ?? "Ksuser Console").font(.headline)
+                    if let origin = confirmation.preview.targetOrigin {
+                        Text(origin).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L10n.text("授权资料")).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                if let scopes = confirmation.preview.requestedScopes, !scopes.isEmpty {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), alignment: .leading)], alignment: .leading, spacing: 8) {
+                        ForEach(scopes, id: \.self) { scope in
+                            Text(scopeLabel(scope)).font(.caption.weight(.medium))
+                                .padding(.horizontal, 10).padding(.vertical, 7)
+                                .background(Brand.subtleGold, in: Capsule()).foregroundStyle(Brand.gold)
+                        }
+                    }
+                } else {
+                    Text(L10n.text("账号信息、邮箱")).font(.subheadline)
+                }
+            }
+            Label(confirmation.preview.isConsoleLogin ? L10n.text("仅超级管理员可登录管理中心。确认后，浏览器将以当前账号登录。") : L10n.text("确认后，发起请求的设备将登录此应用。授权可在通行证隐私设置中撤销。"), systemImage: "lock.shield")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private var targetApplicationLogo: some View {
+        AsyncImage(url: confirmation.preview.targetLogoUrl.flatMap(URL.init(string:))) { phase in
+            if let image = phase.image { image.resizable().scaledToFit().padding(6) }
+            else { Image(systemName: "app.fill").font(.title2).foregroundStyle(Brand.gold) }
+        }
+        .frame(width: 52, height: 52)
+        .background(.white, in: RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.08)))
+        .accessibilityHidden(true)
+    }
+    private var requestSourceCard: some View {
+        AppCard {
+            CardHeader(title: L10n.text("请求来源"), subtitle: L10n.text("检查设备和网络位置是否与你的操作一致"), icon: "desktopcomputer")
+            InfoRow(title: L10n.text("客户端"), value: confirmation.preview.clientName ?? L10n.text("未知客户端"))
+            let device = [confirmation.preview.system, confirmation.preview.browser].compactMap { $0 }.joined(separator: " · ")
+            InfoRow(title: L10n.text("设备"), value: device.isEmpty ? L10n.text("未知") : device)
+            InfoRow(title: "IP", value: confirmation.preview.ipAddress ?? L10n.text("未知"))
+            InfoRow(title: L10n.text("位置"), value: confirmation.preview.ipLocation ?? L10n.text("未知"))
+        }
+    }
+    @ViewBuilder private func confirmationActions(remaining: Int) -> some View {
+        VStack(spacing: 8) {
+            if !model.isAuthenticated && !confirmation.isTransfer {
+                Text(L10n.text("请先登录，再确认授权。" )).font(.caption).foregroundStyle(.secondary)
+                NavigationLink { AuthenticationView() } label: { Text(L10n.text("登录后继续")).frame(maxWidth: .infinity, minHeight: 50) }.buttonStyle(GoldButtonStyle())
+            } else {
+                AsyncActionButton(title: approveTitle, isBusy: model.isBusy, disabled: remaining <= 0) {
+                    if confirmation.isTransfer && model.isAuthenticated { confirmTransfer = true }
+                    else { await model.approveQRCode() }
+                }
+                .confirmationDialog(L10n.text("切换到二维码所属账号？"), isPresented: $confirmTransfer, titleVisibility: .visible) {
+                    Button(L10n.text("确认切换")) { Task { await model.approveQRCode() } }
+                } message: {
+                    Text(L10n.text("完成验证后，这台设备会显示新账号的资料。"))
+                }
+                if confirmation.preview.isOfficialAuthorization {
+                    Button(L10n.text("拒绝登录"), role: .cancel) { Task { await model.rejectOfficialQRCode() } }
+                        .disabled(model.isBusy || remaining <= 0).frame(minHeight: 40)
+                }
+            }
+        }
+        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
+        .background(.regularMaterial)
+    }
+    private var approveTitle: String {
+        confirmation.isTransfer ? L10n.text("确认切换账号") : (confirmation.preview.isConsoleLogin ? L10n.text("确认登录管理中心") : (confirmation.preview.isOfficialAuthorization ? L10n.text("确认登录应用") : L10n.text("确认授权")))
     }
     private var title: String { confirmation.isTransfer ? L10n.text("确认账号切换") : (confirmation.preview.isConsoleLogin ? L10n.text("登录管理中心") : (confirmation.preview.isOfficialAuthorization ? L10n.text("官方应用登录") : L10n.text("确认扫码授权"))) }
     private func scopeLabel(_ scope: String) -> String {
@@ -173,14 +248,52 @@ struct BridgeConfirmationView: View {
             let remaining = max(0, Int(confirmation.expiresAt.timeIntervalSince(context.date)))
             PageScroll {
                 AppCard {
-                    CardHeader(title: L10n.text("允许浏览器登录？"), subtitle: L10n.text("你正在把当前账号的登录授权交给这个站点。"), icon: "globe")
-                    InfoRow(title: L10n.text("目标站点"), value: confirmation.status.returnOrigin ?? L10n.text("未知站点"))
-                    InfoRow(title: L10n.text("当前账号"), value: model.user?.displayName ?? L10n.text("尚未登录"))
-                    InfoRow(title: L10n.text("有效期"), value: remaining > 0 ? L10n.format("{0} 秒", [String(describing: remaining)]) : L10n.text("已过期"))
+                    VStack(spacing: 14) {
+                        ZStack {
+                            Circle().fill(Brand.subtleGold).frame(width: 76, height: 76)
+                            Image(systemName: "globe.americas.fill").font(.system(size: 34, weight: .medium)).foregroundStyle(Brand.gold)
+                        }
+                        Text(L10n.text("允许浏览器登录？")).font(.title2.bold()).multilineTextAlignment(.center)
+                        Text(L10n.text("你正在把当前账号的登录授权交给这个站点。"))
+                            .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        StatusPill(title: remaining > 0 ? L10n.format("{0} 秒", [String(describing: remaining)]) : L10n.text("已过期"), positive: remaining > 0)
+                    }.frame(maxWidth: .infinity).padding(.vertical, 8)
+                }
+                AppCard {
+                    CardHeader(title: L10n.text("目标网站"), subtitle: L10n.text("请确认这是你正在使用的网站"), icon: "network")
+                    Label(confirmation.status.returnOrigin ?? L10n.text("未知站点"), systemImage: "link")
+                        .font(.headline).foregroundStyle(.primary).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                }
+                AppCard {
+                    CardHeader(title: L10n.text("使用账号"), subtitle: L10n.text("授权后浏览器将以此账号登录"), icon: "person.crop.circle")
+                    if let user = model.user {
+                        HStack(spacing: 12) {
+                            AvatarView(url: user.avatarUrl, name: user.displayName, size: 48)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(user.displayName).font(.headline)
+                                Text(user.email).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Brand.success)
+                        }
+                    } else {
+                        Text(L10n.text("尚未登录")).foregroundStyle(.secondary)
+                    }
+                }
+                Label(L10n.text("仅批准你本人发起的请求。陌生二维码可能导致其他设备访问你的账号。"), systemImage: "exclamationmark.shield.fill")
+                    .font(.caption).foregroundStyle(Brand.gold).fixedSize(horizontal: false, vertical: true)
+                    .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Brand.subtleGold, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 8) {
                     AsyncActionButton(title: L10n.text("确认并打开网页"), isBusy: model.isBusy, disabled: remaining <= 0 || !model.isAuthenticated) {
                         if let url = await model.approveBridge() { returnToBrowser(url) }
                     }
-                }
+                    if !model.isAuthenticated {
+                        Text(L10n.text("请先登录，再确认授权。" )).font(.caption).foregroundStyle(.secondary)
+                    }
+                }.padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8).background(.regularMaterial)
             }
         }.navigationTitle(L10n.text("网页登录授权")).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { Task { if let url = await model.cancelBridge() { returnToBrowser(url) } } } } }

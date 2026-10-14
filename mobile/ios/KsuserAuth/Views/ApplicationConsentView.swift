@@ -15,13 +15,12 @@ struct ApplicationConsentView: View {
     var body: some View {
         PageScroll {
             VStack(spacing: 18) {
-                Label(L10n.text("KSUSER · 安全授权"), systemImage: "lock.shield.fill")
-                    .font(.caption.weight(.semibold)).tracking(2).foregroundStyle(Brand.gold)
                 HStack(spacing: 18) {
-                    Image("AppLogo").resizable().scaledToFit().frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 16))
+                    Image("AppLogo").resizable().scaledToFit().frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: 16))
                     Image(systemName: "arrow.right").font(.title3).foregroundStyle(Brand.gold)
                     applicationLogo
                 }.padding(.top, 10).accessibilityHidden(true)
+                applicationTrustBadge
                 Text(context.appName).font(.title.bold()).multilineTextAlignment(.center)
                 Text(L10n.text("申请使用你的 Ksuser 账号继续"))
                     .font(.subheadline).foregroundStyle(.secondary)
@@ -30,8 +29,10 @@ struct ApplicationConsentView: View {
             AppCard {
                 CardHeader(title: L10n.text("应用信息"), subtitle: L10n.text("确认应用身份后再授权"), icon: "square.stack.3d.up")
                 consentDetail(title: L10n.text("应用名称"), value: context.appName)
-                consentDetail(title: L10n.text("联系方式"), value: context.contactInfo?.isEmpty == false ? context.contactInfo! : L10n.text("应用未提供联系方式"))
-                consentDetail(title: L10n.text("返回网站"), value: URL(string: context.redirectUri)?.host ?? context.redirectUri)
+                if context.officialApplication != true {
+                    consentDetail(title: L10n.text("联系方式"), value: context.contactInfo?.isEmpty == false ? context.contactInfo! : L10n.text("应用未提供联系方式"))
+                }
+                consentDetail(title: L10n.text("返回网站"), value: redirectOrigin)
                 if context.consoleApplication == true {
                     Text(L10n.text("仅超级管理员可登录管理中心。确认后，浏览器将以当前账号登录。"))
                         .font(.caption).foregroundStyle(.secondary)
@@ -128,9 +129,51 @@ struct ApplicationConsentView: View {
     }
     private var applicationLogo: some View {
         AsyncImage(url: context.logoUrl.flatMap(URL.init(string:))) { phase in
-            if let image = phase.image { image.resizable().scaledToFill() }
-            else { Text(String(context.appName.prefix(1))).font(.title.bold()).foregroundStyle(Brand.gold).frame(maxWidth: .infinity, maxHeight: .infinity).background(Brand.subtleGold) }
-        }.frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: 20))
+            if let image = phase.image {
+                image.resizable().scaledToFit().padding(7)
+            } else {
+                Text(String(context.appName.prefix(1))).font(.title.bold()).foregroundStyle(Brand.gold)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).background(Brand.subtleGold)
+            }
+        }
+        .frame(width: 64, height: 64)
+        .background(.white, in: RoundedRectangle(cornerRadius: 20))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Color.primary.opacity(0.08)))
+    }
+    private var applicationTrustBadge: some View {
+        Group {
+            if context.officialApplication == true {
+                Label(L10n.text("官方应用授权"), systemImage: "checkmark.seal.fill")
+            } else if let subjectName = context.subjectName, !subjectName.isEmpty {
+                Label {
+                    Text(subjectVerificationLabel.map { "\(subjectName) · \($0)" } ?? subjectName)
+                } icon: {
+                    Image(systemName: "person.crop.circle.badge.checkmark")
+                }
+            } else {
+                Label(L10n.text("开发者信息未提供"), systemImage: "questionmark.circle")
+            }
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(Brand.gold)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Brand.subtleGold, in: Capsule())
+    }
+    private var redirectOrigin: String {
+        guard let url = URL(string: context.redirectUri), let scheme = url.scheme,
+              let host = url.host else { return context.redirectUri }
+        let port = url.port.map { ":\($0)" } ?? ""
+        return "\(scheme)://\(host)\(port)"
+    }
+    private var subjectVerificationLabel: String? {
+        switch context.subjectVerificationType {
+        case "personal": L10n.text("个人认证")
+        case "enterprise": L10n.text("企业认证")
+        case "admin": L10n.text("管理员")
+        default: nil
+        }
     }
     private func submit(approve: Bool) {
         guard !submitting else { return }

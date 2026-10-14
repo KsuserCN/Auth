@@ -14,6 +14,8 @@ struct MobileAuthorizationContext: Decodable, Sendable, Identifiable {
     var officialApplication: Bool? = nil
     var consoleApplication: Bool? = nil
     var webOrigin: String? = nil
+    var subjectName: String? = nil
+    var subjectVerificationType: String? = nil
     var id: String { ticket }
 }
 struct MobileAuthorizationReturn: Decodable, Sendable { let returnUrl: String?; let completed: Bool? }
