@@ -745,7 +745,7 @@
   "ui.oAuthQQCallback.message027": "Sign-in failed. Please try again.",
   "ui.oAuthQQCallback.message028": "Third-party sign-in state has expired. Please authorize again.",
   "ui.openPlatform.message001": "Developer platform",
-  "ui.openPlatform.message002": "Manage applications and callbacks for user authorization or single sign-on.",
+  "ui.openPlatform.message002": "Manage OAuth applications and callback URLs for user authorization.",
   "ui.openPlatform.message003": "Integration steps",
   "ui.openPlatform.message004": "Read documentation",
   "ui.openPlatform.message005": "Create an app",

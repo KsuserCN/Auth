@@ -745,7 +745,7 @@
   "ui.oAuthQQCallback.message027": "登录失败，请重试",
   "ui.oAuthQQCallback.message028": "第三方登录状态已过期，请重新授权",
   "ui.openPlatform.message001": "开发者平台",
-  "ui.openPlatform.message002": "管理应用、配置回调地址，接入用户授权或统一登录。",
+  "ui.openPlatform.message002": "管理 OAuth 应用、配置回调地址，接入用户授权。",
   "ui.openPlatform.message003": "接入步骤",
   "ui.openPlatform.message004": "阅读文档",
   "ui.openPlatform.message005": "创建应用",

@@ -111,18 +111,14 @@
           </p>
           <span class="mono">{{ selected.user.uuid }}</span>
         </div>
-        <form class="toolbar" @submit.prevent>
-          <el-select v-model="protocol" aria-label="应用协议">
-            <el-option label="全部协议" value="all" />
-            <el-option label="OAuth" value="oauth2" />
-          </el-select>
-          <span class="muted">共 {{ filteredApps.length }} 个应用</span>
+        <div class="toolbar">
+          <span class="muted">共 {{ selected.applications.length }} 个应用</span>
           <el-button @click="loadApplications(selected.user.uuid)">刷新应用</el-button>
-        </form>
+        </div>
         <el-table
-          :data="filteredApps"
+          :data="selected.applications"
           :row-key="(app: OwnedApplication) => `${app.protocol}:${app.clientId}`"
-          empty-text="该用户暂无此类应用"
+          empty-text="该用户暂无 OAuth 应用"
         >
           <el-table-column type="expand">
             <template #default="{ row }">
@@ -179,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   consoleApi,
@@ -204,12 +200,6 @@ const appsVisible = ref(false)
 const appsLoading = ref(false)
 const appsError = ref('')
 const selected = ref<UserApplications | null>(null)
-const protocol = ref<'all' | 'oauth2'>('all')
-const filteredApps = computed(() =>
-  (selected.value?.applications || []).filter(
-    (app) => protocol.value === 'all' || app.protocol === protocol.value,
-  ),
-)
 const date = (value: string) => (value ? new Date(value).toLocaleString('zh-CN') : '—')
 let loadGeneration = 0
 let appsGeneration = 0
@@ -277,7 +267,6 @@ const closeApplications = () => {
 watch(
   () => route.query.user,
   (uuid) => {
-    protocol.value = 'all'
     if (typeof uuid === 'string' && uuid) void loadApplications(uuid)
     else {
       ++appsGeneration

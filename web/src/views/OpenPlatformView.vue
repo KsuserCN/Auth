@@ -60,113 +60,91 @@
           <span aria-hidden="true">↗</span>
         </a>
       </div>
-      <el-tabs v-model="activeProtocol" class="protocol-tabs">
-        <el-tab-pane v-for="protocol in protocols" :key="protocol" :name="protocol">
-          <template #label>
-            <span class="protocol-label">
-              {{ t('ui.openPlatform.message009') }}
-              <span v-if="protocol === 'oauth' && oauthOverview" class="protocol-count">{{
-                oauthOverview.currentCount
-              }}</span>
-            </span>
-          </template>
-          <template v-if="activeProtocol === protocol">
-            <div class="applications-toolbar">
-              <div class="applications-description">
-                <p>
-                  {{
-                    t('ui.openPlatform.message010')
-                  }}
-                </p>
-                <span v-if="activeQuota" class="quota-text">{{ activeQuota }}</span>
-              </div>
-              <div class="toolbar-actions">
-                <el-button
-                  :icon="Refresh"
-                  :loading="activeLoading"
-                  @click="refreshActiveApplications"
-                >
-                  {{ t('ui.devices.message002') }}
-                </el-button>
-                <el-button
-                  type="primary"
-                  :icon="Plus"
-                  :disabled="!canCreateActive"
-                  @click="openActiveCreateDialog"
-                >
-                  {{ t('ui.openPlatform.message005') }}
-                </el-button>
-              </div>
-            </div>
+      <div class="applications-toolbar">
+        <div class="applications-description">
+          <p>{{ t('ui.openPlatform.message010') }}</p>
+          <span v-if="oauthQuota" class="quota-text">{{ oauthQuota }}</span>
+        </div>
+        <div class="toolbar-actions">
+          <el-button :icon="Refresh" :loading="oauthLoading" @click="loadOAuthApps">
+            {{ t('ui.devices.message002') }}
+          </el-button>
+          <el-button
+            type="primary"
+            :icon="Plus"
+            :disabled="!oauthOverview?.canCreate || oauthLoading || oauthLoadFailed"
+            @click="openOAuthCreateDialog"
+          >
+            {{ t('ui.openPlatform.message005') }}
+          </el-button>
+        </div>
+      </div>
 
-            <div class="applications-content" :aria-busy="activeLoading">
-              <el-skeleton v-if="activeLoading" :rows="4" animated />
-              <div v-else-if="activeLoadFailed" class="load-error" role="alert">
-                <span>{{ t('ui.openPlatform.applicationsLoadFailed') }}</span>
-                <el-button text type="primary" @click="refreshActiveApplications">{{
-                  t('ui.openPlatform.retry')
-                }}</el-button>
-              </div>
-              <template v-else-if="oauthOverview">
-                <div v-if="!oauthOverview.verified" class="permission-note" role="status">
-                  <el-icon><Lock /></el-icon>
-                  <span>{{ t('ui.openPlatform.message008') }}</span>
-                </div>
-                <div v-else-if="!oauthOverview.canCreate" class="permission-note" role="status">
-                  <span>{{ t('ui.openPlatform.limitReached') }}</span>
-                </div>
-                <el-empty
-                  v-if="!oauthOverview.apps.length"
-                  :image-size="72"
-                  :description="t('ui.openPlatform.message020')"
+      <div class="applications-content" :aria-busy="oauthLoading">
+        <el-skeleton v-if="oauthLoading" :rows="4" animated />
+        <div v-else-if="oauthLoadFailed" class="load-error" role="alert">
+          <span>{{ t('ui.openPlatform.applicationsLoadFailed') }}</span>
+          <el-button text type="primary" @click="loadOAuthApps">{{
+            t('ui.openPlatform.retry')
+          }}</el-button>
+        </div>
+        <template v-else-if="oauthOverview">
+          <div v-if="!oauthOverview.verified" class="permission-note" role="status">
+            <el-icon><Lock /></el-icon>
+            <span>{{ t('ui.openPlatform.message008') }}</span>
+          </div>
+          <div v-else-if="!oauthOverview.canCreate" class="permission-note" role="status">
+            <span>{{ t('ui.openPlatform.limitReached') }}</span>
+          </div>
+          <el-empty
+            v-if="!oauthOverview.apps.length"
+            :image-size="72"
+            :description="t('ui.openPlatform.message020')"
+          >
+            <p class="empty-hint">{{ t('ui.openPlatform.oauthEmptyHint') }}</p>
+          </el-empty>
+          <div v-else class="app-list">
+            <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item">
+              <button
+                class="app-title-wrap"
+                type="button"
+                @click="openOAuthDetailDialog(app.appId)"
+              >
+                <el-avatar
+                  shape="square"
+                  :size="44"
+                  :src="app.logoUrl || ''"
+                  :class="['app-logo', { 'app-logo--image': !!app.logoUrl }]"
                 >
-                  <p class="empty-hint">{{ t('ui.openPlatform.oauthEmptyHint') }}</p>
-                </el-empty>
-                <div v-else class="app-list">
-                  <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item">
-                    <button
-                      class="app-title-wrap"
-                      type="button"
-                      @click="openOAuthDetailDialog(app.appId)"
-                    >
-                      <el-avatar
-                        shape="square"
-                        :size="44"
-                        :src="app.logoUrl || ''"
-                        :class="['app-logo', { 'app-logo--image': !!app.logoUrl }]"
-                      >
-                        {{ app.appName.slice(0, 1).toUpperCase() }}
-                      </el-avatar>
-                      <span class="app-title-body">
-                        <span class="app-name">{{ app.appName }}</span>
-                        <span class="app-id">AppID: {{ app.appId }}</span>
-                      </span>
-                    </button>
-                    <div class="app-item-actions">
-                      <el-button text type="primary" @click="openOAuthDetailDialog(app.appId)">{{
-                        t('ui.openPlatform.manage')
-                      }}</el-button>
-                      <el-popconfirm
-                        :title="t('ui.openPlatform.message022')"
-                        :description="t('ui.openPlatform.message023')"
-                        :confirm-button-text="t('ui.loginOptions.message020')"
-                        :cancel-button-text="t('ui.addPasskey.message009')"
-                        @confirm="handleOAuthDelete(app.appId)"
-                      >
-                        <template #reference>
-                          <el-button text type="danger">{{
-                            t('ui.loginOptions.message020')
-                          }}</el-button>
-                        </template>
-                      </el-popconfirm>
-                    </div>
-                  </div>
-                </div>
-              </template>
+                  {{ app.appName.slice(0, 1).toUpperCase() }}
+                </el-avatar>
+                <span class="app-title-body">
+                  <span class="app-name">{{ app.appName }}</span>
+                  <span class="app-id">AppID: {{ app.appId }}</span>
+                </span>
+              </button>
+              <div class="app-item-actions">
+                <el-button text type="primary" @click="openOAuthDetailDialog(app.appId)">{{
+                  t('ui.openPlatform.manage')
+                }}</el-button>
+                <el-popconfirm
+                  :title="t('ui.openPlatform.message022')"
+                  :description="t('ui.openPlatform.message023')"
+                  :confirm-button-text="t('ui.loginOptions.message020')"
+                  :cancel-button-text="t('ui.addPasskey.message009')"
+                  @confirm="handleOAuthDelete(app.appId)"
+                >
+                  <template #reference>
+                    <el-button text type="danger">{{
+                      t('ui.loginOptions.message020')
+                    }}</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
             </div>
-          </template>
-        </el-tab-pane>
-      </el-tabs>
+          </div>
+        </template>
+      </div>
     </section>
 
     <el-dialog
@@ -477,15 +455,14 @@ import {
   type OAuth2Scope,
 } from '@/api/oauth2'
 const userStore = useUserStore()
-const protocols = ['oauth'] as const
-const activeProtocol = ref<(typeof protocols)[number]>('oauth')
-const activeLoading = computed(() => oauthLoading.value)
-const activeLoadFailed = computed(() => oauthLoadFailed.value)
-const canCreateActive = computed(() => !!oauthOverview.value?.canCreate && !activeLoading.value && !activeLoadFailed.value)
-const activeQuota = computed(() => oauthOverview.value && !activeLoadFailed.value ? t('ui.openPlatform.quota', { count: oauthOverview.value.currentCount, max: oauthOverview.value.maxApps }) : '')
+const oauthQuota = computed(() => {
+  if (!oauthOverview.value || oauthLoadFailed.value) return ''
+  return t('ui.openPlatform.quota', {
+    count: oauthOverview.value.currentCount,
+    max: oauthOverview.value.maxApps,
+  })
+})
 const activeDocumentUrl = computed(() => documentUrl('auth/oauth'))
-const refreshActiveApplications = () => loadOAuthApps()
-const openActiveCreateDialog = () => { if (canCreateActive.value) openOAuthCreateDialog() }
 const secretDialogTitle = computed(() => oauthCreatedApp.value ? t('ui.openPlatform.message071') : t('ui.openPlatform.message073'))
 const identityLoading = ref(true)
 const identityLoadFailed = ref(false)
@@ -1186,7 +1163,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 20px 24px 8px;
+  padding: 20px 24px;
 }
 
 .applications-heading h2 {
@@ -1217,45 +1194,6 @@ onBeforeUnmount(() => {
   outline: 2px solid var(--el-color-primary);
   outline-offset: 4px;
   border-radius: 4px;
-}
-
-.protocol-tabs :deep(.el-tabs__header) {
-  margin: 0;
-  padding: 0 24px;
-}
-
-.protocol-tabs :deep(.el-tabs__nav-wrap::after) {
-  height: 1px;
-  background: var(--el-border-color-lighter);
-}
-
-.protocol-tabs :deep(.el-tabs__item) {
-  height: 48px;
-  font-size: 14px;
-  color: var(--el-text-color-secondary);
-}
-
-.protocol-tabs :deep(.el-tabs__item.is-active) {
-  color: var(--el-text-color-primary);
-  font-weight: 600;
-}
-
-.protocol-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.protocol-count {
-  min-width: 20px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 20px;
-  text-align: center;
 }
 
 .applications-toolbar {
@@ -1799,11 +1737,7 @@ button.app-title-wrap:hover .app-name {
 
   .applications-heading {
     flex-wrap: wrap;
-    padding: 16px 20px 8px;
-  }
-
-  .protocol-tabs :deep(.el-tabs__header) {
-    padding: 0 20px;
+    padding: 16px 20px;
   }
 
   .applications-toolbar {
