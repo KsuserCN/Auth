@@ -5,6 +5,7 @@ import cn.ksuser.api.service.SensitiveLogService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import java.util.Locale;
 
 @Component
 public class SensitiveLogUtil {
@@ -88,7 +89,22 @@ public class SensitiveLogUtil {
      */
     public void logSensitiveVerify(HttpServletRequest request, Long userId, boolean success, 
                                   String failureReason, Long startTimeMs) {
-        log(request, userId, "SENSITIVE_VERIFY", null,
+        logSensitiveVerify(request, userId, null, success, failureReason, startTimeMs);
+    }
+
+    public void logSensitiveVerify(HttpServletRequest request, Long userId, String method, boolean success,
+                                  String failureReason, Long startTimeMs) {
+        String normalizedMethod = method == null ? null : switch (method.toLowerCase(Locale.ROOT)) {
+            case "password" -> "PASSWORD";
+            case "email-code", "email_code" -> "EMAIL_CODE";
+            case "totp" -> "TOTP";
+            case "recovery_code" -> "RECOVERY_CODE";
+            case "passkey" -> "PASSKEY";
+            case "apple" -> "APPLE";
+            case "qr" -> "QR";
+            default -> null;
+        };
+        log(request, userId, "SENSITIVE_VERIFY", normalizedMethod,
             success ? UserSensitiveLog.OperationResult.SUCCESS : UserSensitiveLog.OperationResult.FAILURE,
             failureReason, startTimeMs);
     }

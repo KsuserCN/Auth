@@ -1,5 +1,7 @@
 package cn.ksuser.auth.data.model
 
+import cn.ksuser.auth.core.security.SecurityLogPresentation
+
 import cn.ksuser.auth.core.network.ApiResultCodeResolver
 import cn.ksuser.auth.core.network.GeneratedApiResultCodes
 import com.google.gson.JsonElement
@@ -261,11 +263,7 @@ data class SensitiveLogItem(
     val durationMs: Int = 0,
     val createdAt: String,
 ) {
-    val displayFailureReason: String?
-        get() = failureReason?.let {
-            if (GeneratedApiResultCodes.messages.containsKey(it)) ApiResultCodeResolver.message(it, statusCode = 400)
-            else it
-        }
+    val displayFailureReason: String? get() = SecurityLogPresentation.reason(failureReason)
 }
 
 data class PaginatedSensitiveLogs(

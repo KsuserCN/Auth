@@ -75,7 +75,7 @@ public class AppleAuthController {
         AppleAuthService.Verified result=apple.verify(body,context,true);
         sensitive.markVerified(context.uuid(),context.ip());
         sessions.findActiveSessionById(context.sessionId()).ifPresent(session -> sessions.markStepUpVerified(session,"apple"));
-        logs.logSensitiveVerify(request,result.user().getId(),true,null,start);
+        logs.logSensitiveVerify(request,result.user().getId(),"APPLE",true,null,start);
         return ok(ApiResultCode.APPLE_003, Map.of("verified",true,"remainingSeconds",900));
     }
     @GetMapping("/status")

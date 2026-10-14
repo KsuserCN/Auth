@@ -1,0 +1,330 @@
+{
+  "operation.REGISTER": {
+    "zh-Hans": "注册账号",
+    "en": "Create account"
+  },
+  "operation.LOGIN": {
+    "zh-Hans": "登录账号",
+    "en": "Sign in"
+  },
+  "operation.SENSITIVE_VERIFY": {
+    "zh-Hans": "验证身份",
+    "en": "Verify identity"
+  },
+  "operation.ADAPTIVE_POLICY": {
+    "zh-Hans": "系统安全检查",
+    "en": "System security check"
+  },
+  "operation.CHANGE_PASSWORD": {
+    "zh-Hans": "修改密码",
+    "en": "Change password"
+  },
+  "operation.CHANGE_EMAIL": {
+    "zh-Hans": "修改邮箱",
+    "en": "Change email"
+  },
+  "operation.ADD_PASSKEY": {
+    "zh-Hans": "添加通行密钥",
+    "en": "Add passkey"
+  },
+  "operation.DELETE_PASSKEY": {
+    "zh-Hans": "删除通行密钥",
+    "en": "Delete passkey"
+  },
+  "operation.ENABLE_TOTP": {
+    "zh-Hans": "启用身份验证器",
+    "en": "Enable authenticator"
+  },
+  "operation.DISABLE_TOTP": {
+    "zh-Hans": "停用身份验证器",
+    "en": "Disable authenticator"
+  },
+  "operation.BIND_OAUTH": {
+    "zh-Hans": "绑定第三方账号",
+    "en": "Link external account"
+  },
+  "operation.UNBIND_OAUTH": {
+    "zh-Hans": "解绑第三方账号",
+    "en": "Unlink external account"
+  },
+  "operation.UPDATE_PROFILE": {
+    "zh-Hans": "更新个人资料",
+    "en": "Update profile"
+  },
+  "operation.DELETE_ACCOUNT": {
+    "zh-Hans": "注销账号",
+    "en": "Delete account"
+  },
+  "method.PASSWORD": {
+    "zh-Hans": "密码",
+    "en": "Password"
+  },
+  "method.EMAIL_CODE": {
+    "zh-Hans": "邮箱验证码",
+    "en": "Email code"
+  },
+  "method.PASSKEY": {
+    "zh-Hans": "通行密钥",
+    "en": "Passkey"
+  },
+  "method.MFA": {
+    "zh-Hans": "二步验证",
+    "en": "Two-step verification"
+  },
+  "method.TOTP": {
+    "zh-Hans": "身份验证器",
+    "en": "Authenticator"
+  },
+  "method.RECOVERY_CODE": {
+    "zh-Hans": "恢复码",
+    "en": "Recovery code"
+  },
+  "method.QR": {
+    "zh-Hans": "扫码登录",
+    "en": "QR code"
+  },
+  "method.APPLE": {
+    "zh-Hans": "Apple",
+    "en": "Apple"
+  },
+  "method.QQ": {
+    "zh-Hans": "QQ",
+    "en": "QQ"
+  },
+  "method.GITHUB": {
+    "zh-Hans": "GitHub",
+    "en": "GitHub"
+  },
+  "method.GOOGLE": {
+    "zh-Hans": "Google",
+    "en": "Google"
+  },
+  "method.MICROSOFT": {
+    "zh-Hans": "Microsoft",
+    "en": "Microsoft"
+  },
+  "method.WECHAT": {
+    "zh-Hans": "微信",
+    "en": "WeChat"
+  },
+  "method.BRIDGE": {
+    "zh-Hans": "跨端登录",
+    "en": "Cross-device sign-in"
+  },
+  "method.BRIDGE_FROM_DESKTOP": {
+    "zh-Hans": "来自桌面端",
+    "en": "From desktop"
+  },
+  "method.BRIDGE_FROM_WEB": {
+    "zh-Hans": "来自网页端",
+    "en": "From web"
+  },
+  "method.BRIDGE_TO_MOBILE": {
+    "zh-Hans": "登录到手机端",
+    "en": "To mobile"
+  },
+  "method.ACCOUNT_RECOVERY": {
+    "zh-Hans": "账号找回",
+    "en": "Account recovery"
+  },
+  "action.ALLOW": {
+    "zh-Hans": "安全检查通过",
+    "en": "Security check passed"
+  },
+  "action.STEP_UP": {
+    "zh-Hans": "需要再次验证身份",
+    "en": "Identity verification required"
+  },
+  "action.FREEZE": {
+    "zh-Hans": "会话已冻结",
+    "en": "Session frozen"
+  },
+  "action.BLOCK": {
+    "zh-Hans": "操作已阻止",
+    "en": "Operation blocked"
+  },
+  "ui.unknownOperation": {
+    "zh-Hans": "其他账号操作",
+    "en": "Other account activity"
+  },
+  "ui.unknownMethod": {
+    "zh-Hans": "其他验证方式",
+    "en": "Other verification method"
+  },
+  "ui.unknownAction": {
+    "zh-Hans": "其他安全措施",
+    "en": "Other security action"
+  },
+  "ui.method": {
+    "zh-Hans": "登录 / 验证方式",
+    "en": "Sign-in / verification method"
+  },
+  "ui.provider": {
+    "zh-Hans": "关联平台",
+    "en": "Linked provider"
+  },
+  "ui.action": {
+    "zh-Hans": "安全措施",
+    "en": "Security action"
+  },
+  "ui.system": {
+    "zh-Hans": "系统安全事件",
+    "en": "System security event"
+  },
+  "ui.executed": {
+    "zh-Hans": "已执行",
+    "en": "Applied"
+  },
+  "ui.note": {
+    "zh-Hans": "说明",
+    "en": "Details"
+  },
+  "ui.unknownReason": {
+    "zh-Hans": "操作未完成，请重试",
+    "en": "The operation could not be completed. Try again."
+  },
+  "ui.low": {
+    "zh-Hans": "低风险",
+    "en": "Low risk"
+  },
+  "ui.medium": {
+    "zh-Hans": "中风险",
+    "en": "Medium risk"
+  },
+  "ui.high": {
+    "zh-Hans": "高风险",
+    "en": "High risk"
+  },
+  "ui.policyEvents": {
+    "zh-Hans": "安全处置记录（7天）",
+    "en": "Security action records (7 days)"
+  },
+  "reason.not_authenticated": {
+    "zh-Hans": "登录已失效，请重新登录",
+    "en": "Sign in again to continue"
+  },
+  "reason.user_not_found": {
+    "zh-Hans": "未找到账号",
+    "en": "Account not found"
+  },
+  "reason.empty_verification_method": {
+    "zh-Hans": "请选择验证方式",
+    "en": "Choose a verification method"
+  },
+  "reason.invalid_verification_method": {
+    "zh-Hans": "此验证方式不可用",
+    "en": "This verification method is unavailable"
+  },
+  "reason.unknown_verification_method": {
+    "zh-Hans": "此验证方式不可用",
+    "en": "This verification method is unavailable"
+  },
+  "reason.empty_password": {
+    "zh-Hans": "请输入密码",
+    "en": "Enter your password"
+  },
+  "reason.invalid_password": {
+    "zh-Hans": "密码不正确",
+    "en": "Incorrect password"
+  },
+  "reason.empty_verification_code": {
+    "zh-Hans": "请输入验证码",
+    "en": "Enter a verification code"
+  },
+  "reason.verification_code_locked": {
+    "zh-Hans": "验证码错误次数过多，请稍后重试",
+    "en": "Too many incorrect codes. Try again later."
+  },
+  "reason.verification_code_not_sent": {
+    "zh-Hans": "请先获取验证码",
+    "en": "Request a verification code first"
+  },
+  "reason.verification_code_expired": {
+    "zh-Hans": "验证码已过期",
+    "en": "The verification code has expired"
+  },
+  "reason.verification_code_invalid": {
+    "zh-Hans": "验证码不正确",
+    "en": "Incorrect verification code"
+  },
+  "reason.verification_code_invalid_or_expired": {
+    "zh-Hans": "验证码不正确或已过期",
+    "en": "The verification code is incorrect or expired"
+  },
+  "reason.recovery_code_invalid_or_used": {
+    "zh-Hans": "恢复码不正确或已使用",
+    "en": "The recovery code is incorrect or already used"
+  },
+  "reason.totp_not_enabled": {
+    "zh-Hans": "尚未启用身份验证器",
+    "en": "Authenticator is not enabled"
+  },
+  "reason.email_mismatch": {
+    "zh-Hans": "邮箱与验证请求不一致",
+    "en": "The email does not match the verification request"
+  },
+  "reason.ip_mismatch": {
+    "zh-Hans": "网络环境已变化，请重新验证",
+    "en": "Your network changed. Verify again."
+  },
+  "reason.session_frozen_by_adaptive_risk": {
+    "zh-Hans": "系统已冻结此会话，请重新登录",
+    "en": "This session was frozen. Sign in again."
+  },
+  "reason.sensitive_verification_not_completed": {
+    "zh-Hans": "请先完成身份验证",
+    "en": "Verify your identity first"
+  },
+  "reason.empty_email": {
+    "zh-Hans": "请输入邮箱",
+    "en": "Enter your email"
+  },
+  "reason.invalid_email_format": {
+    "zh-Hans": "邮箱格式不正确",
+    "en": "Invalid email address"
+  },
+  "reason.email_already_exists": {
+    "zh-Hans": "此邮箱已被使用",
+    "en": "This email is already in use"
+  },
+  "reason.empty_new_password": {
+    "zh-Hans": "请输入新密码",
+    "en": "Enter a new password"
+  },
+  "reason.invalid_password_length": {
+    "zh-Hans": "密码长度不符合要求",
+    "en": "The password length does not meet the requirements"
+  },
+  "reason.weak_password": {
+    "zh-Hans": "密码强度不足",
+    "en": "The password is too weak"
+  },
+  "reason.common_weak_password": {
+    "zh-Hans": "请避免使用常见弱密码",
+    "en": "Avoid commonly used passwords"
+  },
+  "reason.empty_challenge_id": {
+    "zh-Hans": "验证请求已失效，请重试",
+    "en": "The verification request expired. Try again."
+  },
+  "reason.passkey_requires_webauthn_challenge": {
+    "zh-Hans": "请使用通行密钥完成验证",
+    "en": "Complete verification with a passkey"
+  },
+  "ui.multiErrorLock": {
+    "zh-Hans": "触发连续错误保护",
+    "en": "Repeated error protection triggered"
+  },
+  "ui.rateLimitLock": {
+    "zh-Hans": "触发请求频率保护",
+    "en": "Request rate protection triggered"
+  },
+  "reason.totp_code": {
+    "zh-Hans": "已通过身份验证器验证",
+    "en": "Verified with an authenticator"
+  },
+  "reason.recovery_code": {
+    "zh-Hans": "已通过恢复码验证",
+    "en": "Verified with a recovery code"
+  }
+}

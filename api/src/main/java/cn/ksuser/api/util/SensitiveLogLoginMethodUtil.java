@@ -23,16 +23,7 @@ public final class SensitiveLogLoginMethodUtil {
             return splitTokens(raw.substring(1, raw.length() - 1));
         }
 
-        if (raw.contains(",")) {
-            return splitTokens(raw);
-        }
-
-        String token = normalizeToken(raw);
-        if (token.endsWith("_MFA") && token.length() > 4) {
-            return List.of(token.substring(0, token.length() - 4), "MFA");
-        }
-
-        return List.of(token);
+        return splitTokens(raw);
     }
 
     private static List<String> splitTokens(String rawTokens) {
@@ -40,15 +31,19 @@ public final class SensitiveLogLoginMethodUtil {
         List<String> tokens = new ArrayList<>();
         for (String segment : segments) {
             String token = normalizeToken(segment);
-            if (!token.isEmpty() && !tokens.contains(token)) {
-                tokens.add(token);
+            if (token.isEmpty() || "NULL".equals(token)) continue;
+            List<String> expanded = token.endsWith("_MFA") && token.length() > 4
+                ? List.of(normalizeToken(token.substring(0, token.length() - 4)), "MFA")
+                : List.of(token);
+            for (String item : expanded) {
+                if (!tokens.contains(item)) tokens.add(item);
             }
         }
         return tokens;
     }
 
     private static String normalizeToken(String rawToken) {
-        String token = rawToken == null ? "" : rawToken.trim();
+        String token = rawToken == null ? "" : rawToken.trim().replace("\"", "").replace("'", "");
         if (token.isEmpty()) {
             return "";
         }

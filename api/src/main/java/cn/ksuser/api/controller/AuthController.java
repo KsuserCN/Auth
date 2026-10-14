@@ -2480,12 +2480,12 @@ public class AuthController {
 
         // 参数校验
         if (method == null || method.trim().isEmpty()) {
-            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_method", startTime);
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "empty_verification_method", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_128));
         }
         if (!("password".equals(method) || "email-code".equals(method) || "totp".equals(method) || "passkey".equals(method))) {
-            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "invalid_verification_method", startTime);
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "invalid_verification_method", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(new ApiResponse<>(400, ApiResultCode.AUTH_129));
         }
@@ -2496,13 +2496,13 @@ public class AuthController {
         if ("password".equals(method)) {
             String password = verifySensitiveOperationRequest.getPassword();
             if (password == null || password.trim().isEmpty()) {
-                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_password", startTime);
+                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "empty_password", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, ApiResultCode.AUTH_017));
             }
 
             if (!userService.verifyPassword(password, user.getPasswordHash())) {
-                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "invalid_password", startTime);
+                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "invalid_password", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, ApiResultCode.AUTH_130));
             }
@@ -2514,7 +2514,7 @@ public class AuthController {
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(request, "password");
             verificationCodeService.clearLockAndError(user.getEmail());
-            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         }
@@ -2523,7 +2523,7 @@ public class AuthController {
         if ("email-code".equals(method)) {
             String code = verifySensitiveOperationRequest.getCode();
             if (code == null || code.trim().isEmpty()) {
-                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_code", startTime);
+                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "empty_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
             }
@@ -2535,41 +2535,41 @@ public class AuthController {
             if (verifyResult != 0) {
                 // 0 = 成功，1 = 已过期，2 = 错误，3 = 被锁定，4 = 未发送，5 = 邮箱不匹配，6 = IP不匹配
                 if (verifyResult == 3) {
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_locked", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "verification_code_locked", startTime);
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                         .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                 } else if (verifyResult == 4) {
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_not_sent", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "verification_code_not_sent", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse<>(400, ApiResultCode.AUTH_023));
                 } else if (verifyResult == 5) {
                     int errorCount = verificationCodeService.getErrorCount(email);
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "email_mismatch", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "email_mismatch", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse<>(400, ApiResultCode.AUTH_024.withParams("count", errorCount)));
                 } else if (verifyResult == 6) {
                     int errorCount = verificationCodeService.getErrorCount(email);
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "ip_mismatch", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "ip_mismatch", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse<>(400, ApiResultCode.AUTH_025.withParams("count", errorCount)));
                 } else if (verifyResult == 1) {
                     if (verificationCodeService.isLocked(email)) {
-                        sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_locked", startTime);
+                        sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "verification_code_locked", startTime);
                         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                             .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                     }
                     int errorCount = verificationCodeService.getErrorCount(email);
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_expired", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "verification_code_expired", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse<>(400, ApiResultCode.AUTH_026.withParams("count", errorCount)));
                 } else {
                     if (verificationCodeService.isLocked(email)) {
-                        sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_locked", startTime);
+                        sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "verification_code_locked", startTime);
                         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                             .body(new ApiResponse<>(429, ApiResultCode.AUTH_010));
                     }
                     int errorCount = verificationCodeService.getErrorCount(email);
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "verification_code_invalid", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "verification_code_invalid", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse<>(400, ApiResultCode.AUTH_027.withParams("count", errorCount)));
                 }
@@ -2582,7 +2582,7 @@ public class AuthController {
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(request, "email-code");
             verificationCodeService.clearLockAndError(email);
-            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         }
@@ -2592,15 +2592,16 @@ public class AuthController {
             String code = verifySensitiveOperationRequest.getCode();
             String recoveryCode = verifySensitiveOperationRequest.getRecoveryCode();
             boolean usingRecoveryCode = recoveryCode != null && !recoveryCode.isBlank();
+            String logMethod = usingRecoveryCode ? "RECOVERY_CODE" : method;
             if (!usingRecoveryCode && (code == null || code.isBlank())) {
-                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "empty_verification_code", startTime);
+                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), logMethod, false, "empty_verification_code", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, ApiResultCode.AUTH_132));
             }
 
             // 检查是否已启用 TOTP
             if (!totpService.isTotpEnabled(user.getId())) {
-                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "totp_not_enabled", startTime);
+                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), logMethod, false, "totp_not_enabled", startTime);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponse<>(400, ApiResultCode.AUTH_133));
             }
@@ -2610,12 +2611,12 @@ public class AuthController {
                     ? totpService.verifyRecoveryCode(user.getId(), recoveryCode)
                     : totpService.verifyTotpCode(user.getId(), code, encryptionUtil.getMasterKey());
                 if (!ok) {
-                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, usingRecoveryCode ? "recovery_code_invalid_or_used" : "verification_code_invalid_or_expired", startTime);
+                    sensitiveLogUtil.logSensitiveVerify(request, user.getId(), logMethod, false, usingRecoveryCode ? "recovery_code_invalid_or_used" : "verification_code_invalid_or_expired", startTime);
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body(new ApiResponse<>(400, usingRecoveryCode ? ApiResultCode.AUTH_RECOVERY_CODE_INVALID : ApiResultCode.AUTH_VERIFICATION_CODE_INVALID));
                 }
             } catch (Exception e) {
-                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, e.getMessage(), startTime);
+                sensitiveLogUtil.logSensitiveVerify(request, user.getId(), logMethod, false, e.getMessage(), startTime);
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse<>(500, ApiResultCode.AUTH_134));
             }
@@ -2626,18 +2627,18 @@ public class AuthController {
             }
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(request, "totp");
-            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), true, null, startTime);
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), logMethod, true, null, startTime);
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         }
 
         if ("passkey".equals(method)) {
-            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "passkey_requires_webauthn_challenge", startTime);
+            sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "passkey_requires_webauthn_challenge", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_135));
         }
 
-        sensitiveLogUtil.logSensitiveVerify(request, user.getId(), false, "unknown_verification_method", startTime);
+        sensitiveLogUtil.logSensitiveVerify(request, user.getId(), method, false, "unknown_verification_method", startTime);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(new ApiResponse<>(400, ApiResultCode.AUTH_136));
     }
@@ -3408,18 +3409,18 @@ public class AuthController {
             }
             sensitiveOperationService.markVerified(uuid, clientIp);
             strengthenCurrentSession(httpRequest, "passkey");
-            sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), true, null, startTime);
+            sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), "PASSKEY", true, null, startTime);
             
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_131));
         } catch (cn.ksuser.api.exception.Oauth2Exception e) {
             throw e;
         } catch (IllegalArgumentException e) {
-            sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), false, e.getMessage(), startTime);
+            sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), "PASSKEY", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, ApiFailures.result(e, ApiResultCode.BAD_REQUEST)));
         } catch (Exception e) {
-            sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), false, e.getMessage(), startTime);
+            sensitiveLogUtil.logSensitiveVerify(httpRequest, user.getId(), "PASSKEY", false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, ApiResultCode.AUTH_152));
         }

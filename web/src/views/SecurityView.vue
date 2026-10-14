@@ -282,14 +282,12 @@
 
             <div v-if="adaptiveMetrics" class="adaptive-auth-metrics adaptive-auth-metrics--engine">
               <div class="adaptive-auth-metric">
-                <span class="metric-label">{{ t('ui.security.message041') }}</span>
-                <span class="metric-value">{{ adaptiveMetrics.totalEvaluations }}</span>
+                <span class="metric-label">{{ securityLogText('ui.policyEvents') }}</span>
+                <span class="metric-value">{{ adaptiveMetrics.interceptedCount }}</span>
               </div>
               <div class="adaptive-auth-metric">
-                <span class="metric-label">{{ t('ui.security.message042') }}</span>
-                <span class="metric-value"
-                  >{{ adaptiveMetrics.interceptRatePercent.toFixed(2) }}%</span
-                >
+                <span class="metric-label">{{ logActionLabel('STEP_UP') }}</span>
+                <span class="metric-value">{{ adaptiveMetrics.stepUpCount }}</span>
               </div>
               <div class="adaptive-auth-metric">
                 <span class="metric-label">{{ t('ui.security.message043') }}</span>
@@ -420,9 +418,9 @@
             <el-table-column :label="t('ui.devices.message015')" min-width="180">
               <template #default="{ row }">
                 <div class="log-primary">
-                  <span class="log-title">{{ getOperationTitle(row.operationType) }}</span>
+                  <span class="log-title">{{ logTitle(row) }}</span>
                   <el-tag
-                    v-for="(tag, idx) in getOperationTags(row)"
+                    v-for="(tag, idx) in logMethodLabels(row)"
                     :key="`${row.id}-${idx}-${tag}`"
                     size="small"
                     effect="plain"
@@ -438,12 +436,33 @@
                   <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
                     {{
                       row.result === 'SUCCESS'
-                        ? t('ui.security.message051')
+                        ? row.operationType === 'ADAPTIVE_POLICY'
+                          ? securityLogText('ui.executed')
+                          : t('ui.security.message051')
                         : t('ui.desktopPasskeyBridge.message010')
                     }}
                   </el-tag>
+                  <span v-if="row.operationType === 'ADAPTIVE_POLICY'" class="log-sub">{{
+                    securityLogText('ui.system')
+                  }}</span>
+                  <span
+                    v-if="row.actionTaken && row.operationType !== 'ADAPTIVE_POLICY'"
+                    class="log-sub"
+                    >{{ logActionLabel(row.actionTaken) }}</span
+                  >
+                  <span
+                    v-if="row.result === 'SUCCESS' && logReason(row.failureReason)"
+                    class="log-sub"
+                    >{{ logReason(row.failureReason) }}</span
+                  >
+                  <span v-if="row.triggeredMultiErrorLock" class="log-sub">{{
+                    securityLogText('ui.multiErrorLock')
+                  }}</span>
+                  <span v-if="row.triggeredRateLimitLock" class="log-sub">{{
+                    securityLogText('ui.rateLimitLock')
+                  }}</span>
                   <span v-if="row.result === 'FAILURE'" class="log-sub">
-                    {{ resolveAuditReason(row.failureReason) || t('ui.security.message059') }}
+                    {{ logReason(row.failureReason) || t('ui.security.message059') }}
                   </span>
                 </div>
               </template>
@@ -481,7 +500,7 @@
             <el-table-column :label="t('ui.security.message026')" min-width="100" align="center">
               <template #default="{ row }">
                 <el-tag :type="getRiskTagType(row.riskScore)" size="small" effect="plain">
-                  {{ row.riskScore }}
+                  {{ logRiskLabel(row.riskScore) }} · {{ row.riskScore }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -541,11 +560,20 @@ import { computed } from 'vue'
 
 import { intlLocale, durationUnit, t } from '@/i18n'
 
-import { resolveApiResult, resolveAuditReason } from '@/utils/apiResult'
+import { resolveApiResult } from '@/utils/apiResult'
+import {
+  securityLogText,
+  logTitle,
+  logMethodLabels,
+  logOperationLabel,
+  logActionLabel,
+  logReason,
+  logRiskLabel,
+} from '@/utils/securityLog'
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { Key, Lock, Delete, Document, WarningFilled } from '@element-plus/icons-vue'
+import { Key, Lock, Document, WarningFilled } from '@element-plus/icons-vue'
 import {
   checkSensitiveVerification,
   getAppleStatus,
@@ -559,8 +587,6 @@ import {
   type AdaptiveAuthStatus,
   type AdaptiveRiskMetrics,
   type SensitiveLogItem,
-  type SensitiveLoginMethod,
-  type SensitiveOperationType,
 } from '@/api/auth'
 import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
 import DangerZoneCard from '@/components/DangerZoneCard.vue'
@@ -627,42 +653,26 @@ const query = ref<{
 
 const dateRange = ref<string[] | null>(null)
 
-const operationTypeLabels = computed<Record<SensitiveOperationType, string>>(() => ({
-  REGISTER: t('ui.security.message064'),
-  LOGIN: t('ui.login.message001'),
-  SENSITIVE_VERIFY: t('ui.security.message065'),
-  ADAPTIVE_POLICY: t('ui.security.message066'),
-  CHANGE_PASSWORD: t('ui.changePassword.message001'),
-  CHANGE_EMAIL: t('ui.changeEmail.message012'),
-  ADD_PASSKEY: t('ui.security.message067'),
-  DELETE_PASSKEY: t('ui.security.message068'),
-  ENABLE_TOTP: t('ui.loginOptions.message028'),
-  DISABLE_TOTP: t('ui.loginOptions.message029'),
-}))
-
-const loginMethodLabels = computed<Record<SensitiveLoginMethod, string>>(() => ({
-  PASSWORD: t('ui.security.message069'),
-  PASSWORD_MFA: t('ui.security.message070'),
-  EMAIL: t('ui.security.message071'),
-  EMAIL_CODE: t('ui.security.message071'),
-  EMAIL_CODE_MFA: t('ui.security.message072'),
-  PASSKEY: t('ui.security.message073'),
-  PASSKEY_MFA: t('ui.security.message074'),
-  QR: t('ui.security.message075'),
-  QR_MFA: t('ui.security.message076'),
-  QQ: 'QQ',
-  GITHUB: 'GitHub',
-  MICROSOFT: 'Microsoft',
-  GOOGLE: 'Google',
-  WECHAT: t('ui.loginOptions.message049'),
-  WEIXIN: t('ui.loginOptions.message049'),
-  MFA: 'MFA',
-  BRIDGE: t('ui.security.message077'),
-  BRIDGE_FROM_DESKTOP: t('ui.security.message078'),
-  BRIDGE_FROM_WEB: t('ui.security.message079'),
-  BRIDGE_TO_MOBILE: t('ui.security.message080'),
-  ACCOUNT_RECOVERY: t('ui.accountRecoveryCard.message001'),
-}))
+const operationTypeLabels = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    [
+      'REGISTER',
+      'LOGIN',
+      'SENSITIVE_VERIFY',
+      'ADAPTIVE_POLICY',
+      'CHANGE_PASSWORD',
+      'CHANGE_EMAIL',
+      'ADD_PASSKEY',
+      'DELETE_PASSKEY',
+      'ENABLE_TOTP',
+      'DISABLE_TOTP',
+      'BIND_OAUTH',
+      'UNBIND_OAUTH',
+      'UPDATE_PROFILE',
+      'DELETE_ACCOUNT',
+    ].map((operation) => [operation, logOperationLabel(operation)]),
+  ),
+)
 
 const formatSensitiveTime = (value?: string | null) => {
   if (!value) return '-'
@@ -675,91 +685,6 @@ const formatSensitiveTime = (value?: string | null) => {
     hour: '2-digit',
     minute: '2-digit',
   })
-}
-
-const getOperationLabel = (op: unknown) => {
-  return operationTypeLabels.value[op as SensitiveOperationType] || String(op ?? '-')
-}
-
-const normalizeLoginTokenLabel = (token: string) => {
-  const key = token.trim().toUpperCase()
-  if (!key) return ''
-  if (key === 'PASSKEY') return 'Passkey'
-  if (key === 'MFA') return 'MFA'
-  if (key === 'PASSWORD') return t('ui.loginOptions.message004')
-  if (key === 'EMAIL') return t('ui.security.message081')
-  if (key === 'EMAIL_CODE') return t('ui.security.message081')
-  if (key === 'TOTP') return 'TOTP'
-  if (key === 'QR') return t('ui.security.message082')
-  if (key === 'GOOGLE') return 'Google'
-  if (key === 'GITHUB') return 'GitHub'
-  if (key === 'MICROSOFT') return 'Microsoft'
-  if (key === 'QQ') return 'QQ'
-  if (key === 'WECHAT' || key === 'WEIXIN') return t('ui.loginOptions.message049')
-  if (key === 'BRIDGE') return t('ui.security.message077')
-  if (key === 'BRIDGE_FROM_DESKTOP') return t('ui.security.message078')
-  if (key === 'BRIDGE_FROM_WEB') return t('ui.security.message079')
-  if (key === 'BRIDGE_TO_MOBILE') return t('ui.security.message080')
-  if (key === 'ACCOUNT_RECOVERY') return t('ui.accountRecoveryCard.message001')
-  return token.trim()
-}
-
-const getLoginMethodTags = (row: SensitiveLogItem): string[] => {
-  const fromArray = Array.isArray(row.loginMethods)
-    ? row.loginMethods.map((item) => normalizeLoginTokenLabel(String(item))).filter(Boolean)
-    : []
-  if (fromArray.length > 0) {
-    return [...new Set(fromArray)]
-  }
-
-  const m = row.loginMethod
-  if (m == null) return []
-
-  const raw = String(m).trim()
-  if (!raw) return []
-  if (raw.toLowerCase() === 'null') return []
-
-  const normalized = raw.toUpperCase()
-
-  // Old backend format: "PASSKEY_MFA"
-  if (normalized in loginMethodLabels.value) {
-    const tokens: string[] = []
-    if (normalized.endsWith('_MFA')) {
-      tokens.push(normalized.slice(0, -4))
-      tokens.push('MFA')
-    } else {
-      tokens.push(normalized)
-    }
-    return tokens.map(normalizeLoginTokenLabel).filter(Boolean)
-  }
-
-  // New backend format: "[passkey, mfa]"
-  if (raw.startsWith('[') && raw.endsWith(']')) {
-    return raw
-      .slice(1, -1)
-      .split(',')
-      .map((item) => normalizeLoginTokenLabel(item))
-      .filter(Boolean)
-  }
-
-  return [normalizeLoginTokenLabel(raw)].filter(Boolean)
-}
-
-const getOperationTitle = (op: unknown) => {
-  const key = String(op ?? '').toUpperCase()
-  if (key === 'LOGIN') return t('ui.login.message001')
-  if (key === 'REGISTER') return t('ui.security.message064')
-  if (key === 'ADAPTIVE_POLICY') return t('ui.security.message083')
-  return t('ui.security.message084')
-}
-
-const getOperationTags = (row: SensitiveLogItem): string[] => {
-  const op = String(row.operationType).toUpperCase()
-  if (op === 'REGISTER') return []
-  if (op === 'LOGIN') {
-    return getLoginMethodTags(row)
-  }
-  return [getOperationLabel(row.operationType)]
 }
 
 const getRiskTagType = (score: number) => {

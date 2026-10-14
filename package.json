@@ -48,6 +48,8 @@
     "preview:console": "npm --prefix console run preview",
     "test:console": "npm --prefix console run test:unit -- --run",
     "lint:console": "npm --prefix console run lint",
-    "sync:build:console": "node -e \"const fs=require('node:fs'); fs.rmSync('build/console',{recursive:true,force:true}); fs.mkdirSync('build',{recursive:true}); fs.cpSync('console/dist','build/console',{recursive:true});\""
+    "sync:build:console": "node -e \"const fs=require('node:fs'); fs.rmSync('build/console',{recursive:true,force:true}); fs.mkdirSync('build',{recursive:true}); fs.cpSync('console/dist','build/console',{recursive:true});\"",
+    "generate:security-logs": "node scripts/generate-security-log-catalog.mjs",
+    "check:security-logs": "node scripts/generate-security-log-catalog.mjs --check"
   }
 }

@@ -16,6 +16,26 @@ final class LocalizationTests: XCTestCase {
         super.tearDown()
     }
 
+    func testSecurityLogsTranslateUppercaseAndLegacyCompositeMethods() throws {
+        let data = Data(#"{"id":1,"operationType":"LOGIN","loginMethod":"PASSWORD_MFA","loginMethods":[],"ipAddress":"192.0.2.1","result":"SUCCESS","riskScore":0,"triggeredMultiErrorLock":false,"triggeredRateLimitLock":false,"createdAt":"2026-10-14T10:00:00"}"#.utf8)
+        let log = try JSONDecoder().decode(SensitiveLogItem.self, from: data)
+        XCTAssertEqual(SecurityLogPresentation.methods(log), ["密码", "二步验证"])
+        XCTAssertEqual(SecurityLogPresentation.action("FREEZE"), "会话已冻结")
+        XCTAssertEqual(SecurityLogPresentation.parseMethods(#"["email_mfa", weixin, MFA, null]"#), ["EMAIL_CODE", "MFA", "WECHAT"])
+        XCTAssertEqual(SecurityLogPresentation.reason("Invalid password"), "密码不正确")
+        UserDefaults.standard.set("en", forKey: "language")
+        XCTAssertEqual(SecurityLogPresentation.methods(log), ["Password", "Two-step verification"])
+        XCTAssertEqual(SecurityLogPresentation.action("FREEZE"), "Session frozen")
+        XCTAssertEqual(SecurityLogPresentation.reason("invalid_password"), "Incorrect password")
+    }
+
+    func testPolicySourcesAreNeverPresentedAsLoginMethods() throws {
+        let data = Data(#"{"id":1,"operationType":"ADAPTIVE_POLICY","loginMethod":"adaptive-auth-status","ipAddress":"192.0.2.1","result":"SUCCESS","riskScore":80,"actionTaken":"FREEZE","triggeredMultiErrorLock":false,"triggeredRateLimitLock":false,"createdAt":"2026-10-14T10:00:00"}"#.utf8)
+        let log = try JSONDecoder().decode(SensitiveLogItem.self, from: data)
+        XCTAssertEqual(SecurityLogPresentation.title(log), "会话已冻结")
+        XCTAssertTrue(SecurityLogPresentation.methods(log).isEmpty)
+    }
+
     func testLanguageResolutionUsesTopDeviceLanguageAndManualPreference() {
         for language in ["zh", "zh-CN", "zh-TW", "zh-Hant-HK", "ZH_hans"] {
             XCTAssertEqual(AppLanguage.resolve(preference: "system", preferredLanguages: [language]), "zh-Hans")

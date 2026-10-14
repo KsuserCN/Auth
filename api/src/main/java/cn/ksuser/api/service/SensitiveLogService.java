@@ -86,7 +86,7 @@ public class SensitiveLogService {
 
             // 计算风险评分（在补全IP/设备/浏览器后）
             try {
-                if (log.getUserId() != null) {
+                if (log.getRiskScore() == null && log.getUserId() != null) {
                     var user = userService.findById(log.getUserId()).orElse(null);
                     Integer riskScore = riskScoringService.calculateRiskScore(log, user);
                     log.setRiskScore(riskScore);
@@ -177,7 +177,7 @@ public class SensitiveLogService {
 
             // 计算风险评分（在补全IP/设备/浏览器后）
             try {
-                if (log.getUserId() != null) {
+                if (log.getRiskScore() == null && log.getUserId() != null) {
                     var user = userService.findById(log.getUserId()).orElse(null);
                     Integer riskScore = riskScoringService.calculateRiskScore(log, user);
                     log.setRiskScore(riskScore);

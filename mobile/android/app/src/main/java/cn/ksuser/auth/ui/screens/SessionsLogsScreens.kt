@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.vector.ImageVector
 import cn.ksuser.auth.data.AppContainer
 import cn.ksuser.auth.data.model.SensitiveLogItem
+import cn.ksuser.auth.core.security.SecurityLogPresentation
 import cn.ksuser.auth.data.model.SessionItem
 import cn.ksuser.auth.ui.components.AppPagePadding
 import cn.ksuser.auth.ui.components.AppRadius
@@ -349,19 +351,21 @@ internal fun LogsScreen(
                             modifier = Modifier.weight(1f),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(getOperationTitle(log.operationType), style = MaterialTheme.typography.titleMedium)
-                                getOperationTags(log).forEach { tag ->
-                                    StatusPill(
-                                        text = tag,
-                                        background = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                                        content = MaterialTheme.colorScheme.primary,
-                                    )
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(SecurityLogPresentation.title(log), style = MaterialTheme.typography.titleMedium)
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    SecurityLogPresentation.methods(log).forEach { tag ->
+                                        StatusPill(
+                                            text = tag,
+                                            background = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                            content = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
                                 }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                                 StatusPill(
-                                    text = if (log.result.equals("SUCCESS", true)) "成功" else "失败",
+                                    text = if (log.result.equals("SUCCESS", true)) { if (log.operationType == "ADAPTIVE_POLICY") "已执行" else "成功" } else "失败",
                                     background = if (log.result.equals("SUCCESS", true)) {
                                         MaterialTheme.colorScheme.tertiaryContainer
                                     } else {
@@ -392,6 +396,17 @@ internal fun LogsScreen(
                         }
                         RiskPill(score = log.riskScore)
                     }
+                    if (log.operationType == "ADAPTIVE_POLICY") {
+                        Text(SecurityLogPresentation.text("ui.system"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    log.actionTaken?.let { action ->
+                        Text("${SecurityLogPresentation.text("ui.action")}：${SecurityLogPresentation.action(action)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!showFailureReason && !log.displayFailureReason.isNullOrBlank()) {
+                        Text("说明：${log.displayFailureReason}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (log.triggeredMultiErrorLock) Text("触发连续错误保护", style = MaterialTheme.typography.bodySmall)
+                    if (log.triggeredRateLimitLock) Text("触发请求频率保护", style = MaterialTheme.typography.bodySmall)
                     if (showFailureReason) {
                         Text(
                             "失败原因：${log.displayFailureReason}",
@@ -591,7 +606,7 @@ private fun RiskPill(score: Int) {
     }
     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("风险", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        StatusPill(text = score.toString(), background = bg, content = fg)
+        StatusPill(text = "${SecurityLogPresentation.text(if (score >= 70) "ui.high" else if (score >= 40) "ui.medium" else "ui.low")} · $score", background = bg, content = fg)
     }
 }
 
@@ -776,19 +791,10 @@ private fun resolveSessionIcon(session: SessionItem): ImageVector {
     }
 }
 
-private val OperationTypeOptions = listOf(
-    FilterOption(null, "全部操作"),
-    FilterOption("LOGIN", "登录"),
-    FilterOption("REGISTER", "注册"),
-    FilterOption("SENSITIVE_VERIFY", "敏感验证"),
-    FilterOption("ADAPTIVE_POLICY", "风控策略编排"),
-    FilterOption("CHANGE_PASSWORD", "修改密码"),
-    FilterOption("CHANGE_EMAIL", "修改邮箱"),
-    FilterOption("ADD_PASSKEY", "新增 Passkey"),
-    FilterOption("DELETE_PASSKEY", "删除 Passkey"),
-    FilterOption("ENABLE_TOTP", "启用 TOTP"),
-    FilterOption("DISABLE_TOTP", "禁用 TOTP"),
-)
+private val OperationTypeOptions = listOf(FilterOption(null, "全部操作")) +
+    listOf("LOGIN", "REGISTER", "SENSITIVE_VERIFY", "ADAPTIVE_POLICY", "CHANGE_PASSWORD", "CHANGE_EMAIL",
+        "ADD_PASSKEY", "DELETE_PASSKEY", "ENABLE_TOTP", "DISABLE_TOTP", "BIND_OAUTH", "UNBIND_OAUTH", "UPDATE_PROFILE", "DELETE_ACCOUNT")
+        .map { FilterOption(it, SecurityLogPresentation.operation(it)) }
 
 private val ResultOptions = listOf(
     FilterOption(null, "全部结果"),
@@ -801,90 +807,9 @@ private data class FilterOption(
     val label: String,
 )
 
-private fun getOperationLabel(op: String?): String {
-    return when (op?.uppercase(Locale.getDefault())) {
-        "REGISTER" -> "注册"
-        "LOGIN" -> "登录"
-        "SENSITIVE_VERIFY" -> "敏感验证"
-        "ADAPTIVE_POLICY" -> "风控策略编排"
-        "CHANGE_PASSWORD" -> "修改密码"
-        "CHANGE_EMAIL" -> "修改邮箱"
-        "ADD_PASSKEY" -> "新增 Passkey"
-        "DELETE_PASSKEY" -> "删除 Passkey"
-        "ENABLE_TOTP" -> "启用 TOTP"
-        "DISABLE_TOTP" -> "禁用 TOTP"
-        else -> op ?: "-"
-    }
-}
-
-private fun getOperationTitle(op: String?): String {
-    return when (op?.uppercase(Locale.getDefault())) {
-        "LOGIN" -> "登录"
-        "REGISTER" -> "注册"
-        "ADAPTIVE_POLICY" -> "风控编排"
-        else -> "敏感操作"
-    }
-}
-
-private fun normalizeLoginTokenLabel(token: String): String {
-    val key = token.trim().uppercase(Locale.getDefault())
-    if (key.isBlank()) return ""
-    return when (key) {
-        "PASSKEY" -> "Passkey"
-        "MFA" -> "MFA"
-        "PASSWORD" -> "密码"
-        "EMAIL", "EMAIL_CODE" -> "验证码"
-        "TOTP" -> "TOTP"
-        "QR" -> "扫码"
-        "GOOGLE" -> "Google"
-        "GITHUB" -> "GitHub"
-        "MICROSOFT" -> "Microsoft"
-        "QQ" -> "QQ"
-        "WECHAT", "WEIXIN" -> "微信"
-        "BRIDGE" -> "桥接登录"
-        "BRIDGE_FROM_DESKTOP" -> "电脑端桥接"
-        "BRIDGE_FROM_WEB" -> "网页端桥接"
-        "BRIDGE_TO_MOBILE" -> "桥接到手机端"
-        else -> token.trim()
-    }
-}
-
-private fun getLoginMethodTags(log: SensitiveLogItem): List<String> {
-    val fromArray = log.loginMethods
-        .map { normalizeLoginTokenLabel(it) }
-        .filter { it.isNotBlank() }
-    if (fromArray.isNotEmpty()) return fromArray.distinct()
-
-    val raw = log.loginMethod?.trim().orEmpty()
-    if (raw.isBlank() || raw.equals("null", true)) return emptyList()
-    val normalized = raw.uppercase(Locale.getDefault())
-    if (normalized.endsWith("_MFA")) {
-        return listOf(
-            normalizeLoginTokenLabel(normalized.removeSuffix("_MFA")),
-            "MFA",
-        )
-    }
-    if (raw.startsWith("[") && raw.endsWith("]")) {
-        return raw.removePrefix("[").removeSuffix("]")
-            .split(',')
-            .map { normalizeLoginTokenLabel(it) }
-            .filter { it.isNotBlank() }
-    }
-    return listOf(normalizeLoginTokenLabel(raw)).filter { it.isNotBlank() }
-}
-
-private fun getOperationTags(log: SensitiveLogItem): List<String> {
-    val op = log.operationType.uppercase(Locale.getDefault())
-    return when (op) {
-        "REGISTER" -> emptyList()
-        "LOGIN" -> getLoginMethodTags(log)
-        else -> listOf(getOperationLabel(log.operationType))
-    }
-}
-
 private fun formatAbsoluteTime(value: String?): String {
     if (value.isNullOrBlank()) return "-"
-    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss")
+    val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
     return runCatching {
         OffsetDateTime.parse(value).toLocalDateTime().format(formatter)
     }.recoverCatching {

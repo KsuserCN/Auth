@@ -785,8 +785,15 @@ export type SensitiveOperationType =
   | 'DELETE_PASSKEY'
   | 'ENABLE_TOTP'
   | 'DISABLE_TOTP'
+  | 'BIND_OAUTH'
+  | 'UNBIND_OAUTH'
+  | 'UPDATE_PROFILE'
+  | 'DELETE_ACCOUNT'
 
 export type SensitiveLoginMethod =
+  | 'APPLE'
+  | 'TOTP'
+  | 'RECOVERY_CODE'
   | 'PASSWORD'
   | 'PASSWORD_MFA'
   | 'EMAIL'

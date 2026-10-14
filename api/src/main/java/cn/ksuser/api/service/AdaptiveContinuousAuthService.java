@@ -121,7 +121,8 @@ public class AdaptiveContinuousAuthService {
             reasonCodes.add(ApiResult.of(ApiResultCode.ADAPTIVE_REASON_RECENT_FAILURES));
         }
 
-        UserSensitiveLog latestLog = userSensitiveLogRepository.findTopByUserIdOrderByCreatedAtDesc(user.getId()).orElse(null);
+        UserSensitiveLog latestLog = userSensitiveLogRepository
+            .findTopByUserIdAndOperationTypeNotOrderByCreatedAtDesc(user.getId(), "ADAPTIVE_POLICY").orElse(null);
         if (latestLog != null && latestLog.getRiskScore() != null && latestLog.getRiskScore() >= 70) {
             score += 15;
             reasons.add("最近一次安全事件风险评分较高");

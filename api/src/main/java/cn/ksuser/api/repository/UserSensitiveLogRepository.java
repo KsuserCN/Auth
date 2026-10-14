@@ -22,6 +22,7 @@ public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveL
     Page<UserSensitiveLog> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     @Query("SELECT l FROM UserSensitiveLog l WHERE l.userId = :userId " +
+           "AND (l.operationType <> 'ADAPTIVE_POLICY' OR l.actionTaken <> 'ALLOW') " +
            "AND (:startDate IS NULL OR l.createdAt >= :startDate) " +
            "AND (:endDate IS NULL OR l.createdAt <= :endDate) " +
            "AND (:operationType IS NULL OR l.operationType = :operationType) " +
@@ -75,7 +76,7 @@ public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveL
      */
     List<UserSensitiveLog> findByUserIdAndCreatedAtAfter(Long userId, LocalDateTime createdAt);
 
-    Optional<UserSensitiveLog> findTopByUserIdOrderByCreatedAtDesc(Long userId);
+    Optional<UserSensitiveLog> findTopByUserIdAndOperationTypeNotOrderByCreatedAtDesc(Long userId, String operationType);
 
     List<UserSensitiveLog> findByUserIdAndOperationTypeAndCreatedAtAfterOrderByCreatedAtAsc(
         Long userId,

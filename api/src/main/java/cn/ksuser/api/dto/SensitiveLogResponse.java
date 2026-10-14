@@ -30,8 +30,9 @@ public class SensitiveLogResponse {
     public SensitiveLogResponse(UserSensitiveLog log) {
         this.id = log.getId();
         this.operationType = log.getOperationType();
-        this.loginMethod = log.getLoginMethod();
-        this.loginMethods = SensitiveLogLoginMethodUtil.parseTokens(log.getLoginMethod());
+        // Historical policy logs stored request sources in the login-method column.
+        this.loginMethod = "ADAPTIVE_POLICY".equals(log.getOperationType()) ? null : log.getLoginMethod();
+        this.loginMethods = SensitiveLogLoginMethodUtil.parseTokens(this.loginMethod);
         this.ipAddress = log.getIpAddress();
         this.ipLocation = log.getIpLocation();
         this.browser = log.getBrowser();

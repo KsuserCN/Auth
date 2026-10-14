@@ -7,9 +7,11 @@ import cn.ksuser.api.entity.UserSensitiveLog;
 import cn.ksuser.api.entity.UserSession;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -17,6 +19,9 @@ public class AdaptiveRiskOrchestrationService {
 
     private static final String POLICY_VERSION = "2.0.0";
     private static final String DECISION_CACHE_PREFIX = "adaptive:risk:last-decision:";
+    private static final DefaultRedisScript<String> RECORD_DECISION = new DefaultRedisScript<>(
+        "local previous = redis.call('GET', KEYS[1]); " +
+        "redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2]); return previous or ''", String.class);
 
     private final AdaptiveContinuousAuthService adaptiveContinuousAuthService;
     private final UserSessionService userSessionService;
@@ -83,7 +88,7 @@ public class AdaptiveRiskOrchestrationService {
         }
 
         attachAlert(user, response);
-        maybeRecordDecisionLog(user, session, clientIp, userAgent, source, response, decision);
+        maybeRecordDecisionLog(user, session, clientIp, userAgent, response, decision);
         adjustRecommendedAction(response, decision);
         return response;
     }
@@ -140,7 +145,6 @@ public class AdaptiveRiskOrchestrationService {
         UserSession session,
         String clientIp,
         String userAgent,
-        String source,
         AdaptiveAuthStatusResponse response,
         PolicyDecision decision
     ) {
@@ -148,19 +152,22 @@ public class AdaptiveRiskOrchestrationService {
             return;
         }
         String dedupeKey = decisionDedupeKey(user.getId(), session == null ? null : session.getId());
-        String dedupeValue = decision.name() + ":" + response.getRiskScore();
-        String previous = redisTemplate.opsForValue().get(dedupeKey);
-        if (dedupeValue.equals(previous)) {
+        // Track decisions for the session lifetime, atomically. Score fluctuations and
+        // repeated status polling must not create new user-visible security events.
+        long lifetime = session == null || session.getExpiresAt() == null ? 86400
+            : Duration.between(LocalDateTime.now(), session.getExpiresAt()).getSeconds();
+        String previous = redisTemplate.execute(RECORD_DECISION, List.of(dedupeKey),
+            decision.name(), Long.toString(Math.max(Math.max(lifetime, deduplicateSeconds), 1)));
+        if (decision == PolicyDecision.ALLOW || decision.name().equals(previous)) {
             return;
         }
-        redisTemplate.opsForValue().set(dedupeKey, dedupeValue, Duration.ofSeconds(Math.max(deduplicateSeconds, 1)));
-
         UserSensitiveLog log = new UserSensitiveLog();
         log.setUserId(user.getId());
         log.setOperationType("ADAPTIVE_POLICY");
-        log.setLoginMethod(source == null || source.isBlank() ? "adaptive" : source);
+        log.setLoginMethod(null);
         log.setResult(UserSensitiveLog.OperationResult.SUCCESS);
-        log.setFailureReason(composeReason(response.getReasons(), response.getRiskScore()));
+        log.setFailureReason(response.getReasonCodes() == null || response.getReasonCodes().isEmpty()
+            ? null : response.getReasonCodes().get(0).errorCode().name());
         log.setIpAddress(resolveIp(clientIp, session));
         log.setUserAgent(resolveUserAgent(userAgent, session));
         log.setRiskScore(response.getRiskScore());
@@ -192,15 +199,6 @@ public class AdaptiveRiskOrchestrationService {
             return userAgent;
         }
         return session == null ? null : session.getUserAgent();
-    }
-
-    private String composeReason(List<String> reasons, int riskScore) {
-        String reasonText = reasons == null || reasons.isEmpty() ? "" : reasons.get(0);
-        if (reasonText == null) {
-            reasonText = "";
-        }
-        String merged = ("risk=" + riskScore + (reasonText.isBlank() ? "" : "; " + reasonText));
-        return merged.length() <= 255 ? merged : merged.substring(0, 255);
     }
 
     public enum PolicyDecision {

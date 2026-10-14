@@ -10,6 +10,7 @@ import 'package:ksuser_auth_desktop/api_result_messages.dart';
 import 'package:ksuser_auth_desktop/generated/api_result_codes.dart';
 import 'package:ksuser_auth_desktop/i18n.dart';
 import 'package:ksuser_auth_desktop/main.dart';
+import 'package:ksuser_auth_desktop/security_log.dart';
 
 void main() {
   late Directory directory;
@@ -203,6 +204,36 @@ void main() {
         resolveApiResultMessage(errorCode: 'AUTH_020', statusCode: 400),
         english['BAD_REQUEST'],
       );
+    },
+  );
+
+  test(
+    'activity methods and security actions follow live language changes',
+    () async {
+      final SensitiveLogItem log = SensitiveLogItem.fromJson(<String, dynamic>{
+        'operationType': 'LOGIN',
+        'loginMethod': 'PASSWORD_MFA',
+        'loginMethods': <String>[],
+      });
+      final SensitiveLogItem event =
+          SensitiveLogItem.fromJson(<String, dynamic>{
+            'operationType': 'ADAPTIVE_POLICY',
+            'loginMethod': 'adaptive-auth-status',
+            'actionTaken': 'FREEZE',
+          });
+      expect(log.methodLabels, <String>['密码', '二步验证']);
+      expect(event.methodLabels, isEmpty);
+      expect(event.title, '会话已冻结');
+      expect(parseLogMethods('["email_mfa", weixin, MFA, null]'), <String>[
+        'EMAIL_CODE',
+        'MFA',
+        'WECHAT',
+      ]);
+      expect(logReason('Invalid password'), '密码不正确');
+      await desktopLocaleController.setLanguage(DesktopLanguage.english);
+      expect(log.methodLabels, <String>['Password', 'Two-step verification']);
+      expect(event.title, 'Session frozen');
+      expect(logReason('invalid_password'), 'Incorrect password');
     },
   );
 

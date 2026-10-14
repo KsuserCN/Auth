@@ -14,6 +14,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'api_result_messages.dart';
 import 'i18n.dart';
+import 'security_log.dart';
 import 'l10n/generated/app_localizations.dart';
 import 'package:intl/intl.dart';
 
@@ -7502,30 +7503,26 @@ class _ActivityPageState extends State<ActivityPage> {
                                 prefixIcon: Icon(Icons.manage_search_rounded),
                               ),
                               items: <DropdownMenuItem<String>>[
-                                DropdownMenuItem<String>(
-                                  value: 'LOGIN',
-                                  child: Text(desktopL10n.signIn),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'REGISTER',
-                                  child: Text(desktopL10n.register),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'CHANGE_PASSWORD',
-                                  child: Text(desktopL10n.changePassword),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'CHANGE_EMAIL',
-                                  child: Text(desktopL10n.changeEmail),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'ENABLE_TOTP',
-                                  child: Text(desktopL10n.enableTotp),
-                                ),
-                                DropdownMenuItem<String>(
-                                  value: 'DISABLE_TOTP',
-                                  child: Text(desktopL10n.disableTotp),
-                                ),
+                                for (final String operation in <String>[
+                                  'LOGIN',
+                                  'REGISTER',
+                                  'SENSITIVE_VERIFY',
+                                  'ADAPTIVE_POLICY',
+                                  'CHANGE_PASSWORD',
+                                  'CHANGE_EMAIL',
+                                  'ADD_PASSKEY',
+                                  'DELETE_PASSKEY',
+                                  'ENABLE_TOTP',
+                                  'DISABLE_TOTP',
+                                  'BIND_OAUTH',
+                                  'UNBIND_OAUTH',
+                                  'UPDATE_PROFILE',
+                                  'DELETE_ACCOUNT',
+                                ])
+                                  DropdownMenuItem<String>(
+                                    value: operation,
+                                    child: Text(logOperationLabel(operation)),
+                                  ),
                               ],
                               onChanged: (String? value) =>
                                   setState(() => _operationType = value),
@@ -8809,7 +8806,7 @@ class _LogTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color statusColor = log.result == 'SUCCESS'
+    final Color statusColor = log.result.toUpperCase() == 'SUCCESS'
         ? Colors.green
         : Colors.red;
     return Container(
@@ -8842,7 +8839,7 @@ class _LogTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
-              log.result == 'SUCCESS'
+              log.result.toUpperCase() == 'SUCCESS'
                   ? Icons.task_alt_rounded
                   : Icons.error_outline_rounded,
               color: statusColor,
@@ -8857,7 +8854,7 @@ class _LogTile extends StatelessWidget {
                   children: <Widget>[
                     Expanded(
                       child: Text(
-                        operationLabel(log.operationType),
+                        log.title,
                         style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
@@ -8871,8 +8868,10 @@ class _LogTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        log.result == 'SUCCESS'
-                            ? desktopL10n.success
+                        log.result.toUpperCase() == 'SUCCESS'
+                            ? (log.operationType == 'ADAPTIVE_POLICY'
+                                  ? securityLogText('ui.executed')
+                                  : desktopL10n.success)
                             : desktopL10n.failure,
                         style: TextStyle(
                           color: statusColor,
@@ -8888,10 +8887,13 @@ class _LogTile extends StatelessWidget {
                   spacing: 14,
                   runSpacing: 6,
                   children: <Widget>[
-                    _SessionMetaPill(
-                      icon: Icons.login_rounded,
-                      text: loginMethodLabel(log.loginMethod),
-                    ),
+                    for (final String method in log.methodLabels)
+                      _SessionMetaPill(icon: Icons.login_rounded, text: method),
+                    if (log.operationType == 'ADAPTIVE_POLICY')
+                      _SessionMetaPill(
+                        icon: Icons.shield_outlined,
+                        text: securityLogText('ui.system'),
+                      ),
                     _SessionMetaPill(
                       icon: Icons.schedule_rounded,
                       text: formatDateTime(log.createdAt),
@@ -8914,8 +8916,28 @@ class _LogTile extends StatelessWidget {
                       ),
                       _SessionMetaPill(
                         icon: Icons.shield_outlined,
-                        text: desktopL10n.risk2((log.riskScore).toString()),
+                        text:
+                            '${securityLogText(log.riskScore >= 70
+                                ? 'ui.high'
+                                : log.riskScore >= 40
+                                ? 'ui.medium'
+                                : 'ui.low')} · ${log.riskScore}',
                       ),
+                      if (log.actionTaken != null)
+                        _SessionMetaPill(
+                          icon: Icons.security_rounded,
+                          text: logActionLabel(log.actionTaken),
+                        ),
+                      if (log.triggeredMultiErrorLock)
+                        _SessionMetaPill(
+                          icon: Icons.lock_outline_rounded,
+                          text: securityLogText('ui.multiErrorLock'),
+                        ),
+                      if (log.triggeredRateLimitLock)
+                        _SessionMetaPill(
+                          icon: Icons.timer_outlined,
+                          text: securityLogText('ui.rateLimitLock'),
+                        ),
                     ],
                   ),
                   if (log.failureReason != null &&
@@ -8928,17 +8950,23 @@ class _LogTile extends StatelessWidget {
                         vertical: 9,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(
-                          alpha: isDark ? 0.12 : 0.06,
-                        ),
+                        color:
+                            (log.result.toUpperCase() == 'SUCCESS'
+                                    ? Colors.blue
+                                    : Colors.red)
+                                .withValues(alpha: isDark ? 0.12 : 0.06),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         log.failureReason!,
                         style: TextStyle(
-                          color: isDark
-                              ? Colors.red.shade200
-                              : Colors.red.shade700,
+                          color: log.result.toUpperCase() == 'SUCCESS'
+                              ? (isDark
+                                    ? Colors.blue.shade200
+                                    : Colors.blue.shade700)
+                              : (isDark
+                                    ? Colors.red.shade200
+                                    : Colors.red.shade700),
                           fontSize: 12,
                         ),
                       ),
@@ -10391,39 +10419,10 @@ String displayGender(String? gender) {
   }
 }
 
-String operationLabel(String operationType) {
-  Map<String, String> labels = <String, String>{
-    'REGISTER': desktopL10n.register,
-    'LOGIN': desktopL10n.signIn,
-    'SENSITIVE_VERIFY': desktopL10n.sensitiveActionVerification2,
-    'CHANGE_PASSWORD': desktopL10n.changePassword,
-    'CHANGE_EMAIL': desktopL10n.changeEmail,
-    'ADD_PASSKEY': desktopL10n.addPasskey,
-    'DELETE_PASSKEY': desktopL10n.deletePasskey,
-    'ENABLE_TOTP': desktopL10n.enableTotp,
-    'DISABLE_TOTP': desktopL10n.disableTotp,
-  };
-  return labels[operationType] ?? operationType;
-}
+String operationLabel(String operationType) => logOperationLabel(operationType);
 
-String loginMethodLabel(String? loginMethod) {
-  Map<String, String> labels = <String, String>{
-    'PASSWORD': desktopL10n.passwordSignIn,
-    'PASSWORD_MFA': desktopL10n.passwordMfa,
-    'EMAIL_CODE': desktopL10n.codeSignIn,
-    'EMAIL_CODE_MFA': desktopL10n.codeMfa,
-    'PASSKEY': desktopL10n.passkeySignIn,
-    'PASSKEY_MFA': desktopL10n.passkeyMfa,
-    'QR': desktopL10n.qrSignIn2,
-    'QR_MFA': desktopL10n.qrCodeMfa,
-    'BRIDGE': desktopL10n.bridgeSignIn,
-    'BRIDGE_FROM_DESKTOP': desktopL10n.desktopBridge,
-    'BRIDGE_FROM_WEB': desktopL10n.webBridge,
-    'BRIDGE_TO_MOBILE': desktopL10n.mobileBridge,
-    'ACCOUNT_RECOVERY': desktopL10n.accountRecovery,
-  };
-  return labels[loginMethod] ?? (loginMethod ?? desktopL10n.generalAction);
-}
+String loginMethodLabel(String? loginMethod) =>
+    logMethodLabels('LOGIN', loginMethod, const <String>[]).join(' · ');
 
 String adaptiveRiskLabel(String riskLevel) {
   switch (riskLevel.toLowerCase()) {
@@ -11272,6 +11271,10 @@ class SensitiveLogItem {
     required this.id,
     required this.operationType,
     required this.loginMethod,
+    this.loginMethods = const <String>[],
+    this.actionTaken,
+    this.triggeredMultiErrorLock = false,
+    this.triggeredRateLimitLock = false,
     required this.ipAddress,
     required this.ipLocation,
     required this.browser,
@@ -11287,6 +11290,12 @@ class SensitiveLogItem {
       id: asInt(json['id']) ?? 0,
       operationType: asString(json['operationType']) ?? 'LOGIN',
       loginMethod: asString(json['loginMethod']),
+      loginMethods: asList(
+        json['loginMethods'],
+      ).map((dynamic value) => value.toString()).toList(),
+      actionTaken: asString(json['actionTaken']),
+      triggeredMultiErrorLock: json['triggeredMultiErrorLock'] == true,
+      triggeredRateLimitLock: json['triggeredRateLimitLock'] == true,
       ipAddress: asString(json['ipAddress']) ?? '',
       ipLocation: asString(json['ipLocation']),
       browser: asString(json['browser']),
@@ -11301,13 +11310,22 @@ class SensitiveLogItem {
   final int id;
   final String operationType;
   final String? loginMethod;
+  final List<String> loginMethods;
+  final String? actionTaken;
+  final bool triggeredMultiErrorLock;
+  final bool triggeredRateLimitLock;
+  String get title => operationType.toUpperCase() == 'ADAPTIVE_POLICY'
+      ? logActionLabel(actionTaken)
+      : logOperationLabel(operationType);
+  List<String> get methodLabels =>
+      logMethodLabels(operationType, loginMethod, loginMethods);
   final String ipAddress;
   final String? ipLocation;
   final String? browser;
   final String? deviceType;
   final String result;
   final String? _failureReason;
-  String? get failureReason => resolveAuditFailureReason(_failureReason);
+  String? get failureReason => logReason(_failureReason);
   final int riskScore;
   final String createdAt;
 }

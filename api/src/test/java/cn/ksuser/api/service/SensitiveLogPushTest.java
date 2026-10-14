@@ -36,4 +36,12 @@ class SensitiveLogPushTest {
         var event = event(); doThrow(new RejectedExecutionException()).when(push).notifySensitiveOperation(event);
         assertDoesNotThrow(() -> logs.logSync(event)); verify(repository).save(event);
     }
+    @Test void policyScoresRemainTheScoresThatTriggeredTheAction() {
+        for (boolean synchronous : new boolean[]{true, false}) {
+            var event = event(); event.setOperationType("ADAPTIVE_POLICY"); event.setRiskScore(80);
+            if (synchronous) logs.logSync(event); else logs.logAsync(event);
+            assertEquals(80, event.getRiskScore());
+        }
+        verifyNoInteractions((RiskScoringService) ReflectionTestUtils.getField(logs, "riskScoringService"));
+    }
 }

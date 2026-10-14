@@ -27,4 +27,12 @@ class SensitiveLogLoginMethodUtilTest {
     void shouldKeepBridgeMethod() {
         assertEquals(List.of("BRIDGE_FROM_DESKTOP"), SensitiveLogLoginMethodUtil.parseTokens("BRIDGE_FROM_DESKTOP"));
     }
+
+    @Test
+    void shouldParseQuotedArraysAndNormalizeAliasesInsideCompositeMethods() {
+        assertEquals(List.of("EMAIL_CODE", "MFA", "WECHAT"),
+            SensitiveLogLoginMethodUtil.parseTokens("[\"email_mfa\", 'weixin', MFA, null]"));
+        assertEquals(List.of(), SensitiveLogLoginMethodUtil.parseTokens("[null, '']"));
+        assertEquals(List.of("PASSWORD", "MFA"), SensitiveLogLoginMethodUtil.parseTokens("password, mfa, PASSWORD"));
+    }
 }

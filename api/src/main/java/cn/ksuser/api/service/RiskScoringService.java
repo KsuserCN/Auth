@@ -289,7 +289,8 @@ public class RiskScoringService {
                     log.getUserId(), recentLogs != null ? recentLogs.size() : 0);
 
         // 5分钟内超过5次请求：+20分
-        if (recentLogs != null && recentLogs.size() > 5) {
+        if (recentLogs != null && recentLogs.stream()
+                .filter(item -> !"ADAPTIVE_POLICY".equals(item.getOperationType())).count() > 5) {
             return 20;
         }
         return 0;

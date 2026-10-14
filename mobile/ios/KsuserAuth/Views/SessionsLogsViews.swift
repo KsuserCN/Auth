@@ -218,7 +218,7 @@ struct LogsView: View {
                             if index > 0 { Divider().padding(.leading, 64) }
                             Button { detail = log } label: { LogListRow(log: log) }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel(L10n.format("log.accessibilitySummary", [String(describing: operationTitle(log.operationType)), String(describing: log.result.uppercased() == "SUCCESS" ? L10n.text("成功") : L10n.text("失败")), String(describing: displayDate(log.createdAt))]))
+                                .accessibilityLabel(L10n.format("log.accessibilitySummary", [String(describing: SecurityLogPresentation.title(log)), String(describing: log.result.uppercased() == "SUCCESS" ? (log.operationType.uppercased() == "ADAPTIVE_POLICY" ? SecurityLogPresentation.text("ui.executed") : L10n.text("成功")) : L10n.text("失败")), String(describing: displayDate(log.createdAt))]))
                         }
                     }
                     .background(Brand.card, in: RoundedRectangle(cornerRadius: 20))
@@ -323,13 +323,13 @@ private struct LogListRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(operationTitle(log.operationType)).font(.subheadline.weight(.semibold))
+                    Text(SecurityLogPresentation.title(log)).font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Spacer(minLength: 0)
                     Text(time).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 HStack(spacing: 6) {
-                    Text(succeeded ? L10n.text("成功") : L10n.text("失败"))
+                    Text(succeeded ? (log.operationType.uppercased() == "ADAPTIVE_POLICY" ? SecurityLogPresentation.text("ui.executed") : L10n.text("成功")) : L10n.text("失败"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(succeeded ? Brand.success : Brand.danger)
                     if !context.isEmpty {
@@ -338,6 +338,13 @@ private struct LogListRow: View {
                     }
                 }
                 .font(.caption).foregroundStyle(.secondary)
+                if !SecurityLogPresentation.methods(log).isEmpty {
+                    Text(SecurityLogPresentation.methods(log).joined(separator: " · "))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                if log.operationType.uppercased() == "ADAPTIVE_POLICY" {
+                    Text(SecurityLogPresentation.text("ui.system")).font(.caption2).foregroundStyle(.secondary)
+                }
                 if !succeeded, let failure = log.displayFailureReason, !failure.isEmpty {
                     Text(failure).font(.caption).foregroundStyle(Brand.danger).lineLimit(2)
                 }
@@ -357,7 +364,7 @@ private struct LogFilterView: View {
     @State private var selectedOperation: String
     @State private var selectedResult: String
     let onApply: (String, String) -> Void
-    private let types = ["", "LOGIN", "REGISTER", "SENSITIVE_VERIFY", "ADAPTIVE_POLICY", "CHANGE_PASSWORD", "CHANGE_EMAIL", "ADD_PASSKEY", "DELETE_PASSKEY", "ENABLE_TOTP", "DISABLE_TOTP", "UPDATE_PROFILE", "DELETE_ACCOUNT"]
+    private let types = ["", "LOGIN", "REGISTER", "SENSITIVE_VERIFY", "ADAPTIVE_POLICY", "CHANGE_PASSWORD", "CHANGE_EMAIL", "ADD_PASSKEY", "DELETE_PASSKEY", "ENABLE_TOTP", "DISABLE_TOTP", "BIND_OAUTH", "UNBIND_OAUTH", "UPDATE_PROFILE", "DELETE_ACCOUNT"]
 
     init(operation: String, result: String, onApply: @escaping (String, String) -> Void) {
         _selectedOperation = State(initialValue: operation)
@@ -434,17 +441,19 @@ struct LogDetailView: View {
     var body: some View {
         PageScroll {
             AppCard {
-                CardHeader(title: operationTitle(log.operationType), icon: logOperationIcon(log.operationType))
-                InfoRow(title: L10n.text("结果"), value: log.result.uppercased() == "SUCCESS" ? L10n.text("成功") : L10n.text("失败"))
+                CardHeader(title: SecurityLogPresentation.title(log), icon: logOperationIcon(log.operationType))
+                InfoRow(title: L10n.text("结果"), value: log.result.uppercased() == "SUCCESS" ? (log.operationType.uppercased() == "ADAPTIVE_POLICY" ? SecurityLogPresentation.text("ui.executed") : L10n.text("成功")) : L10n.text("失败"))
                 DateInfoRow(title: L10n.text("时间"), value: log.createdAt)
-                InfoRow(title: L10n.text("登录方式"), value: (log.loginMethods ?? log.loginMethod.map { [$0] } ?? []).map(methodLabel).joined(separator: L10n.text("separator.list")))
+                if !SecurityLogPresentation.methods(log).isEmpty {
+                    InfoRow(title: SecurityLogPresentation.text(log.operationType.uppercased().contains("OAUTH") ? "ui.provider" : "ui.method"), value: SecurityLogPresentation.methods(log).joined(separator: " · "))
+                }
                 InfoRow(title: "IP", value: log.ipAddress)
                 InfoRow(title: L10n.text("位置"), value: log.ipLocation ?? L10n.text("未知"))
                 InfoRow(title: L10n.text("浏览器"), value: log.browser ?? L10n.text("未知"))
                 InfoRow(title: L10n.text("设备"), value: log.deviceType ?? L10n.text("未知"))
-                InfoRow(title: L10n.text("风险评分"), value: String(log.riskScore))
+                InfoRow(title: L10n.text("风险评分"), value: "\(SecurityLogPresentation.text(log.riskScore >= 70 ? "ui.high" : log.riskScore >= 40 ? "ui.medium" : "ui.low")) · \(log.riskScore)")
                 InfoRow(title: L10n.text("响应耗时"), value: log.durationMs.map { L10n.format("{0} 毫秒", [String(describing: $0)]) } ?? L10n.text("暂无记录"))
-                if let action = log.actionTaken { InfoRow(title: L10n.text("执行措施"), value: action) }
+                if let action = log.actionTaken { InfoRow(title: SecurityLogPresentation.text("ui.action"), value: SecurityLogPresentation.action(action)) }
                 if let note = log.displayFailureReason, !note.isEmpty {
                     InfoRow(title: log.result.uppercased() == "SUCCESS" ? L10n.text("备注") : L10n.text("失败原因"), value: note)
                 }
@@ -456,22 +465,7 @@ struct LogDetailView: View {
 }
 
 func operationTitle(_ value: String) -> String {
-    switch value.uppercased() {
-    case "": L10n.text("全部操作")
-    case "LOGIN": L10n.text("登录")
-    case "REGISTER": L10n.text("注册")
-    case "SENSITIVE_VERIFY": L10n.text("敏感验证")
-    case "ADAPTIVE_POLICY": L10n.text("风控策略")
-    case "CHANGE_PASSWORD": L10n.text("修改密码")
-    case "CHANGE_EMAIL": L10n.text("修改邮箱")
-    case "ADD_PASSKEY": L10n.text("新增 Passkey")
-    case "DELETE_PASSKEY": L10n.text("删除 Passkey")
-    case "ENABLE_TOTP": L10n.text("启用验证器")
-    case "DISABLE_TOTP": L10n.text("停用验证器")
-    case "UPDATE_PROFILE": L10n.text("更新资料")
-    case "DELETE_ACCOUNT": L10n.text("注销账号")
-    default: value
-    }
+    value.isEmpty ? L10n.text("全部操作") : SecurityLogPresentation.operation(value)
 }
 
 private func logOperationIcon(_ value: String) -> String {

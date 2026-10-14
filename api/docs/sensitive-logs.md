@@ -10,7 +10,9 @@
 
 - `REGISTER` - 用户注册
 - `LOGIN` - 用户登录
-- `SENSITIVE_VERIFY` - 敏感操作认证
+- `SENSITIVE_VERIFY` - 身份验证
+- `ADAPTIVE_POLICY` - 系统安全事件（再次验证 / 冻结）
+- `BIND_OAUTH` / `UNBIND_OAUTH` - 绑定 / 解绑第三方账号
 - `CHANGE_PASSWORD` - 修改密码
 - `CHANGE_EMAIL` - 修改邮箱
 - `ADD_PASSKEY` - 新增Passkey
@@ -20,7 +22,7 @@
 
 ## 登录方式 (`loginMethod` / `loginMethods`)
 
-当操作类型为 `LOGIN` 时：
+当操作类型为 `LOGIN`、`SENSITIVE_VERIFY`、`BIND_OAUTH` 或 `UNBIND_OAUTH` 时：
 
 - `loginMethod` 保留原始字符串，兼容旧前端。
 - `loginMethods` 返回规范化后的 token 数组，前端应优先使用该字段渲染标签。
@@ -77,13 +79,15 @@
 const LOGIN_METHOD_TEXT = {
   'PASSWORD': '密码登录',
   'EMAIL_CODE': '验证码登录',
-  'PASSKEY': 'Passkey登录',
+  'PASSKEY': '通行密钥',
   'QQ': 'QQ',
   'GITHUB': 'GitHub',
   'MICROSOFT': 'Microsoft',
   'GOOGLE': 'Google',
   'WECHAT': '微信',
-  'MFA': 'MFA',
+  'MFA': '二步验证',
+  'TOTP': '身份验证器',
+  'APPLE': 'Apple',
   'BRIDGE_FROM_DESKTOP': '电脑端桥接',
   'BRIDGE_FROM_WEB': '网页端桥接'
 };
@@ -245,16 +249,16 @@ curl -X GET "https://api.example.com/auth/sensitive-logs?operationType=LOGIN&res
 |------|------|------|
 | id | Long | 日志ID |
 | operationType | String | 操作类型 |
-| loginMethod | String | 登录方式原始值（仅登录操作有值，兼容旧前端） |
+| loginMethod | String | 登录、验证方式或关联平台的原始值；系统安全事件为 null |
 | loginMethods | Array<String> | 登录方式规范化 token 列表，前端应优先使用 |
 | ipAddress | String | 客户端IP地址 |
 | ipLocation | String | IP属地（如：广东省深圳市） |
 | browser | String | 浏览器信息 |
 | deviceType | String | 设备类型/操作系统：Windows/Mac/Linux/Android/iOS/ChromeOS/Bot/Unknown |
 | result | String | 操作结果：SUCCESS/FAILURE |
-| failureReason | String | 失败原因（成功时为null） |
+| failureReason | String | 失败原因或成功事件说明；新安全事件使用语言无关的原因代码 |
 | riskScore | Integer | 风险评分（0-100，0为最低风险） |
-| actionTaken | String | 处置动作：ALLOW（放行）/BLOCK（阻止）/FREEZE（冻结） |
+| actionTaken | String | 处置动作：ALLOW（安全检查通过）/STEP_UP（需要再次验证身份）/BLOCK（阻止）/FREEZE（冻结） |
 | triggeredMultiErrorLock | Boolean | 是否触发多次错误锁定 |
 | triggeredRateLimitLock | Boolean | 是否触发限速锁定 |
 | durationMs | Integer | 操作耗时（毫秒） |
@@ -303,3 +307,17 @@ curl -X GET "https://api.example.com/auth/sensitive-logs?operationType=LOGIN&res
 5. 日志按创建时间倒序排列（最新的在前）
 6. IP属地信息可能因第三方API限制而为空
 7. 本地IP（如127.0.0.1）的属地会显示为"内网IP"
+
+## 统一展示与系统安全事件
+
+Web、桌面端、iOS、Android 共用 `shared/security-log-catalog.json` 的操作、验证方式、安全措施及历史原因词表。更新词表后运行 `npm run generate:security-logs`；`npm run check:security-logs` 检查生成文件是否同步。
+
+- 每条记录首先显示具体操作，例如“修改密码”“解绑第三方账号”，再显示结果、验证方式或关联平台、时间、位置与设备信息。未知操作和方式使用本地化的通用名称。
+- 兼容大小写、`PASSWORD_MFA`、逗号列表、带引号或不带引号的数组字符串；优先解析非空 `loginMethods`，统一别名、展开 MFA 并去重。
+- `ADAPTIVE_POLICY` 表示系统执行的安全措施，不代表用户主动操作；标题按 `actionTaken` 显示“需要再次验证身份”或“会话已冻结”，成功结果显示“已执行”。检查接口的来源不再出现在登录方式中。
+- 正常 `ALLOW` 检查不再产生操作日志；查询在数据库分页前排除历史 `ADAPTIVE_POLICY + ALLOW`，保留实际用户操作的 `ALLOW` 日志。历史数据不做迁移或删除。
+- Redis 原子更新当前会话的处置状态；仅处置变化时记录安全事件。分数波动和重复查询不产生重复记录，恢复正常后再次触发处置仍可记录。状态缓存覆盖会话剩余有效期，缺少会话有效期时保留一天。
+- 日志保存保留策略判断时的风险评分，系统安全事件不参与操作频率或“最近用户操作风险”的评分，避免自动检查影响自己的判断。
+- 风控统计仍兼容历史接口字段；用户界面展示安全处置次数、再次验证次数、误拦截候选比例和验证耗时。由于正常检查不再记录，历史 `totalEvaluations` / `interceptRatePercent` 不应用于推算所有请求的拦截率。
+
+简体中文和英文随 Web、桌面端、iOS 的应用语言实时切换；Android 当前应用以中文展示，日志使用同一套中文词表。历史自由文本原因保留原文，已知原因代码与旧英文标识通过本地词表翻译。

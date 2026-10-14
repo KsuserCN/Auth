@@ -175,9 +175,7 @@ struct SensitiveLogItem: Codable, Sendable, Identifiable {
     let id: Int64; let operationType: String; let loginMethod: String?; let loginMethods: [String]?; let ipAddress: String; let ipLocation: String?
     let browser: String?; let deviceType: String?; let result: String; let failureReason: String?; let riskScore: Int; let actionTaken: String?
     let triggeredMultiErrorLock: Bool; let triggeredRateLimitLock: Bool; let durationMs: Int?; let createdAt: String
-    var displayFailureReason: String? {
-        failureReason.map { GeneratedAPIResultCodes.messages[$0] != nil ? APIResultCodeResolver.message(errorCode: $0, statusCode: 400) : $0 }
-    }
+    var displayFailureReason: String? { SecurityLogPresentation.reason(failureReason) }
 }
 struct PaginatedSensitiveLogs: Codable, Sendable { let data: [SensitiveLogItem]; let page: Int; let pageSize: Int; let total: Int; let totalPages: Int }
 struct QrScanPreview: Codable, Sendable {
