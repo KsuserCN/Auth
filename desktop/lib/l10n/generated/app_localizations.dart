@@ -1413,29 +1413,59 @@ abstract class AppLocalizations {
   /// **'Authorized apps'**
   String get authorizedApps;
 
-  String get ssoApps;
-
-  String get oauthApps;
-
-  String get officialApps;
-
-  String get untilRevoked;
-
-  String get realNameScope;
-
-  String get genderScope;
-
-  String get birthDateScope;
-
-  String get regionScope;
-
-  String get bioScope;
-
   /// No description provided for @viewThirdPartyAppsThatCanAccess.
   ///
   /// In en, this message translates to:
-  /// **'View third-party apps that can access your account and their permissions.'**
+  /// **'Review access granted to OAuth and official apps.'**
   String get viewThirdPartyAppsThatCanAccess;
+
+  /// No description provided for @oauthApps.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth apps'**
+  String get oauthApps;
+
+  /// No description provided for @officialApps.
+  ///
+  /// In en, this message translates to:
+  /// **'Official apps'**
+  String get officialApps;
+
+  /// No description provided for @untilRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Access remains until revoked'**
+  String get untilRevoked;
+
+  /// No description provided for @realNameScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Real name'**
+  String get realNameScope;
+
+  /// No description provided for @genderScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Gender'**
+  String get genderScope;
+
+  /// No description provided for @birthDateScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth'**
+  String get birthDateScope;
+
+  /// No description provided for @regionScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Region'**
+  String get regionScope;
+
+  /// No description provided for @bioScope.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile bio'**
+  String get bioScope;
 
   /// No description provided for @apps.
   ///
@@ -1464,7 +1494,7 @@ abstract class AppLocalizations {
   /// No description provided for @thirdPartyAppsYouAuthorizeWillAppear.
   ///
   /// In en, this message translates to:
-  /// **'Third-party apps you authorize will appear here.'**
+  /// **'Apps you authorize will appear here, grouped by application type.'**
   String get thirdPartyAppsYouAuthorizeWillAppear;
 
   /// No description provided for @aboutAuthorization.
@@ -1476,7 +1506,7 @@ abstract class AppLocalizations {
   /// No description provided for @youCanManageThirdPartyAppsOn.
   ///
   /// In en, this message translates to:
-  /// **'You can manage third-party apps on the web authorization page at any time.'**
+  /// **'You can manage OAuth and official app access here at any time.'**
   String get youCanManageThirdPartyAppsOn;
 
   /// No description provided for @afterYouRevokeAccessTheAppCan.

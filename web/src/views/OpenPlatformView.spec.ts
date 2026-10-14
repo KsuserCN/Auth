@@ -8,7 +8,6 @@ import OpenPlatformView from './OpenPlatformView.vue'
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   oauth: vi.fn(),
-  sso: vi.fn(),
 }))
 vi.mock('@/api/auth', () => ({ getUserInfo: mocks.user, getUserDetailsInfo: vi.fn() }))
 vi.mock('@/api/oauth2', () => ({
@@ -17,13 +16,6 @@ vi.mock('@/api/oauth2', () => ({
   deleteOAuth2App: vi.fn(),
   uploadOAuth2AppLogo: vi.fn(),
   updateOAuth2App: vi.fn(),
-}))
-vi.mock('@/api/sso', () => ({
-  getSSOClients: mocks.sso,
-  createSSOClient: vi.fn(),
-  deleteSSOClient: vi.fn(),
-  uploadSSOClientLogo: vi.fn(),
-  updateSSOClient: vi.fn(),
 }))
 
 const account = {
@@ -54,16 +46,6 @@ const oauthOverview = {
   canCreate: true,
   apps: [oauthApp],
 }
-const ssoOverview = {
-  verificationType: 'enterprise',
-  developerVerificationType: 'enterprise',
-  systemRole: 'USER',
-  admin: false,
-  currentCount: 0,
-  maxClients: 10,
-  canCreate: false,
-  clients: [],
-}
 const render = async () => {
   const wrapper = mount(OpenPlatformView, {
     global: {
@@ -85,7 +67,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.user.mockResolvedValue({ ...account })
   mocks.oauth.mockResolvedValue({ ...oauthOverview })
-  mocks.sso.mockResolvedValue({ ...ssoOverview })
 })
 
 describe('service integration account identity and applications', () => {
@@ -107,27 +88,12 @@ describe('service integration account identity and applications', () => {
     },
   )
 
-  it('keeps organization verification visible for an administrator and switches SSO actions', async () => {
+  it('keeps organization verification visible for an administrator', async () => {
     mocks.user.mockResolvedValue({ ...account, systemRole: 'ADMIN', verificationType: 'admin' })
-    mocks.oauth.mockResolvedValue({
-      ...oauthOverview,
-      systemRole: 'ADMIN',
-      verificationType: 'admin',
-    })
-    mocks.sso.mockResolvedValue({
-      ...ssoOverview,
-      systemRole: 'ADMIN',
-      admin: true,
-      canCreate: true,
-    })
+    mocks.oauth.mockResolvedValue({ ...oauthOverview, systemRole: 'ADMIN', verificationType: 'admin' })
     const wrapper = await render()
     expect(wrapper.get('.identity-title-row').text()).toContain('企业认证')
     expect(wrapper.get('.identity-account-name').text()).toContain('管理员')
-    await wrapper.get('#tab-sso').trigger('click')
-    expect(wrapper.get('.quota-text').text()).toContain('0 / 10')
-    expect(wrapper.get('.docs-link').attributes('href')).toContain('/auth/sso')
-    await wrapper.get('.toolbar-actions .el-button--primary').trigger('click')
-    expect(wrapper.get('[role="dialog"]').text()).toContain('创建 SSO 内部服务应用')
     wrapper.unmount()
   })
 
@@ -145,7 +111,7 @@ describe('service integration account identity and applications', () => {
     wrapper.unmount()
   })
 
-  it('explains why an unverified user cannot create OAuth or SSO applications', async () => {
+  it('explains why an unverified user cannot create OAuth applications', async () => {
     mocks.user.mockResolvedValue({
       ...account,
       developerVerificationType: 'none',
@@ -162,12 +128,6 @@ describe('service integration account identity and applications', () => {
     const wrapper = await render()
     expect(wrapper.get('.identity-title-row').text()).toContain('未认证')
     expect(wrapper.get('.permission-note').text()).toContain('个人或企业认证')
-    expect(wrapper.get('.toolbar-actions .el-button--primary').attributes()).toHaveProperty(
-      'disabled',
-    )
-    await wrapper.get('#tab-sso').trigger('click')
-    expect(wrapper.get('.restricted-state').text()).toContain('仅管理员可管理内部服务')
-    expect(wrapper.find('.quota-text').exists()).toBe(false)
     expect(wrapper.get('.toolbar-actions .el-button--primary').attributes()).toHaveProperty(
       'disabled',
     )

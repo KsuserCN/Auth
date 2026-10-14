@@ -3,7 +3,7 @@ package cn.ksuser.api.entity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-/** Official registration is separate from developer OAuth and SSO registries. */
+/** Official registration is separate from developer OAuth registry. */
 @Entity
 @Table(name = "official_applications")
 public class OfficialApplication {
@@ -37,6 +37,9 @@ public class OfficialApplication {
     @Column(name = "reserved", nullable = false)
     private Boolean reserved;
 
+    @Column(name = "allow_missing_nonce", nullable = false)
+    private Boolean allowMissingNonce = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -50,6 +53,7 @@ public class OfficialApplication {
         updatedAt = now;
         if (isActive == null) isActive = true;
         if (reserved == null) reserved = false;
+        if (allowMissingNonce == null) allowMissingNonce = false;
         if (scopes == null) scopes = "openid";
     }
     @PreUpdate
@@ -75,6 +79,8 @@ public class OfficialApplication {
     public void setIsActive(Boolean value) { isActive = value; }
     public Boolean getReserved() { return reserved; }
     public void setReserved(Boolean value) { reserved = value; }
+    public Boolean getAllowMissingNonce() { return allowMissingNonce; }
+    public void setAllowMissingNonce(Boolean value) { allowMissingNonce = value; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime value) { createdAt = value; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

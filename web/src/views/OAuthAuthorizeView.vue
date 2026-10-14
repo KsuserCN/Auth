@@ -307,7 +307,6 @@ import {
   getOAuth2AuthorizeContext,
   type AuthorizationGrantMode,
 } from '@/api/oauth2'
-import { approveSSOAuthorize, getSSOAuthorizeContext } from '@/api/sso'
 import { approveOfficialAuthorize, getOfficialAuthorizeContext } from '@/api/official'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
@@ -368,12 +367,8 @@ const resumeWebLogin = async () => {
 const grantMode = ref<AuthorizationGrantMode>('PERSISTENT')
 const grantTtlSeconds = ref(3600)
 
-const mode = computed<'oauth' | 'sso' | 'official'>(() =>
-  route.path.startsWith('/official/')
-    ? 'official'
-    : route.path.startsWith('/sso/')
-      ? 'sso'
-      : 'oauth',
+const mode = computed<'oauth' | 'official'>(() =>
+  route.path.startsWith('/official/') ? 'official' : 'oauth',
 )
 
 // 使用 VueUse 的 useDark 同步暗黑模式
@@ -538,8 +533,7 @@ const ensureAuthenticated = async (): Promise<boolean> => {
 }
 
 const loadAuthorizeContext = async () => {
-  const { clientId, redirectUri, responseType, scope, nonce, codeChallenge, codeChallengeMethod } =
-    requestParams.value
+  const { clientId, redirectUri, responseType, scope } = requestParams.value
 
   if (mode.value === 'official') {
     const response = await getOfficialAuthorizeContext(requestParams.value)
@@ -552,32 +546,6 @@ const loadAuthorizeContext = async () => {
       consoleApplication: response.consoleApplication,
       alreadyAuthorized: response.loggedIn && !response.consentRequired,
       existingGrantMode: 'PERSISTENT',
-    }
-    return
-  }
-
-  if (mode.value === 'sso') {
-    const response = await getSSOAuthorizeContext({
-      clientId,
-      redirectUri,
-      responseType,
-      scope,
-      nonce,
-      codeChallenge,
-      codeChallengeMethod,
-    })
-    context.value = {
-      clientId: response.clientId,
-      appName: response.clientName,
-      logoUrl: response.logoUrl,
-      redirectUri: response.redirectUri,
-      requestedScopes: response.requestedScopes,
-      consoleApplication: false,
-      subjectName: response.subjectName,
-      subjectVerificationType: response.subjectVerificationType,
-      alreadyAuthorized: response.alreadyAuthorized,
-      existingGrantMode: response.existingGrantMode,
-      existingGrantExpiresAt: response.existingGrantExpiresAt,
     }
     return
   }
@@ -647,23 +615,6 @@ const handleApprove = async (silent = false) => {
       window.location.replace(response.redirectUrl)
       return
     }
-    if (mode.value === 'sso') {
-      const response = await approveSSOAuthorize({
-        clientId: requestParams.value.clientId,
-        redirectUri: requestParams.value.redirectUri,
-        responseType: 'code',
-        scope: requestParams.value.scope,
-        state: requestParams.value.state,
-        nonce: requestParams.value.nonce,
-        codeChallenge: requestParams.value.codeChallenge,
-        codeChallengeMethod: requestParams.value.codeChallengeMethod,
-        grantMode: grantMode.value,
-        grantTtlSeconds: grantMode.value === 'TIME_LIMITED' ? grantTtlSeconds.value : undefined,
-      })
-      window.location.replace(response.redirectUrl)
-      return
-    }
-
     const response = await approveOAuth2Authorize({
       clientId: requestParams.value.clientId,
       redirectUri: requestParams.value.redirectUri,

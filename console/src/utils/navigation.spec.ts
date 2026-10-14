@@ -40,6 +40,7 @@ describe('console verification navigation', () => {
       clientName: '校园服务',
       logoUrl: '',
       clientType: 'public',
+      allowMissingNonce: false,
       redirectText: 'https://campus.example/callback',
       scopes: ['openid'],
       isActive: true,

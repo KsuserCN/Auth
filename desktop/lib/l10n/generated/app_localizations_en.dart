@@ -760,7 +760,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authorizedApps => 'Authorized apps';
 
   @override
-  String get ssoApps => 'SSO apps';
+  String get viewThirdPartyAppsThatCanAccess =>
+      'Review access granted to OAuth and official apps.';
 
   @override
   String get oauthApps => 'OAuth apps';
@@ -785,10 +786,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get bioScope => 'Profile bio';
-
-  @override
-  String get viewThirdPartyAppsThatCanAccess =>
-      'Review access granted to OAuth, SSO, and official apps.';
 
   @override
   String apps(int arg0) {
@@ -820,7 +817,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get youCanManageThirdPartyAppsOn =>
-      'You can manage OAuth, SSO, and official app access here at any time.';
+      'You can manage OAuth and official app access here at any time.';
 
   @override
   String get afterYouRevokeAccessTheAppCan =>

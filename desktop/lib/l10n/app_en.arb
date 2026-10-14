@@ -322,8 +322,7 @@
   "activityLogs2": "Activity logs",
   "recentAccountSecurityActions": "Recent account security actions",
   "authorizedApps": "Authorized apps",
-  "viewThirdPartyAppsThatCanAccess": "Review access granted to OAuth, SSO, and official apps.",
-  "ssoApps": "SSO apps",
+  "viewThirdPartyAppsThatCanAccess": "Review access granted to OAuth and official apps.",
   "oauthApps": "OAuth apps",
   "officialApps": "Official apps",
   "untilRevoked": "Access remains until revoked",
@@ -345,7 +344,7 @@
   "noAuthorizedAppsYet": "No authorized apps yet",
   "thirdPartyAppsYouAuthorizeWillAppear": "Apps you authorize will appear here, grouped by application type.",
   "aboutAuthorization": "About authorization",
-  "youCanManageThirdPartyAppsOn": "You can manage OAuth, SSO, and official app access here at any time.",
+  "youCanManageThirdPartyAppsOn": "You can manage OAuth and official app access here at any time.",
   "afterYouRevokeAccessTheAppCan": "After you revoke access, the app can no longer use its existing authorization to access your account.",
   "revokeAccessFor": "Revoke access for {arg0}?",
   "@revokeAccessFor": {

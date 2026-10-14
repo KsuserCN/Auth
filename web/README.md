@@ -25,7 +25,7 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 
 ## 应用扫码授权
 
-OAuth、SSO 和官方应用授权页默认使用网页登录，电脑端提供「使用扫码登录」，手机 UA（含 iPad 桌面模式）隐藏扫码按钮。扫码后在 Ksuser iOS App 核对应用、权限及当前账号；「同时登录通行证网页端」默认关闭，只有主动开启才建立通行证网页会话。第三方授权回调与原 state、nonce、PKCE 不变。
+OAuth 和官方应用授权页默认使用网页登录，电脑端提供「使用扫码登录」，手机 UA（含 iPad 桌面模式）隐藏扫码按钮。扫码后在 Ksuser iOS App 核对应用、权限及当前账号；「同时登录通行证网页端」默认关闭，只有主动开启才建立通行证网页会话。第三方授权回调与原 state、适用的 nonce 和 PKCE 不变。
 
 扫码组件复用 `/auth/mobile-authorization/qr/create`、`qr/status`、`consume` 和 `cancel`，写请求保留 CSRF；浏览器私有凭据不放进二维码。扫码页的 Ksuser iOS App 链接按当前语言选择 App Store 中国区或美国区，并在新标签页打开。API、Web 与 iOS App 需同步发布。
 

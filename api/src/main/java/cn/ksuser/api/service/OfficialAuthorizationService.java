@@ -222,7 +222,8 @@ public class OfficialAuthorizationService {
         if (code == null || code.length() > 256) throw invalidGrant();
         CodePayload payload = read(redis.opsForValue().getAndDelete(CODE_PREFIX + hashOpaque(code)), CodePayload.class);
         if (payload == null || payload.expiresAt() <= System.currentTimeMillis() || !app.getClientId().equals(payload.clientId())
-            || !redirectUri.equals(payload.redirectUri()) || payload.nonce() == null || payload.nonce().isBlank()
+            || !redirectUri.equals(payload.redirectUri())
+            || ((payload.nonce() == null || payload.nonce().isBlank()) && !allowsMissingNonce(app))
             || payload.challenge() == null || !payload.challenge().matches("[A-Za-z0-9_-]{43}")
             || (nonce != null && !nonce.equals(payload.nonce()))) throw invalidGrant();
         if (verifier == null || !verifier.matches("[A-Za-z0-9._~-]{43,128}")
@@ -234,7 +235,8 @@ public class OfficialAuthorizationService {
 
     private List<String> validateRequest(OfficialApplication app, OfficialAuthorizeRequest request) {
         if (!"code".equals(request.responseType()) || request.state() == null || request.state().isBlank() || request.state().length() > 512
-            || request.nonce() == null || request.nonce().isBlank() || request.nonce().length() > 512) {
+            || ((request.nonce() == null || request.nonce().isBlank()) && !allowsMissingNonce(app))
+            || (request.nonce() != null && request.nonce().length() > 512)) {
             throw failure(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OFFICIAL_REQUEST_INVALID);
         }
         if (!parseRedirectUris(app.getRedirectUris()).contains(request.redirectUri())) {
@@ -266,10 +268,16 @@ public class OfficialAuthorizationService {
         }
     }
 
+    private static boolean allowsMissingNonce(OfficialApplication app) {
+        return "confidential".equals(app.getClientType()) && !Boolean.TRUE.equals(app.getReserved())
+            && !CONSOLE_CLIENT_ID.equals(app.getClientId()) && Boolean.TRUE.equals(app.getAllowMissingNonce());
+    }
+
     private String idToken(OfficialApplication app, User user, CodePayload payload) {
         long now = System.currentTimeMillis();
         Map<String, Object> claims = claims(user, parseScopes(payload.scope()));
-        claims.put("nonce", payload.nonce()); claims.put("type", "official_id_token");
+        if (payload.nonce() != null && !payload.nonce().isBlank()) claims.put("nonce", payload.nonce());
+        claims.put("type", "official_id_token");
         return Jwts.builder().header().keyId(rsa.getKeyId()).and().claims(claims).issuer(issuer.replaceAll("/+$", ""))
             .subject(user.getUuid()).audience().add(app.getClientId()).and().issuedAt(new Date(now))
             .expiration(new Date(now + TOKEN_TTL.toMillis())).signWith(rsa.getPrivateKey(), Jwts.SIG.RS256).compact();
@@ -279,6 +287,7 @@ public class OfficialAuthorizationService {
         Map<String, Object> result = new LinkedHashMap<>(); result.put("sub", user.getUuid()); result.put("uuid", user.getUuid());
         if (scopes.contains("profile")) {
             result.put("username", user.getUsername()); result.put("preferred_username", user.getUsername()); result.put("nickname", user.getUsername());
+            result.put("name", user.getUsername());
             result.put("avatar_url", user.getAvatarUrl()); result.put("picture", user.getAvatarUrl());
         }
         if (scopes.contains("email")) { result.put("email", user.getEmail()); result.put("email_verified", user.getEmail() != null && !user.getEmail().isBlank()); }

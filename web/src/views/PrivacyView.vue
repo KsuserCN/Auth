@@ -22,7 +22,7 @@
     </el-alert>
 
     <div v-if="loading || officialLoading" class="overview-grid">
-      <el-card v-for="index in 3" :key="index" class="overview-card" shadow="never">
+      <el-card v-for="index in 2" :key="index" class="overview-card" shadow="never">
         <div class="privacy-overview-skeleton">
           <el-skeleton-item variant="text" class="privacy-overview-label" />
           <el-skeleton-item variant="text" class="privacy-overview-value" />
@@ -31,16 +31,6 @@
       </el-card>
     </div>
     <div v-else class="overview-grid">
-      <el-card class="overview-card" shadow="never">
-        <div class="overview-card-head">
-          <span class="overview-icon internal"
-            ><el-icon><Monitor /></el-icon></span
-          ><span class="overview-label">{{ t('ui.privacy.message005') }}</span>
-        </div>
-        <div class="overview-value">{{ ssoApps.length }}</div>
-        <div class="overview-desc">{{ t('ui.privacy.message006') }}</div>
-      </el-card>
-
       <el-card class="overview-card" shadow="never">
         <div class="overview-card-head">
           <span class="overview-icon external"
@@ -63,7 +53,7 @@
     </div>
 
     <el-row v-if="loading" :gutter="16">
-      <el-col v-for="index in 3" :key="index" :xs="24" :lg="12" :xl="8">
+      <el-col v-for="index in 2" :key="index" :xs="24" :lg="12" :xl="8">
         <el-card class="card" shadow="never">
           <div class="privacy-card-skeleton">
             <div class="privacy-card-skeleton-head">
@@ -91,97 +81,6 @@
       </el-col>
     </el-row>
     <el-row v-else :gutter="16">
-      <el-col :xs="24" :lg="12" :xl="8">
-        <el-card class="card" shadow="never">
-          <div class="card-title">
-            <el-icon><Monitor /></el-icon>
-            <span>{{ t('ui.privacy.message005') }}</span>
-            <el-tag class="app-count" size="small" effect="plain">{{ ssoApps.length }}</el-tag>
-          </div>
-          <p class="card-desc">{{ t('ui.privacy.message009') }}</p>
-
-          <div class="list-toolbar">
-            <el-input
-              v-if="ssoApps.length > PAGE_SIZE"
-              v-model="ssoSearch"
-              class="app-search"
-              :placeholder="t('ui.privacy.message010')"
-              clearable
-              :prefix-icon="Search"
-              @input="ssoPage = 1"
-            />
-            <span v-if="ssoApps.length" class="list-count"
-              >{{ filteredSsoApps.length }} {{ t('ui.privacy.message011') }}</span
-            >
-          </div>
-          <div v-if="pagedSsoApps.length" class="app-list">
-            <div v-for="app in pagedSsoApps" :key="app.clientId" class="app-item">
-              <div class="app-left">
-                <el-avatar
-                  :size="48"
-                  :src="app.logoUrl"
-                  :class="['app-avatar', { 'app-avatar--image': !!app.logoUrl }]"
-                >
-                  {{ app.clientName.slice(0, 1).toUpperCase() }}
-                </el-avatar>
-                <div class="app-info">
-                  <div class="app-name-row">
-                    <span class="app-name">{{ app.clientName }}</span>
-                    <el-tag size="small" type="success" effect="plain">SSO</el-tag>
-                    <el-tag size="small" effect="plain">{{ grantModeLabel(app.grantMode) }}</el-tag>
-                  </div>
-                  <div class="app-meta">
-                    {{ t('ui.privacy.message012') }}{{ formatDateTime(app.lastAuthorizedAt) }}
-                  </div>
-                  <div v-if="app.grantMode === 'TIME_LIMITED' && app.expiresAt" class="app-meta">
-                    {{ t('ui.privacy.message013') }}{{ formatDateTime(app.expiresAt) }}
-                  </div>
-                </div>
-              </div>
-
-              <div class="app-actions">
-                <el-button size="small" @click="openSsoDetailDialog(app.clientId)">{{
-                  t('ui.devices.message016')
-                }}</el-button>
-                <el-popconfirm
-                  :title="t('ui.privacy.message014')"
-                  :description="t('ui.privacy.message015')"
-                  :confirm-button-text="t('ui.devices.message017')"
-                  :cancel-button-text="t('ui.addPasskey.message009')"
-                  @confirm="handleRevokeSso(app.clientId)"
-                >
-                  <template #reference>
-                    <el-button
-                      type="danger"
-                      plain
-                      size="small"
-                      :loading="revokingId === `sso:${app.clientId}`"
-                    >
-                      {{ t('ui.devices.message017') }}
-                    </el-button>
-                  </template>
-                </el-popconfirm>
-              </div>
-            </div>
-          </div>
-
-          <el-empty
-            v-else
-            :description="ssoApps.length ? t('ui.privacy.message016') : t('ui.privacy.message017')"
-          />
-          <el-pagination
-            v-if="filteredSsoApps.length > PAGE_SIZE"
-            v-model:current-page="ssoPage"
-            class="app-pagination"
-            :page-size="PAGE_SIZE"
-            :total="filteredSsoApps.length"
-            layout="prev, pager, next"
-            small
-            background
-          />
-        </el-card>
-      </el-col>
-
       <el-col :xs="24" :lg="12" :xl="8">
         <el-card class="card" shadow="never">
           <div class="card-title">
@@ -374,70 +273,6 @@
     </el-row>
 
     <el-dialog
-      v-model="ssoDetailDialogVisible"
-      class="detail-dialog"
-      :title="t('ui.privacy.message023')"
-      width="720px"
-      @closed="resetSsoDetailDialog"
-    >
-      <div v-if="ssoDetailApp" class="detail-shell">
-        <div class="detail-head">
-          <div class="detail-title">
-            <el-avatar
-              :size="56"
-              :src="ssoDetailApp.logoUrl"
-              :class="[
-                'app-avatar',
-                'detail-avatar',
-                { 'app-avatar--image': !!ssoDetailApp.logoUrl },
-              ]"
-            >
-              {{ ssoDetailApp.clientName.slice(0, 1).toUpperCase() }}
-            </el-avatar>
-            <div>
-              <div class="detail-name">{{ ssoDetailApp.clientName }}</div>
-              <div class="detail-sub">
-                {{ t('ui.privacy.message012') }}{{ formatDateTime(ssoDetailApp.lastAuthorizedAt) }}
-              </div>
-            </div>
-          </div>
-          <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
-        </div>
-
-        <el-descriptions class="detail-desc" :column="1" border>
-          <el-descriptions-item :label="t('ui.privacy.message024')">{{
-            extractWebsite(ssoDetailApp.redirectUri)
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('ui.privacy.message025')">{{
-            formatDateTime(ssoDetailApp.authorizedAt)
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('ui.oAuthAuthorize.message019')">
-            {{ grantModeLabel(ssoDetailApp.grantMode) }}
-          </el-descriptions-item>
-          <el-descriptions-item
-            v-if="ssoDetailApp.grantMode === 'TIME_LIMITED' && ssoDetailApp.expiresAt"
-            :label="t('ui.privacy.message026')"
-          >
-            {{ formatDateTime(ssoDetailApp.expiresAt) }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ui.openPlatform.message037')">
-            <div class="scope-list">
-              <el-tag
-                v-for="scope in ssoDetailApp.scopes"
-                :key="`${ssoDetailApp.clientId}-${scope}`"
-                size="small"
-                effect="plain"
-              >
-                {{ ssoScopeLabel(scope) }}
-              </el-tag>
-            </div>
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-      <el-empty v-else :description="t('ui.privacy.message027')" />
-    </el-dialog>
-
-    <el-dialog
       v-model="oauthDetailDialogVisible"
       class="detail-dialog"
       :title="t('ui.privacy.message023')"
@@ -591,12 +426,6 @@ import {
   type OAuth2AuthorizedApp,
   type OAuth2Scope,
 } from '@/api/oauth2'
-import {
-  getSSOAuthorizations,
-  revokeSSOAuthorization,
-  type SSOAuthorizedClient,
-  type SSOScope,
-} from '@/api/sso'
 import { checkSensitiveVerification } from '@/api/auth'
 import {
   getOfficialAuthorizations,
@@ -638,12 +467,9 @@ const pagedOfficialApps = computed(() =>
 )
 const revokingId = ref('')
 const oauthApps = ref<OAuth2AuthorizedApp[]>([])
-const ssoApps = ref<SSOAuthorizedClient[]>([])
 const PAGE_SIZE = 5
 const oauthSearch = ref('')
-const ssoSearch = ref('')
 const oauthPage = ref(1)
-const ssoPage = ref(1)
 const filteredOauthApps = computed(() => {
   const query = oauthSearch.value.trim().toLocaleLowerCase()
   if (!query) return oauthApps.value
@@ -653,34 +479,16 @@ const filteredOauthApps = computed(() => {
       .includes(query),
   )
 })
-const filteredSsoApps = computed(() => {
-  const query = ssoSearch.value.trim().toLocaleLowerCase()
-  if (!query) return ssoApps.value
-  return ssoApps.value.filter((app) =>
-    `${app.clientName} ${app.clientId}`.toLocaleLowerCase().includes(query),
-  )
-})
 const pagedOauthApps = computed(() =>
   filteredOauthApps.value.slice((oauthPage.value - 1) * PAGE_SIZE, oauthPage.value * PAGE_SIZE),
 )
-const pagedSsoApps = computed(() =>
-  filteredSsoApps.value.slice((ssoPage.value - 1) * PAGE_SIZE, ssoPage.value * PAGE_SIZE),
-)
 const downloading = ref(false)
 const sensitiveDialogVisible = ref(false)
-const ssoDetailDialogVisible = ref(false)
 const oauthDetailDialogVisible = ref(false)
-const ssoDetailClientId = ref('')
 const oauthDetailAppId = ref('')
 let pendingSensitiveAction: (() => Promise<void>) | null = null
 
 const oauthScopeLabel = (scope: OAuth2Scope) => {
-  if (scope === 'email') return t('ui.login.message011')
-  return t('ui.openPlatform.message050')
-}
-
-const ssoScopeLabel = (scope: SSOScope) => {
-  if (scope === 'openid') return t('ui.openPlatform.message062')
   if (scope === 'email') return t('ui.login.message011')
   return t('ui.openPlatform.message050')
 }
@@ -735,30 +543,15 @@ const extractWebsite = (redirectUri: string) => {
   }
 }
 
-const ssoDetailApp = computed(() => {
-  const clientId = ssoDetailClientId.value
-  if (!clientId) return null
-  return ssoApps.value.find((item) => item.clientId === clientId) ?? null
-})
-
 const oauthDetailApp = computed(() => {
   const appId = oauthDetailAppId.value
   if (!appId) return null
   return oauthApps.value.find((item) => item.appId === appId) ?? null
 })
 
-const openSsoDetailDialog = (clientId: string) => {
-  ssoDetailClientId.value = clientId
-  ssoDetailDialogVisible.value = true
-}
-
 const openOauthDetailDialog = (appId: string) => {
   oauthDetailAppId.value = appId
   oauthDetailDialogVisible.value = true
-}
-
-const resetSsoDetailDialog = () => {
-  ssoDetailClientId.value = ''
 }
 
 const resetOauthDetailDialog = () => {
@@ -768,21 +561,11 @@ const resetOauthDetailDialog = () => {
 const loadAuthorizations = async () => {
   loading.value = true
   try {
-    const [oauth, sso] = await Promise.all([getOAuth2Authorizations(), getSSOAuthorizations()])
-    oauthApps.value = oauth
-    ssoApps.value = sso
-    ssoPage.value = Math.min(
-      ssoPage.value,
-      Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)),
-    )
+    oauthApps.value = await getOAuth2Authorizations()
     oauthPage.value = Math.min(
       oauthPage.value,
       Math.max(1, Math.ceil(filteredOauthApps.value.length / PAGE_SIZE)),
     )
-    if (ssoDetailDialogVisible.value && ssoDetailClientId.value && !ssoDetailApp.value) {
-      resetSsoDetailDialog()
-      ssoDetailDialogVisible.value = false
-    }
     if (oauthDetailDialogVisible.value && oauthDetailAppId.value && !oauthDetailApp.value) {
       resetOauthDetailDialog()
       oauthDetailDialogVisible.value = false
@@ -836,23 +619,6 @@ const handleRevokeOauth = async (appId: string) => {
     ElMessage.success(t('ui.privacy.message044'))
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message045'))
-  } finally {
-    revokingId.value = ''
-  }
-}
-
-const handleRevokeSso = async (clientId: string) => {
-  revokingId.value = `sso:${clientId}`
-  try {
-    await revokeSSOAuthorization(clientId)
-    ssoApps.value = ssoApps.value.filter((item) => item.clientId !== clientId)
-    ssoPage.value = Math.min(
-      ssoPage.value,
-      Math.max(1, Math.ceil(filteredSsoApps.value.length / PAGE_SIZE)),
-    )
-    ElMessage.success(t('ui.privacy.message046'))
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t('ui.privacy.message047'))
   } finally {
     revokingId.value = ''
   }

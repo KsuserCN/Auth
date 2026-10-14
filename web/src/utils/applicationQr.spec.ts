@@ -29,7 +29,7 @@ beforeEach(() => {
   setLanguagePreference('zh-Hans')
 })
 describe('shared application QR receipt', () => {
-  it.each(['oauth', 'sso', 'official'] as const)(
+  it.each(['oauth', 'official'] as const)(
     'sends the immutable %s request and keeps the browser secret separate from QR text',
     async (mode) => {
       mocks.post.mockResolvedValue({
@@ -102,7 +102,7 @@ describe('shared application QR receipt', () => {
   })
   it('selects the App Store region from the active language and labels third-party identity accurately', () => {
     expect(ksuserIosAppStoreUrl.value).toContain('apps.apple.com/cn/')
-    expect(applicationQrScopeLabel('sso', 'openid')).toBe('确认账号身份')
+    expect(applicationQrScopeLabel('oauth', 'openid')).toBe('确认账号身份')
     setLanguagePreference('en')
     expect(ksuserIosAppStoreUrl.value).toContain('apps.apple.com/us/')
     expect(applicationQrScopeLabel('oauth', 'email')).toBe('Email address')

@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import type { SSOAuthorizeApproveRequest } from '@/api/sso'
+import type { OfficialAuthorizeRequest } from '@/api/official'
 
 export interface MobileAuthorizationTicket {
   ticket: string
@@ -22,8 +22,8 @@ export const isMobileAuthorizationBrowser = (): boolean =>
     /Android|Mobile|Windows Phone|IEMobile|BlackBerry|Opera Mini/i.test(navigator.userAgent))
 
 export const createMobileAuthorization = async (
-  mode: 'oauth' | 'sso',
-  authorization: SSOAuthorizeApproveRequest,
+  mode: 'oauth',
+  authorization: OfficialAuthorizeRequest,
 ): Promise<MobileAuthorizationTicket> => {
   const response = await request.post('/auth/mobile-authorization/create', {
     mode,

@@ -99,10 +99,10 @@ afterEach(() => {
 })
 
 describe('application QR authorization', () => {
-  it.each(['oauth', 'sso'] as const)(
+  it.each(['oauth', 'official'] as const)(
     'uses the %s protocol and links the iOS App in a new tab',
     async (mode) => {
-      const english = mode === 'sso'
+      const english = mode === 'official'
       setLanguagePreference(english ? 'en' : 'zh-Hans')
       const view = render()
       await view.setProps({ mode })

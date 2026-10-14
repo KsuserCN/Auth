@@ -290,7 +290,7 @@ def render_error_page(title: str, message: str, details: str | None = None) -> b
 
 def fetch_openid_configuration() -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     request = urllib.request.Request(
-        f"{API_BASE_URL}/.well-known/openid-configuration",
+        f"{API_BASE_URL}/official/.well-known/openid-configuration",
         method="GET",
     )
     try:
@@ -323,7 +323,7 @@ def exchange_code_for_token(code: str, code_verifier: str) -> tuple[dict[str, An
     ).encode("utf-8")
 
     request = urllib.request.Request(
-        f"{API_BASE_URL}/sso/token",
+        f"{API_BASE_URL}/official/token",
         data=form,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
         method="POST",
@@ -352,7 +352,7 @@ def exchange_code_for_token(code: str, code_verifier: str) -> tuple[dict[str, An
 
 def fetch_userinfo(access_token: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     request = urllib.request.Request(
-        f"{API_BASE_URL}/sso/userinfo",
+        f"{API_BASE_URL}/official/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
         method="GET",
     )
@@ -412,13 +412,13 @@ class DemoHandler(BaseHTTPRequestHandler):
             missing.append("KSUSER_CLIENT_SECRET")
 
         body = [
-            "<h1>Ksuser SSO localhost 测试 Demo</h1>",
-            "<p class='muted'>这个页面会跳到 Ksuser SSO 授权页，自动携带 <code>openid</code>、<code>nonce</code> 和 PKCE 参数，授权成功后展示 <code>id_token</code>、<code>userinfo</code> 与 discovery 文档。</p>",
+            "<h1>Ksuser 官方应用 localhost 测试 Demo</h1>",
+            "<p class='muted'>这个页面会跳到 Ksuser 官方应用 授权页，自动携带 <code>openid</code>、<code>nonce</code> 和 PKCE 参数，授权成功后展示 <code>id_token</code>、<code>userinfo</code> 与 discovery 文档。</p>",
             "<div class='grid'>",
-            f"<div class='field'><span class='label'>授权页</span><code>{html.escape(AUTH_BASE_URL + '/sso/authorize')}</code></div>",
-            f"<div class='field'><span class='label'>Discovery</span><code>{html.escape(API_BASE_URL + '/.well-known/openid-configuration')}</code></div>",
-            f"<div class='field'><span class='label'>Token 接口</span><code>{html.escape(API_BASE_URL + '/sso/token')}</code></div>",
-            f"<div class='field'><span class='label'>userinfo 接口</span><code>{html.escape(API_BASE_URL + '/sso/userinfo')}</code></div>",
+            f"<div class='field'><span class='label'>授权页</span><code>{html.escape(AUTH_BASE_URL + '/official/authorize')}</code></div>",
+            f"<div class='field'><span class='label'>Discovery</span><code>{html.escape(API_BASE_URL + '/official/.well-known/openid-configuration')}</code></div>",
+            f"<div class='field'><span class='label'>Token 接口</span><code>{html.escape(API_BASE_URL + '/official/token')}</code></div>",
+            f"<div class='field'><span class='label'>userinfo 接口</span><code>{html.escape(API_BASE_URL + '/official/userinfo')}</code></div>",
             f"<div class='field'><span class='label'>当前回调地址</span><code>{html.escape(redirect_uri)}</code></div>",
             f"<div class='field'><span class='label'>client_id</span><code>{html.escape(CLIENT_ID or '未设置')}</code></div>",
             f"<div class='field'><span class='label'>scope</span><code>{html.escape(SCOPE)}</code></div>",
@@ -433,28 +433,28 @@ class DemoHandler(BaseHTTPRequestHandler):
             )
         else:
             body.append(
-                "<div class='notice success'>如果 SSO 应用里的回调地址已精确登记为当前页面显示的地址，现在可以直接点击下面按钮发起 SSO 测试。</div>"
+                "<div class='notice success'>如果 官方应用里的回调地址已精确登记为当前页面显示的地址，现在可以直接点击下面按钮发起 官方应用测试。</div>"
             )
 
         body.append("<h2>测试前确认</h2>")
         body.append(
             "<ul>"
-            "<li>SSO 应用回调地址必须与当前 Demo 显示值完全一致。</li>"
+            "<li>官方应用回调地址必须与当前 Demo 显示值完全一致。</li>"
             "<li>本地 HTTP 只允许 <code>http://localhost</code>，不要使用 <code>127.0.0.1</code>。</li>"
             "<li>当前 Demo 会自动生成 <code>nonce</code>、<code>code_challenge</code> 与 <code>code_verifier</code>。</li>"
             "</ul>"
         )
         body.append(
             "<div class='actions'>"
-            "<a class='button' href='/login'>开始 SSO 测试</a>"
+            "<a class='button' href='/login'>开始 官方应用测试</a>"
             "<a class='button secondary' href='/'>刷新配置</a>"
             "</div>"
         )
-        self.respond_ok("Ksuser SSO localhost demo", "".join(body))
+        self.respond_ok("Ksuser 官方应用 localhost demo", "".join(body))
 
     def handle_login(self) -> None:
         if not CLIENT_ID or not CLIENT_SECRET:
-            self.respond_bytes(render_error_page("配置不完整", "请先设置 SSO ClientID 与 ClientSecret"))
+            self.respond_bytes(render_error_page("配置不完整", "请先设置 官方应用 ClientID 与 ClientSecret"))
             return
 
         cleanup_requests()
@@ -479,7 +479,7 @@ class DemoHandler(BaseHTTPRequestHandler):
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
         }
-        authorize_url = f"{AUTH_BASE_URL}/sso/authorize?{urllib.parse.urlencode(params)}"
+        authorize_url = f"{AUTH_BASE_URL}/official/authorize?{urllib.parse.urlencode(params)}"
 
         self.send_response(302)
         self.send_header("Location", authorize_url)
@@ -520,7 +520,7 @@ class DemoHandler(BaseHTTPRequestHandler):
         discovery_response, discovery_error = fetch_openid_configuration()
 
         body = [
-            "<h1>SSO 测试成功</h1>",
+            "<h1>官方应用测试成功</h1>",
             "<div class='notice success'>授权回调已完成，本页已经自动用授权码换取了 Access Token / ID Token，并请求了 userinfo 与 discovery。</div>",
             "<div class='grid'>",
             f"<div class='field'><span class='label'>state</span><code>{html.escape(state)}</code></div>",
@@ -541,7 +541,7 @@ class DemoHandler(BaseHTTPRequestHandler):
             "<a class='button secondary' href='/'>返回首页</a>"
             "</div>",
         ]
-        self.respond_ok("SSO 测试成功", "".join(body))
+        self.respond_ok("官方应用测试成功", "".join(body))
 
     def respond_ok(self, title: str, body: str) -> None:
         self.respond_bytes(html_page(title, body))
@@ -559,14 +559,14 @@ class DemoHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     redirect_uri = build_redirect_uri()
-    print("Ksuser SSO localhost demo")
+    print("Ksuser 官方应用 localhost demo")
     print(f"Bind address : http://{BIND_HOST}:{DEMO_PORT}")
     print(f"Public URL   : http://{PUBLIC_HOST}:{DEMO_PORT}/")
     print(f"Redirect URI : {redirect_uri}")
-    print(f"Authorize URL: {AUTH_BASE_URL}/sso/authorize")
-    print(f"Discovery URL: {API_BASE_URL}/.well-known/openid-configuration")
-    print(f"Token URL    : {API_BASE_URL}/sso/token")
-    print(f"Userinfo URL : {API_BASE_URL}/sso/userinfo")
+    print(f"Authorize URL: {AUTH_BASE_URL}/official/authorize")
+    print(f"Discovery URL: {API_BASE_URL}/official/.well-known/openid-configuration")
+    print(f"Token URL    : {API_BASE_URL}/official/token")
+    print(f"Userinfo URL : {API_BASE_URL}/official/userinfo")
     if API_BASE_URL.startswith("https://"):
         if INSECURE_SKIP_VERIFY:
             print("TLS verify  : disabled by KSUSER_INSECURE_SKIP_VERIFY=true (debug only)")

@@ -80,6 +80,18 @@ class OfficialQrAuthorizationServiceTest {
         assertEquals("expired",service.status(browser()).status());
         assertTrue(memory.isEmpty());
     }
+    @Test void qrFlowPreservesAnOmittedNonceForAnOptedInOfficialClient() {
+        OfficialAuthorizeRequest source = request();
+        OfficialAuthorizeRequest withoutNonce = new OfficialAuthorizeRequest(source.clientId(), source.redirectUri(),
+            source.responseType(), source.scope(), source.state(), null, source.codeChallenge(), source.codeChallengeMethod(), true);
+        service.create(withoutNonce, "127.0.0.1", "browser");
+        service.decide(challenge, user, true);
+        ArgumentCaptor<OfficialAuthorizeRequest> captured = ArgumentCaptor.forClass(OfficialAuthorizeRequest.class);
+        verify(official).approveAuthorization(eq(user), captured.capture());
+        assertNull(captured.getValue().nonce());
+        assertEquals(source.state(), captured.getValue().state());
+        assertEquals(source.codeChallenge(), captured.getValue().codeChallenge());
+    }
     @Test void requestCreationNeverInheritsBrowserApprovalOrIdentity() {
         create();
         var captured=ArgumentCaptor.forClass(OfficialAuthorizeRequest.class);

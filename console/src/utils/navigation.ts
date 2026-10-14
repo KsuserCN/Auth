@@ -33,6 +33,7 @@ export interface ApplicationDraft {
   redirectText: string
   scopes: string[]
   isActive: boolean
+  allowMissingNonce: boolean
   editing: boolean
 }
 export const preserveApplicationDraft = (draft: ApplicationDraft) =>
@@ -46,6 +47,7 @@ export const preserveApplicationDraft = (draft: ApplicationDraft) =>
       redirectText: draft.redirectText,
       scopes: draft.scopes,
       isActive: draft.isActive,
+      allowMissingNonce: draft.allowMissingNonce,
       editing: draft.editing,
     }),
   )
@@ -66,6 +68,7 @@ export const consumeApplicationDraft = (): ApplicationDraft | null => {
       !Array.isArray(value.scopes) ||
       value.scopes.some((scope: unknown) => typeof scope !== 'string') ||
       typeof value.isActive !== 'boolean' ||
+      typeof value.allowMissingNonce !== 'boolean' ||
       typeof value.editing !== 'boolean'
     )
       return null

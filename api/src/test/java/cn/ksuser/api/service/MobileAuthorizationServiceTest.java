@@ -25,7 +25,6 @@ class MobileAuthorizationServiceTest {
     private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
     @SuppressWarnings("unchecked") private final ValueOperations<String, String> values = mock(ValueOperations.class);
     private final Oauth2PlatformService oauth = mock(Oauth2PlatformService.class);
-    private final SsoPlatformService sso = mock(SsoPlatformService.class);
     private final OfficialAuthorizationService official = mock(OfficialAuthorizationService.class);
     private final QrChallengeService qr = mock(QrChallengeService.class);
     private final SessionTransferService transfers = mock(SessionTransferService.class);
@@ -39,7 +38,7 @@ class MobileAuthorizationServiceTest {
         user.setUuid("current-user"); user.setId(7L);
         AppProperties properties = new AppProperties();
         properties.getMobileBridge().setAllowedReturnOrigins(List.of(ORIGIN));
-        service = new MobileAuthorizationService(redis, new ObjectMapper(), properties, oauth, sso, official, qr, transfers);
+        service = new MobileAuthorizationService(redis, new ObjectMapper(), properties, oauth, official, qr, transfers);
         when(redis.opsForValue()).thenReturn(values);
         when(values.get(anyString())).thenAnswer(inv -> memory.get(inv.getArgument(0)));
         when(values.getAndDelete(anyString())).thenAnswer(inv -> memory.remove(inv.getArgument(0)));
@@ -53,7 +52,6 @@ class MobileAuthorizationServiceTest {
         });
         when(redis.getExpire(anyString(), eq(TimeUnit.SECONDS))).thenReturn(240L);
         when(oauth.buildAuthorizeContext(any(), any(), any(), any(), any())).thenReturn(new Oauth2AuthorizeContextResponse("client", "日历", "https://client.example/logo.png", "help@client.example", CALLBACK, List.of("profile", "email"), false, "PERSISTENT", null));
-        when(sso.buildAuthorizeContext(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(new SsoAuthorizeContextResponse("client", "OIDC 应用", null, CALLBACK, List.of("openid", "profile"), false, "PERSISTENT", null));
         when(official.buildAuthorizeContext(any(), any())).thenReturn(new OfficialAuthorizationService.AuthorizeContext(
             "client", "官方应用", null, List.of("openid", "real_name"), List.of(), true, false, false));
         when(qr.createApplicationAuthorizationChallenge(anyString(), any(), any())).thenAnswer(inv -> {
@@ -70,8 +68,8 @@ class MobileAuthorizationServiceTest {
             qr.getByChallengeId(inv.getArgument(0)).setStatus("rejected"); return null;
         }).when(qr).rejectChallenge(anyString(), anyLong(), anyMap());
     }
-    private SsoAuthorizeRequest authorization() {
-        var a = new SsoAuthorizeRequest();
+    private MobileAuthorizeRequest authorization() {
+        var a = new MobileAuthorizeRequest();
         a.setClientId("client"); a.setRedirectUri(CALLBACK); a.setResponseType("code"); a.setScope("openid profile");
         a.setState("state +&中文"); a.setNonce("original-nonce"); a.setCodeChallenge("original-challenge"); a.setCodeChallengeMethod("S256");
         return a;
@@ -84,22 +82,6 @@ class MobileAuthorizationServiceTest {
         var context = service.preview(c.ticket(), user);
         assertEquals("日历", context.appName()); assertEquals("help@client.example", context.contactInfo());
         assertEquals(List.of("profile", "email"), context.requestedScopes());
-    }
-    @Test void preservesOidcStateNoncePkceAndIssuesOnlyOneCode() {
-        when(sso.approveAuthorization(eq(user), any())).thenReturn(new SsoAuthorizeApproveResponse("https://client.example/callback?code=code"));
-        var c = create("sso");
-        var decision = new MobileAuthorizationService.Decision(c.ticket(), true, "ONE_TIME", null);
-        var returned = service.decide(decision, user);
-        assertEquals(ORIGIN + "/app/authorize-return#ticket=" + c.ticket() + "&secret=" + c.secret(), returned.returnUrl());
-        assertEquals(returned, service.decide(decision, user));
-        var captured = ArgumentCaptor.forClass(SsoAuthorizeRequest.class);
-        verify(sso, times(1)).approveAuthorization(eq(user), captured.capture());
-        var a = captured.getValue();
-        assertEquals("state +&中文", a.getState()); assertEquals("original-nonce", a.getNonce());
-        assertEquals("original-challenge", a.getCodeChallenge()); assertEquals("S256", a.getCodeChallengeMethod());
-        assertEquals("ONE_TIME", a.getGrantMode());
-        assertEquals("completed", service.consume(browser(c)).status());
-        assertThrows(Oauth2Exception.class, () -> service.consume(browser(c)));
     }
     @Test void oauthApprovalUsesOriginalRequestAndSelectedDuration() {
         when(oauth.approveAuthorization(eq(user), any())).thenReturn(new Oauth2AuthorizeApproveResponse("https://client.example/callback?code=oauth"));
@@ -126,8 +108,9 @@ class MobileAuthorizationServiceTest {
         verify(oauth, never()).approveAuthorization(any(), any());
     }
     @Test void rejectsUntrustedOriginsAndExpiredRequests() {
-        assertThrows(Oauth2Exception.class, () -> service.create(new MobileAuthorizationService.CreateRequest("sso", "https://auth.ksuser.cn.evil.test", authorization())));
-        var c = create("sso"); memory.clear();
+        assertThrows(Oauth2Exception.class, () -> service.create(new MobileAuthorizationService.CreateRequest("oauth", "https://auth.ksuser.cn.evil.test", authorization())));
+        assertThrows(Oauth2Exception.class, () -> create("sso"));
+        var c = create("oauth"); memory.clear();
         assertThrows(Oauth2Exception.class, () -> service.preview(c.ticket(), user));
     }
 
@@ -139,12 +122,11 @@ class MobileAuthorizationServiceTest {
     }
     private void approvalResults() {
         when(oauth.approveAuthorization(eq(user), any())).thenReturn(new Oauth2AuthorizeApproveResponse(CALLBACK + "&code=oauth"));
-        when(sso.approveAuthorization(eq(user), any())).thenReturn(new SsoAuthorizeApproveResponse(CALLBACK + "&code=sso"));
         when(official.approveAuthorization(eq(user), any())).thenReturn(Map.of("redirectUrl", CALLBACK + "&code=official"));
     }
     @Test void everyQrModeDefaultsToApplicationConsentWithoutPassportLogin() {
         approvalResults();
-        for (String mode : List.of("oauth", "sso", "official")) {
+        for (String mode : List.of("oauth", "official")) {
             var c = createQr(mode);
             assertTrue(c.application().qr()); assertEquals(ORIGIN, c.application().webOrigin());
             assertFalse(c.qrText().contains(c.secret())); assertFalse(c.qrText().contains(c.ticket()));
@@ -161,7 +143,6 @@ class MobileAuthorizationServiceTest {
         }
         verifyNoInteractions(transfers);
         verify(oauth, times(1)).approveAuthorization(eq(user), any());
-        verify(sso, times(1)).approveAuthorization(eq(user), any());
         var officialRequest = ArgumentCaptor.forClass(OfficialAuthorizeRequest.class);
         verify(official).approveAuthorization(eq(user), officialRequest.capture());
         assertEquals("state +&中文", officialRequest.getValue().state());
@@ -173,7 +154,7 @@ class MobileAuthorizationServiceTest {
         approvalResults();
         var transfer = new SessionTransferService.SessionTransferPayload(); transfer.setTransferCode("private-web-login");
         when(transfers.createTransfer(7L, "web", SessionTransferService.PURPOSE_BRIDGE_LOGIN, "browser-ip", "Browser UA")).thenReturn(transfer);
-        var c = createQr("sso");
+        var c = createQr("official");
         var decision = new MobileAuthorizationService.Decision(c.ticket(), true, "TIME_LIMITED", 3600, true);
         assertNull(service.decide(decision, user).returnUrl());
         service.decide(decision, user);
@@ -182,11 +163,10 @@ class MobileAuthorizationServiceTest {
         assertThrows(Oauth2Exception.class, () -> service.qrStatus(new MobileAuthorizationService.BrowserRequest(c.ticket(), "wrong")));
         assertThrows(Oauth2Exception.class, () -> service.consume(new MobileAuthorizationService.BrowserRequest(c.ticket(), "wrong")));
         assertEquals("private-web-login", service.consume(browser(c)).webLoginTransferCode());
-        var request = ArgumentCaptor.forClass(SsoAuthorizeRequest.class);
-        verify(sso).approveAuthorization(eq(user), request.capture());
-        assertEquals("original-nonce", request.getValue().getNonce());
-        assertEquals("original-challenge", request.getValue().getCodeChallenge());
-        assertEquals(3600, request.getValue().getGrantTtlSeconds());
+        var request = ArgumentCaptor.forClass(OfficialAuthorizeRequest.class);
+        verify(official).approveAuthorization(eq(user), request.capture());
+        assertEquals("original-nonce", request.getValue().nonce());
+        assertEquals("original-challenge", request.getValue().codeChallenge());
     }
     @Test void denialAndLegacyHandoffNeverLogInPassportEvenIfLoginWebIsTrue() {
         approvalResults();

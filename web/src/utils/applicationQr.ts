@@ -4,7 +4,7 @@ import { exchangeSessionTransfer } from '@/api/auth'
 import { finalizeWebLogin } from '@/utils/desktopBridge'
 import { effectiveLocale } from '@/i18n'
 
-export type ApplicationAuthorizationMode = 'oauth' | 'sso' | 'official'
+export type ApplicationAuthorizationMode = 'oauth' | 'official'
 export interface ApplicationQrPayload {
   challenge: { challengeId: string; pollToken: string; qrText: string; expiresInSeconds: number }
   application: {

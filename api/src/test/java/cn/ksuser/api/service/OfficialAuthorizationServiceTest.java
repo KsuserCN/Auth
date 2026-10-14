@@ -213,6 +213,42 @@ class OfficialAuthorizationServiceTest {
     }
 
     @Test
+    void optedInConfidentialClientCanOmitNonceButCannotSkipOtherChecks() {
+        var original = request("openid profile email");
+        var noNonce = new OfficialAuthorizeRequest(original.clientId(), CALLBACK, "code", original.scope(),
+            original.state(), null, original.codeChallenge(), "S256", true);
+        assertThrows(Oauth2Exception.class, () -> service.buildAuthorizeContext(user, noNonce));
+        app.setAllowMissingNonce(true);
+        assertThrows(Oauth2Exception.class, () -> service.buildAuthorizeContext(user, noNonce));
+        app.setClientType("confidential"); app.setClientSecretHash("encoded-secret");
+        when(passwords.matches("secret", "encoded-secret")).thenReturn(true);
+        assertNotNull(service.buildAuthorizeContext(user, noNonce));
+        String redirect = service.approveAuthorization(user, noNonce).get("redirectUrl");
+        String code = Arrays.stream(URI.create(redirect).getRawQuery().split("&"))
+            .filter(item -> item.startsWith("code="))
+            .map(item -> URLDecoder.decode(item.substring(5), StandardCharsets.UTF_8)).findFirst().orElseThrow();
+        assertThrows(Oauth2Exception.class, () -> service.exchangeAuthorizationCode("authorization_code", code,
+            app.getClientId(), null, CALLBACK, VERIFIER, null));
+        var tokens = service.exchangeAuthorizationCode("authorization_code", code, app.getClientId(),
+            "secret", CALLBACK, VERIFIER, null);
+        var idToken = Jwts.parser().verifyWith((java.security.interfaces.RSAPublicKey)publicKey())
+            .build().parseSignedClaims((String)tokens.get("id_token"));
+        assertFalse(idToken.getPayload().containsKey("nonce"));
+        assertEquals("ksuser", idToken.getPayload().get("name"));
+        var info = service.buildUserInfo((String)tokens.get("access_token"), null);
+        assertEquals("ksuser", info.get("name"));
+        assertEquals("hello@example.test", info.get("email"));
+        assertThrows(Oauth2Exception.class, () -> service.buildAuthorizeContext(user,
+            new OfficialAuthorizeRequest(original.clientId(), CALLBACK, "code", original.scope(), null, null,
+                original.codeChallenge(), "S256", true)));
+        assertThrows(Oauth2Exception.class, () -> service.buildAuthorizeContext(user,
+            new OfficialAuthorizeRequest(original.clientId(), CALLBACK, "code", original.scope(), original.state(),
+                null, null, "S256", true)));
+        app.setReserved(true);
+        assertThrows(Oauth2Exception.class, () -> service.buildAuthorizeContext(user, noNonce));
+    }
+
+    @Test
     void browserOriginMustBelongToTheRequestingApplication() {
         String code = issue("openid");
         assertThrows(Oauth2Exception.class, () -> service.exchangeAuthorizationCode("authorization_code", code, app.getClientId(), null,

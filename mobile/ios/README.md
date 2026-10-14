@@ -1,8 +1,8 @@
-# iOS 应用扫码授权（OAuth / SSO / 官方应用）
+# iOS 应用扫码授权（OAuth / 官方应用）
 
-`/oauth/authorize`、`/sso/authorize`、`/official/authorize` 默认展示网页登录及授权。电脑浏览器可选择「使用扫码登录」，手机 UA（含 iPad 桌面模式）隐藏该按钮，授权页不自动唤起 App。App Store 超链接在新标签页打开，简体中文使用中国区、English 使用美国区。
+`/oauth/authorize`、`/official/authorize` 默认展示网页登录及授权。电脑浏览器可选择「使用扫码登录」，手机 UA（含 iPad 桌面模式）隐藏该按钮，授权页不自动唤起 App。App Store 超链接在新标签页打开，简体中文使用中国区、English 使用美国区。
 
-App 的「扫码」识别 `approve_application`，从 `/auth/qr/preview` 获得临时授权 ticket，再从 `/auth/mobile-authorization/context` 读取真实应用、回调网站和完整范围，进入原生应用授权页。未登录先完成 App 登录。OAuth / SSO 用户可选择长期、一次性或限时授权；官方应用沿用可撤销的资料授权。公共官方应用允许普通账号，Console 的超级管理员权限限制仍有效。
+App 的「扫码」识别 `approve_application`，从 `/auth/qr/preview` 获得临时授权 ticket，再从 `/auth/mobile-authorization/context` 读取真实应用、回调网站和完整范围，进入原生应用授权页。未登录先完成 App 登录。OAuth 用户可选择长期、一次性或限时授权；官方应用沿用可撤销的资料授权。公共官方应用允许普通账号，Console 的超级管理员权限限制仍有效。
 
 手机提供「同时登录通行证网页端」开关，默认关闭。默认只完成此应用授权，不改变原浏览器的通行证账号；开启后原浏览器可用一次性凭据建立当前手机账号的通行证会话。拒绝授权不会登录网页。手机提交 `/auth/mobile-authorization/decide` 的 `loginWeb` 字段，确认后停留在 App，不打开第三方回调；App 自身会话保持不变。
 
@@ -28,7 +28,6 @@ iPhone、iPad 的网页登录页在 Passkey 下方显示“通过 Ksuser 安全 
 
 App 继续接收 `ksuserauth://authorize?ticket=…` 与 `/app/authorize?ticket=…` Universal Link。旧版五分钟临时请求保留原生授权与 `/app/authorize-return` 浏览器回跳流程，网页不再自动发起此交接。`/app/authorize-return` 仍由网页承接，AASA 不应将该路径直接唤起 App。
 
-OAuth 联系方式来自注册应用；SSO 可通过 `APP_SSO_CONTACT_INFO` 配置统一联系方式，未配置时显示“应用未提供联系方式”。
 
 验证覆盖 API `MobileAuthorizationServiceTest`、Web 授权页与扫码组件测试、iOS `CoreTests` 和 `testQRApplicationConsentWebLoginIsOffByDefaultAndCanBeSelected`。隔离 UI 预览使用 `--ui-testing --ui-test-authenticated --ui-test-application-consent --ui-test-qr-consent`。
 

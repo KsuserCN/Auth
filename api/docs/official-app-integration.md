@@ -4,21 +4,20 @@
 
 ## 先选对接入类型
 
-Ksuser 当前有三套独立的客户端登记和协议入口。创建或接入前，先确认使用哪一套：
+Ksuser 当前有两套独立的客户端登记和协议入口。创建或接入前，先确认使用哪一套：
 
 | 接入类型 | 入口 | 适用情况 | 身份标识 |
 | --- | --- | --- | --- |
 | **官方应用** | `/official` | 经 Ksuser 管理员登记、需要用户明确同意并读取官方资料的服务 | `sub` / `uuid` 是用户真实 UUID |
 | 开放平台 OAuth/OIDC | `/oauth2` | 开放平台中登记的一般第三方应用 | 使用应用专属的 `openid` 等标识；新令牌不提供真实 UUID |
-| 内部 SSO | `/sso` | Ksuser 自己管理的内部服务 | 使用 SSO 客户端配置的应用专属标识 |
 
-三套登记彼此独立。官方应用不能拿普通开放平台或 SSO 的 `client_id`、`client_secret` 来调用；旧的 [OIDC 本地 Demo](../../demos/oidc-local-demo/README.md) 使用 `/oauth2`，不能直接当作官方应用示例。
+两套登记彼此独立。官方应用不能拿普通开放平台的 `client_id`、`client_secret` 来调用；[OIDC 本地 Demo](../../demos/oidc-local-demo/README.md) 可用于官方应用联调。
 
 官方应用协议是**用户登录授权**：它只支持授权码模式，不提供机器到机器的 `client_credentials` 或 refresh token。没有用户参与的后台任务不适合使用此流程。
 
 ## 公开客户端和服务端客户端
 
-官方应用的客户端类型在创建时选定，之后不能更改。两种类型都必须使用授权码模式、`state`、`nonce` 和 PKCE `S256`；`client_secret` 不能替代 PKCE。
+官方应用的客户端类型在创建时选定，之后不能更改。两种类型都必须使用授权码模式、`state` 和 PKCE `S256`；默认还必须发送 `nonce`。仅超级管理员可为非保留的 `confidential` 官方应用单独开启“允许省略 nonce”，供确实不发送 nonce 的原版 OIDC 客户端使用。`client_secret` 不能替代 PKCE。
 
 | 类型 | 适用程序 | 换取令牌的位置 | `client_secret` | PKCE |
 | --- | --- | --- | --- | --- |
@@ -71,7 +70,7 @@ GET https://api.ksuser.cn/official/.well-known/openid-configuration
 每次登录都新生成下列值，并将它们绑定到当前登录事务：
 
 - `state`：至少 128 bit 随机值，用于回调防伪；回调时必须与发起值一致。
-- `nonce`：至少 128 bit 随机值，用于绑定并验证 ID Token。
+- `nonce`：至少 128 bit 随机值，用于绑定并验证 ID Token。仅获管理员显式开启兼容的 `confidential` 应用允许省略；能发送 nonce 的客户端仍应发送。
 - `code_verifier`：PKCE 随机字符串，长度 43–128 个字符，字符集为 `[A-Za-z0-9._~-]`。客户端暂存原值，兑换授权码时提交。
 - `code_challenge`：`BASE64URL(SHA256(ASCII(code_verifier)))`，去掉 Base64 padding，结果为 43 个字符；方法固定为 `S256`。
 
@@ -95,17 +94,17 @@ https://auth.ksuser.cn/official/authorize
 
 ## 通过 iOS App 扫码快捷登录
 
-所有通过 `/official` 注册的官方应用（`public` 和 `confidential`）均可使用统一扫码登录，无需为每个应用单独开发手机授权逻辑。继续按第 3 节生成原有的 `state`、`nonce` 和 PKCE 请求并导航到 `/official/authorize`：默认展示网页登录与授权，电脑浏览器提供「使用扫码登录」按钮，手机 UA（包括 iPad 桌面模式）不显示该按钮，也不会自动唤起 App。在电脑授权 URL 加上 `login_method=qr` 可直接展示扫码入口；这个参数只选择页面登录方式，不参与 token 兑换。
+所有通过 `/official` 注册的官方应用（`public` 和 `confidential`）均可使用统一扫码登录，无需为每个应用单独开发手机授权逻辑。继续按第 3 节生成原有的 `state`、`nonce` 和 PKCE 请求（获准兼容的客户端可不发 nonce）并导航到 `/official/authorize`：默认展示网页登录与授权，电脑浏览器提供「使用扫码登录」按钮，手机 UA（包括 iPad 桌面模式）不显示该按钮，也不会自动唤起 App。在电脑授权 URL 加上 `login_method=qr` 可直接展示扫码入口；这个参数只选择页面登录方式，不参与 token 兑换。
 
-用户用 Ksuser iOS App 的「扫码」扫描二维码，核对服务端提供的应用名称、图标、回调网站、当前账号和具体资料范围后，选择同意或拒绝。手机确认后，原浏览器自动返回已登记回调，收到原 `state` 和一次性 `code`（拒绝则收到 `error=access_denied`）。应用按下文的原有流程兑换令牌，客户端密钥、nonce 校验和 PKCE 要求保持一致。手机确认页的「同时登录通行证网页端」默认关闭：默认只授权当前应用，不改变浏览器的通行证账号。用户主动开启后，原浏览器通过私有结果中的一次性凭据建立当前手机账号的通行证网页会话；凭据不会放入二维码、手机回跳链接或第三方回调。拒绝授权不会建立网页会话。
+用户用 Ksuser iOS App 的「扫码」扫描二维码，核对服务端提供的应用名称、图标、回调网站、当前账号和具体资料范围后，选择同意或拒绝。手机确认后，原浏览器自动返回已登记回调，收到原 `state` 和一次性 `code`（拒绝则收到 `error=access_denied`）。应用按下文的原有流程兑换令牌，客户端密钥、当前应用的 nonce 策略和 PKCE 要求保持一致。手机确认页的「同时登录通行证网页端」默认关闭：默认只授权当前应用，不改变浏览器的通行证账号。用户主动开启后，原浏览器通过私有结果中的一次性凭据建立当前手机账号的通行证网页会话；凭据不会放入二维码、手机回跳链接或第三方回调。拒绝授权不会建立网页会话。
 
 公共官方应用允许普通用户扫码登录；Console 仍要求 `SUPER_ADMIN`，手机扫码不会绕过应用既有的账号权限检查。创建、手机确认和令牌兑换都会校验应用是否启用、精确回调和资料范围；撤销授权与应用停用沿用原有规则。
 
-二维码有效两分钟，刷新或切换网页登录会取消旧请求。二维码仅携带手机审批码；读取和领取回调的轮询凭据仅保存在发起浏览器，领取回调只能成功一次。OAuth、SSO 和官方应用统一复用 `/auth/mobile-authorization/qr/create`、`qr/status`、`consume`、`cancel`，手机读取 `context` 并提交 `decide`。写请求需要 CSRF，手机确认需要通行证登录；二维码应通过统一授权页展示，这些接口不对任意应用页面额外开放 CORS。旧版 `/official/qr/*` 协议仍保留兼容。
+二维码有效两分钟，刷新或切换网页登录会取消旧请求。二维码仅携带手机审批码；读取和领取回调的轮询凭据仅保存在发起浏览器，领取回调只能成功一次。OAuth 和官方应用统一复用 `/auth/mobile-authorization/qr/create`、`qr/status`、`consume`、`cancel`，手机读取 `context` 并提交 `decide`。写请求需要 CSRF，手机确认需要通行证登录；二维码应通过统一授权页展示，这些接口不对任意应用页面额外开放 CORS。旧版 `/official/qr/*` 协议仍保留兼容。
 
 扫码页的「Ksuser iOS App」是新标签页 App Store 链接：当前语言为简体中文时使用中国区，为 English 时使用美国区。
 
-发布此功能需同步更新 API、通行证 Web 和 iOS App，无新增数据库迁移。Console 自身的直接扫码入口继续可用。
+发布此功能需同步更新 API、通行证 Web 和 iOS App；省略 nonce 的配置需要先执行数据库迁移。Console 自身的直接扫码入口继续可用。
 
 ## 4. 用授权码兑换令牌
 
@@ -161,7 +160,7 @@ ID Token 使用 Discovery 声明的 `RS256` 签名。用标准 OIDC 库和 Disco
 - `iss` 必须等于 Discovery 的 `issuer`。
 - `aud` 必须包含当前应用的 `client_id`。
 - `exp` 必须尚未到期。
-- `nonce` 必须与此登录事务生成的 nonce 完全相同。
+- 如果请求发送了 `nonce`，ID Token 的 `nonce` 必须与登录事务生成的值完全相同；未发送 nonce 的获准应用，ID Token 不含 `nonce` claim。
 - `sub` 是用户真实 UUID；响应还包含相同 UUID 的 `uuid` claim。
 
 拿到 ID Token 不代表之后的 API 请求都应当信任其过期状态。获取最新授权资料时，以 UserInfo endpoint 为准：
@@ -176,7 +175,7 @@ UserInfo 返回 `sub`、`uuid` 和请求 scope 允许的字段。当前资料范
 | Scope | 返回字段 |
 | --- | --- |
 | `openid` | `sub`、`uuid`：Ksuser 用户真实 UUID |
-| `profile` | `username`、`preferred_username`、`nickname`、`avatar_url`、`picture` |
+| `profile` | `username`、`preferred_username`、`nickname`、`name`、`avatar_url`、`picture` |
 | `email` | `email`、`email_verified` |
 | `real_name` | `real_name` |
 | `gender` | `gender` |
@@ -203,7 +202,7 @@ UserInfo 返回 `sub`、`uuid` 和请求 scope 允许的字段。当前资料范
 | 错误 | 常见原因 | 检查方式 |
 | --- | --- | --- |
 | `invalid_client` | client_id 不存在或停用；服务端密钥缺失或错误；公开客户端错误提交密钥 | 确认使用 `/official` 登记的 ID 和对应类型；必要时由管理员轮换密钥 |
-| `invalid_request` | `response_type`、`state`、`nonce` 等缺失或格式不符 | 授权请求始终发送 `response_type=code`、state、nonce 和完整 PKCE 参数 |
+| `invalid_request` | `response_type`、`state`、`nonce` 等缺失或格式不符 | 发送 `response_type=code`、state 和完整 PKCE 参数；默认发送 nonce，仅获准兼容的应用可省略 |
 | `invalid_scope` | scope 不含 `openid`、不受支持或未在应用登记 | 只请求应用获准且业务必需的 scope |
 | `invalid_grant` | code 过期/已使用、回调 URI 不完全相同或 verifier 不匹配 | 每个事务只兑换一次，核对原 callback 和 verifier |
 | `invalid_token` | token 过期、用户已撤销授权或应用不可用 | 清理本地会话并重新发起登录授权 |
@@ -211,3 +210,5 @@ UserInfo 返回 `sub`、`uuid` 和请求 scope 允许的字段。当前资料范
 | 浏览器 CORS 错误 | 页面 origin 未对应到该应用登记的回调来源，或请求发往了其他 API 路径 | 精确检查回调来源；开放应用 origin 的仅是 official token 和 userinfo 接口 |
 
 本地开发时可按 [Console 文档的本地配置](../../console/README.md#本地开发)设置 API issuer、授权页地址和 localhost 回调；本地调试应用必须注册在本地开发数据库，不能把生产应用密钥带到本地环境。
+
+原版 EzBookKeep 的迁移配置与发布顺序见 [EzBookKeep 官方应用迁移](../ezbookkeep-official-migration.md)。

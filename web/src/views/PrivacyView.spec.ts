@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   official: vi.fn(),
   revoke: vi.fn(),
   oauth: vi.fn(),
-  sso: vi.fn(),
 }))
 vi.mock('@/api/official', () => ({
   getOfficialAuthorizations: mocks.official,
@@ -19,7 +18,6 @@ vi.mock('@/api/oauth2', () => ({
   getOAuth2Authorizations: mocks.oauth,
   revokeOAuth2Authorization: vi.fn(),
 }))
-vi.mock('@/api/sso', () => ({ getSSOAuthorizations: mocks.sso, revokeSSOAuthorization: vi.fn() }))
 vi.mock('@/api/auth', () => ({ checkSensitiveVerification: vi.fn() }))
 vi.mock('@/api/privacyExport', () => ({
   downloadPrivacyExportFile: vi.fn(),
@@ -43,7 +41,6 @@ const grant = {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.oauth.mockResolvedValue([])
-  mocks.sso.mockResolvedValue([])
   mocks.official.mockResolvedValue([grant])
   mocks.revoke.mockResolvedValue(undefined)
 })
@@ -67,7 +64,6 @@ describe('official privacy grants', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('官方服务暂时不可用')
     expect(mocks.oauth).toHaveBeenCalled()
-    expect(mocks.sso).toHaveBeenCalled()
     wrapper.unmount()
   })
 })

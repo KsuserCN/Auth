@@ -14,7 +14,7 @@
 3. Demo 自动携带 `scope=openid profile email`、`nonce`、PKCE 参数
 4. 用户登录并同意授权
 5. Ksuser 回调到本地 `http://localhost:端口/callback`
-6. Demo 使用 `code + code_verifier` 调 `/oauth2/token`
+6. Demo 使用 `code + code_verifier` 调 `/official/token`
 7. 页面展示 `access_token`、`id_token`、`userinfo`
 
 ## 1. 启动依赖服务
@@ -22,20 +22,20 @@
 后端：
 
 ```bash
-cd /Users/ksuserkqy/work/api
+cd api
 ./gradlew bootRun
 ```
 
 前端：
 
 ```bash
-cd /Users/ksuserkqy/work/auth
+cd .
 npm run dev
 ```
 
 ## 2. 创建测试应用
 
-在开放平台创建应用时，回调地址请填写：
+在 Console 中由超级管理员创建 confidential 官方应用时，回调地址请填写：
 
 ```text
 http://localhost:9002/callback
@@ -43,18 +43,18 @@ http://localhost:9002/callback
 
 权限范围建议至少勾选：
 
+- `openid`
 - `profile`
 - `email`
 
 说明：
 
-- OIDC 的 `openid` 不需要在应用登记范围里单独勾选
 - 本地 HTTP 测试只允许 `http://localhost...`，不要写 `127.0.0.1`
 
 ## 3. 配置环境变量
 
 ```bash
-cd /Users/ksuserkqy/work/auth/demos/oidc-local-demo
+cd ./demos/oidc-local-demo
 cp env.example .env
 ```
 
@@ -87,14 +87,13 @@ http://localhost:9002/
 授权成功后，页面会展示：
 
 - `code`
-- `openid`
-- `unionid`
+- `sub` / `uuid`
 - `id_token`
-- `/oauth2/userinfo` 响应
-- `/.well-known/openid-configuration` 返回值
+- `/official/userinfo` 响应
+- `/official/.well-known/openid-configuration` 返回值
 
-如果 `/oauth2/token` 返回 `invalid_grant`，优先检查：
+如果 `/official/token` 返回 `invalid_grant`，优先检查：
 
-1. 回调地址是否和开放平台登记值完全一致
+1. 回调地址是否和 Console 登记值完全一致
 2. `code_verifier` 是否与本次授权使用的 `code_challenge` 对应
 3. 授权码是否已经被消费过

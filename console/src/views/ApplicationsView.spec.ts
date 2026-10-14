@@ -76,6 +76,7 @@ describe('official application verification return', () => {
       clientName: '校园服务',
       logoUrl: '',
       clientType: 'public',
+      allowMissingNonce: false,
       redirectText: 'https://campus.example/callback',
       scopes: ['openid', 'email'],
       isActive: true,

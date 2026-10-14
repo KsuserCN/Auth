@@ -15,7 +15,6 @@ Spring Boot (Java 21) authentication service powering Ksuser accounts.
 - TOTP MFA + recovery codes
 - Session management (multi-device), refresh & revoke (rotation supported)
 - OAuth sign-in / binding (GitHub / Google / Microsoft / QQ)
-- Internal SSO + OIDC discovery endpoints
 - Official application OIDC login with explicit consent and scoped profile access
 - Rate limiting + risk scoring + sensitive operation logs
 
@@ -99,17 +98,18 @@ OAuth:
 - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
 - `MICROSOFT_OAUTH_CLIENT_ID`, `MICROSOFT_OAUTH_CLIENT_SECRET`, `MICROSOFT_OAUTH_TENANT_ID`
 
-SSO / OIDC:
+Official OIDC:
 
-- `APP_SSO_ISSUER`
-- `APP_SSO_AUTHORIZATION_ENDPOINT`
-- `APP_OIDC_ISSUER`
+- `APP_OFFICIAL_ISSUER`
+- `APP_OFFICIAL_AUTHORIZATION_URL`
+- `APP_OIDC_ISSUER` (开放平台 OAuth2 令牌发行者)
 
 ## API Docs
 
 iOS 会话安全推送使用 APNs，默认关闭。启用与迁移步骤见 [iOS 推送配置](../mobile/ios/PUSH_NOTIFICATIONS.md)。
 
 - [Ksuser 官方应用接入指南](docs/official-app-integration.md)（客户端类型、OIDC 授权、scope、令牌校验与撤销）
+- [EzBookKeep 官方应用迁移](ezbookkeep-official-migration.md)（原版客户端配置和分阶段发布）
 
 - `docs/README.md` (documentation index)
 - `docs/postman/` (Postman collections)
@@ -135,7 +135,6 @@ iOS 会话安全推送使用 APNs，默认关闭。启用与迁移步骤见 [iOS
 - TOTP 双因素认证 + 恢复码
 - 会话管理（多设备）、刷新与撤销（支持 refresh rotation）
 - OAuth 登录/绑定（GitHub / Google / Microsoft / QQ）
-- 内部 SSO + OIDC discovery 端点
 - 官方应用 OIDC 登录（用户明确授权及按 scope 返回资料）
 - 限流、风险评分、敏感操作日志
 
@@ -180,6 +179,7 @@ cd api
 ## 文档
 
 - [Ksuser 官方应用接入指南](docs/official-app-integration.md)（客户端类型、OIDC 授权、scope、令牌校验与撤销）
+- [EzBookKeep 官方应用迁移](ezbookkeep-official-migration.md)（原版客户端配置和分阶段发布）
 - `docs/README.md`（文档索引）
 - `docs/postman/`（Postman 集合）
 

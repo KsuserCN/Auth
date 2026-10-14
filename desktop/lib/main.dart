@@ -2425,20 +2425,15 @@ class AppController extends ChangeNotifier {
       final List<dynamic> responses =
           await Future.wait<dynamic>(<Future<dynamic>>[
             _apiClient.get('/oauth2/authorizations', authorized: true),
-            _apiClient.get('/sso/authorizations', authorized: true),
             _apiClient.get('/official/authorizations', authorized: true),
           ]);
       final List<AuthorizedAppRecord> oauthApps = asList(responses[0])
           .map((dynamic item) => AuthorizedAppRecord.fromOAuth(asMap(item)))
           .toList();
-      final List<AuthorizedAppRecord> ssoApps = asList(responses[1])
-          .map((dynamic item) => AuthorizedAppRecord.fromSSO(asMap(item)))
-          .toList();
-      final List<AuthorizedAppRecord> officialApps = asList(responses[2])
+      final List<AuthorizedAppRecord> officialApps = asList(responses[1])
           .map((dynamic item) => AuthorizedAppRecord.fromOfficial(asMap(item)))
           .toList();
       authorizedApps = <AuthorizedAppRecord>[
-        ...ssoApps,
         ...oauthApps,
         ...officialApps,
       ];
@@ -2459,7 +2454,6 @@ class AppController extends ChangeNotifier {
     try {
       final String namespace = switch (app.type) {
         AuthorizationApplicationType.oauth => 'oauth2',
-        AuthorizationApplicationType.sso => 'sso',
         AuthorizationApplicationType.official => 'official',
       };
       await _apiClient.delete(
@@ -5980,19 +5974,6 @@ class AuthorizationsPage extends StatelessWidget {
                 const SizedBox(height: 14),
                 Row(
                   children: <Widget>[
-                    Expanded(
-                      child: _AuthorizationCountCard(
-                        label: desktopL10n.ssoApps,
-                        count: controller.authorizedApps
-                            .where(
-                              (AuthorizedAppRecord app) =>
-                                  app.type == AuthorizationApplicationType.sso,
-                            )
-                            .length,
-                        icon: Icons.apartment_rounded,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: _AuthorizationCountCard(
                         label: desktopL10n.oauthApps,
@@ -10721,7 +10702,7 @@ class UserSettings {
   final String? preferredSensitiveMethod;
 }
 
-enum AuthorizationApplicationType { oauth, sso, official }
+enum AuthorizationApplicationType { oauth, official }
 
 class AuthorizedAppRecord {
   const AuthorizedAppRecord({
@@ -10747,22 +10728,6 @@ class AuthorizedAppRecord {
         logoUrl: asString(json['logoUrl']),
         creatorName: asString(json['creatorName']),
         contactInfo: asString(json['contactInfo']),
-        redirectUri: asString(json['redirectUri']),
-        scopes: asList(
-          json['scopes'],
-        ).map((dynamic scope) => scope.toString()).toList(),
-        authorizedAt: asString(json['authorizedAt']) ?? '',
-        lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
-        grantMode: asString(json['grantMode']) ?? 'PERMANENT',
-        expiresAt: asString(json['expiresAt']),
-      );
-
-  factory AuthorizedAppRecord.fromSSO(Map<String, dynamic> json) =>
-      AuthorizedAppRecord(
-        appId: asString(json['clientId']) ?? '',
-        appName: asString(json['clientName']) ?? '',
-        type: AuthorizationApplicationType.sso,
-        logoUrl: asString(json['logoUrl']),
         redirectUri: asString(json['redirectUri']),
         scopes: asList(
           json['scopes'],
@@ -10803,12 +10768,10 @@ class AuthorizedAppRecord {
   String get authorizationKey => '${type.name}:$appId';
   String get typeLabel => switch (type) {
     AuthorizationApplicationType.oauth => desktopL10n.oauthApps,
-    AuthorizationApplicationType.sso => desktopL10n.ssoApps,
     AuthorizationApplicationType.official => desktopL10n.officialApps,
   };
   IconData get typeIcon => switch (type) {
     AuthorizationApplicationType.oauth => Icons.public_rounded,
-    AuthorizationApplicationType.sso => Icons.apartment_rounded,
     AuthorizationApplicationType.official => Icons.verified_user_rounded,
   };
 }

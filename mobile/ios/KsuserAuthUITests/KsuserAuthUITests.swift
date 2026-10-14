@@ -193,17 +193,16 @@ import XCTest
         XCTAssertTrue(row.isEnabled)
     }
 
-    func testAuthorizedAppsShowsKsuserAndThirdPartyDetails() {
+    func testAuthorizedAppsShowsOfficialAndThirdPartyDetails() {
         let app = launch(authenticated: true)
         let row = app.buttons["authorizedAppsRow"]
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.tap()
-        XCTAssertTrue(app.staticTexts["Ksuser 校园"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Ksuser Console"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["外部日历"].exists)
 
-        app.staticTexts["Ksuser 校园"].tap()
+        app.staticTexts["Ksuser Console"].tap()
         XCTAssertTrue(app.staticTexts["基础身份标识"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["campus.example.invalid"].exists)
         app.navigationBars.buttons.firstMatch.tap()
 
         app.staticTexts["外部日历"].tap()
@@ -217,11 +216,11 @@ import XCTest
         XCTAssertTrue(row.waitForExistence(timeout: 10))
         row.tap()
 
-        XCTAssertTrue(app.staticTexts["Ksuser 校园"].waitForExistence(timeout: 5))
-        app.staticTexts["Ksuser 校园"].tap()
+        XCTAssertTrue(app.staticTexts["Ksuser Console"].waitForExistence(timeout: 5))
+        app.staticTexts["Ksuser Console"].tap()
         app.buttons["revokeAuthorizationButton"].tap()
         app.buttons.matching(identifier: "confirmRevokeAuthorization").firstMatch.tap()
-        XCTAssertTrue(app.staticTexts["暂无已授权的 Ksuser 应用"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["暂无官方应用授权"].waitForExistence(timeout: 5))
 
         app.staticTexts["外部日历"].tap()
         app.buttons["revokeAuthorizationButton"].tap()

@@ -31,25 +31,23 @@ public class MobileAuthorizationService {
     private final ObjectMapper mapper;
     private final AppProperties properties;
     private final Oauth2PlatformService oauth;
-    private final SsoPlatformService sso;
     private final OfficialAuthorizationService official;
     private final QrChallengeService qr;
     private final SessionTransferService transfers;
     private final SecureRandom random = new SecureRandom();
-    @Value("${app.sso.contact-info:}") private String ssoContactInfo = "";
 
     public MobileAuthorizationService(StringRedisTemplate redis, ObjectMapper mapper, AppProperties properties,
-                                      Oauth2PlatformService oauth, SsoPlatformService sso,
+                                      Oauth2PlatformService oauth,
                                       OfficialAuthorizationService official, QrChallengeService qr, SessionTransferService transfers) {
-        this.redis = redis; this.mapper = mapper; this.properties = properties; this.oauth = oauth; this.sso = sso;
+        this.redis = redis; this.mapper = mapper; this.properties = properties; this.oauth = oauth;
         this.official = official; this.qr = qr; this.transfers = transfers;
     }
-    public record CreateRequest(String mode, String returnOrigin, SsoAuthorizeRequest authorization) {}
+    public record CreateRequest(String mode, String returnOrigin, MobileAuthorizeRequest authorization) {}
     public record Created(String ticket, String secret, String appLink, int expiresInSeconds) {}
     public record QrCreated(String ticket, String secret, String qrText, int expiresInSeconds, Context application) {}
-    public record Stored(String mode, String returnOrigin, String secret, SsoAuthorizeRequest authorization,
+    public record Stored(String mode, String returnOrigin, String secret, MobileAuthorizeRequest authorization,
                          boolean qr, String qrChallengeId, String requesterIp, String requesterUserAgent) {
-        public Stored(String mode, String returnOrigin, String secret, SsoAuthorizeRequest authorization) {
+        public Stored(String mode, String returnOrigin, String secret, MobileAuthorizeRequest authorization) {
             this(mode, returnOrigin, secret, authorization, false, null, null, null);
         }
     }
@@ -96,7 +94,7 @@ public class MobileAuthorizationService {
         String serialized = encode(input.authorization());
         if (serialized.length() > 8192) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_002);
         // Freeze the original request before any phone-controlled policy is added.
-        SsoAuthorizeRequest authorization = decode(serialized, SsoAuthorizeRequest.class);
+        MobileAuthorizeRequest authorization = decode(serialized, MobileAuthorizeRequest.class);
         context("", new Stored(input.mode(), origin, "", authorization), null, 120);
         String ticket = opaque(), secret = opaque();
         var challenge = qr.createApplicationAuthorizationChallenge(ticket, ip, userAgent);
@@ -107,7 +105,7 @@ public class MobileAuthorizationService {
     }
     private void validateInput(CreateRequest input) {
         if (input == null || input.authorization() == null || input.mode() == null
-            || !List.of("oauth", "sso", "official").contains(input.mode())) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
+            || !List.of("oauth", "official").contains(input.mode())) throw invalid(ApiResultCode.MOBILE_AUTHORIZATION_001);
     }
     public Context preview(String ticket, User user) {
         Stored stored = stored(ticket);
@@ -121,13 +119,6 @@ public class MobileAuthorizationService {
             return new Context(ticket, c.clientName(), c.logoUrl(), null, a.getRedirectUri(), c.requestedScopes(),
                 user != null && !c.consentRequired(), "PERSISTENT", seconds, stored.qr(), true, c.consoleApplication(),
                 stored.returnOrigin(), null, null);
-        }
-        if (stored.mode().equals("sso")) {
-            var c = sso.buildAuthorizeContext(user, a.getClientId(), a.getRedirectUri(), a.getResponseType(),
-                a.getScope(), a.getNonce(), a.getCodeChallenge(), a.getCodeChallengeMethod());
-            return new Context(ticket, c.getClientName(), c.getLogoUrl(), ssoContactInfo, c.getRedirectUri(),
-                c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds, stored.qr(), false,
-                false, stored.returnOrigin(), c.getSubjectName(), c.getSubjectVerificationType());
         }
         var c = oauth.buildAuthorizeContext(user, a.getClientId(), a.getRedirectUri(), a.getResponseType(), a.getScope());
         return new Context(ticket, c.getAppName(), c.getLogoUrl(), c.getContactInfo(), c.getRedirectUri(),
@@ -152,7 +143,6 @@ public class MobileAuthorizationService {
         if (decision.approve()) {
             a.setGrantMode(decision.grantMode()); a.setGrantTtlSeconds(decision.grantTtlSeconds());
             if (stored.mode().equals("official")) redirect = official.approveAuthorization(user, officialRequest(a, true)).get("redirectUrl");
-            else if (stored.mode().equals("sso")) redirect = sso.approveAuthorization(user, a).getRedirectUrl();
             else {
                 var request = new Oauth2AuthorizeRequest();
                 request.setClientId(a.getClientId()); request.setRedirectUri(a.getRedirectUri());
@@ -196,7 +186,7 @@ public class MobileAuthorizationService {
         // A QR confirmation stays on the phone; its browser receipt and login code never go into a return link.
         return new Return(stored.qr() ? null : returnUrl(ticket, stored));
     }
-    private OfficialAuthorizeRequest officialRequest(SsoAuthorizeRequest a, Boolean approved) {
+    private OfficialAuthorizeRequest officialRequest(MobileAuthorizeRequest a, Boolean approved) {
         return new OfficialAuthorizeRequest(a.getClientId(), a.getRedirectUri(), a.getResponseType(), a.getScope(),
             a.getState(), a.getNonce(), a.getCodeChallenge(), a.getCodeChallengeMethod(), approved);
     }

@@ -1,6 +1,6 @@
 package cn.ksuser.api.dto;
 
-public class SsoAuthorizeRequest {
+public class MobileAuthorizeRequest {
     private String clientId;
     private String redirectUri;
     private String responseType;

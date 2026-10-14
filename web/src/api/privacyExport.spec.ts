@@ -13,13 +13,13 @@ vi.mock('@/api/oauth2', () => ({
   getOAuth2Authorizations: vi.fn(),
 }))
 
-vi.mock('@/api/sso', () => ({
-  getSSOAuthorizations: vi.fn(),
+vi.mock('@/api/official', () => ({
+  getOfficialAuthorizations: vi.fn(),
 }))
 
 import { getUserDetailsInfo } from '@/api/auth'
 import { getOAuth2Authorizations } from '@/api/oauth2'
-import { getSSOAuthorizations } from '@/api/sso'
+import { getOfficialAuthorizations } from '@/api/official'
 
 describe('privacy export', () => {
   beforeEach(() => {
@@ -44,15 +44,15 @@ describe('privacy export', () => {
       },
     })
     vi.mocked(getOAuth2Authorizations).mockResolvedValue([])
-    vi.mocked(getSSOAuthorizations).mockResolvedValue([])
+    vi.mocked(getOfficialAuthorizations).mockResolvedValue([])
 
     const payload = await fetchPrivacyExportData()
 
     expect(payload.profile.uuid).toBe('u-1')
     expect(payload.authorizations.oauth2).toEqual([])
-    expect(payload.authorizations.sso).toEqual([])
-    expect(payload.meta.version).toBe('1.0.0')
-    expect(payload.meta.schemaVersion).toBe(1)
+    expect(payload.authorizations.official).toEqual([])
+    expect(payload.meta.version).toBe('2.0.0')
+    expect(payload.meta.schemaVersion).toBe(2)
     expect(payload.meta.exportedAt).toMatch(/T/)
     expect(payload.meta.timezone.length).toBeGreaterThan(0)
   })
@@ -60,7 +60,7 @@ describe('privacy export', () => {
   it('throws readable message when fetch fails', async () => {
     vi.mocked(getUserDetailsInfo).mockRejectedValue(new Error('boom'))
     vi.mocked(getOAuth2Authorizations).mockResolvedValue([])
-    vi.mocked(getSSOAuthorizations).mockResolvedValue([])
+    vi.mocked(getOfficialAuthorizations).mockResolvedValue([])
 
     await expect(fetchPrivacyExportData()).rejects.toThrow('boom')
   })
@@ -69,8 +69,8 @@ describe('privacy export', () => {
     const payload: PrivacyExportPayload = {
       meta: {
         exportedAt: '2026-04-11T00:00:00.000Z',
-        version: '1.0.0',
-        schemaVersion: 1,
+        version: '2.0.0',
+        schemaVersion: 2,
         timezone: 'Asia/Shanghai',
       },
       profile: {
@@ -80,7 +80,7 @@ describe('privacy export', () => {
       },
       authorizations: {
         oauth2: [],
-        sso: [],
+        official: [],
       },
     }
 

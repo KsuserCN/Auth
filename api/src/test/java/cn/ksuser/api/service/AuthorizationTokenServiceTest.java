@@ -30,21 +30,4 @@ class AuthorizationTokenServiceTest {
             java.nio.charset.StandardCharsets.UTF_8).contains("user-uuid-demo"));
     }
 
-    @Test
-    void ssoAccessTokenKeepsAuthorizationId() {
-        SsoTokenService service = new SsoTokenService(
-            new OidcRsaKeyService("test-oidc-rsa-key-seed", SECRET)
-        );
-        ReflectionTestUtils.setField(service, "secret", SECRET);
-        ReflectionTestUtils.setField(service, "accessTokenExpirationSeconds", 7200L);
-
-        String token = service.generateAccessToken(
-            "ksuser_auth_1", 1L, "sub-demo", "openid profile", "ksuser-auth", 42L
-        );
-
-        SsoTokenService.ParsedSsoAccessToken parsed = service.parseAccessToken(token);
-        assertNotNull(parsed);
-        assertEquals(42L, parsed.authorizationId());
-        assertEquals("ksuser_auth_1", parsed.clientId());
-    }
 }

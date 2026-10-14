@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <h1>认证用户应用</h1>
-        <p>按个人认证、企业认证或管理员账号，查看其创建的 OAuth 和 SSO 应用。</p>
+        <p>按个人认证、企业认证或管理员账号，查看其创建的 OAuth 应用。</p>
       </div>
       <el-button @click="load">刷新</el-button>
     </div>
@@ -115,7 +115,6 @@
           <el-select v-model="protocol" aria-label="应用协议">
             <el-option label="全部协议" value="all" />
             <el-option label="OAuth" value="oauth2" />
-            <el-option label="SSO / OIDC" value="sso" />
           </el-select>
           <span class="muted">共 {{ filteredApps.length }} 个应用</span>
           <el-button @click="loadApplications(selected.user.uuid)">刷新应用</el-button>
@@ -160,7 +159,7 @@
           </el-table-column>
           <el-table-column label="协议" width="120"
             ><template #default="{ row }">{{
-              row.protocol === 'oauth2' ? 'OAuth' : 'SSO / OIDC'
+              'OAuth'
             }}</template></el-table-column
           >
           <el-table-column label="状态" width="90"
@@ -205,7 +204,7 @@ const appsVisible = ref(false)
 const appsLoading = ref(false)
 const appsError = ref('')
 const selected = ref<UserApplications | null>(null)
-const protocol = ref<'all' | 'oauth2' | 'sso'>('all')
+const protocol = ref<'all' | 'oauth2'>('all')
 const filteredApps = computed(() =>
   (selected.value?.applications || []).filter(
     (app) => protocol.value === 'all' || app.protocol === protocol.value,

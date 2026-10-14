@@ -88,7 +88,7 @@ export interface VerificationInput {
   verificationEntityName: string | null
 }
 export interface OwnedApplication {
-  protocol: 'oauth2' | 'sso'
+  protocol: 'oauth2'
   clientId: string
   clientName: string
   logoUrl?: string | null
@@ -121,6 +121,7 @@ export interface OfficialApplication {
   scopes: OfficialScope[]
   isActive: boolean
   reserved: boolean
+  allowMissingNonce: boolean
   createdAt: string
   updatedAt: string
 }
@@ -132,6 +133,7 @@ export interface ApplicationInput {
   redirectUris: string[]
   scopes: OfficialScope[]
   isActive: boolean
+  allowMissingNonce: boolean
 }
 export interface AuditLog {
   id: number

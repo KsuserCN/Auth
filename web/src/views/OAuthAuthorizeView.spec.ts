@@ -13,17 +13,15 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn(),
   continue: vi.fn(),
   oauthContext: vi.fn(),
-  ssoContext: vi.fn(),
   officialContext: vi.fn(),
   officialApprove: vi.fn(),
   oauthApprove: vi.fn(),
-  ssoApprove: vi.fn(),
   token: null as string | null,
   account: null as { username: string; email: string } | null,
   desktopStatus: vi.fn(),
   route: {
-    path: '/sso/authorize',
-    fullPath: '/sso/authorize?client_id=client',
+    path: '/oauth/authorize',
+    fullPath: '/oauth/authorize?client_id=client',
     query: {
       client_id: 'client',
       redirect_uri: 'https://client.example/callback',
@@ -54,10 +52,6 @@ vi.mock('@/api/auth', () => ({ logout: vi.fn() }))
 vi.mock('@/api/oauth2', () => ({
   getOAuth2AuthorizeContext: mocks.oauthContext,
   approveOAuth2Authorize: mocks.oauthApprove,
-}))
-vi.mock('@/api/sso', () => ({
-  getSSOAuthorizeContext: mocks.ssoContext,
-  approveSSOAuthorize: mocks.ssoApprove,
 }))
 vi.mock('@/api/official', () => ({
   getOfficialAuthorizeContext: mocks.officialContext,
@@ -123,14 +117,13 @@ const render = () => {
 }
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.route.path = '/sso/authorize'
-  mocks.route.fullPath = '/sso/authorize?client_id=client'
+  mocks.route.path = '/oauth/authorize'
+  mocks.route.fullPath = '/oauth/authorize?client_id=client'
   Reflect.deleteProperty(mocks.route.query, 'login_method')
   mocks.token = null
   mocks.account = null
   mocks.ios.mockReturnValue(true)
   mocks.mobile.mockReturnValue(false)
-  mocks.ssoContext.mockResolvedValue(context)
   mocks.oauthContext.mockResolvedValue(context)
   mocks.create.mockResolvedValue(ticket)
   mocks.consume.mockResolvedValue({ status: 'pending' })
@@ -138,7 +131,6 @@ beforeEach(() => {
   mocks.cancel.mockResolvedValue(undefined)
   mocks.desktopStatus.mockResolvedValue(null)
   mocks.oauthApprove.mockImplementation(() => new Promise(() => {}))
-  mocks.ssoApprove.mockImplementation(() => new Promise(() => {}))
 })
 
 describe('compact authorization mode controls', () => {
@@ -151,9 +143,6 @@ describe('compact authorization mode controls', () => {
     ['/oauth/authorize', 'PERSISTENT'],
     ['/oauth/authorize', 'ONE_TIME'],
     ['/oauth/authorize', 'TIME_LIMITED'],
-    ['/sso/authorize', 'PERSISTENT'],
-    ['/sso/authorize', 'ONE_TIME'],
-    ['/sso/authorize', 'TIME_LIMITED'],
   ])('keeps the grant payload intact for %s with %s', async (path, mode) => {
     mocks.route.path = path
     const wrapper = render()
@@ -172,7 +161,7 @@ describe('compact authorization mode controls', () => {
       expect(wrapper.find('.grant-ttl-select').exists()).toBe(false)
     }
     await wrapper.get('.consent-primary-btn').trigger('click')
-    const approve = path.startsWith('/sso') ? mocks.ssoApprove : mocks.oauthApprove
+    const approve = mocks.oauthApprove
     expect(approve).toHaveBeenCalledWith(
       expect.objectContaining({
         clientId: 'client',
@@ -184,7 +173,7 @@ describe('compact authorization mode controls', () => {
   })
 
   it('keeps existing authorization distinct from the newly selected mode', async () => {
-    mocks.ssoContext.mockResolvedValue({
+    mocks.oauthContext.mockResolvedValue({
       ...context,
       alreadyAuthorized: true,
       existingGrantMode: 'TIME_LIMITED',
@@ -310,7 +299,7 @@ describe('official application consent', () => {
 })
 afterEach(() => mounted.splice(0).forEach((wrapper) => wrapper.unmount()))
 describe('authorization login methods', () => {
-  it.each(['/oauth/authorize', '/sso/authorize', '/official/authorize'])(
+  it.each(['/oauth/authorize', '/official/authorize'])(
     'defaults to the web on %s and starts QR only after selecting it',
     async (path) => {
       mocks.route.path = path
@@ -331,7 +320,7 @@ describe('authorization login methods', () => {
       await wrapper.find('.qr-login-toggle').trigger('click')
       const qr = wrapper.findComponent({ name: 'ApplicationQrAuthorization' })
       expect(qr.props('mode')).toBe(
-        path.startsWith('/oauth') ? 'oauth' : path.startsWith('/sso') ? 'sso' : 'official',
+        path.startsWith('/oauth') ? 'oauth' : 'official',
       )
       expect(qr.props('authorization')).toEqual(
         expect.objectContaining({
@@ -343,7 +332,7 @@ describe('authorization login methods', () => {
       )
     },
   )
-  it.each(['/oauth/authorize', '/sso/authorize', '/official/authorize'])(
+  it.each(['/oauth/authorize', '/official/authorize'])(
     'does not show or automatically launch QR for mobile UA on %s',
     async (path) => {
       mocks.route.path = path

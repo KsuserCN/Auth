@@ -68,7 +68,7 @@ class ApiResponseContractTest {
     }
     @Test void servletProtocolErrorsUseOriginalUriAndContextPath() {
         var request = new MockHttpServletRequest(); request.setRequestURI("/auth/error"); request.setContextPath("/auth");
-        request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/auth/sso/token/");
+        request.setAttribute(RequestDispatcher.ERROR_REQUEST_URI, "/auth/official/token/");
         assertTrue(ApiErrorResponses.isProtocol(request));
     }
     @Test void adaptiveStatusSerializesOnlyDescriptorsAndLeavesInternalAuditCopyPrivate() throws Exception {

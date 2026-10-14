@@ -1,14 +1,14 @@
 # Ksuser Console
 
-Vue 3 Web 管理面板，生产地址为 **https://console.ksuser.cn**。登录和再次验证都由 Ksuser 通行证完成；只有 `SUPER_ADMIN` 能进入面板。普通 `ADMIN` 保留通行证开放平台中的 OAuth/SSO 管理资格。
+Vue 3 Web 管理面板，生产地址为 **https://console.ksuser.cn**。登录和再次验证都由 Ksuser 通行证完成；只有 `SUPER_ADMIN` 能进入面板。普通 `ADMIN` 保留通行证开放平台中的 OAuth 管理资格。
 
 ## 用户认证与用户应用
 
 「用户管理」支持个人认证、企业认证、认证主体名称登记，以及任免普通管理员。开发者认证与系统角色独立：认证设置保留角色，任免管理员保留认证。个人 / 企业认证需填写已核验的姓名 / 企业名称，管理员可以在认证设置中登记真实姓名。认证和角色修改均沿用 Console 的再次验证，并写入操作记录。
 
-「认证用户应用」列出个人认证、企业认证和管理员账号，支持搜索与类型筛选。点击「查看应用」可按 OAuth / SSO 协议查看该账号创建的应用、启用状态、回调地址和权限范围；用户管理中的「应用」按钮也可直达该账号。应用归属以数据库记录为准，历史 SSO 应用未登记归属时需先补录。
+「认证用户应用」列出个人认证、企业认证和管理员账号，支持搜索与类型筛选。点击「查看应用」可查看 OAuth 应用的该账号创建的启用状态、回调地址和权限范围；用户管理中的「应用」按钮也可直达该账号。应用归属以数据库记录为准。
 
-本次功能无新增迁移，但部署数据库需已执行 `20261013_user_verification_entity.sql` 和 `20261013_sso_client_owner.sql`。字段升级、手动维护和接口说明见[认证实体与数据库维护](../api/docs/user-verification-entity.md)。
+部署数据库需已执行 `20261013_user_verification_entity.sql`；新增兼容开关需执行 `20261014_official_optional_nonce.sql`。字段升级、手动维护和接口说明见[认证实体与数据库维护](../api/docs/user-verification-entity.md)。
 
 ## iOS App 扫码登录
 
@@ -109,7 +109,7 @@ Console Cookie 为 API 主机下的 HttpOnly Cookie，路径 `/console`，生产
 
 超级管理员在「官方应用」中创建应用，配置精确回调和最小资料范围。`public` 不使用密钥；`confidential` 的密钥仅在创建和轮换时显示，数据库只保存哈希。完整的接入步骤、客户端类型对照、授权码 + PKCE 流程、scope 和令牌验证方法见[官方应用接入指南](../api/docs/official-app-integration.md)。
 
-官方应用使用独立的 `/official` OIDC 接口，ID Token 和 UserInfo 中的 `sub` / `uuid` 是真实 UUID。开放平台 OAuth `/oauth2` 和内部 SSO `/sso` 使用不同的登记及标识规则；不要混用它们的客户端凭据。
+官方应用使用独立的 `/official` OIDC 接口，ID Token 和 UserInfo 中的 `sub` / `uuid` 是真实 UUID。开放平台 OAuth `/oauth2` 使用不同的登记及标识规则；不要混用它们的客户端凭据。
 
 ## 检查
 

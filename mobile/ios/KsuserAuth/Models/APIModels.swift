@@ -154,12 +154,6 @@ struct SessionItem: Codable, Sendable, Identifiable {
     let id: Int64; let ipAddress: String; let ipLocation: String?; let userAgent: String?; let browser: String?; let deviceType: String?
     let createdAt: String; let lastSeenAt: String; let expiresAt: String; let revokedAt: String?; let online: Bool; let current: Bool
 }
-struct KsuserAuthorizedApp: Decodable, Sendable, Identifiable {
-    let clientId: String; let clientName: String; let logoUrl: String?; let redirectUri: String?
-    let scopes: [String]; let authorizedAt: String?; let lastAuthorizedAt: String?
-    let grantMode: String; let expiresAt: String?
-    var id: String { clientId }
-}
 struct OfficialAuthorizedApp: Decodable, Sendable, Identifiable {
     let clientId: String; let clientName: String; let logoUrl: String?
     let scopes: [String]; let authorizedAt: String?; let lastAuthorizedAt: String?
@@ -173,7 +167,6 @@ struct ThirdPartyAuthorizedApp: Decodable, Sendable, Identifiable {
     var id: String { appId }
 }
 struct AuthorizedAppsSnapshot: Sendable {
-    let ksuserApps: [KsuserAuthorizedApp]
     let thirdPartyApps: [ThirdPartyAuthorizedApp]
     let officialApps: [OfficialAuthorizedApp]
 }

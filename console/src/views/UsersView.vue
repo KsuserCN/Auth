@@ -272,7 +272,7 @@
         </ul>
       </div>
       <p class="muted">
-        管理员可以使用通行证中的 OAuth 和 SSO 管理功能。此操作会记录在操作记录中。
+        管理员可以使用通行证中的 OAuth 管理功能。此操作会记录在操作记录中。
       </p>
       <el-alert
         v-if="restored"

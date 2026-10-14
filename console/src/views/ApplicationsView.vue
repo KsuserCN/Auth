@@ -82,6 +82,7 @@
                 row.isActive ? '已启用' : '已停用'
               }}</el-tag>
               <el-tag v-if="row.reserved" size="small" type="warning">保留</el-tag>
+              <el-tag v-if="row.allowMissingNonce" size="small" type="warning">免 nonce</el-tag>
             </div></template
           ></el-table-column
         >
@@ -153,6 +154,10 @@
             ><el-radio value="confidential">服务端客户端</el-radio></el-radio-group
           ></el-form-item
         >
+        <el-form-item v-if="form.clientType === 'confidential' && !editingReserved" label="OIDC 兼容">
+          <el-switch v-model="form.allowMissingNonce" active-text="允许省略 nonce" />
+          <p class="muted">仅供无法发送 nonce 的服务端 OIDC 客户端使用；仍必须使用 state、PKCE 和客户端密钥。</p>
+        </el-form-item>
         <el-form-item label="应用图片">
           <div class="logo-editor">
             <div class="logo-upload-row">
@@ -327,6 +332,7 @@ const emptyForm = (): ApplicationDraft => ({
   redirectText: '',
   scopes: ['openid', 'profile', 'email'],
   isActive: true,
+  allowMissingNonce: false,
   editing: false,
 })
 const form = ref<ApplicationDraft>(emptyForm())
@@ -352,6 +358,9 @@ const onSelectionChange = (selection: OfficialApplication[]) => {
 }
 const selectableApp = (app: OfficialApplication) => !app.reserved
 watch(search, clearSelection)
+watch(() => form.value.clientType, (type) => {
+  if (type !== 'confidential') form.value.allowMissingNonce = false
+})
 const onSortChange = (event: { prop: string; order: 'ascending' | 'descending' | null }) => {
   const prop = event.prop as ApplicationSortField
   if (['clientName', 'clientType', 'isActive', 'scopes'].includes(prop) && event.order) {
@@ -389,6 +398,7 @@ const openEdit = (app: OfficialApplication) => {
     redirectText: app.redirectUris.join('\n'),
     scopes: [...app.scopes],
     isActive: app.isActive,
+    allowMissingNonce: app.allowMissingNonce,
     editing: true,
   }
   formError.value = ''
@@ -435,6 +445,8 @@ const applicationInput = (): ApplicationInput => {
     .map((uri) => uri.trim())
     .filter(Boolean)
   if (!form.value.clientName.trim()) throw new Error('请输入应用名称')
+  if (form.value.allowMissingNonce && form.value.clientType !== 'confidential')
+    throw new Error('只有服务端客户端可以允许省略 nonce')
   if (!redirects.length) throw new Error('请至少填写一个回调地址')
   for (const redirect of redirects) {
     let url: URL
@@ -456,6 +468,7 @@ const applicationInput = (): ApplicationInput => {
     redirectUris: [...new Set(redirects)],
     scopes: form.value.scopes as OfficialScope[],
     isActive: form.value.isActive,
+    allowMissingNonce: form.value.allowMissingNonce,
     ...(!form.value.editing
       ? {
           clientId: form.value.clientId.trim() || undefined,
@@ -511,6 +524,7 @@ const toggle = async (app: OfficialApplication) => {
       redirectUris: app.redirectUris,
       scopes: app.scopes,
       isActive: !app.isActive,
+      allowMissingNonce: app.allowMissingNonce,
     }))
     ElMessage.success('应用状态已更新')
     await load()
@@ -550,6 +564,7 @@ const setSelectedAppsActive = async (isActive: boolean) => {
             redirectUris: app.redirectUris,
             scopes: app.scopes,
             isActive,
+            allowMissingNonce: app.allowMissingNonce,
           }),
         )
         succeeded += 1

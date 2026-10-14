@@ -322,8 +322,7 @@
   "activityLogs2": "敏感日志",
   "recentAccountSecurityActions": "近期账户安全操作",
   "authorizedApps": "已授权应用",
-  "viewThirdPartyAppsThatCanAccess": "查看 OAuth、SSO 和官方应用已获得的账号访问权限。",
-  "ssoApps": "SSO 应用",
+  "viewThirdPartyAppsThatCanAccess": "查看 OAuth 和官方应用已获得的账号访问权限。",
   "oauthApps": "OAuth 应用",
   "officialApps": "官方应用",
   "untilRevoked": "持续有效，直到撤销授权",
@@ -345,7 +344,7 @@
   "noAuthorizedAppsYet": "还没有授权应用",
   "thirdPartyAppsYouAuthorizeWillAppear": "您授权的应用会按类型显示在这里。",
   "aboutAuthorization": "授权说明",
-  "youCanManageThirdPartyAppsOn": "您可以随时在这里管理 OAuth、SSO 和官方应用授权。",
+  "youCanManageThirdPartyAppsOn": "您可以随时在这里管理 OAuth 和官方应用授权。",
   "afterYouRevokeAccessTheAppCan": "撤销授权后，该应用将无法继续使用现有授权访问您的账户信息。",
   "revokeAccessFor": "取消「{arg0}」的授权？",
   "@revokeAccessFor": {

@@ -56,13 +56,7 @@
         <h2>{{ t('ui.openPlatform.applications') }}</h2>
         <a class="docs-link" :href="activeDocumentUrl" target="_blank" rel="noopener noreferrer">
           <el-icon><Document /></el-icon>
-          {{
-            t(
-              activeProtocol === 'oauth'
-                ? 'ui.openPlatform.message018'
-                : 'ui.openPlatform.message026',
-            )
-          }}
+          {{ t('ui.openPlatform.message018') }}
           <span aria-hidden="true">↗</span>
         </a>
       </div>
@@ -70,22 +64,10 @@
         <el-tab-pane v-for="protocol in protocols" :key="protocol" :name="protocol">
           <template #label>
             <span class="protocol-label">
-              {{
-                t(
-                  protocol === 'oauth'
-                    ? 'ui.openPlatform.message009'
-                    : 'ui.openPlatform.message011',
-                )
-              }}
+              {{ t('ui.openPlatform.message009') }}
               <span v-if="protocol === 'oauth' && oauthOverview" class="protocol-count">{{
                 oauthOverview.currentCount
               }}</span>
-              <span v-else-if="protocol === 'sso' && ssoOverview?.admin" class="protocol-count">{{
-                ssoOverview.currentCount
-              }}</span>
-              <el-icon v-else-if="protocol === 'sso' && ssoOverview" aria-hidden="true"
-                ><Lock
-              /></el-icon>
             </span>
           </template>
           <template v-if="activeProtocol === protocol">
@@ -93,11 +75,7 @@
               <div class="applications-description">
                 <p>
                   {{
-                    t(
-                      activeProtocol === 'oauth'
-                        ? 'ui.openPlatform.message010'
-                        : 'ui.openPlatform.message012',
-                    )
+                    t('ui.openPlatform.message010')
                   }}
                 </p>
                 <span v-if="activeQuota" class="quota-text">{{ activeQuota }}</span>
@@ -129,7 +107,7 @@
                   t('ui.openPlatform.retry')
                 }}</el-button>
               </div>
-              <template v-else-if="activeProtocol === 'oauth' && oauthOverview">
+              <template v-else-if="oauthOverview">
                 <div v-if="!oauthOverview.verified" class="permission-note" role="status">
                   <el-icon><Lock /></el-icon>
                   <span>{{ t('ui.openPlatform.message008') }}</span>
@@ -184,74 +162,6 @@
                     </div>
                   </div>
                 </div>
-              </template>
-              <template v-else-if="ssoOverview">
-                <div v-if="!ssoOverview.admin" class="restricted-state">
-                  <div class="restricted-icon" aria-hidden="true">
-                    <el-icon :size="24"><Lock /></el-icon>
-                  </div>
-                  <h3>{{ t('ui.openPlatform.ssoRestricted') }}</h3>
-                  <p>{{ t('ui.openPlatform.message016') }}</p>
-                </div>
-                <template v-else>
-                  <div v-if="!ssoOverview.canCreate" class="permission-note" role="status">
-                    <span>{{ t('ui.openPlatform.limitReached') }}</span>
-                  </div>
-                  <el-empty
-                    v-if="!ssoOverview.clients.length"
-                    :image-size="72"
-                    :description="t('ui.openPlatform.message028')"
-                  >
-                    <p class="empty-hint">{{ t('ui.openPlatform.ssoEmptyHint') }}</p>
-                  </el-empty>
-                  <div v-else class="app-list">
-                    <div
-                      v-for="client in ssoOverview.clients"
-                      :key="client.clientId"
-                      class="app-item"
-                    >
-                      <button
-                        class="app-title-wrap"
-                        type="button"
-                        @click="openSSODetailDialog(client.clientId)"
-                      >
-                        <el-avatar
-                          shape="square"
-                          :size="44"
-                          :src="client.logoUrl || ''"
-                          :class="['app-logo', { 'app-logo--image': !!client.logoUrl }]"
-                        >
-                          {{ client.clientName.slice(0, 1).toUpperCase() }}
-                        </el-avatar>
-                        <span class="app-title-body">
-                          <span class="app-name">{{ client.clientName }}</span>
-                          <span class="app-id">ClientID: {{ client.clientId }}</span>
-                        </span>
-                      </button>
-                      <div class="app-item-actions">
-                        <el-button
-                          text
-                          type="primary"
-                          @click="openSSODetailDialog(client.clientId)"
-                          >{{ t('ui.openPlatform.manage') }}</el-button
-                        >
-                        <el-popconfirm
-                          :title="t('ui.openPlatform.message030')"
-                          :description="t('ui.openPlatform.message031')"
-                          :confirm-button-text="t('ui.loginOptions.message020')"
-                          :cancel-button-text="t('ui.addPasskey.message009')"
-                          @confirm="handleSSODelete(client.clientId)"
-                        >
-                          <template #reference>
-                            <el-button text type="danger">{{
-                              t('ui.loginOptions.message020')
-                            }}</el-button>
-                          </template>
-                        </el-popconfirm>
-                      </div>
-                    </div>
-                  </div>
-                </template>
               </template>
             </div>
           </template>
@@ -335,112 +245,6 @@
           }}</el-descriptions-item>
           <el-descriptions-item :label="t('ui.openPlatform.message040')">{{
             formatDateTime(oauthDetailApp.updatedAt)
-          }}</el-descriptions-item>
-        </el-descriptions>
-      </div>
-      <el-empty v-else :description="t('ui.openPlatform.message041')" />
-    </el-dialog>
-
-    <el-dialog
-      v-model="ssoDetailDialogVisible"
-      class="app-dialog detail-dialog"
-      :title="t('ui.openPlatform.message042')"
-      width="760px"
-      @closed="resetSSODetailDialog"
-    >
-      <div v-if="ssoDetailClient" class="detail-shell">
-        <div class="detail-head">
-          <div class="detail-title">
-            <el-avatar
-              shape="square"
-              :size="56"
-              :src="ssoDetailClient.logoUrl || ''"
-              :class="['app-logo', 'detail-logo', { 'app-logo--image': !!ssoDetailClient.logoUrl }]"
-            >
-              {{ ssoDetailClient.clientName.slice(0, 1).toUpperCase() }}
-            </el-avatar>
-            <div>
-              <div class="detail-name">{{ ssoDetailClient.clientName }}</div>
-              <div class="detail-subrow">
-                <span class="detail-mono">ClientID: {{ ssoDetailClient.clientId }}</span>
-                <el-button text size="small" @click="copyText(ssoDetailClient.clientId)">{{
-                  t('ui.accountRecoveryCard.message012')
-                }}</el-button>
-              </div>
-            </div>
-          </div>
-          <div class="detail-actions">
-            <el-button size="small" @click="triggerLogoSelect('sso', ssoDetailClient.clientId)">{{
-              t('ui.openPlatform.message033')
-            }}</el-button>
-            <el-button size="small" type="primary" @click="openSSOEditDialog(ssoDetailClient)">{{
-              t('ui.openPlatform.message034')
-            }}</el-button>
-          </div>
-        </div>
-
-        <el-descriptions class="detail-desc" :column="1" border>
-          <el-descriptions-item :label="t('ui.openPlatform.message035')">
-            <div class="detail-stack">
-              <div v-for="uri in ssoDetailClient.redirectUris" :key="uri" class="detail-code-row">
-                <code class="detail-code">{{ uri }}</code>
-                <el-button text size="small" @click="copyText(uri)">{{
-                  t('ui.accountRecoveryCard.message012')
-                }}</el-button>
-              </div>
-            </div>
-          </el-descriptions-item>
-          <el-descriptions-item
-            v-if="ssoDetailClient.postLogoutRedirectUris.length"
-            :label="t('ui.openPlatform.message043')"
-          >
-            <div class="detail-stack">
-              <div
-                v-for="uri in ssoDetailClient.postLogoutRedirectUris"
-                :key="uri"
-                class="detail-code-row"
-              >
-                <code class="detail-code">{{ uri }}</code>
-                <el-button text size="small" @click="copyText(uri)">{{
-                  t('ui.accountRecoveryCard.message012')
-                }}</el-button>
-              </div>
-            </div>
-          </el-descriptions-item>
-          <el-descriptions-item label="Audience">
-            <div class="detail-stack">
-              <div
-                v-for="audience in ssoDetailClient.audiences"
-                :key="audience"
-                class="detail-code-row"
-              >
-                <code class="detail-code">{{ audience }}</code>
-                <el-button text size="small" @click="copyText(audience)">{{
-                  t('ui.accountRecoveryCard.message012')
-                }}</el-button>
-              </div>
-            </div>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ui.openPlatform.message037')">
-            <div class="meta-scopes">
-              <el-tag
-                v-for="scope in ssoDetailClient.scopes"
-                :key="scope"
-                size="small"
-                effect="plain"
-              >
-                {{ scope }}
-              </el-tag>
-              <el-tag v-if="ssoDetailClient.requirePkce" size="small" type="success" effect="plain">
-                PKCE Required
-              </el-tag>
-            </div>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('ui.openPlatform.message039')">{{
-            formatDateTime(ssoDetailClient.createdAt)
-          }}</el-descriptions-item>
-          <el-descriptions-item :label="t('ui.openPlatform.message040')">{{
-            formatDateTime(ssoDetailClient.updatedAt)
           }}</el-descriptions-item>
         </el-descriptions>
       </div>
@@ -562,184 +366,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="ssoCreateDialogVisible"
-      class="app-dialog"
-      :title="t('ui.openPlatform.message054')"
-      width="720px"
-    >
-      <el-form
-        ref="ssoCreateFormRef"
-        class="app-dialog-form"
-        :model="ssoCreateForm"
-        :rules="ssoRules"
-        label-position="top"
-      >
-        <el-row :gutter="12">
-          <el-col :xs="24" :md="16">
-            <el-form-item :label="t('ui.openPlatform.message055')" prop="clientName">
-              <el-input
-                v-model="ssoCreateForm.clientName"
-                maxlength="120"
-                :placeholder="t('ui.openPlatform.message056')"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="8">
-            <el-form-item label="PKCE">
-              <el-switch
-                v-model="ssoCreateForm.requirePkce"
-                inline-prompt
-                :active-text="t('ui.openPlatform.message057')"
-                :inactive-text="t('ui.accountRecoveryCard.message017')"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item :label="t('ui.openPlatform.message035')" prop="redirectUrisText">
-          <el-input
-            v-model="ssoCreateForm.redirectUrisText"
-            type="textarea"
-            :rows="4"
-            :placeholder="t('ui.openPlatform.message058')"
-          />
-        </el-form-item>
-
-        <el-row :gutter="12">
-          <el-col :xs="24" :md="12">
-            <el-form-item label="Audience" prop="audiencesText">
-              <el-input
-                v-model="ssoCreateForm.audiencesText"
-                type="textarea"
-                :rows="2"
-                :placeholder="t('ui.openPlatform.message059')"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <el-form-item
-              :label="t('ui.openPlatform.message060')"
-              prop="postLogoutRedirectUrisText"
-            >
-              <el-input
-                v-model="ssoCreateForm.postLogoutRedirectUrisText"
-                type="textarea"
-                :rows="2"
-                :placeholder="t('ui.openPlatform.message061')"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item :label="t('ui.openPlatform.message049')" prop="scopes">
-          <el-checkbox-group v-model="ssoCreateForm.scopes">
-            <el-checkbox value="openid">{{ t('ui.openPlatform.message062') }}</el-checkbox>
-            <el-checkbox value="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
-            <el-checkbox value="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="ssoCreateDialogVisible = false">{{
-          t('ui.addPasskey.message009')
-        }}</el-button>
-        <el-button type="primary" :loading="ssoSubmitting" @click="handleSSOCreate">{{
-          t('ui.openPlatform.message005')
-        }}</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog
-      v-model="ssoEditDialogVisible"
-      class="app-dialog"
-      :title="t('ui.openPlatform.message063')"
-      width="720px"
-    >
-      <el-form
-        ref="ssoEditFormRef"
-        class="app-dialog-form"
-        :model="ssoEditForm"
-        :rules="ssoRules"
-        label-position="top"
-      >
-        <el-row :gutter="12">
-          <el-col :xs="24" :md="16">
-            <el-form-item :label="t('ui.openPlatform.message055')" prop="clientName">
-              <el-input
-                v-model="ssoEditForm.clientName"
-                maxlength="120"
-                :placeholder="t('ui.openPlatform.message056')"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="8">
-            <el-form-item label="PKCE">
-              <el-switch
-                v-model="ssoEditForm.requirePkce"
-                inline-prompt
-                :active-text="t('ui.openPlatform.message057')"
-                :inactive-text="t('ui.accountRecoveryCard.message017')"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item :label="t('ui.openPlatform.message035')" prop="redirectUrisText">
-          <el-input
-            v-model="ssoEditForm.redirectUrisText"
-            type="textarea"
-            :rows="4"
-            :placeholder="t('ui.openPlatform.message058')"
-          />
-        </el-form-item>
-
-        <el-row :gutter="12">
-          <el-col :xs="24" :md="12">
-            <el-form-item label="Audience" prop="audiencesText">
-              <el-input
-                v-model="ssoEditForm.audiencesText"
-                type="textarea"
-                :rows="2"
-                :placeholder="t('ui.openPlatform.message064')"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <el-form-item
-              :label="t('ui.openPlatform.message060')"
-              prop="postLogoutRedirectUrisText"
-            >
-              <el-input
-                v-model="ssoEditForm.postLogoutRedirectUrisText"
-                type="textarea"
-                :rows="2"
-                :placeholder="t('ui.openPlatform.message061')"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item :label="t('ui.openPlatform.message049')" prop="scopes">
-          <el-checkbox-group v-model="ssoEditForm.scopes">
-            <el-checkbox value="openid">{{ t('ui.openPlatform.message062') }}</el-checkbox>
-            <el-checkbox value="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
-            <el-checkbox value="email">{{ t('ui.loginOptions.message003') }}</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="ssoEditDialogVisible = false">{{
-          t('ui.addPasskey.message009')
-        }}</el-button>
-        <el-button type="primary" :loading="ssoEditSubmitting" @click="handleSSOEdit">{{
-          t('ui.openPlatform.message053')
-        }}</el-button>
-      </template>
-    </el-dialog>
-
     <input
       ref="logoFileInput"
       class="file-input"
@@ -826,32 +452,6 @@
         </div>
       </div>
 
-      <div v-else-if="ssoCreatedClient" class="secret-panel">
-        <el-alert
-          type="success"
-          :closable="false"
-          show-icon
-          :title="t('ui.openPlatform.message069')"
-        />
-        <div class="secret-item">
-          <span class="secret-label">ClientID</span>
-          <div class="secret-value">
-            <code>{{ ssoCreatedClient.clientId }}</code>
-            <el-button text @click="copyText(ssoCreatedClient.clientId)">{{
-              t('ui.accountRecoveryCard.message012')
-            }}</el-button>
-          </div>
-        </div>
-        <div class="secret-item">
-          <span class="secret-label">ClientSecret</span>
-          <div class="secret-value">
-            <code>{{ ssoCreatedClient.clientSecret }}</code>
-            <el-button text @click="copyText(ssoCreatedClient.clientSecret)">{{
-              t('ui.accountRecoveryCard.message012')
-            }}</el-button>
-          </div>
-        </div>
-      </div>
     </el-dialog>
   </div>
 </template>
@@ -876,58 +476,41 @@ import {
   type OAuth2AppsOverview,
   type OAuth2Scope,
 } from '@/api/oauth2'
-import {
-  createSSOClient,
-  deleteSSOClient,
-  getSSOClients,
-  uploadSSOClientLogo,
-  updateSSOClient,
-  type CreateSSOClientResponse,
-  type SSOClient,
-  type SSOClientsOverview,
-  type SSOScope,
-} from '@/api/sso'
-
 const userStore = useUserStore()
-const protocols = ['oauth', 'sso'] as const
+const protocols = ['oauth'] as const
 const activeProtocol = ref<(typeof protocols)[number]>('oauth')
+const activeLoading = computed(() => oauthLoading.value)
+const activeLoadFailed = computed(() => oauthLoadFailed.value)
+const canCreateActive = computed(() => !!oauthOverview.value?.canCreate && !activeLoading.value && !activeLoadFailed.value)
+const activeQuota = computed(() => oauthOverview.value && !activeLoadFailed.value ? t('ui.openPlatform.quota', { count: oauthOverview.value.currentCount, max: oauthOverview.value.maxApps }) : '')
+const activeDocumentUrl = computed(() => documentUrl('auth/oauth'))
+const refreshActiveApplications = () => loadOAuthApps()
+const openActiveCreateDialog = () => { if (canCreateActive.value) openOAuthCreateDialog() }
+const secretDialogTitle = computed(() => oauthCreatedApp.value ? t('ui.openPlatform.message071') : t('ui.openPlatform.message073'))
 const identityLoading = ref(true)
 const identityLoadFailed = ref(false)
 const oauthLoading = ref(true)
-const ssoLoading = ref(true)
 const oauthLoadFailed = ref(false)
-const ssoLoadFailed = ref(false)
 const oauthSubmitting = ref(false)
 const oauthEditSubmitting = ref(false)
-const ssoSubmitting = ref(false)
-const ssoEditSubmitting = ref(false)
 
 const oauthCreateDialogVisible = ref(false)
 const oauthEditDialogVisible = ref(false)
-const ssoCreateDialogVisible = ref(false)
-const ssoEditDialogVisible = ref(false)
 const oauthDetailDialogVisible = ref(false)
-const ssoDetailDialogVisible = ref(false)
 const secretDialogVisible = ref(false)
 const logoCropDialogVisible = ref(false)
 const logoUploading = ref(false)
 
 const oauthOverview = ref<OAuth2AppsOverview | null>(null)
-const ssoOverview = ref<SSOClientsOverview | null>(null)
 const oauthDetailAppId = ref('')
-const ssoDetailClientId = ref('')
 const oauthCreatedApp = ref<CreateOAuth2AppResponse | null>(null)
-const ssoCreatedClient = ref<CreateSSOClientResponse | null>(null)
 
 const oauthCreateFormRef = ref<FormInstance>()
 const oauthEditFormRef = ref<FormInstance>()
-const ssoCreateFormRef = ref<FormInstance>()
-const ssoEditFormRef = ref<FormInstance>()
 
 const editingOAuthAppId = ref('')
-const editingSSOClientId = ref('')
 const logoFileInput = ref<HTMLInputElement>()
-const logoUploadTargetType = ref<'oauth' | 'sso' | ''>('')
+const logoUploadTargetType = ref<'oauth' | ''>('')
 const logoUploadTargetId = ref('')
 const selectedLogoFile = ref<File | null>(null)
 
@@ -975,36 +558,6 @@ const oauthEditForm = reactive<{
   contactInfo: '',
 })
 
-const ssoCreateForm = reactive({
-  clientName: '',
-  redirectUrisText: '',
-  postLogoutRedirectUrisText: '',
-  audiencesText: 'ksuser-auth',
-  scopes: ['openid', 'profile', 'email'] as SSOScope[],
-  requirePkce: true,
-})
-
-const ssoEditForm = reactive({
-  clientName: '',
-  redirectUrisText: '',
-  postLogoutRedirectUrisText: '',
-  audiencesText: 'ksuser-auth',
-  scopes: ['openid', 'profile', 'email'] as SSOScope[],
-  requirePkce: true,
-})
-
-const normalizeLines = (value: string) =>
-  value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter(Boolean)
-
-const normalizeUriTextValues = (value: string) =>
-  value
-    .split(/[;\n]/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-
 const normalizeSemicolonValues = (value: string) =>
   value
     .split(';')
@@ -1013,7 +566,7 @@ const normalizeSemicolonValues = (value: string) =>
 
 const oauthRedirectUris = (value: string) => normalizeSemicolonValues(value || '')
 
-const accountAccess = computed(() => oauthOverview.value ?? ssoOverview.value ?? userStore.user)
+const accountAccess = computed(() => oauthOverview.value ?? userStore.user)
 const developerVerificationType = computed(() => {
   const type =
     accountAccess.value?.developerVerificationType ?? accountAccess.value?.verificationType
@@ -1021,7 +574,7 @@ const developerVerificationType = computed(() => {
 })
 const isEnterprise = computed(() => developerVerificationType.value === 'enterprise')
 const isAdmin = computed(
-  () => isSystemAdmin(accountAccess.value) || ssoOverview.value?.admin === true,
+  () => isSystemAdmin(accountAccess.value),
 )
 const subjectName = computed(() => {
   if (developerVerificationType.value === 'none' && !isAdmin.value) return ''
@@ -1040,44 +593,6 @@ const verificationTagType = computed(() => {
   if (type === 'enterprise') return 'warning'
   if (type === 'personal') return 'success'
   return 'info'
-})
-
-const activeLoading = computed(() =>
-  activeProtocol.value === 'oauth' ? oauthLoading.value : ssoLoading.value,
-)
-const activeLoadFailed = computed(() =>
-  activeProtocol.value === 'oauth' ? oauthLoadFailed.value : ssoLoadFailed.value,
-)
-const canCreateActive = computed(() => {
-  if (activeLoading.value || activeLoadFailed.value) return false
-  return activeProtocol.value === 'oauth'
-    ? oauthOverview.value?.canCreate
-    : ssoOverview.value?.canCreate
-})
-const activeQuota = computed(() => {
-  const overview = activeProtocol.value === 'oauth' ? oauthOverview.value : ssoOverview.value
-  if (!overview || activeLoadFailed.value) return ''
-  if (activeProtocol.value === 'sso' && !ssoOverview.value?.admin) return ''
-  return t('ui.openPlatform.quota', {
-    count: overview.currentCount,
-    max: 'maxApps' in overview ? overview.maxApps : overview.maxClients,
-  })
-})
-const activeDocumentUrl = computed(() =>
-  documentUrl(activeProtocol.value === 'oauth' ? 'auth/oauth' : 'auth/sso'),
-)
-const refreshActiveApplications = () =>
-  activeProtocol.value === 'oauth' ? loadOAuthApps() : loadSSOClients()
-const openActiveCreateDialog = () => {
-  if (!canCreateActive.value) return
-  if (activeProtocol.value === 'oauth') openOAuthCreateDialog()
-  else openSSOCreateDialog()
-}
-
-const secretDialogTitle = computed(() => {
-  if (oauthCreatedApp.value) return t('ui.openPlatform.message071')
-  if (ssoCreatedClient.value) return t('ui.openPlatform.message072')
-  return t('ui.openPlatform.message073')
 })
 
 const redirectUriValidator = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
@@ -1109,43 +624,6 @@ const redirectUriValidator = (_rule: unknown, value: string, callback: (error?: 
   }
 }
 
-const multilineUriValidator = (
-  _rule: unknown,
-  value: string,
-  callback: (error?: Error) => void,
-) => {
-  const lines = normalizeUriTextValues(value || '')
-  if (!lines.length) {
-    callback(new LocalizedError('ui.openPlatform.message079'))
-    return
-  }
-
-  try {
-    lines.forEach((line) => {
-      const url = new URL(line)
-      const isHttps = url.protocol === 'https:'
-      const isLocalhostHttp = url.protocol === 'http:' && url.hostname === 'localhost'
-      if (!isHttps && !isLocalhostHttp) {
-        throw new LocalizedError('ui.openPlatform.message080')
-      }
-      if (url.hash) {
-        throw new LocalizedError('ui.openPlatform.message081')
-      }
-    })
-    callback()
-  } catch (error) {
-    callback(error instanceof Error ? error : new LocalizedError('ui.openPlatform.message082'))
-  }
-}
-
-const audiencesValidator = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-  if (!normalizeLines(value || '').length) {
-    callback(new LocalizedError('ui.openPlatform.message083'))
-    return
-  }
-  callback()
-}
-
 const oauthCreateRules = computed<FormRules>(() => ({
   appName: [
     { required: true, message: t('ui.openPlatform.message084'), trigger: 'blur' },
@@ -1162,28 +640,6 @@ const oauthEditRules = computed<FormRules>(() => ({
   appName: oauthCreateRules.value.appName,
   redirectUri: oauthCreateRules.value.redirectUri,
   contactInfo: oauthCreateRules.value.contactInfo,
-}))
-
-const ssoRules = computed<FormRules>(() => ({
-  clientName: [
-    { required: true, message: t('ui.openPlatform.message088'), trigger: 'blur' },
-    { min: 2, max: 120, message: t('ui.openPlatform.message089'), trigger: 'blur' },
-  ],
-  redirectUrisText: [{ validator: multilineUriValidator, trigger: 'blur' }],
-  postLogoutRedirectUrisText: [
-    {
-      validator: (_rule, value, callback) => {
-        const lines = normalizeLines(value || '')
-        if (!lines.length) {
-          callback()
-          return
-        }
-        multilineUriValidator(_rule, value, callback)
-      },
-      trigger: 'blur',
-    },
-  ],
-  audiencesText: [{ validator: audiencesValidator, trigger: 'blur' }],
 }))
 
 const oauthScopeLabel = (scope: OAuth2Scope) =>
@@ -1212,27 +668,6 @@ const resetOAuthEditForm = () => {
   oauthEditFormRef.value?.clearValidate()
 }
 
-const resetSSOCreateForm = () => {
-  ssoCreateForm.clientName = ''
-  ssoCreateForm.redirectUrisText = ''
-  ssoCreateForm.postLogoutRedirectUrisText = ''
-  ssoCreateForm.audiencesText = 'ksuser-auth'
-  ssoCreateForm.scopes = ['openid', 'profile', 'email']
-  ssoCreateForm.requirePkce = true
-  ssoCreateFormRef.value?.clearValidate()
-}
-
-const resetSSOEditForm = () => {
-  editingSSOClientId.value = ''
-  ssoEditForm.clientName = ''
-  ssoEditForm.redirectUrisText = ''
-  ssoEditForm.postLogoutRedirectUrisText = ''
-  ssoEditForm.audiencesText = 'ksuser-auth'
-  ssoEditForm.scopes = ['openid', 'profile', 'email']
-  ssoEditForm.requirePkce = true
-  ssoEditFormRef.value?.clearValidate()
-}
-
 const loadIdentity = async () => {
   identityLoading.value = true
   identityLoadFailed.value = false
@@ -1258,29 +693,10 @@ const loadOAuthApps = async () => {
   }
 }
 
-const loadSSOClients = async () => {
-  ssoLoading.value = true
-  ssoLoadFailed.value = false
-  try {
-    ssoOverview.value = await getSSOClients()
-    ensureSSODetailExists()
-  } catch {
-    ssoLoadFailed.value = true
-  } finally {
-    ssoLoading.value = false
-  }
-}
-
 const oauthDetailApp = computed(() => {
   const appId = oauthDetailAppId.value
   if (!appId) return null
   return oauthOverview.value?.apps.find((app) => app.appId === appId) ?? null
-})
-
-const ssoDetailClient = computed(() => {
-  const clientId = ssoDetailClientId.value
-  if (!clientId) return null
-  return ssoOverview.value?.clients.find((client) => client.clientId === clientId) ?? null
 })
 
 const ensureOAuthDetailExists = () => {
@@ -1291,30 +707,13 @@ const ensureOAuthDetailExists = () => {
   }
 }
 
-const ensureSSODetailExists = () => {
-  if (!ssoDetailDialogVisible.value || !ssoDetailClientId.value) return
-  if (!ssoDetailClient.value) {
-    ssoDetailDialogVisible.value = false
-    ssoDetailClientId.value = ''
-  }
-}
-
 const openOAuthDetailDialog = (appId: string) => {
   oauthDetailAppId.value = appId
   oauthDetailDialogVisible.value = true
 }
 
-const openSSODetailDialog = (clientId: string) => {
-  ssoDetailClientId.value = clientId
-  ssoDetailDialogVisible.value = true
-}
-
 const resetOAuthDetailDialog = () => {
   oauthDetailAppId.value = ''
-}
-
-const resetSSODetailDialog = () => {
-  ssoDetailClientId.value = ''
 }
 
 const openOAuthCreateDialog = () => {
@@ -1334,26 +733,6 @@ const openOAuthEditDialog = (app: OAuth2App) => {
   oauthEditDialogVisible.value = true
 }
 
-const openSSOCreateDialog = () => {
-  if (!ssoOverview.value?.canCreate) {
-    ElMessage.warning(t('ui.openPlatform.message091'))
-    return
-  }
-  resetSSOCreateForm()
-  ssoCreateDialogVisible.value = true
-}
-
-const openSSOEditDialog = (client: SSOClient) => {
-  editingSSOClientId.value = client.clientId
-  ssoEditForm.clientName = client.clientName
-  ssoEditForm.redirectUrisText = client.redirectUris.join(';')
-  ssoEditForm.postLogoutRedirectUrisText = client.postLogoutRedirectUris.join(';')
-  ssoEditForm.audiencesText = client.audiences.join('\n')
-  ssoEditForm.scopes = [...client.scopes]
-  ssoEditForm.requirePkce = client.requirePkce
-  ssoEditDialogVisible.value = true
-}
-
 const handleOAuthCreate = async () => {
   await oauthCreateFormRef.value?.validate()
   oauthSubmitting.value = true
@@ -1364,7 +743,6 @@ const handleOAuthCreate = async () => {
       contactInfo: oauthCreateForm.contactInfo.trim(),
       scopes: [...oauthCreateForm.scopes],
     })
-    ssoCreatedClient.value = null
     oauthCreateDialogVisible.value = false
     secretDialogVisible.value = true
     ElMessage.success(t('ui.openPlatform.message092'))
@@ -1403,69 +781,11 @@ const handleOAuthDelete = async (appId: string) => {
   await loadOAuthApps()
 }
 
-const handleSSOCreate = async () => {
-  await ssoCreateFormRef.value?.validate()
-  ssoSubmitting.value = true
-  try {
-    ssoCreatedClient.value = await createSSOClient({
-      clientName: ssoCreateForm.clientName.trim(),
-      redirectUris: normalizeUriTextValues(ssoCreateForm.redirectUrisText),
-      postLogoutRedirectUris: normalizeUriTextValues(ssoCreateForm.postLogoutRedirectUrisText),
-      scopes: [...ssoCreateForm.scopes],
-      audiences: normalizeLines(ssoCreateForm.audiencesText),
-      requirePkce: ssoCreateForm.requirePkce,
-    })
-    oauthCreatedApp.value = null
-    ssoCreateDialogVisible.value = false
-    secretDialogVisible.value = true
-    ElMessage.success(t('ui.openPlatform.message096'))
-    await loadSSOClients()
-  } finally {
-    ssoSubmitting.value = false
-  }
-}
-
-const handleSSOEdit = async () => {
-  await ssoEditFormRef.value?.validate()
-  if (!editingSSOClientId.value) {
-    ElMessage.error(t('ui.openPlatform.message097'))
-    return
-  }
-
-  ssoEditSubmitting.value = true
-  try {
-    await updateSSOClient(editingSSOClientId.value, {
-      clientName: ssoEditForm.clientName.trim(),
-      redirectUris: normalizeUriTextValues(ssoEditForm.redirectUrisText),
-      postLogoutRedirectUris: normalizeUriTextValues(ssoEditForm.postLogoutRedirectUrisText),
-      scopes: [...ssoEditForm.scopes],
-      audiences: normalizeLines(ssoEditForm.audiencesText),
-      requirePkce: ssoEditForm.requirePkce,
-    })
-    ssoEditDialogVisible.value = false
-    resetSSOEditForm()
-    ElMessage.success(t('ui.openPlatform.message098'))
-    await loadSSOClients()
-  } finally {
-    ssoEditSubmitting.value = false
-  }
-}
-
-const handleSSODelete = async (clientId: string) => {
-  await deleteSSOClient(clientId)
-  ElMessage.success(t('ui.openPlatform.message099'))
-  await loadSSOClients()
-}
-
 watch(oauthDetailDialogVisible, (visible) => {
   if (visible) ensureOAuthDetailExists()
 })
 
-watch(ssoDetailDialogVisible, (visible) => {
-  if (visible) ensureSSODetailExists()
-})
-
-const triggerLogoSelect = (targetType: 'oauth' | 'sso', targetId: string) => {
+const triggerLogoSelect = (targetType: 'oauth', targetId: string) => {
   logoUploadTargetType.value = targetType
   logoUploadTargetId.value = targetId
   logoFileInput.value?.click()
@@ -1642,13 +962,8 @@ const confirmLogoCrop = async () => {
   try {
     logoUploading.value = true
     const blob = await exportCroppedLogoBlob()
-    if (logoUploadTargetType.value === 'oauth') {
-      await uploadOAuth2AppLogo(logoUploadTargetId.value, blob)
-      await loadOAuthApps()
-    } else {
-      await uploadSSOClientLogo(logoUploadTargetId.value, blob)
-      await loadSSOClients()
-    }
+    await uploadOAuth2AppLogo(logoUploadTargetId.value, blob)
+    await loadOAuthApps()
     logoCropDialogVisible.value = false
     ElMessage.success(t('ui.openPlatform.message104'))
   } catch {
@@ -1691,7 +1006,7 @@ const copyText = async (value: string) => {
 }
 
 onMounted(() => {
-  void Promise.all([loadIdentity(), loadOAuthApps(), loadSSOClients()])
+  void Promise.all([loadIdentity(), loadOAuthApps()])
 })
 
 onBeforeUnmount(() => {

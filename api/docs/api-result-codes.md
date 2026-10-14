@@ -12,7 +12,7 @@
 
 参数仅携带结构化业务值（次数、长度、提供商等），不得携带异常原文、上游错误详情或用户提示文字。文案使用 `{参数名}` 占位符。四端先查本地表，再替换参数；未知码、缺参数和不规范响应使用本地通用提示。不得退回显示服务器 `msg` 或 `error_description`。
 
-OAuth2/SSO 的 token、userinfo、JWKS、OIDC discovery 成功响应保持协议原始数据格式；错误保留标准 `error` 字段，扩展 `errorCode` / `params`。标准可选字段 `error_description` 使用稳定结果码，不提供展示文案。安全过滤器和 Spring MVC 未处理异常也返回同样的详细码。
+OAuth2/官方应用的 token、userinfo、JWKS、OIDC discovery 成功响应保持协议原始数据格式；错误保留标准 `error` 字段，扩展 `errorCode` / `params`。标准可选字段 `error_description` 使用稳定结果码，不提供展示文案。安全过滤器和 Spring MVC 未处理异常也返回同样的详细码。
 
 密码策略返回 `requirementCode` / `requirementParams`。自适应认证返回 `reasonCodes: [{errorCode, params?}]`、`recommendedActionCode`、`alertTitleCode`、`alertMessageCode`。OAuth 的嵌套 `data.message` / `data.reason` 和 TOTP `data.message` 不再作为提示来源，客户端统一读取外层详细码。
 
@@ -39,7 +39,7 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `REQUEST_SUCCESS` | 操作成功 | Operation completed | — | MobileAuthorizationController.java |
 | `REQUEST_FAILED` | 请求失败，请重试 | Request failed. Please try again. | — | 公共/客户端 |
 | `BAD_REQUEST` | 请求参数不正确 | Invalid request parameters | — | 公共/客户端 |
-| `UNAUTHENTICATED` | 未登录或登录状态已失效，请重新登录 | You are signed out or your session has expired. Please sign in again. | — | AppleAuthController.java, AuthController.java, MobileAuthorizationController.java, Oauth2PlatformController.java, OauthController.java, PushDeviceController.java, SsoPlatformController.java, TotpController.java, AppleAuthService.java |
+| `UNAUTHENTICATED` | 未登录或登录状态已失效，请重新登录 | You are signed out or your session has expired. Please sign in again. | — | AppleAuthController.java, AuthController.java, MobileAuthorizationController.java, Oauth2PlatformController.java, OauthController.java, PushDeviceController.java, retired-sso, TotpController.java, AppleAuthService.java |
 | `FORBIDDEN` | 无权限 | You do not have permission to perform this action | — | 公共/客户端 |
 | `SECURITY_CSRF_INVALID` | 安全校验失败，请刷新页面后重试 | Security check failed. Refresh the page and try again. | — | 公共/客户端 |
 | `SENSITIVE_VERIFICATION_REQUIRED` | 请先完成敏感操作验证 | Verify your identity before continuing | — | AppleAuthController.java, AuthController.java, OauthController.java, TotpController.java |
@@ -83,7 +83,7 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `APPLE_001` | 挑战已创建 | Challenge created | — | AppleAuthController.java |
 | `APPLE_002` | Apple 绑定成功 | Apple account linked | — | AppleAuthController.java |
 | `APPLE_003` | 身份验证成功 | Identity verified | — | AppleAuthController.java |
-| `APPLE_004` | 获取成功 | Retrieved successfully | — | AppleAuthController.java, AuthController.java, InfoController.java, Oauth2PlatformController.java, SsoPlatformController.java |
+| `APPLE_004` | 获取成功 | Retrieved successfully | — | AppleAuthController.java, AuthController.java, InfoController.java, Oauth2PlatformController.java, retired-sso |
 | `APPLE_005` | Apple 解绑成功 | Apple account unlinked | — | AppleAuthController.java |
 | `APPLE_006` | 已接收 | Received | — | AppleAuthController.java |
 | `APPLE_007` | Apple 登录成功 | Signed in with Apple | — | AppleAuthController.java |
@@ -97,7 +97,7 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `AUTH_002` | 用户名不能为空 | Username is required | — | AuthController.java |
 | `AUTH_003` | 类型不能为空 | Type is required | — | AuthController.java |
 | `AUTH_004` | 类型只能是 register、login、change-email 或 sensitive-verification | Type must be register, login, change-email or sensitive-verification | — | AuthController.java |
-| `AUTH_005` | 用户不存在 | User not found | — | AuthController.java, MobileAuthorizationController.java, Oauth2PlatformController.java, OauthController.java, SensitiveLogController.java, SsoPlatformController.java, TotpController.java, AccountRecoveryService.java, MobileBridgeService.java |
+| `AUTH_005` | 用户不存在 | User not found | — | AuthController.java, MobileAuthorizationController.java, Oauth2PlatformController.java, OauthController.java, SensitiveLogController.java, retired-sso, TotpController.java, AccountRecoveryService.java, MobileBridgeService.java |
 | `AUTH_006` | 当前用户未绑定邮箱 | No email address is linked to the current user | — | AuthController.java |
 | `AUTH_007` | 邮箱不能为空 | Email address is required | — | AuthController.java |
 | `AUTH_008` | 邮箱格式不正确 | Invalid email address | — | AuthController.java |
@@ -138,7 +138,7 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `AUTH_043` | 当前用户未启用所选 MFA 方式 | The selected MFA method is not enabled for this user | — | AuthController.java |
 | `AUTH_044` | 敏感验证优先方式只能是 password、email-code、passkey、totp 或 apple | The preferred identity verification method must be password, email-code, passkey, totp or apple | — | AuthController.java |
 | `AUTH_045` | 当前用户不可用所选敏感验证方式 | The selected identity verification method is not available for this user | — | AuthController.java |
-| `AUTH_046` | 更新成功 | Updated successfully | — | AuthController.java, Oauth2PlatformController.java, SsoPlatformController.java |
+| `AUTH_046` | 更新成功 | Updated successfully | — | AuthController.java, Oauth2PlatformController.java, retired-sso |
 | `AUTH_047` | RefreshToken不存在 | Refresh token is missing | — | AuthController.java |
 | `AUTH_048` | RefreshToken已失效 | The refresh token is no longer valid | — | AuthController.java |
 | `AUTH_049` | Token类型无效，应为RefreshToken | Invalid token type. A refresh token is required. | — | AuthController.java |
@@ -216,8 +216,8 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `AUTH_121` | birthDate 格式不正确，应为 YYYY-MM-DD | Invalid birthDate. Use YYYY-MM-DD. | — | AuthController.java |
 | `AUTH_122` | 请选择头像文件 | Choose an avatar image | — | AuthController.java |
 | `AUTH_123` | 头像文件不能超过 3MB | Avatar images must not exceed 3 MB | — | AuthController.java |
-| `AUTH_124` | 仅支持图片文件 | Only image files are supported | — | AuthController.java, Oauth2PlatformController.java, SsoPlatformController.java |
-| `AUTH_125` | 不支持的图片格式 | Unsupported image format | — | AuthController.java, Oauth2PlatformController.java, SsoPlatformController.java |
+| `AUTH_124` | 仅支持图片文件 | Only image files are supported | — | AuthController.java, Oauth2PlatformController.java, retired-sso |
+| `AUTH_125` | 不支持的图片格式 | Unsupported image format | — | AuthController.java, Oauth2PlatformController.java, retired-sso |
 | `AUTH_126` | 头像上传成功 | Avatar uploaded | — | AuthController.java |
 | `AUTH_127` | 头像上传失败 | Could not upload the avatar | — | AuthController.java |
 | `AUTH_128` | 验证方式不能为空 | Verification method is required | — | AuthController.java |
@@ -251,13 +251,13 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `AUTH_156` | Passkey 重命名成功 | Passkey renamed | — | AuthController.java |
 | `AUTH_157` | 重命名失败 | Could not rename the item | — | AuthController.java |
 | `OAUTH2_001` | 创建成功，请妥善保存 AppSecret | Application created. Store your AppSecret securely. | — | Oauth2PlatformController.java |
-| `OAUTH2_002` | 删除成功 | Deleted successfully | — | Oauth2PlatformController.java, SsoPlatformController.java |
-| `OAUTH2_003` | 请选择 Logo 文件 | Choose a logo image | — | Oauth2PlatformController.java, SsoPlatformController.java |
-| `OAUTH2_004` | Logo 文件不能超过 3MB | Logo images must not exceed 3 MB | — | Oauth2PlatformController.java, SsoPlatformController.java |
-| `OAUTH2_005` | Logo 上传成功 | Logo uploaded | — | Oauth2PlatformController.java, SsoPlatformController.java |
-| `OAUTH2_006` | Logo 上传失败 | Could not upload the logo | — | Oauth2PlatformController.java, SsoPlatformController.java |
-| `OAUTH2_007` | 授权成功 | Authorization granted | — | Oauth2PlatformController.java, SsoPlatformController.java |
-| `OAUTH2_008` | 撤销成功 | Authorization revoked | — | Oauth2PlatformController.java, SsoPlatformController.java |
+| `OAUTH2_002` | 删除成功 | Deleted successfully | — | Oauth2PlatformController.java, retired-sso |
+| `OAUTH2_003` | 请选择 Logo 文件 | Choose a logo image | — | Oauth2PlatformController.java, retired-sso |
+| `OAUTH2_004` | Logo 文件不能超过 3MB | Logo images must not exceed 3 MB | — | Oauth2PlatformController.java, retired-sso |
+| `OAUTH2_005` | Logo 上传成功 | Logo uploaded | — | Oauth2PlatformController.java, retired-sso |
+| `OAUTH2_006` | Logo 上传失败 | Could not upload the logo | — | Oauth2PlatformController.java, retired-sso |
+| `OAUTH2_007` | 授权成功 | Authorization granted | — | Oauth2PlatformController.java, retired-sso |
+| `OAUTH2_008` | 撤销成功 | Authorization revoked | — | Oauth2PlatformController.java, retired-sso |
 | `OAUTH_001` | QQ 登录成功 | Signed in with QQ | — | OauthController.java |
 | `OAUTH_002` | 绑定并登录成功 | Account linked and signed in | — | OauthController.java |
 | `OAUTH_003` | 注册并绑定并登录成功 | Account created, linked and signed in | — | OauthController.java |
@@ -355,7 +355,7 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `REQUEST_005` | 开始日期格式不正确，请使用 YYYY-MM-DD | Invalid start date. Use YYYY-MM-DD. | — | SensitiveLogController.java |
 | `REQUEST_006` | 结束日期格式不正确，请使用 YYYY-MM-DD | Invalid end date. Use YYYY-MM-DD. | — | SensitiveLogController.java |
 | `REQUEST_007` | 获取敏感操作日志成功 | Security activity retrieved | — | SensitiveLogController.java |
-| `SSO_001` | 创建成功，请妥善保存 ClientSecret | Client created. Store your ClientSecret securely. | — | SsoPlatformController.java |
+| `SSO_001` | 创建成功，请妥善保存 ClientSecret | Client created. Store your ClientSecret securely. | — | retired-sso |
 | `TOTP_001` | 用户已启用 TOTP | TOTP is already enabled for this user | — | TotpController.java |
 | `TOTP_002` | 获取 TOTP 注册选项成功 | TOTP registration options retrieved | — | TotpController.java |
 | `TOTP_003` | 生成 TOTP 秘钥失败 | Could not generate the TOTP secret | — | TotpController.java |
@@ -440,31 +440,31 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `OAUTH2_009` | AppID 不能为空 | AppID is required | — | Oauth2PlatformService.java |
 | `OAUTH2_010` | 应用名称不能为空 | Application name is required | — | Oauth2PlatformService.java |
 | `OAUTH2_011` | 联系方式不能为空 | Contact information is required | — | Oauth2PlatformService.java |
-| `OAUTH2_012` | 回调地址不能为空 | Redirect URL is required | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_012` | 回调地址不能为空 | Redirect URL is required | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_013` | 每位认证用户最多只能创建 {maxApps} 个 OAuth2 应用 | Each verified user may create at most {maxApps} OAuth2 applications | `maxApps` | Oauth2PlatformService.java |
-| `OAUTH2_014` | 当前仅支持 authorization_code | Only authorization_code is supported | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_014` | 当前仅支持 authorization_code | Only authorization_code is supported | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_015` | AppSecret 不正确 | Incorrect AppSecret | — | Oauth2PlatformService.java |
-| `OAUTH2_016` | 授权码无效、已过期或已使用 | The authorization code is invalid, expired or already used | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_016` | 授权码无效、已过期或已使用 | The authorization code is invalid, expired or already used | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_017` | 授权码与当前应用或回调地址不匹配 | The authorization code does not match this application or redirect URL | — | Oauth2PlatformService.java |
-| `OAUTH2_018` | 授权用户不存在 | The authorizing user does not exist | — | Oauth2PlatformService.java, SsoPlatformService.java |
-| `OAUTH2_019` | 授权已撤销或已过期 | Authorization has been revoked or has expired | — | Oauth2PlatformService.java, SsoPlatformService.java |
-| `OAUTH2_020` | Access Token 无效或已过期 | The access token is invalid or has expired | — | Oauth2PlatformService.java, SsoPlatformService.java |
-| `OAUTH2_021` | Access Token 对应用户不存在 | The user associated with this access token does not exist | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_018` | 授权用户不存在 | The authorizing user does not exist | — | Oauth2PlatformService.java, retired-sso |
+| `OAUTH2_019` | 授权已撤销或已过期 | Authorization has been revoked or has expired | — | Oauth2PlatformService.java, retired-sso |
+| `OAUTH2_020` | Access Token 无效或已过期 | The access token is invalid or has expired | — | Oauth2PlatformService.java, retired-sso |
+| `OAUTH2_021` | Access Token 对应用户不存在 | The user associated with this access token does not exist | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_022` | 仅个人认证、企业认证或管理员账号可以创建 OAuth2 应用 | Only individually verified, enterprise-verified or administrator accounts may create OAuth2 applications | — | Oauth2PlatformService.java |
 | `OAUTH2_023` | 应用不存在 | Application not found | — | Oauth2PlatformService.java |
 | `OAUTH2_024` | AppID 不存在或已停用 | AppID does not exist or is disabled | — | Oauth2PlatformService.java |
-| `OAUTH2_025` | 仅支持 response_type=code | Only response_type=code is supported | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_025` | 仅支持 response_type=code | Only response_type=code is supported | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_026` | redirect_uri 与应用登记信息不一致 | redirect_uri does not match the application's registered redirect URL | — | Oauth2PlatformService.java |
 | `OAUTH2_027` | 应用名称长度需在 2-100 个字符之间 | Application names must contain 2–100 characters | — | Oauth2PlatformService.java |
 | `OAUTH2_028` | 联系方式长度需在 3-120 个字符之间 | Contact information must contain 3–120 characters | — | Oauth2PlatformService.java |
-| `OAUTH2_029` | 回调地址仅支持 https:// 或 http://localhost | Redirect URLs must use https:// or http://localhost | — | Oauth2PlatformService.java, SsoPlatformService.java |
-| `OAUTH2_030` | 回调地址不允许包含 URL fragment | Redirect URLs must not contain a URL fragment | — | Oauth2PlatformService.java, SsoPlatformService.java |
-| `OAUTH2_031` | 回调地址格式不正确 | Invalid redirect URL format | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_029` | 回调地址仅支持 https:// 或 http://localhost | Redirect URLs must use https:// or http://localhost | — | Oauth2PlatformService.java, retired-sso |
+| `OAUTH2_030` | 回调地址不允许包含 URL fragment | Redirect URLs must not contain a URL fragment | — | Oauth2PlatformService.java, retired-sso |
+| `OAUTH2_031` | 回调地址格式不正确 | Invalid redirect URL format | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_032` | 回调地址总长度不能超过 500 个字符 | Redirect URLs must not exceed 500 characters in total | — | Oauth2PlatformService.java |
 | `OAUTH2_033` | 请求的 scope 超出了应用已登记的权限范围 | The requested scope exceeds the application's registered permissions | — | Oauth2PlatformService.java |
 | `OAUTH2_034` | 暂仅支持 profile、email 两种 scope | Only profile and email scopes are supported | — | Oauth2PlatformService.java |
 | `OAUTH2_035` | 生成 AppID 失败，请稍后重试 | Could not generate AppID. Please try again later. | — | Oauth2PlatformService.java |
-| `OAUTH2_036` | 生成授权码失败 | Could not generate the authorization code | — | Oauth2PlatformService.java, SsoPlatformService.java |
+| `OAUTH2_036` | 生成授权码失败 | Could not generate the authorization code | — | Oauth2PlatformService.java, retired-sso |
 | `OAUTH2_037` | 生成用户标识失败 | Could not generate the user identifier | — | Oauth2PlatformService.java |
 | `PASSKEY_001` | Challenge 已过期或不存在 | The challenge has expired or does not exist | — | PasskeyService.java |
 | `PASSKEY_002` | Passkey 注册验证失败 | Passkey registration verification failed | — | PasskeyService.java |
@@ -484,31 +484,31 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `SESSION_TRANSFER_003` | 跨端票据目标端不匹配 | The session transfer ticket does not match the target platform | — | SessionTransferService.java |
 | `SESSION_TRANSFER_004` | 跨端票据数据无效 | Invalid session transfer ticket data | — | SessionTransferService.java |
 | `SESSION_TRANSFER_005` | 解析跨端票据失败 | Could not parse the session transfer ticket | — | SessionTransferService.java |
-| `SSO_002` | ClientID 不能为空 | ClientID is required | — | SsoPlatformService.java |
-| `SSO_003` | 客户端名称不能为空 | Client name is required | — | SsoPlatformService.java |
-| `SSO_004` | 当前环境最多只能创建 {maxClients} 个 SSO 内部服务应用 | This environment may contain at most {maxClients} internal SSO applications | `maxClients` | SsoPlatformService.java |
-| `SSO_005` | ClientSecret 不正确 | Incorrect ClientSecret | — | SsoPlatformService.java |
-| `SSO_006` | 授权码与当前客户端或回调地址不匹配 | The authorization code does not match this client or redirect URL | — | SsoPlatformService.java |
-| `SSO_007` | 只有管理员可以创建或管理 SSO 内部服务应用 | Only administrators may create or manage internal SSO applications | — | SsoPlatformService.java |
-| `SSO_008` | SSO 客户端不存在 | SSO client not found | — | SsoPlatformService.java |
-| `SSO_009` | SSO 客户端不存在或已停用 | The SSO client does not exist or is disabled | — | SsoPlatformService.java |
-| `SSO_010` | nonce 长度不能超过 255 个字符 | nonce must not exceed 255 characters | — | SsoPlatformService.java |
-| `SSO_011` | 当前 SSO 客户端要求必须提供 PKCE 参数 | This SSO client requires PKCE parameters | — | SsoPlatformService.java |
-| `SSO_012` | code_challenge 与 code_challenge_method 必须同时提供 | code_challenge and code_challenge_method must be provided together | — | SsoPlatformService.java |
-| `SSO_013` | 当前仅支持 code_challenge_method=S256 | Only code_challenge_method=S256 is supported | — | SsoPlatformService.java |
-| `SSO_014` | code_challenge 长度需在 43-128 个字符之间 | code_challenge must contain 43–128 characters | — | SsoPlatformService.java |
-| `SSO_015` | 缺少 PKCE 校验信息 | PKCE verification information is missing | — | SsoPlatformService.java |
-| `SSO_016` | 缺少 code_verifier | code_verifier is missing | — | SsoPlatformService.java |
-| `SSO_017` | code_verifier 长度无效 | Invalid code_verifier length | — | SsoPlatformService.java |
-| `SSO_018` | PKCE 校验失败 | PKCE verification failed | — | SsoPlatformService.java |
-| `SSO_019` | 客户端名称长度需在 2-120 个字符之间 | Client names must contain 2–120 characters | — | SsoPlatformService.java |
-| `SSO_020` | 至少需要配置一个 redirect_uri | Configure at least one redirect_uri | — | SsoPlatformService.java |
-| `SSO_021` | redirect_uri 与客户端登记信息不一致 | redirect_uri does not match the client's registered redirect URL | — | SsoPlatformService.java |
-| `SSO_022` | SSO 暂仅支持 openid、profile、email | SSO only supports openid, profile and email scopes | — | SsoPlatformService.java |
-| `SSO_023` | SSO 授权请求必须包含 openid | SSO authorization requests must include openid | — | SsoPlatformService.java |
-| `SSO_024` | 请求的 scope 超出了客户端登记范围 | The requested scope exceeds the client's registered permissions | — | SsoPlatformService.java |
-| `SSO_025` | 生成 sub 失败 | Could not generate sub | — | SsoPlatformService.java |
-| `SSO_026` | 生成 ClientID 失败，请稍后重试 | Could not generate ClientID. Please try again later. | — | SsoPlatformService.java |
+| `SSO_002` | ClientID 不能为空 | ClientID is required | — | retired-sso |
+| `SSO_003` | 客户端名称不能为空 | Client name is required | — | retired-sso |
+| `SSO_004` | 当前环境最多只能创建 {maxClients} 个 SSO 内部服务应用 | This environment may contain at most {maxClients} internal SSO applications | `maxClients` | retired-sso |
+| `SSO_005` | ClientSecret 不正确 | Incorrect ClientSecret | — | retired-sso |
+| `SSO_006` | 授权码与当前客户端或回调地址不匹配 | The authorization code does not match this client or redirect URL | — | retired-sso |
+| `SSO_007` | 只有管理员可以创建或管理 SSO 内部服务应用 | Only administrators may create or manage internal SSO applications | — | retired-sso |
+| `SSO_008` | SSO 客户端不存在 | SSO client not found | — | retired-sso |
+| `SSO_009` | SSO 客户端不存在或已停用 | The SSO client does not exist or is disabled | — | retired-sso |
+| `SSO_010` | nonce 长度不能超过 255 个字符 | nonce must not exceed 255 characters | — | retired-sso |
+| `SSO_011` | 当前 SSO 客户端要求必须提供 PKCE 参数 | This SSO client requires PKCE parameters | — | retired-sso |
+| `SSO_012` | code_challenge 与 code_challenge_method 必须同时提供 | code_challenge and code_challenge_method must be provided together | — | retired-sso |
+| `SSO_013` | 当前仅支持 code_challenge_method=S256 | Only code_challenge_method=S256 is supported | — | retired-sso |
+| `SSO_014` | code_challenge 长度需在 43-128 个字符之间 | code_challenge must contain 43–128 characters | — | retired-sso |
+| `SSO_015` | 缺少 PKCE 校验信息 | PKCE verification information is missing | — | retired-sso |
+| `SSO_016` | 缺少 code_verifier | code_verifier is missing | — | retired-sso |
+| `SSO_017` | code_verifier 长度无效 | Invalid code_verifier length | — | retired-sso |
+| `SSO_018` | PKCE 校验失败 | PKCE verification failed | — | retired-sso |
+| `SSO_019` | 客户端名称长度需在 2-120 个字符之间 | Client names must contain 2–120 characters | — | retired-sso |
+| `SSO_020` | 至少需要配置一个 redirect_uri | Configure at least one redirect_uri | — | retired-sso |
+| `SSO_021` | redirect_uri 与客户端登记信息不一致 | redirect_uri does not match the client's registered redirect URL | — | retired-sso |
+| `SSO_022` | SSO 暂仅支持 openid、profile、email | SSO only supports openid, profile and email scopes | — | retired-sso |
+| `SSO_023` | SSO 授权请求必须包含 openid | SSO authorization requests must include openid | — | retired-sso |
+| `SSO_024` | 请求的 scope 超出了客户端登记范围 | The requested scope exceeds the client's registered permissions | — | retired-sso |
+| `SSO_025` | 生成 sub 失败 | Could not generate sub | — | retired-sso |
+| `SSO_026` | 生成 ClientID 失败，请稍后重试 | Could not generate ClientID. Please try again later. | — | retired-sso |
 | `REQUEST_UPLOAD_TOO_LARGE` | 上传文件过大，请选择较小文件 | The file is too large. Choose a smaller file. | — | GlobalExceptionHandler.java |
 | `ADAPTIVE_REASON_SESSION_MISSING` | 未找到当前活跃会话 | No active session was found | — | AdaptiveContinuousAuthService.java |
 | `ADAPTIVE_REASON_IP_CHANGED` | 当前 IP 与会话建立时不一致 | Your current IP address differs from the IP used to start this session | — | AdaptiveContinuousAuthService.java |

@@ -61,7 +61,6 @@ public class SecurityConfig {
                 .requestMatchers("/console/**").hasAuthority("CONSOLE_SUPER_ADMIN")
                 .requestMatchers("/", "/auth/health", "/auth/health/",
                     "/auth/csrf-token", "/auth/csrf-token/",
-                    "/.well-known/openid-configuration",
                     "/auth/register", "/auth/register/", "/auth/login", "/auth/login/",
                     "/auth/login-with-code", "/auth/login-with-code/",
                     "/auth/session-transfer/exchange", "/auth/session-transfer/exchange/",
@@ -89,11 +88,7 @@ public class SecurityConfig {
                     "/oauth2/token", "/oauth2/token/",
                     "/oauth2/userinfo", "/oauth2/userinfo/",
                     "/oauth2/authorize/context", "/oauth2/authorize/context/",
-                    "/sso/token", "/sso/token/",
                     "/official/token", "/official/token/",
-                    "/sso/userinfo", "/sso/userinfo/",
-                    "/sso/jwks", "/sso/jwks/",
-                    "/sso/authorize/context", "/sso/authorize/context/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",
                     "/oauth/qq/mobile-login", "/oauth/qq/mobile-login/",
                     "/oauth/apple/challenge", "/oauth/apple/challenge/",
@@ -176,9 +171,7 @@ public class SecurityConfig {
                     "/oauth/google/register-bind", "/oauth/google/register-bind/",
                     "/oauth/google/bind-pending", "/oauth/google/bind-pending/",
                     "/oauth2/token", "/oauth2/token/",
-                    "/sso/token", "/sso/token/",
-                    "/official/token", "/official/token/",
-                    "/sso/jwks", "/sso/jwks/"
+                    "/official/token", "/official/token/"
                 )
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

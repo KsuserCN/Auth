@@ -1,7 +1,7 @@
 import { LocalizedError } from '@/i18n'
 import { getUserDetailsInfo, type UserDetails } from '@/api/auth'
 import { getOAuth2Authorizations, type OAuth2AuthorizedApp } from '@/api/oauth2'
-import { getSSOAuthorizations, type SSOAuthorizedClient } from '@/api/sso'
+import { getOfficialAuthorizations, type OfficialAuthorization } from '@/api/official'
 
 export interface PrivacyExportMeta {
   exportedAt: string
@@ -12,7 +12,7 @@ export interface PrivacyExportMeta {
 
 export interface PrivacyExportAuthorizations {
   oauth2: OAuth2AuthorizedApp[]
-  sso: SSOAuthorizedClient[]
+  official: OfficialAuthorization[]
 }
 
 export interface PrivacyExportPayload {
@@ -21,15 +21,15 @@ export interface PrivacyExportPayload {
   authorizations: PrivacyExportAuthorizations
 }
 
-const PRIVACY_EXPORT_VERSION = '1.0.0'
-const PRIVACY_EXPORT_SCHEMA_VERSION = 1
+const PRIVACY_EXPORT_VERSION = '2.0.0'
+const PRIVACY_EXPORT_SCHEMA_VERSION = 2
 
 export const fetchPrivacyExportData = async (): Promise<PrivacyExportPayload> => {
   try {
-    const [profile, oauth2, sso] = await Promise.all([
+    const [profile, oauth2, official] = await Promise.all([
       getUserDetailsInfo(),
       getOAuth2Authorizations(),
-      getSSOAuthorizations(),
+      getOfficialAuthorizations(),
     ])
 
     return {
@@ -42,7 +42,7 @@ export const fetchPrivacyExportData = async (): Promise<PrivacyExportPayload> =>
       profile,
       authorizations: {
         oauth2,
-        sso,
+        official,
       },
     }
   } catch (error) {

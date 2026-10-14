@@ -559,19 +559,18 @@ final class CoreTests: XCTestCase {
         let unbind = try XCTUnwrap(capturedUnbind)
         XCTAssertEqual(unbind.value(forHTTPHeaderField: "Authorization"), "Bearer existing-access")
     }
-    @MainActor func testAuthorizedAppsLoadsBothKindsForCurrentAccount() async throws {
+    @MainActor func testAuthorizedAppsLoadsOAuthAndOfficialForCurrentAccount() async throws {
         let transport = FixtureTransport(mode: .authorizationLists)
         let client = APIClient(environment: environment, storage: MemorySessionStore(snapshot(token: "current-access")), transport: transport)
         let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
 
         let apps = try await model.authorizedApps()
 
-        XCTAssertEqual(apps.ksuserApps.map(\.clientName), ["Ksuser 校园"])
-        XCTAssertEqual(apps.ksuserApps.first?.scopes, ["openid", "profile"])
         XCTAssertEqual(apps.thirdPartyApps.map(\.appName), ["外部日历"])
         XCTAssertEqual(apps.thirdPartyApps.first?.creatorName, "示例开发者")
+        XCTAssertEqual(apps.officialApps.map(\.clientName), ["Ksuser Console"])
         let requests = await transport.authorizationRequests
-        XCTAssertEqual(Set(requests.compactMap { $0.url?.path }), Set(["/sso/authorizations", "/oauth2/authorizations"]))
+        XCTAssertEqual(Set(requests.compactMap { $0.url?.path }), Set(["/official/authorizations", "/oauth2/authorizations"]))
         XCTAssertTrue(requests.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer current-access" })
     }
     @MainActor func testRevokingBothKindsOfAuthorizationUsesCurrentAccountAndUpdatesLists() async throws {
@@ -580,18 +579,18 @@ final class CoreTests: XCTestCase {
         let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
         model.user = UserProfile(uuid: "current-account", username: "current", email: "current@example.invalid")
 
-        let revokedKsuser = await model.revokeKsuserAuthorization("campus")
         let revokedThirdParty = await model.revokeThirdPartyAuthorization("calendar")
+        let revokedOfficial = await model.revokeOfficialAuthorization("ksuser_console")
 
-        XCTAssertTrue(revokedKsuser)
         XCTAssertTrue(revokedThirdParty)
+        XCTAssertTrue(revokedOfficial)
         XCTAssertEqual(model.noticeMessage, "应用授权已撤销")
         let apps = try await model.authorizedApps()
-        XCTAssertTrue(apps.ksuserApps.isEmpty)
         XCTAssertTrue(apps.thirdPartyApps.isEmpty)
+        XCTAssertTrue(apps.officialApps.isEmpty)
         let requests = await transport.authorizationRequests
         let deletes = requests.filter { $0.httpMethod == "DELETE" }
-        XCTAssertEqual(Set(deletes.compactMap { $0.url?.path }), Set(["/sso/authorizations/campus", "/oauth2/authorizations/calendar"]))
+        XCTAssertEqual(Set(deletes.compactMap { $0.url?.path }), Set(["/oauth2/authorizations/calendar", "/official/authorizations/ksuser_console"]))
         XCTAssertTrue(deletes.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer current-access" })
         XCTAssertTrue(deletes.allSatisfy { $0.value(forHTTPHeaderField: "X-XSRF-TOKEN") == "csrf-fixture" })
     }
@@ -601,13 +600,13 @@ final class CoreTests: XCTestCase {
         let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
         model.user = UserProfile(uuid: "current-account", username: "current", email: "current@example.invalid")
 
-        let revoked = await model.revokeKsuserAuthorization("campus")
+        let revoked = await model.revokeThirdPartyAuthorization("calendar")
 
         XCTAssertFalse(revoked)
         XCTAssertNil(model.noticeMessage)
         XCTAssertEqual(model.errorMessage, GeneratedAPIResultCodes.messages["SERVER_ERROR"])
         let apps = try await model.authorizedApps()
-        XCTAssertEqual(apps.ksuserApps.map(\.clientId), ["campus"])
+        XCTAssertEqual(apps.thirdPartyApps.map(\.appId), ["calendar"])
     }
     func testMobileAuthorizationLinksRejectUntrustedHostsAndMalformedTickets() {
         let ticket = String(repeating: "a", count: 32)
@@ -713,8 +712,8 @@ private actor FixtureTransport: HTTPTransport {
     var qqBindRequest: URLRequest?
     var qqUnbindRequest: URLRequest?
     var authorizationRequests: [URLRequest] = []
-    var revokedKsuserAuthorization = false
     var revokedThirdPartyAuthorization = false
+    var revokedOfficialAuthorization = false
     var inputRequests: [URLRequest] = []
     private var refreshGate: CheckedContinuation<Void, Never>?
     init(mode: Mode) { self.mode = mode }
@@ -783,13 +782,13 @@ private actor FixtureTransport: HTTPTransport {
             authorizationRequests.append(request)
             if request.httpMethod == "DELETE" {
                 if mode == .authorizationRevokeFails { return response(request, 500, #"{"code":500,"errorCode":"SERVER_ERROR"}"#) }
-                if path == "/sso/authorizations/campus" { revokedKsuserAuthorization = true }
                 if path == "/oauth2/authorizations/calendar" { revokedThirdPartyAuthorization = true }
+                if path == "/official/authorizations/ksuser_console" { revokedOfficialAuthorization = true }
                 return response(request, 200, #"{"code":200,"data":null}"#)
             }
-            if path == "/sso/authorizations" {
-                if revokedKsuserAuthorization { return response(request, 200, #"{"code":200,"data":[]}"#) }
-                return response(request, 200, #"{"code":200,"data":[{"clientId":"campus","clientName":"Ksuser 校园","redirectUri":"https://campus.example.invalid/callback","scopes":["openid","profile"],"authorizedAt":"2026-10-01T10:00:00","lastAuthorizedAt":"2026-10-04T10:00:00","grantMode":"PERSISTENT"}]}"#)
+            if path == "/official/authorizations" {
+                if revokedOfficialAuthorization { return response(request, 200, #"{"code":200,"data":[]}"#) }
+                return response(request, 200, #"{"code":200,"data":[{"clientId":"ksuser_console","clientName":"Ksuser Console","scopes":["openid","email"],"authorizedAt":"2026-10-01T10:00:00","lastAuthorizedAt":"2026-10-04T10:00:00"}]}"#)
             }
             if path == "/oauth2/authorizations" {
                 if revokedThirdPartyAuthorization { return response(request, 200, #"{"code":200,"data":[]}"#) }

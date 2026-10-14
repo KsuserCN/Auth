@@ -6,7 +6,7 @@
 
 - 统一账号认证与会话管理
 - 支持密码、邮箱验证码、Passkey、TOTP MFA 等认证能力
-- 支持 OAuth 登录/绑定与内部 SSO / OIDC
+- 支持 OAuth 登录/绑定与官方应用 OIDC
 - 为 Web、桌面端、移动端提供统一认证基础设施
 
 ## 仓库结构
@@ -14,7 +14,7 @@
 | 目录 | 作用 | 主要技术 |
 | --- | --- | --- |
 | `api/` | 认证后端服务，默认端口 `8000` | Spring Boot, Spring Security, JPA, MySQL, Redis |
-| `web/` | Web 认证中心与 OAuth/SSO 授权页，开发环境默认 `5173` | Vue 3, Vite, TypeScript, Element Plus |
+| `web/` | Web 认证中心与 OAuth/官方应用授权页，开发环境默认 `5173` | Vue 3, Vite, TypeScript, Element Plus |
 | `desktop/` | 桌面客户端，当前支持 `macOS` / `Windows` | Flutter |
 | `mobile/android/` | Android 客户端 | Kotlin, Jetpack Compose, Retrofit |
 | `mobile/ios/` | iOS 客户端 | SwiftUI, URLSession |
@@ -28,7 +28,7 @@
 - TOTP 双因素认证与恢复码
 - 多设备会话管理、刷新与撤销
 - OAuth 登录 / 绑定（GitHub / Google / Microsoft / QQ）
-- 内部 SSO 与 OIDC Discovery
+- 官方应用 OIDC Discovery
 - 风控、限流、敏感操作日志
 
 ## 技术栈

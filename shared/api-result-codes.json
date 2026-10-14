@@ -31,7 +31,7 @@
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java",
         "api/src/main/java/cn/ksuser/api/controller/PushDeviceController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java",
+        "legacy/retired-sso",
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java",
         "api/src/main/java/cn/ksuser/api/service/AppleAuthService.java"
       ],
@@ -326,7 +326,7 @@
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/InfoController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Retrieved successfully"
     },
@@ -445,7 +445,7 @@
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
         "api/src/main/java/cn/ksuser/api/controller/OauthController.java",
         "api/src/main/java/cn/ksuser/api/controller/SensitiveLogController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java",
+        "legacy/retired-sso",
         "api/src/main/java/cn/ksuser/api/controller/TotpController.java",
         "api/src/main/java/cn/ksuser/api/service/AccountRecoveryService.java",
         "api/src/main/java/cn/ksuser/api/service/MobileBridgeService.java"
@@ -794,7 +794,7 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Updated successfully"
     },
@@ -1433,7 +1433,7 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Only image files are supported"
     },
@@ -1443,7 +1443,7 @@
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java",
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Unsupported image format"
     },
@@ -1718,7 +1718,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Deleted successfully"
     },
@@ -1727,7 +1727,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Choose a logo image"
     },
@@ -1736,7 +1736,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Logo images must not exceed 3 MB"
     },
@@ -1745,7 +1745,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Logo uploaded"
     },
@@ -1754,7 +1754,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Could not upload the logo"
     },
@@ -1763,7 +1763,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Authorization granted"
     },
@@ -1772,7 +1772,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/Oauth2PlatformController.java",
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Authorization revoked"
     },
@@ -2566,7 +2566,7 @@
       "message": "创建成功，请妥善保存 ClientSecret",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/controller/SsoPlatformController.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Client created. Store your ClientSecret securely."
     },
@@ -3254,7 +3254,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Redirect URL is required"
     },
@@ -3273,7 +3273,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Only authorization_code is supported"
     },
@@ -3290,7 +3290,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The authorization code is invalid, expired or already used"
     },
@@ -3307,7 +3307,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The authorizing user does not exist"
     },
@@ -3316,7 +3316,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Authorization has been revoked or has expired"
     },
@@ -3325,7 +3325,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The access token is invalid or has expired"
     },
@@ -3334,7 +3334,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The user associated with this access token does not exist"
     },
@@ -3367,7 +3367,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Only response_type=code is supported"
     },
@@ -3400,7 +3400,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Redirect URLs must use https:// or http://localhost"
     },
@@ -3409,7 +3409,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Redirect URLs must not contain a URL fragment"
     },
@@ -3418,7 +3418,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Invalid redirect URL format"
     },
@@ -3459,7 +3459,7 @@
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java",
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Could not generate the authorization code"
     },
@@ -3619,7 +3619,7 @@
       "message": "ClientID 不能为空",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "ClientID is required"
     },
@@ -3627,7 +3627,7 @@
       "message": "客户端名称不能为空",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Client name is required"
     },
@@ -3637,7 +3637,7 @@
         "maxClients"
       ],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "This environment may contain at most {maxClients} internal SSO applications"
     },
@@ -3645,7 +3645,7 @@
       "message": "ClientSecret 不正确",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Incorrect ClientSecret"
     },
@@ -3653,7 +3653,7 @@
       "message": "授权码与当前客户端或回调地址不匹配",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The authorization code does not match this client or redirect URL"
     },
@@ -3661,7 +3661,7 @@
       "message": "只有管理员可以创建或管理 SSO 内部服务应用",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Only administrators may create or manage internal SSO applications"
     },
@@ -3669,7 +3669,7 @@
       "message": "SSO 客户端不存在",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "SSO client not found"
     },
@@ -3677,7 +3677,7 @@
       "message": "SSO 客户端不存在或已停用",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The SSO client does not exist or is disabled"
     },
@@ -3685,7 +3685,7 @@
       "message": "nonce 长度不能超过 255 个字符",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "nonce must not exceed 255 characters"
     },
@@ -3693,7 +3693,7 @@
       "message": "当前 SSO 客户端要求必须提供 PKCE 参数",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "This SSO client requires PKCE parameters"
     },
@@ -3701,7 +3701,7 @@
       "message": "code_challenge 与 code_challenge_method 必须同时提供",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "code_challenge and code_challenge_method must be provided together"
     },
@@ -3709,7 +3709,7 @@
       "message": "当前仅支持 code_challenge_method=S256",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Only code_challenge_method=S256 is supported"
     },
@@ -3717,7 +3717,7 @@
       "message": "code_challenge 长度需在 43-128 个字符之间",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "code_challenge must contain 43–128 characters"
     },
@@ -3725,7 +3725,7 @@
       "message": "缺少 PKCE 校验信息",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "PKCE verification information is missing"
     },
@@ -3733,7 +3733,7 @@
       "message": "缺少 code_verifier",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "code_verifier is missing"
     },
@@ -3741,7 +3741,7 @@
       "message": "code_verifier 长度无效",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Invalid code_verifier length"
     },
@@ -3749,7 +3749,7 @@
       "message": "PKCE 校验失败",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "PKCE verification failed"
     },
@@ -3757,7 +3757,7 @@
       "message": "客户端名称长度需在 2-120 个字符之间",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Client names must contain 2–120 characters"
     },
@@ -3765,7 +3765,7 @@
       "message": "至少需要配置一个 redirect_uri",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Configure at least one redirect_uri"
     },
@@ -3773,7 +3773,7 @@
       "message": "redirect_uri 与客户端登记信息不一致",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "redirect_uri does not match the client's registered redirect URL"
     },
@@ -3781,7 +3781,7 @@
       "message": "SSO 暂仅支持 openid、profile、email",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "SSO only supports openid, profile and email scopes"
     },
@@ -3789,7 +3789,7 @@
       "message": "SSO 授权请求必须包含 openid",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "SSO authorization requests must include openid"
     },
@@ -3797,7 +3797,7 @@
       "message": "请求的 scope 超出了客户端登记范围",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "The requested scope exceeds the client's registered permissions"
     },
@@ -3805,7 +3805,7 @@
       "message": "生成 sub 失败",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Could not generate sub"
     },
@@ -3813,7 +3813,7 @@
       "message": "生成 ClientID 失败，请稍后重试",
       "params": [],
       "sources": [
-        "api/src/main/java/cn/ksuser/api/service/SsoPlatformService.java"
+        "legacy/retired-sso"
       ],
       "messageEn": "Could not generate ClientID. Please try again later."
     },

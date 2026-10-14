@@ -3,14 +3,12 @@ package cn.ksuser.api.service;
 import cn.ksuser.api.entity.ConsoleAuditLog;
 import cn.ksuser.api.entity.OfficialApplication;
 import cn.ksuser.api.entity.Oauth2Application;
-import cn.ksuser.api.entity.OidcClient;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.ConsoleAuditLogRepository;
 import cn.ksuser.api.repository.ConsoleUserRepository;
 import cn.ksuser.api.repository.OfficialApplicationRepository;
 import cn.ksuser.api.repository.Oauth2ApplicationRepository;
-import cn.ksuser.api.repository.OidcClientRepository;
 import cn.ksuser.api.result.ApiResultCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,15 +37,14 @@ public class ConsoleAdminService {
     private final PasswordEncoder passwords;
     private final ObjectMapper json;
     private final Oauth2ApplicationRepository oauthApplications;
-    private final OidcClientRepository ssoApplications;
     private UserService userService;
     public ConsoleAdminService(ConsoleUserRepository users, OfficialApplicationRepository applications,
                                ConsoleAuditLogRepository audits, ConsoleSessionService sessions,
                                PasswordEncoder passwords, ObjectMapper json,
-                               Oauth2ApplicationRepository oauthApplications, OidcClientRepository ssoApplications) {
+                               Oauth2ApplicationRepository oauthApplications) {
         this.users=users; this.applications=applications; this.audits=audits;
         this.sessions=sessions; this.passwords=passwords; this.json=json;
-        this.oauthApplications=oauthApplications; this.ssoApplications=ssoApplications;
+        this.oauthApplications=oauthApplications;
     }
 
     @Autowired
@@ -123,9 +120,8 @@ public class ConsoleAdminService {
     @Transactional(readOnly=true)
     public UserApplicationsView userApplications(String uuid) {
         User owner = users.findByUuid(uuid).orElseThrow(ConsoleAdminService::userMissing);
-        List<OwnedApplicationView> apps = java.util.stream.Stream.concat(
-            oauthApplications.findAllByOwnerUserIdOrderByCreatedAtDesc(owner.getId()).stream().map(OwnedApplicationView::of),
-            ssoApplications.findAllByOwnerUserIdOrderByCreatedAtDesc(owner.getId()).stream().map(OwnedApplicationView::of))
+        List<OwnedApplicationView> apps = oauthApplications.findAllByOwnerUserIdOrderByCreatedAtDesc(owner.getId()).stream()
+            .map(OwnedApplicationView::of)
             .sorted(java.util.Comparator.comparing(OwnedApplicationView::createdAt,
                 java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder()))
                 .thenComparing(OwnedApplicationView::protocol).thenComparing(OwnedApplicationView::clientId))
@@ -172,7 +168,7 @@ public class ConsoleAdminService {
         app.setClientId(id); app.setClientType(request.clientType()); app.setReserved(false);
         ApplicationRequest normalized = new ApplicationRequest(request.clientId(), request.clientName(),
             request.logoUrl()==null || request.logoUrl().isBlank() ? DEFAULT_APPLICATION_LOGO_URL : request.logoUrl(),
-            request.clientType(), request.redirectUris(), request.scopes(), request.isActive());
+            request.clientType(), request.redirectUris(), request.scopes(), request.isActive(), request.allowMissingNonce());
         apply(app, normalized);
         String secret = null;
         if ("confidential".equals(app.getClientType())) {
@@ -192,11 +188,13 @@ public class ConsoleAdminService {
         if ((request.clientId()!=null && !request.clientId().equals(app.getClientId()))
             || (request.clientType()!=null && !request.clientType().equals(app.getClientType()))) throw invalid();
         ApplicationRequest normalized = new ApplicationRequest(app.getClientId(), request.clientName(), request.logoUrl(),
-            app.getClientType(), request.redirectUris(), request.scopes(), request.isActive());
+            app.getClientType(), request.redirectUris(), request.scopes(), request.isActive(),
+            request.allowMissingNonce() == null ? app.getAllowMissingNonce() : request.allowMissingNonce());
         validate(normalized);
         if (reserved(app) && (!Boolean.TRUE.equals(normalized.isActive())
             || !normalized.redirectUris().contains(sessions.callbackUri())
-            || !normalized.scopes().containsAll(List.of("openid", "profile", "email")))) throw denied();
+            || !normalized.scopes().containsAll(List.of("openid", "profile", "email"))
+            || Boolean.TRUE.equals(normalized.allowMissingNonce()))) throw denied();
         ApplicationView previous = ApplicationView.of(app);
         apply(app, normalized);
         applications.saveAndFlush(app);
@@ -257,7 +255,8 @@ public class ConsoleAdminService {
             || request.redirectUris()==null || request.redirectUris().isEmpty() || request.redirectUris().size()>20
             || request.scopes()==null || request.scopes().size()>OfficialAuthorizationService.ALL_SCOPES.size()
             || request.scopes().stream().anyMatch(java.util.Objects::isNull) || !request.scopes().contains("openid")
-            || !OfficialAuthorizationService.ALL_SCOPES.containsAll(request.scopes()) || request.isActive()==null) throw invalid();
+            || !OfficialAuthorizationService.ALL_SCOPES.containsAll(request.scopes()) || request.isActive()==null
+            || (Boolean.TRUE.equals(request.allowMissingNonce()) && !"confidential".equals(request.clientType()))) throw invalid();
         if (request.logoUrl()!=null && !request.logoUrl().isBlank()) {
             if (request.logoUrl().length()>500) throw invalid();
             validateUrl(request.logoUrl(),false);
@@ -283,6 +282,7 @@ public class ConsoleAdminService {
         app.setRedirectUris(String.join("\n", request.redirectUris().stream().distinct().toList()));
         app.setScopes(OfficialAuthorizationService.normalizeScopes(String.join(" ",request.scopes())));
         app.setIsActive(request.isActive());
+        app.setAllowMissingNonce(Boolean.TRUE.equals(request.allowMissingNonce()));
     }
     private void audit(ConsoleSessionService.ConsolePrincipal actor,String target,String action,Object details,String ip) {
         try { audits.save(new ConsoleAuditLog(actor.userUuid(),target,action,json.writeValueAsString(details),ip)); }
@@ -295,7 +295,7 @@ public class ConsoleAdminService {
     private static Oauth2Exception userMissing() { return new Oauth2Exception(HttpStatus.NOT_FOUND,"invalid_request",ApiResultCode.CONSOLE_USER_NOT_FOUND); }
 
     public record PageView<T>(List<T> items,long total,int page,int size) {}
-    public record ApplicationRequest(String clientId,String clientName,String logoUrl,String clientType,List<String> redirectUris,List<String> scopes,Boolean isActive) {}
+    public record ApplicationRequest(String clientId,String clientName,String logoUrl,String clientType,List<String> redirectUris,List<String> scopes,Boolean isActive,Boolean allowMissingNonce) {}
     public record ApplicationSecret(ApplicationView application,String clientSecret) {}
     public record VerificationRequest(String developerVerificationType, String verificationEntityName) {}
     public record UserApplicationsView(UserView user, List<OwnedApplicationView> applications) {}
@@ -307,17 +307,11 @@ public class ConsoleAdminService {
                 OfficialAuthorizationService.parseRedirectUris(app.getRedirectUri()), OfficialAuthorizationService.parseScopes(app.getScopes()), app.getContactInfo(),
                 app.getIsActive(), app.getCreatedAt(), app.getUpdatedAt());
         }
-        public static OwnedApplicationView of(OidcClient app) {
-            return new OwnedApplicationView("sso", app.getClientId(), app.getClientName(), app.getLogoUrl(),
-                OfficialAuthorizationService.parseRedirectUris(app.getRedirectUris()),
-                OfficialAuthorizationService.parseScopes(app.getScopes()), null,
-                app.getIsActive(), app.getCreatedAt(), app.getUpdatedAt());
-        }
     }
     public record ApplicationView(String clientId,String clientName,String logoUrl,String clientType,List<String> redirectUris,List<String> scopes,
-                                  Boolean isActive,Boolean reserved,LocalDateTime createdAt,LocalDateTime updatedAt) {
+                                  Boolean isActive,Boolean reserved,Boolean allowMissingNonce,LocalDateTime createdAt,LocalDateTime updatedAt) {
         public static ApplicationView of(OfficialApplication app) { return new ApplicationView(app.getClientId(),app.getClientName(),app.getLogoUrl(),app.getClientType(),
-            OfficialAuthorizationService.parseRedirectUris(app.getRedirectUris()),OfficialAuthorizationService.parseScopes(app.getScopes()),app.getIsActive(),app.getReserved(),app.getCreatedAt(),app.getUpdatedAt()); }
+            OfficialAuthorizationService.parseRedirectUris(app.getRedirectUris()),OfficialAuthorizationService.parseScopes(app.getScopes()),app.getIsActive(),app.getReserved(),app.getAllowMissingNonce(),app.getCreatedAt(),app.getUpdatedAt()); }
     }
     /** Deliberate field allowlist: credentials, session verifiers and MFA/Passkey material never enter Console responses. */
     public record UserView(String uuid,String username,String email,String avatarUrl,String realName,String gender,LocalDate birthDate,String region,String bio,

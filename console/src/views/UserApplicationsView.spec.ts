@@ -21,7 +21,7 @@ const owner = {
   developerVerificationType: 'personal',
   verificationEntityName: '认证姓名',
 }
-const applications = ['oauth2', 'sso'].map((protocol) => ({
+const applications = ['oauth2'].map((protocol) => ({
   protocol,
   clientId: `${protocol}-app`,
   clientName: `${protocol} 应用`,
@@ -55,17 +55,13 @@ describe('certified user applications', () => {
     )
     wrapper.unmount()
   })
-  it('opens a linked owner and filters their applications by protocol', async () => {
+  it('opens a linked owner and shows their OAuth applications', async () => {
     route.query = { user: 'first-user' }
     const wrapper = create()
     await flushPromises()
     expect(mocks.userApplications).toHaveBeenCalledExactlyOnceWith('first-user')
     expect(wrapper.text()).toContain('oauth2 应用')
-    expect(wrapper.text()).toContain('sso 应用')
     expect(wrapper.text()).toContain('https://example.test/callback')
-    await wrapper.get('[aria-label="应用协议"]').setValue('sso')
-    expect(wrapper.text()).not.toContain('oauth2 应用')
-    expect(wrapper.text()).toContain('sso 应用')
     wrapper.unmount()
   })
   it('ignores an older response when switching owners', async () => {

@@ -3,14 +3,12 @@ package cn.ksuser.api.service;
 import cn.ksuser.api.entity.ConsoleAuditLog;
 import cn.ksuser.api.entity.OfficialApplication;
 import cn.ksuser.api.entity.Oauth2Application;
-import cn.ksuser.api.entity.OidcClient;
 import cn.ksuser.api.entity.User;
 import cn.ksuser.api.exception.Oauth2Exception;
 import cn.ksuser.api.repository.ConsoleAuditLogRepository;
 import cn.ksuser.api.repository.ConsoleUserRepository;
 import cn.ksuser.api.repository.OfficialApplicationRepository;
 import cn.ksuser.api.repository.Oauth2ApplicationRepository;
-import cn.ksuser.api.repository.OidcClientRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +39,6 @@ class ConsoleAdminTransactionTest {
     @Autowired private OfficialApplicationRepository applications;
     @Autowired private ConsoleAuditLogRepository audits;
     @Autowired private Oauth2ApplicationRepository oauthApplications;
-    @Autowired private OidcClientRepository ssoApplications;
     @MockitoBean private ConsoleSessionService sessions;
     private User actorUser;
     private User target;
@@ -70,7 +67,6 @@ class ConsoleAdminTransactionTest {
     void cleanup() {
         audits.deleteAllInBatch();
         oauthApplications.deleteAllInBatch();
-        ssoApplications.deleteAllInBatch();
         applications.deleteAllInBatch();
         users.deleteAllInBatch();
     }
@@ -201,28 +197,13 @@ class ConsoleAdminTransactionTest {
     void applicationsUseActualOwnerAndResponsesExcludeSecretsAndOtherAccounts() throws Exception {
         oauthApp(target, "owned-oauth", "private-oauth-secret");
         oauthApp(actorUser, "other-oauth", "other-private-secret");
-        OidcClient sso = new OidcClient();
-        sso.setOwnerUserId(target.getId());
-        sso.setClientId("owned-sso");
-        sso.setClientName("SSO 应用");
-        sso.setRedirectUris("https://example.test/callback\nhttps://example.test/another");
-        sso.setClientSecretHash("private-sso-secret");
-        sso.setIsActive(false);
-        ssoApplications.saveAndFlush(sso);
-        OidcClient ownerless = new OidcClient();
-        ownerless.setClientId("ownerless-sso");
-        ownerless.setClientName("历史应用");
-        ownerless.setRedirectUris("https://example.test/callback");
-        ssoApplications.saveAndFlush(ownerless);
-
         var result = service.userApplications(target.getUuid());
         assertEquals(target.getUuid(), result.user().uuid());
-        assertEquals(java.util.Set.of("owned-oauth", "owned-sso"), result.applications().stream()
+        assertEquals(java.util.Set.of("owned-oauth"), result.applications().stream()
             .map(ConsoleAdminService.OwnedApplicationView::clientId).collect(java.util.stream.Collectors.toSet()));
         assertTrue(result.applications().stream().allMatch(item -> item.redirectUris().size() == 2));
-        assertFalse(result.applications().stream().filter(item -> item.protocol().equals("sso")).findFirst().orElseThrow().isActive());
         String response = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(result);
-        for (String secret : List.of("private-oauth-secret", "private-sso-secret", "other-private-secret", "ownerless-sso", "other-oauth"))
+        for (String secret : List.of("private-oauth-secret", "other-private-secret", "other-oauth"))
             assertFalse(response.contains(secret));
         assertTrue(service.userApplications(user("empty", "USER").getUuid()).applications().isEmpty());
         assertThrows(Oauth2Exception.class, () -> service.userApplications(UUID.randomUUID().toString()));
@@ -286,7 +267,7 @@ class ConsoleAdminTransactionTest {
         ConsoleSessionService.ConsolePrincipal invalidAuditActor=principal("actor-too-long-for-the-database-column".repeat(3));
         String newClientId="official_created_"+UUID.randomUUID();
         var request=new ConsoleAdminService.ApplicationRequest(newClientId,"New application",null,"public",
-            List.of("https://created.example.test/callback"),List.of("openid"),true);
+            List.of("https://created.example.test/callback"),List.of("openid"),true,false);
 
         assertThrows(DataIntegrityViolationException.class,
             ()->service.createApplication(invalidAuditActor,request,"127.0.0.1"));
@@ -318,7 +299,7 @@ class ConsoleAdminTransactionTest {
     }
     private ConsoleAdminService.ApplicationRequest modifiedApplication() {
         return new ConsoleAdminService.ApplicationRequest(app.getClientId(),"Updated application","https://example.test/logo.png",
-            "public",List.of("https://example.test/callback"),List.of("openid","email"),false);
+            "public",List.of("https://example.test/callback"),List.of("openid","email"),false,false);
     }
     private ConsoleAuditLog onlyAudit() {
         List<ConsoleAuditLog> records=audits.findAll();

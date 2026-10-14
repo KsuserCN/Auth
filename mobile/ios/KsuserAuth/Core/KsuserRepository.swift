@@ -110,12 +110,8 @@ extension KsuserRepositoryProviding {
     func changePassword(_ password: String) async throws { let _: EmptyPayload = try await client.request("/auth/update/password", method: "POST", body: ["newPassword": .string(password)]) }
     func deleteAccount(confirmText: String) async throws { let _: EmptyPayload = try await client.request("/auth/delete", method: "POST", body: ["confirmText": .string(confirmText)]) }
     func sessions() async throws -> [SessionItem] { try await client.request("/auth/sessions") }
-    func ksuserAuthorizations() async throws -> [KsuserAuthorizedApp] { try await client.request("/sso/authorizations") }
     func thirdPartyAuthorizations() async throws -> [ThirdPartyAuthorizedApp] { try await client.request("/oauth2/authorizations") }
     func officialAuthorizations() async throws -> [OfficialAuthorizedApp] { try await client.request("/official/authorizations") }
-    func revokeKsuserAuthorization(_ clientId: String) async throws {
-        let _: EmptyPayload = try await client.request("/sso/authorizations/\(authorizationPathSegment(clientId))", method: "DELETE")
-    }
     func revokeThirdPartyAuthorization(_ appId: String) async throws {
         let _: EmptyPayload = try await client.request("/oauth2/authorizations/\(authorizationPathSegment(appId))", method: "DELETE")
     }

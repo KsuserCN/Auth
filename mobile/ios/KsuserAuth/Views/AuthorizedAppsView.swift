@@ -3,7 +3,6 @@ import SwiftUI
 struct AuthorizedAppsView: View {
     @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
-    @State private var ssoApps: [KsuserAuthorizedApp] = []
     @State private var oauthApps: [ThirdPartyAuthorizedApp] = []
     @State private var officialApps: [OfficialAuthorizedApp] = []
     @State private var isLoading = false
@@ -17,7 +16,6 @@ struct AuthorizedAppsView: View {
                 CardHeader(title: L10n.text("访问授权"), subtitle: L10n.text("查看哪些应用可以使用你的 Ksuser 账号信息"), icon: "person.crop.circle.badge.checkmark")
                 if hasLoaded {
                     HStack(spacing: 12) {
-                        countLabel(L10n.text("SSO 应用"), count: ssoApps.count)
                         countLabel(L10n.text("OAuth 应用"), count: oauthApps.count)
                         countLabel(L10n.text("官方应用"), count: officialApps.count)
                     }
@@ -40,31 +38,6 @@ struct AuthorizedAppsView: View {
                     .frame(maxWidth: .infinity)
                     .padding(36)
             } else if hasLoaded {
-                AppCard {
-                    CardHeader(title: L10n.text("SSO 应用"), subtitle: L10n.text("通过 Ksuser 单点登录的应用"), icon: "square.stack.3d.up")
-                    if ssoApps.isEmpty {
-                        emptyState(L10n.text("暂无已授权的 SSO 应用"))
-                    } else {
-                        ForEach(ssoApps) { app in
-                            NavigationLink {
-                                AuthorizedAppDetailView(record: .sso(app)) {
-                                    let accountID = model.user?.uuid
-                                    let revoked = await model.revokeKsuserAuthorization(app.clientId)
-                                    if revoked && accountID == model.user?.uuid {
-                                        authorizationRevision += 1
-                                        ssoApps.removeAll { $0.clientId == app.clientId }
-                                    }
-                                    return revoked
-                                }
-                            } label: {
-                                AuthorizedAppRow(name: app.clientName, logoURL: app.logoUrl, lastAuthorizedAt: app.lastAuthorizedAt, grantMode: app.grantMode)
-                            }
-                            .buttonStyle(.plain)
-                            if app.id != ssoApps.last?.id { Divider() }
-                        }
-                    }
-                }
-
                 AppCard {
                     CardHeader(title: L10n.text("OAuth 应用"), subtitle: L10n.text("使用 Ksuser OAuth 登录的第三方应用"), icon: "square.on.square")
                     if oauthApps.isEmpty {
@@ -120,7 +93,6 @@ struct AuthorizedAppsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await loadAuthorizations() }
         .task(id: model.user?.uuid) {
-            ssoApps = []
             oauthApps = []
             officialApps = []
             hasLoaded = false
@@ -155,7 +127,6 @@ struct AuthorizedAppsView: View {
         do {
             let snapshot = try await model.authorizedApps()
             guard accountID == model.user?.uuid, revision == authorizationRevision else { return }
-            ssoApps = snapshot.ksuserApps
             oauthApps = snapshot.thirdPartyApps
             officialApps = snapshot.officialApps
             hasLoaded = true
@@ -196,24 +167,22 @@ private struct AuthorizedAppRow: View {
 }
 
 private enum AuthorizedAppRecord {
-    case sso(KsuserAuthorizedApp)
     case oauth(ThirdPartyAuthorizedApp)
     case official(OfficialAuthorizedApp)
 
-    var name: String { switch self { case .sso(let app): app.clientName; case .oauth(let app): app.appName; case .official(let app): app.clientName } }
-    var logoURL: String? { switch self { case .sso(let app): app.logoUrl; case .oauth(let app): app.logoUrl; case .official(let app): app.logoUrl } }
-    var redirectURI: String? { switch self { case .sso(let app): app.redirectUri; case .oauth(let app): app.redirectUri; case .official: nil } }
-    var scopes: [String] { switch self { case .sso(let app): app.scopes; case .oauth(let app): app.scopes; case .official(let app): app.scopes } }
-    var authorizedAt: String? { switch self { case .sso(let app): app.authorizedAt; case .oauth(let app): app.authorizedAt; case .official(let app): app.authorizedAt } }
-    var lastAuthorizedAt: String? { switch self { case .sso(let app): app.lastAuthorizedAt; case .oauth(let app): app.lastAuthorizedAt; case .official(let app): app.lastAuthorizedAt } }
-    var grantMode: String? { switch self { case .sso(let app): app.grantMode; case .oauth(let app): app.grantMode; case .official: nil } }
-    var expiresAt: String? { switch self { case .sso(let app): app.expiresAt; case .oauth(let app): app.expiresAt; case .official: nil } }
+    var name: String { switch self { case .oauth(let app): app.appName; case .official(let app): app.clientName } }
+    var logoURL: String? { switch self { case .oauth(let app): app.logoUrl; case .official(let app): app.logoUrl } }
+    var redirectURI: String? { switch self { case .oauth(let app): app.redirectUri; case .official: nil } }
+    var scopes: [String] { switch self { case .oauth(let app): app.scopes; case .official(let app): app.scopes } }
+    var authorizedAt: String? { switch self { case .oauth(let app): app.authorizedAt; case .official(let app): app.authorizedAt } }
+    var lastAuthorizedAt: String? { switch self { case .oauth(let app): app.lastAuthorizedAt; case .official(let app): app.lastAuthorizedAt } }
+    var grantMode: String? { switch self { case .oauth(let app): app.grantMode; case .official: nil } }
+    var expiresAt: String? { switch self { case .oauth(let app): app.expiresAt; case .official: nil } }
     var creatorName: String? { if case .oauth(let app) = self { return app.creatorName }; return nil }
     var creatorVerificationType: String? { if case .oauth(let app) = self { return app.creatorVerificationType }; return nil }
     var contactInfo: String? { if case .oauth(let app) = self { return app.contactInfo }; return nil }
     var applicationType: String {
         switch self {
-        case .sso: L10n.text("SSO 应用")
         case .oauth: L10n.text("OAuth 应用")
         case .official: L10n.text("官方应用")
         }

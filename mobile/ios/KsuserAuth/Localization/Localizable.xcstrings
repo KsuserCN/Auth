@@ -437,23 +437,6 @@
         }
       }
     },
-    "Ksuser 应用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ksuser apps"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ksuser 应用"
-          }
-        }
-      }
-    },
     "Ksuser 推送回归测试" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5251,23 +5234,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暂无可用恢复码"
-          }
-        }
-      }
-    },
-    "暂无已授权的 Ksuser 应用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No authorized Ksuser apps"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂无已授权的 Ksuser 应用"
           }
         }
       }
@@ -10627,23 +10593,6 @@
         }
       }
     },
-    "SSO 应用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSO apps"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSO 应用"
-          }
-        }
-      }
-    },
     "OAuth 应用" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10657,23 +10606,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OAuth 应用"
-          }
-        }
-      }
-    },
-    "通过 Ksuser 单点登录的应用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apps that use Ksuser single sign-on"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通过 Ksuser 单点登录的应用"
           }
         }
       }
@@ -10742,23 +10674,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "暂无官方应用授权"
-          }
-        }
-      }
-    },
-    "暂无已授权的 SSO 应用" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No SSO apps authorized"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂无已授权的 SSO 应用"
           }
         }
       }

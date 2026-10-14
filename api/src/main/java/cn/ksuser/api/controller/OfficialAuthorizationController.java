@@ -32,7 +32,7 @@ public class OfficialAuthorizationController {
     public ResponseEntity<ApiResponse<OfficialAuthorizationService.AuthorizeContext>> context(
         @RequestParam(name = "client_id") String clientId, @RequestParam(name = "redirect_uri") String redirectUri,
         @RequestParam(name = "response_type") String responseType, @RequestParam(name = "scope", required = false) String scope,
-        @RequestParam(name = "state") String state, @RequestParam(name = "nonce") String nonce,
+        @RequestParam(name = "state") String state, @RequestParam(name = "nonce", required = false) String nonce,
         @RequestParam(name = "code_challenge") String challenge, @RequestParam(name = "code_challenge_method") String method,
         Authentication authentication) {
         return noStore(new ApiResponse<>(200, ApiResultCode.OFFICIAL_SUCCESS, service.buildAuthorizeContext(resolveUser(authentication),
