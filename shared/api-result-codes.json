@@ -509,12 +509,12 @@
       "messageEn": "Too many requests. Please try again in 1 minute."
     },
     "AUTH_013": {
-      "message": "发送次数过多，每小时最多发送14次",
+      "message": "当前网络发送验证码次数过多，请稍后再试",
       "params": [],
       "sources": [
         "api/src/main/java/cn/ksuser/api/controller/AuthController.java"
       ],
-      "messageEn": "Too many codes sent. The limit is 14 per hour."
+      "messageEn": "Too many codes sent from this network. Please try again later."
     },
     "AUTH_014": {
       "message": "该邮箱发送次数过多，每小时最多发送14次",

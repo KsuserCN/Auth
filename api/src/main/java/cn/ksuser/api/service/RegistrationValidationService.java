@@ -14,22 +14,16 @@ public class RegistrationValidationService {
     private final AppProperties properties;
     private final SecurityValidator validator;
     private final VerificationCodeService codes;
-    private final RateLimitService rateLimit;
 
     public RegistrationValidationService(AppProperties properties, SecurityValidator validator,
-                                         VerificationCodeService codes, RateLimitService rateLimit) {
+                                         VerificationCodeService codes) {
         this.properties = properties;
         this.validator = validator;
         this.codes = codes;
-        this.rateLimit = rateLimit;
     }
 
     /** Returns a rejection, or null after validating and consuming the email verification code. */
-    public Rejection validatePasswordRegistration(String username, String email, String password, String code,
-                                                  String clientIp) {
-        if (rateLimit.isRegisterLocked(clientIp)) {
-            return reject(HttpStatus.TOO_MANY_REQUESTS, ApiResultCode.AUTH_011, "Registration locked");
-        }
+    public Rejection validatePasswordRegistration(String username, String email, String password, String code) {
         if (username == null || username.isBlank()) {
             return reject(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_002, "Empty username");
         }

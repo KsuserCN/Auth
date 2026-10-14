@@ -105,7 +105,7 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `AUTH_010` | 验证码错误次数过多，该邮箱已被锁定1小时 | Too many incorrect verification codes. This email address has been locked for 1 hour. | — | AuthController.java |
 | `AUTH_011` | 注册过于频繁，请稍后再试 | Too many registration attempts. Please try again later. | — | AuthController.java |
 | `AUTH_012` | 发送过于频繁，请1分钟后再试 | Too many requests. Please try again in 1 minute. | — | AuthController.java |
-| `AUTH_013` | 发送次数过多，每小时最多发送14次 | Too many codes sent. The limit is 14 per hour. | — | AuthController.java |
+| `AUTH_013` | 当前网络发送验证码次数过多，请稍后再试 | Too many codes sent from this network. Please try again later. | — | AuthController.java |
 | `AUTH_014` | 该邮箱发送次数过多，每小时最多发送14次 | Too many codes sent to this email address. The limit is 14 per hour. | — | AuthController.java |
 | `AUTH_015` | 邮件发送失败，请稍后重试 | Could not send the email. Please try again later. | — | AuthController.java |
 | `AUTH_016` | 验证码已发送 | Verification code sent | — | AuthController.java |

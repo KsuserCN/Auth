@@ -961,9 +961,8 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(409, ApiResultCode.OAUTH_033.withParams("provider", providerDisplayName(provider))));
         }
 
-        String clientIp = rateLimitService.getClientIp(request);
         RegistrationValidationService.Rejection rejection = registrationValidationService.validatePasswordRegistration(
-            username, email, password, req.getCode(), clientIp);
+            username, email, password, req.getCode());
         if (rejection != null) {
             sensitiveLogUtil.logRegister(request, null, false, rejection.reason(), startTime);
             return ResponseEntity.status(rejection.status())
@@ -990,7 +989,6 @@ public class OauthController {
 
         linkOauthAccount(provider, newUser, pending);
         consumePendingOauthIdentity(req.getBindToken());
-        rateLimitService.recordRegisterSuccess(clientIp);
         sensitiveLogUtil.logRegister(request, newUser.getId(), true, null, startTime);
 
         return issueOauthLoginResponse(newUser, provider, request, response, startTime, ApiResultCode.OAUTH_003);

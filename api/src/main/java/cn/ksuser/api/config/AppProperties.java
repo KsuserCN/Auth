@@ -241,8 +241,8 @@ public class AppProperties {
     public static class RateLimit {
         private int sendCodeEmailPerMinute = 1;
         private int sendCodeEmailPerHour = 14;
-        private int sendCodeIpPerMinute = 3;
-        private int sendCodeIpPerHour = 14;
+        private int sendCodeIpPerMinute = 60;
+        private int sendCodeIpPerHour = 600;
 
         private int loginEmailPerMinute = 5;
         private int loginEmailPerHour = 60;

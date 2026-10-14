@@ -128,10 +128,20 @@ OAuth registration (`POST /oauth/{provider}/register-bind`, where `provider` is
 `password`, and `code`. Obtain the email code through `POST /auth/send-code` with
 `{"email":"you@example.com","type":"register"}`. Registration remains available
 if the user's network changes after the code is sent.
-The endpoint uses the same username/password checks, email verification failure
-limits, and registration IP locks as `POST /auth/register`. User-Agent is retained
-as client information for sessions and security logs, not as a registration lock key. A third-party
-OAuth identity alone does not verify the submitted email address.
+The endpoint uses the same username/password checks and email verification failure
+limits as `POST /auth/register`. A third-party OAuth identity alone does not verify
+the submitted email address. Successful registrations no longer lock a shared IP;
+historical registration IP and User-Agent lock keys are ignored and expire normally.
+User-Agent is retained as client information for sessions and security logs.
+
+Verification-code sending keeps a limit for each email address (default: 1 per
+minute and 14 per hour), with a broader shared-IP limit (default: 60 per minute and
+600 per hour). Configure these through `app.rate-limit.send-code-email-per-minute`,
+`app.rate-limit.send-code-email-per-hour`, `app.rate-limit.send-code-ip-per-minute`,
+and `app.rate-limit.send-code-ip-per-hour`. Redis checks and reserves both quotas
+atomically before sending, so concurrent requests cannot exceed them. A failed
+email send still uses its reserved quota; wait for the current window to expire
+before retrying. A successful login does not reset verification-code quotas.
 
 ---
 
@@ -207,6 +217,13 @@ cd api
 OAuth 注册并绑定接口 `POST /oauth/{provider}/register-bind`（`qq`、`github`、
 `microsoft`、`google`）必须提交 `bindToken`、`username`、`email`、`password` 和
 `code`。先通过 `/auth/send-code` 发送 `type=register` 的邮箱验证码，接收验证码后
-更换网络仍可完成注册。接口与 `/auth/register` 共用用户名、密码、邮箱验证码失败次数限制和
-注册 IP 锁定规则。User-Agent 仅作为会话和安全日志的客户端信息，不作为注册锁定依据。
-不能仅凭第三方 OAuth 身份证明所填写邮箱的归属。
+更换网络仍可完成注册。接口与 `/auth/register` 共用用户名、密码校验和邮箱验证码失败次数限制。
+不能仅凭第三方 OAuth 身份证明所填写邮箱的归属。注册成功不再锁定共享 IP；历史注册 IP 和
+User-Agent 锁不再读取，等待其自然过期。User-Agent 继续作为会话和安全日志的客户端信息。
+
+验证码发送保留每个邮箱的额度（默认每分钟 1 次、每小时 14 次），共享 IP 使用较宽松的总额度
+（默认每分钟 60 次、每小时 600 次）。可通过 `app.rate-limit.send-code-email-per-minute`、
+`app.rate-limit.send-code-email-per-hour`、`app.rate-limit.send-code-ip-per-minute` 和
+`app.rate-limit.send-code-ip-per-hour` 调整。发送前由 Redis 原子检查并预留邮箱和 IP 额度，
+并发请求也受相同限制。邮件发送失败仍占用已预留的额度，需要等待当前限流窗口恢复后重试；
+成功登录不会重置验证码发送额度。

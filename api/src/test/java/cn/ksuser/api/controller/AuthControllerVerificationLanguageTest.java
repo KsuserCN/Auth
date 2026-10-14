@@ -31,8 +31,7 @@ class AuthControllerVerificationLanguageTest {
         rate = mock(RateLimitService.class); users = mock(UserService.class);
         when(rate.getClientIp(any())).thenReturn("127.0.0.1");
         when(rate.getClientUserAgent(any())).thenReturn("fixture");
-        when(rate.isIpAllowed(anyString())).thenReturn(true);
-        when(rate.isEmailAllowed(anyString())).thenReturn(true);
+        when(rate.acquireSendCodePermit(anyString(), anyString())).thenReturn(RateLimitService.SendCodeLimit.ALLOWED);
         when(codes.generateCode()).thenReturn("012345");
         AppProperties properties = new AppProperties();
         controller = new AuthController(users, mock(UserSessionService.class), mock(JwtUtil.class), emails, codes, rate,
@@ -56,7 +55,9 @@ class AuthControllerVerificationLanguageTest {
         verify(emails).sendVerificationCode(recipient, "012345", type, expected);
         if (type.equals("sensitive-verification")) verify(codes).saveCodeWithType(recipient, "012345", "127.0.0.1", type);
         else verify(codes).saveCode(recipient, "012345", "127.0.0.1");
-        verify(rate).recordEmailRequest(recipient); verify(rate).recordIpRequest("127.0.0.1");
+        verify(rate).acquireSendCodePermit(recipient, "127.0.0.1");
+        verify(rate, never()).recordEmailRequest(anyString());
+        verify(rate, never()).recordIpRequest(anyString());
     }
 
     @Test void missingHeaderKeepsChineseAndLanguageCannotBypassAuthenticationOrRateLimits() throws Exception {
@@ -67,7 +68,8 @@ class AuthControllerVerificationLanguageTest {
         MockHttpServletRequest http = new MockHttpServletRequest(); http.addHeader("Accept-Language", "en");
         request.setType("sensitive-verification");
         assertEquals(401, controller.sendVerificationCode(http, request, null).getStatusCode().value());
-        request.setType("login"); when(rate.isEmailAllowed(anyString())).thenReturn(false);
+        request.setType("login");
+        when(rate.acquireSendCodePermit(anyString(), anyString())).thenReturn(RateLimitService.SendCodeLimit.EMAIL_MINUTE);
         assertEquals(429, controller.sendVerificationCode(http, request, null).getStatusCode().value());
         verifyNoInteractions(emails);
         verify(codes, never()).generateCode();

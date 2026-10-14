@@ -50,6 +50,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -77,6 +78,7 @@ class OauthRegistrationSecurityTest {
     private AppProperties properties;
     private RegistrationValidationService validation;
     private Map<String, String> redisState;
+    private StringRedisTemplate redis;
     private MockHttpServletRequest http;
     private MockHttpServletResponse servletResponse;
 
@@ -84,7 +86,7 @@ class OauthRegistrationSecurityTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         redisState = new HashMap<>();
-        StringRedisTemplate redis = mock(StringRedisTemplate.class);
+        redis = mock(StringRedisTemplate.class);
         ValueOperations<String, String> values = mock(ValueOperations.class);
         when(redis.opsForValue()).thenReturn(values);
         when(values.get(anyString())).thenAnswer(call -> redisState.get(call.getArgument(0)));
@@ -105,20 +107,20 @@ class OauthRegistrationSecurityTest {
         users = mock(UserService.class);
         accounts = mock(UserOauthAccountRepository.class);
         sessions = mock(UserSessionService.class);
-        rateLimit = mock(RateLimitService.class);
+        rateLimit = spy(new RateLimitService(redis, new AppProperties()));
         jwt = mock(JwtUtil.class);
         logs = mock(SensitiveLogUtil.class);
         codes = new VerificationCodeService(redis);
         properties = new AppProperties();
         validation = new RegistrationValidationService(
-            properties, new SecurityValidator(properties), codes, rateLimit);
+            properties, new SecurityValidator(properties), codes);
         UserSettingsRepository settings = mock(UserSettingsRepository.class);
         when(settings.save(any())).thenAnswer(call -> call.getArgument(0));
         controller = new OauthController(properties, accounts, mock(UserRepository.class), users,
             jwt, sessions, rateLimit, settings, mock(TotpService.class), mock(MfaService.class), logs,
             mock(UserPasskeyRepository.class), mock(SensitiveOperationService.class), redis, validation);
-        when(rateLimit.getClientIp(any())).thenReturn(IP);
-        when(rateLimit.getClientUserAgent(any())).thenReturn(USER_AGENT);
+        doReturn(IP).when(rateLimit).getClientIp(any());
+        doReturn(USER_AGENT).when(rateLimit).getClientUserAgent(any());
         http = new MockHttpServletRequest();
         http.addHeader("User-Agent", USER_AGENT);
         servletResponse = new MockHttpServletResponse();
@@ -155,7 +157,6 @@ class OauthRegistrationSecurityTest {
         verify(users, never()).register(anyString(), anyString(), anyString());
         verify(accounts, never()).save(any());
         verifyNoInteractions(sessions, jwt);
-        verify(rateLimit, never()).recordRegisterSuccess(anyString());
         assertTrue(redisState.containsKey(PENDING_KEY), "Rejected registration must preserve its OAuth identity ticket");
         assertNull(servletResponse.getHeader("Set-Cookie"));
     }
@@ -174,7 +175,7 @@ class OauthRegistrationSecurityTest {
     @ValueSource(strings = {"qq", "github", "microsoft", "google"})
     void incorrectCodeCannotRegisterForAnyProvider(String provider) throws Exception {
         OauthRegisterBindRequest body = requestFor(provider);
-        when(rateLimit.getClientIp(any())).thenReturn(CHANGED_IP);
+        doReturn(CHANGED_IP).when(rateLimit).getClientIp(any());
         body.setCode("999999");
 
         assertRejected(register(body), 400, ApiResultCode.AUTH_027);
@@ -210,13 +211,18 @@ class OauthRegistrationSecurityTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"qq", "github", "microsoft", "google"})
-    void registrationLockCannotBeBypassedThroughOAuth(String provider) throws Exception {
-        OauthRegisterBindRequest body = requestFor(provider);
-        when(rateLimit.getClientIp(any())).thenReturn(CHANGED_IP);
-        when(rateLimit.isRegisterLocked(CHANGED_IP)).thenReturn(true);
+    void historicalSharedIpRegistrationLockDoesNotBlockAnyOAuthProvider(String provider) throws Exception {
+        redisState.put("register:lock:ip:" + IP, "locked");
+        redisState.put("register:success:ip:" + IP + ":2026-10-14", "99");
+        String oldUaLock = "register:lock:ua:" + "a".repeat(64);
+        redisState.put(oldUaLock, "locked");
 
-        assertRejected(register(body), 429, ApiResultCode.AUTH_011);
-        assertEquals(CODE, redisState.get("verification:code:" + EMAIL));
+        assertSuccessfulRegistration(provider, IP);
+
+        assertEquals("locked", redisState.get("register:lock:ip:" + IP));
+        assertEquals("99", redisState.get("register:success:ip:" + IP + ":2026-10-14"));
+        assertEquals("locked", redisState.get(oldUaLock));
+        assertNoRegistrationLimitAccess();
     }
 
     @ParameterizedTest
@@ -297,11 +303,10 @@ class OauthRegistrationSecurityTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"registration-lock", "invalid-username", "weak-password", "missing-code"})
+    @ValueSource(strings = {"invalid-username", "weak-password", "missing-code"})
     void ordinaryAndOAuthRegistrationApplyTheSamePolicy(String scenario) throws Exception {
         OauthRegisterBindRequest body = requestFor("github");
         switch (scenario) {
-            case "registration-lock" -> when(rateLimit.isRegisterLocked(IP)).thenReturn(true);
             case "invalid-username" -> body.setUsername("a!");
             case "weak-password" -> body.setPassword("alllowercase");
             case "missing-code" -> body.setCode(null);
@@ -319,7 +324,7 @@ class OauthRegistrationSecurityTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"qq", "github", "microsoft", "google"})
-    void successfulRegistrationConsumesEmailProofAndOAuthTicketAndRecordsItsQuota(String provider) throws Exception {
+    void successfulRegistrationConsumesEmailProofAndOAuthTicket(String provider) throws Exception {
         assertSuccessfulRegistration(provider, IP);
     }
 
@@ -349,7 +354,7 @@ class OauthRegistrationSecurityTest {
 
     private void assertSuccessfulRegistration(String provider, String currentIp) throws Exception {
         OauthRegisterBindRequest body = requestFor(provider);
-        when(rateLimit.getClientIp(any())).thenReturn(currentIp);
+        doReturn(currentIp).when(rateLimit).getClientIp(any());
         User user = prepareSuccessfulRegistration(body.getUsername(), currentIp);
 
         var response = register(body);
@@ -367,8 +372,6 @@ class OauthRegistrationSecurityTest {
         for (String field : new String[] {"code", "sent", "email", "ip", "error"}) {
             assertFalse(redisState.containsKey("verification:" + field + ":" + EMAIL));
         }
-        verify(rateLimit).isRegisterLocked(currentIp);
-        verify(rateLimit).recordRegisterSuccess(currentIp);
         verify(sessions).createSession(user, "refresh-fixture", currentIp, USER_AGENT);
         assertEquals(0, codes.getErrorCount(EMAIL));
         verify(logs).logRegister(eq(http), eq(17L), eq(true), isNull(), anyLong());
@@ -380,12 +383,11 @@ class OauthRegistrationSecurityTest {
         verify(users, times(1)).register(anyString(), anyString(), anyString());
         verify(accounts, times(1)).save(any());
         verify(sessions, times(1)).createSession(any(), anyString(), anyString(), anyString());
-        verify(rateLimit, times(1)).recordRegisterSuccess(currentIp);
     }
 
     @Test
     void ordinaryRegistrationAlsoSucceedsAfterNetworkChange() {
-        when(rateLimit.getClientIp(any())).thenReturn(CHANGED_IP);
+        doReturn(CHANGED_IP).when(rateLimit).getClientIp(any());
         User user = prepareSuccessfulRegistration("Verified_User", CHANGED_IP);
 
         var response = ordinaryController().register(
@@ -394,11 +396,37 @@ class OauthRegistrationSecurityTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(ApiResultCode.AUTH_032, response.getBody().getErrorCode());
         verify(users).register("Verified_User", EMAIL, PASSWORD);
-        verify(rateLimit).isRegisterLocked(CHANGED_IP);
-        verify(rateLimit).recordRegisterSuccess(CHANGED_IP);
         verify(sessions).createSession(user, "refresh-fixture", CHANGED_IP, USER_AGENT);
         assertEquals(0, codes.getErrorCount(EMAIL));
         assertEquals(4, codes.verifyRegistrationCode(EMAIL, CODE));
+    }
+
+    @Test
+    void historicalSharedIpRegistrationLockDoesNotBlockOrdinaryRegistration() {
+        String lockKey = "register:lock:ip:" + IP;
+        redisState.put(lockKey, "locked");
+        String oldUaLock = "register:lock:ua:" + "a".repeat(64);
+        redisState.put(oldUaLock, "locked");
+        prepareSuccessfulRegistration("Verified_User", IP);
+
+        var response = ordinaryController().register(
+            new RegisterRequest("Verified_User", EMAIL, PASSWORD, CODE), http, servletResponse);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(ApiResultCode.AUTH_032, response.getBody().getErrorCode());
+        assertEquals("locked", redisState.get(lockKey));
+        assertFalse(redisState.keySet().stream().anyMatch(key -> key.startsWith("register:success:")));
+        assertEquals("locked", redisState.get(oldUaLock));
+        assertNoRegistrationLimitAccess();
+    }
+
+    private void assertNoRegistrationLimitAccess() {
+        Stream.concat(mockingDetails(redis).getInvocations().stream(),
+                mockingDetails(redis.opsForValue()).getInvocations().stream())
+            .flatMap(invocation -> Stream.of(invocation.getArguments()))
+            .filter(String.class::isInstance).map(String.class::cast)
+            .forEach(argument -> assertFalse(argument.startsWith("register:"),
+                "Registration must not read or write obsolete IP/User-Agent counters or locks: " + argument));
     }
 
     @Test
@@ -413,11 +441,11 @@ class OauthRegistrationSecurityTest {
         OauthRegisterBindRequest body = requestFor("github");
         body.setCode("999999");
         for (int attempt = 1; attempt <= 4; attempt++) {
-            when(rateLimit.getClientIp(any())).thenReturn("192.0.2." + (20 + attempt));
+            doReturn("192.0.2." + (20 + attempt)).when(rateLimit).getClientIp(any());
             assertRejected(register(body), 400, ApiResultCode.AUTH_027);
         }
 
-        when(rateLimit.getClientIp(any())).thenReturn(CHANGED_IP);
+        doReturn(CHANGED_IP).when(rateLimit).getClientIp(any());
         assertRejected(register(body), 429, ApiResultCode.AUTH_010);
         assertTrue(codes.isLocked(EMAIL));
         body.setCode(CODE);

@@ -254,34 +254,20 @@ public class AuthController {
         // 获取IP
         String clientIp = rateLimitService.getClientIp(request);
 
-        // 注册功能锁定检查（按 IP）
-        if ("register".equals(type) && rateLimitService.isRegisterLocked(clientIp)) {
+        // 邮箱额度为主、IP 为共享网络兜底，在发码前原子预留，避免并发穿透。
+        RateLimitService.SendCodeLimit limit = rateLimitService.acquireSendCodePermit(email, clientIp);
+        if (limit != RateLimitService.SendCodeLimit.ALLOWED) {
+            if (limit == RateLimitService.SendCodeLimit.UNAVAILABLE) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(new ApiResponse<>(503, ApiResultCode.INTERNAL_ERROR));
+            }
+            ApiResultCode resultCode = switch (limit) {
+                case EMAIL_HOUR -> ApiResultCode.AUTH_014;
+                case IP_HOUR -> ApiResultCode.AUTH_013;
+                default -> ApiResultCode.AUTH_012;
+            };
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, ApiResultCode.AUTH_011));
-        }
-
-        // 检查IP限流（3次/分钟，14次/小时）
-        if (!rateLimitService.isIpAllowed(clientIp)) {
-            int remainingMinute = rateLimitService.getRemainingMinuteRequestsForIp(clientIp);
-            if (remainingMinute == 0) {
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_012));
-            } else {
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_013));
-            }
-        }
-
-        // 检查邮箱限流（1次/分钟，14次/小时）
-        if (!rateLimitService.isEmailAllowed(email)) {
-            int remainingMinute = rateLimitService.getRemainingMinuteRequestsForEmail(email);
-            if (remainingMinute == 0) {
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_012));
-            } else {
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ApiResponse<>(429, ApiResultCode.AUTH_014));
-            }
+                .body(new ApiResponse<>(429, resultCode));
         }
 
         // 生成并保存验证码
@@ -302,10 +288,6 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, ApiResultCode.AUTH_015));
         }
-
-        // 记录限流
-        rateLimitService.recordIpRequest(clientIp);
-        rateLimitService.recordEmailRequest(email);
 
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, ApiResultCode.AUTH_016));
@@ -331,7 +313,7 @@ public class AuthController {
         String userAgent = rateLimitService.getClientUserAgent(request);
 
         RegistrationValidationService.Rejection rejection = registrationValidationService.validatePasswordRegistration(
-            username, email, password, code, clientIp);
+            username, email, password, code);
         if (rejection != null) {
             sensitiveLogUtil.logRegister(request, null, false, rejection.reason(), startTime);
             return ResponseEntity.status(rejection.status())
@@ -376,9 +358,6 @@ public class AuthController {
 
         // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
         setRefreshTokenCookie(response, refreshToken);
-
-        // 记录注册成功次数（按 IP）
-        rateLimitService.recordRegisterSuccess(clientIp);
 
         // 记录注册成功日志
         sensitiveLogUtil.logRegister(request, result.getUser().getId(), true, null, startTime);
@@ -500,7 +479,7 @@ public class AuthController {
         // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
         setRefreshTokenCookie(response, refreshToken);
 
-        // 登录成功后清除所有速率限制
+        // 清除登录额度；验证码发送额度独立过期，避免登录重置共享网络的发码限制。
         rateLimitService.clearAllLimits(email, clientIp);
 
         // 记录成功登录日志

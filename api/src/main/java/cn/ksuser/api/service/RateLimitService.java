@@ -3,29 +3,58 @@ package cn.ksuser.api.service;
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.util.IpUtil;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.concurrent.TimeUnit;
+import java.util.List;
 
 @Service
 public class RateLimitService {
 
+    private static final Logger log = LoggerFactory.getLogger(RateLimitService.class);
     private final StringRedisTemplate redisTemplate;
     private final AppProperties appProperties;
     private static final String MINUTE_LIMIT_PREFIX = "ratelimit:minute:";
     private static final String HOUR_LIMIT_PREFIX = "ratelimit:hour:";
-    private static final String REGISTER_SUCCESS_PREFIX = "register:success:";
-    private static final String REGISTER_LOCK_PREFIX = "register:lock:";
     private static final Duration MINUTE_WINDOW = Duration.ofMinutes(1);
     private static final Duration HOUR_WINDOW = Duration.ofHours(1);
-    private static final Duration REGISTER_LOCK_10_MIN = Duration.ofMinutes(10);
-    private static final Duration REGISTER_LOCK_1_HOUR = Duration.ofHours(1);
-    private static final Duration REGISTER_LOCK_1_DAY = Duration.ofDays(1);
+
+    // Check every quota before changing any counter. Redis runs the check and reservation atomically.
+    private static final DefaultRedisScript<Long> ACQUIRE_SEND_CODE_PERMIT = new DefaultRedisScript<>("""
+        local limited = 0
+        for i = 1, 4 do
+            local stored = redis.call('GET', KEYS[i])
+            local count = tonumber(stored or '0')
+            -- Older INCR/EXPIRE calls could leave counters without expiry after an interruption.
+            if stored and redis.call('TTL', KEYS[i]) == -1 then
+                local ttl = (i == 1 or i == 3) and ARGV[5] or ARGV[6]
+                redis.call('EXPIRE', KEYS[i], ttl)
+            end
+            if count >= tonumber(ARGV[i]) and limited == 0 then
+                limited = i
+            end
+        end
+        if limited ~= 0 then
+            return limited
+        end
+        for i = 1, 4 do
+            local count = redis.call('INCR', KEYS[i])
+            if count == 1 then
+                local ttl = (i == 1 or i == 3) and ARGV[5] or ARGV[6]
+                redis.call('EXPIRE', KEYS[i], ttl)
+            end
+        end
+        return 0
+        """, Long.class);
+
+    public enum SendCodeLimit {
+        ALLOWED, EMAIL_MINUTE, EMAIL_HOUR, IP_MINUTE, IP_HOUR, UNAVAILABLE
+    }
     
     // 操作类型常量
     public static final String TYPE_VERIFICATION_CODE = "verify";
@@ -34,6 +63,38 @@ public class RateLimitService {
     public RateLimitService(StringRedisTemplate redisTemplate, AppProperties appProperties) {
         this.redisTemplate = redisTemplate;
         this.appProperties = appProperties;
+    }
+
+    /**
+     * Reserve email and shared-network quotas before generating or sending a code.
+     * Rejected requests do not consume another recipient's network quota or extend any window.
+     * Failed deliveries retain their reservation to bound repeated delivery attempts.
+     */
+    public SendCodeLimit acquireSendCodePermit(String email, String ip) {
+        String emailIdentifier = TYPE_VERIFICATION_CODE + ":" + email;
+        String ipIdentifier = TYPE_VERIFICATION_CODE + ":" + ip;
+        AppProperties.RateLimit limits = appProperties.getRateLimit();
+        Long result;
+        try {
+            result = redisTemplate.execute(ACQUIRE_SEND_CODE_PERMIT, List.of(
+                MINUTE_LIMIT_PREFIX + emailIdentifier, HOUR_LIMIT_PREFIX + emailIdentifier,
+                MINUTE_LIMIT_PREFIX + ipIdentifier, HOUR_LIMIT_PREFIX + ipIdentifier),
+                Integer.toString(limits.getSendCodeEmailPerMinute()),
+                Integer.toString(limits.getSendCodeEmailPerHour()),
+                Integer.toString(limits.getSendCodeIpPerMinute()),
+                Integer.toString(limits.getSendCodeIpPerHour()),
+                Long.toString(MINUTE_WINDOW.toSeconds()), Long.toString(HOUR_WINDOW.toSeconds()));
+        } catch (DataAccessException ex) {
+            log.warn("Unable to reserve verification-code quota", ex);
+            return SendCodeLimit.UNAVAILABLE;
+        }
+        if (result == null) return SendCodeLimit.UNAVAILABLE;
+        if (result == 0) return SendCodeLimit.ALLOWED;
+        if (result == 1) return SendCodeLimit.EMAIL_MINUTE;
+        if (result == 2) return SendCodeLimit.EMAIL_HOUR;
+        if (result == 3) return SendCodeLimit.IP_MINUTE;
+        if (result == 4) return SendCodeLimit.IP_HOUR;
+        return SendCodeLimit.UNAVAILABLE;
     }
 
     /**
@@ -255,37 +316,6 @@ public class RateLimitService {
         return userAgent.trim();
     }
 
-    /**
-     * 注册功能是否被锁定（按当前 IP）
-     * @param ip IP
-     * @return 是否锁定
-     */
-    public boolean isRegisterLocked(String ip) {
-        return getRegisterLockRemainingSeconds(ip) > 0;
-    }
-
-    /**
-     * 获取注册锁定剩余时间（秒）
-     * @param ip IP
-     * @return 剩余秒数，0 表示未锁定
-     */
-    public long getRegisterLockRemainingSeconds(String ip) {
-        String ipKey = REGISTER_LOCK_PREFIX + "ip:" + ip;
-        return getTtlSeconds(ipKey);
-    }
-
-    /**
-     * 按 IP 记录注册成功次数，并根据次数设置锁定
-     * @param ip IP
-     */
-    public void recordRegisterSuccess(String ip) {
-        String dateKey = LocalDate.now().toString();
-
-        String ipCountKey = REGISTER_SUCCESS_PREFIX + "ip:" + ip + ":" + dateKey;
-        long ipCount = incrementWithDailyExpiry(ipCountKey);
-        applyRegisterLockIfNeeded(ip, ipCount);
-    }
-
     private int getRemainingMinuteRequests(String identifier, int limit) {
         String key = MINUTE_LIMIT_PREFIX + identifier;
         String count = redisTemplate.opsForValue().get(key);
@@ -293,44 +323,8 @@ public class RateLimitService {
         return Math.max(0, limit - used);
     }
 
-    private long incrementWithDailyExpiry(String key) {
-        Long count = redisTemplate.opsForValue().increment(key);
-        if (count != null && count == 1) {
-            long secondsUntilEndOfDay = getSecondsUntilEndOfDay();
-            redisTemplate.expire(key, secondsUntilEndOfDay, TimeUnit.SECONDS);
-        }
-        return count == null ? 0 : count;
-    }
-
-    private void applyRegisterLockIfNeeded(String ip, long count) {
-        if (count == 2) {
-            setRegisterLock(ip, REGISTER_LOCK_10_MIN);
-        } else if (count == 3) {
-            setRegisterLock(ip, REGISTER_LOCK_1_HOUR);
-        } else if (count >= 4) {
-            setRegisterLock(ip, REGISTER_LOCK_1_DAY);
-        }
-    }
-
-    private void setRegisterLock(String ip, Duration duration) {
-        String key = REGISTER_LOCK_PREFIX + "ip:" + ip;
-        redisTemplate.opsForValue().set(key, "locked", duration);
-    }
-
-    private long getTtlSeconds(String key) {
-        Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
-        return ttl == null || ttl < 0 ? 0 : ttl;
-    }
-
-    private long getSecondsUntilEndOfDay() {
-        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
-        LocalDateTime endOfDay = now.toLocalDate().plusDays(1).atStartOfDay();
-        long seconds = Duration.between(now, endOfDay).getSeconds();
-        return Math.max(1, seconds);
-    }
-
     /**
-     * 清除指定标识符的所有速率限制（成功登录后调用）
+     * 成功登录后清除密码登录限制；验证码发送额度独立过期。
      * @param email 邮箱
      * @param ip IP地址
      */
@@ -342,13 +336,5 @@ public class RateLimitService {
         // 清除登录相关的IP限制
         redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_LOGIN + ":" + ip);
         redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_LOGIN + ":" + ip);
-        
-        // 清除验证码相关的邮箱限制
-        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + email);
-        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + email);
-        
-        // 清除验证码相关的IP限制
-        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + ip);
-        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_VERIFICATION_CODE + ":" + ip);
     }
 }
