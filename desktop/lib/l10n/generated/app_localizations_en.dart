@@ -760,8 +760,35 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authorizedApps => 'Authorized apps';
 
   @override
+  String get ssoApps => 'SSO apps';
+
+  @override
+  String get oauthApps => 'OAuth apps';
+
+  @override
+  String get officialApps => 'Official apps';
+
+  @override
+  String get untilRevoked => 'Access remains until revoked';
+
+  @override
+  String get realNameScope => 'Real name';
+
+  @override
+  String get genderScope => 'Gender';
+
+  @override
+  String get birthDateScope => 'Date of birth';
+
+  @override
+  String get regionScope => 'Region';
+
+  @override
+  String get bioScope => 'Profile bio';
+
+  @override
   String get viewThirdPartyAppsThatCanAccess =>
-      'View third-party apps that can access your account and their permissions.';
+      'Review access granted to OAuth, SSO, and official apps.';
 
   @override
   String apps(int arg0) {
@@ -786,14 +813,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get thirdPartyAppsYouAuthorizeWillAppear =>
-      'Third-party apps you authorize will appear here.';
+      'Apps you authorize will appear here, grouped by application type.';
 
   @override
   String get aboutAuthorization => 'About authorization';
 
   @override
   String get youCanManageThirdPartyAppsOn =>
-      'You can manage third-party apps on the web authorization page at any time.';
+      'You can manage OAuth, SSO, and official app access here at any time.';
 
   @override
   String get afterYouRevokeAccessTheAppCan =>

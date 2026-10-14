@@ -1413,6 +1413,24 @@ abstract class AppLocalizations {
   /// **'Authorized apps'**
   String get authorizedApps;
 
+  String get ssoApps;
+
+  String get oauthApps;
+
+  String get officialApps;
+
+  String get untilRevoked;
+
+  String get realNameScope;
+
+  String get genderScope;
+
+  String get birthDateScope;
+
+  String get regionScope;
+
+  String get bioScope;
+
   /// No description provided for @viewThirdPartyAppsThatCanAccess.
   ///
   /// In en, this message translates to:

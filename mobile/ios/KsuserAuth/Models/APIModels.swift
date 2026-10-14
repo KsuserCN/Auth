@@ -160,6 +160,11 @@ struct KsuserAuthorizedApp: Decodable, Sendable, Identifiable {
     let grantMode: String; let expiresAt: String?
     var id: String { clientId }
 }
+struct OfficialAuthorizedApp: Decodable, Sendable, Identifiable {
+    let clientId: String; let clientName: String; let logoUrl: String?
+    let scopes: [String]; let authorizedAt: String?; let lastAuthorizedAt: String?
+    var id: String { clientId }
+}
 struct ThirdPartyAuthorizedApp: Decodable, Sendable, Identifiable {
     let appId: String; let appName: String; let logoUrl: String?; let creatorName: String?
     let creatorVerificationType: String?; let contactInfo: String?; let redirectUri: String?
@@ -170,6 +175,7 @@ struct ThirdPartyAuthorizedApp: Decodable, Sendable, Identifiable {
 struct AuthorizedAppsSnapshot: Sendable {
     let ksuserApps: [KsuserAuthorizedApp]
     let thirdPartyApps: [ThirdPartyAuthorizedApp]
+    let officialApps: [OfficialAuthorizedApp]
 }
 struct SensitiveLogItem: Codable, Sendable, Identifiable {
     let id: Int64; let operationType: String; let loginMethod: String?; let loginMethods: [String]?; let ipAddress: String; let ipLocation: String?

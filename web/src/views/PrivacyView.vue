@@ -21,8 +21,8 @@
       {{ t('ui.privacy.message004') }}
     </el-alert>
 
-    <div v-if="loading" class="overview-grid">
-      <el-card v-for="index in 2" :key="index" class="overview-card" shadow="never">
+    <div v-if="loading || officialLoading" class="overview-grid">
+      <el-card v-for="index in 3" :key="index" class="overview-card" shadow="never">
         <div class="privacy-overview-skeleton">
           <el-skeleton-item variant="text" class="privacy-overview-label" />
           <el-skeleton-item variant="text" class="privacy-overview-value" />
@@ -50,10 +50,20 @@
         <div class="overview-value">{{ oauthApps.length }}</div>
         <div class="overview-desc">{{ t('ui.privacy.message008') }}</div>
       </el-card>
+
+      <el-card class="overview-card" shadow="never">
+        <div class="overview-card-head">
+          <span class="overview-icon official"
+            ><el-icon><Lock /></el-icon></span
+          ><span class="overview-label">{{ t('ui.official.privacyTitle') }}</span>
+        </div>
+        <div class="overview-value">{{ officialApps.length }}</div>
+        <div class="overview-desc">{{ t('ui.official.privacyDescription') }}</div>
+      </el-card>
     </div>
 
     <el-row v-if="loading" :gutter="16">
-      <el-col v-for="index in 2" :key="index" :xs="24" :lg="12">
+      <el-col v-for="index in 3" :key="index" :xs="24" :lg="12" :xl="8">
         <el-card class="card" shadow="never">
           <div class="privacy-card-skeleton">
             <div class="privacy-card-skeleton-head">
@@ -81,7 +91,7 @@
       </el-col>
     </el-row>
     <el-row v-else :gutter="16">
-      <el-col :xs="24" :lg="12">
+      <el-col :xs="24" :lg="12" :xl="8">
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon><Monitor /></el-icon>
@@ -117,7 +127,7 @@
                 <div class="app-info">
                   <div class="app-name-row">
                     <span class="app-name">{{ app.clientName }}</span>
-                    <el-tag size="small" type="success" effect="plain">Ksuser</el-tag>
+                    <el-tag size="small" type="success" effect="plain">SSO</el-tag>
                     <el-tag size="small" effect="plain">{{ grantModeLabel(app.grantMode) }}</el-tag>
                   </div>
                   <div class="app-meta">
@@ -172,7 +182,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :lg="12">
+      <el-col :xs="24" :lg="12" :xl="8">
         <el-card class="card" shadow="never">
           <div class="card-title">
             <el-icon><Share /></el-icon>
@@ -274,93 +284,94 @@
           />
         </el-card>
       </el-col>
-    </el-row>
-
-    <el-card class="card" shadow="never">
-      <div class="card-title">
-        <el-icon><Monitor /></el-icon>
-        <span>{{ t('ui.official.privacyTitle') }}</span>
-        <el-tag class="app-count" size="small" effect="plain">{{ officialApps.length }}</el-tag>
-      </div>
-      <p class="card-desc">{{ t('ui.official.privacyDescription') }}</p>
-      <div v-if="officialLoading" class="privacy-card-skeleton">
-        <el-skeleton :rows="2" animated />
-      </div>
-      <el-alert v-else-if="officialError" type="error" :closable="false" show-icon>
-        {{ officialError }}
-        <el-button link type="primary" @click="loadOfficialAuthorizations">{{
-          t('ui.devices.message035')
-        }}</el-button>
-      </el-alert>
-      <template v-else>
-        <div v-if="officialApps.length > PAGE_SIZE" class="list-toolbar">
-          <el-input
-            v-model="officialSearch"
-            class="app-search"
-            :placeholder="t('ui.official.privacySearch')"
-            clearable
-            :prefix-icon="Search"
-            @input="officialPage = 1"
-          />
-        </div>
-        <div v-if="pagedOfficialApps.length" class="app-list">
-          <div v-for="app in pagedOfficialApps" :key="app.clientId" class="app-item">
-            <div class="app-left">
-              <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">{{
-                app.clientName.slice(0, 1).toUpperCase()
-              }}</el-avatar>
-              <div class="app-info">
-                <div class="app-name-row">
-                  <span class="app-name">{{ app.clientName }}</span
-                  ><el-tag type="success" size="small">{{ t('ui.official.privacyTitle') }}</el-tag>
+      <el-col :xs="24" :lg="12" :xl="8">
+        <el-card class="card" shadow="never">
+          <div class="card-title">
+            <el-icon><Monitor /></el-icon>
+            <span>{{ t('ui.official.privacyTitle') }}</span>
+            <el-tag class="app-count" size="small" effect="plain">{{ officialApps.length }}</el-tag>
+          </div>
+          <p class="card-desc">{{ t('ui.official.privacyDescription') }}</p>
+          <div v-if="officialLoading" class="privacy-card-skeleton">
+            <el-skeleton :rows="2" animated />
+          </div>
+          <el-alert v-else-if="officialError" type="error" :closable="false" show-icon>
+            {{ officialError }}
+            <el-button link type="primary" @click="loadOfficialAuthorizations">{{
+              t('ui.devices.message035')
+            }}</el-button>
+          </el-alert>
+          <template v-else>
+            <div v-if="officialApps.length > PAGE_SIZE" class="list-toolbar">
+              <el-input
+                v-model="officialSearch"
+                class="app-search"
+                :placeholder="t('ui.official.privacySearch')"
+                clearable
+                :prefix-icon="Search"
+                @input="officialPage = 1"
+              />
+            </div>
+            <div v-if="pagedOfficialApps.length" class="app-list">
+              <div v-for="app in pagedOfficialApps" :key="app.clientId" class="app-item">
+                <div class="app-left">
+                  <el-avatar :size="48" :src="app.logoUrl" class="app-avatar">{{
+                    app.clientName.slice(0, 1).toUpperCase()
+                  }}</el-avatar>
+                  <div class="app-info">
+                    <div class="app-name-row">
+                      <span class="app-name">{{ app.clientName }}</span
+                      ><el-tag type="success" size="small">{{ t('ui.official.privacyTitle') }}</el-tag>
+                    </div>
+                    <div class="app-meta mono">{{ app.clientId }}</div>
+                    <div class="scope-list">
+                      <el-tag v-for="scope in app.scopes" :key="scope" size="small" effect="plain">{{
+                        officialScopeLabel(scope)
+                      }}</el-tag>
+                    </div>
+                    <div class="app-meta">
+                      {{ t('ui.privacy.message012') }}{{ formatDateTime(app.lastAuthorizedAt) }}
+                    </div>
+                  </div>
                 </div>
-                <div class="app-meta mono">{{ app.clientId }}</div>
-                <div class="scope-list">
-                  <el-tag v-for="scope in app.scopes" :key="scope" size="small" effect="plain">{{
-                    officialScopeLabel(scope)
-                  }}</el-tag>
-                </div>
-                <div class="app-meta">
-                  {{ t('ui.privacy.message012') }}{{ formatDateTime(app.lastAuthorizedAt) }}
-                </div>
+                <el-popconfirm
+                  :title="t('ui.official.privacyRevoke')"
+                  :confirm-button-text="t('ui.devices.message017')"
+                  :cancel-button-text="t('ui.addPasskey.message009')"
+                  @confirm="handleRevokeOfficial(app.clientId)"
+                >
+                  <template #reference
+                    ><el-button
+                      type="danger"
+                      plain
+                      size="small"
+                      :loading="revokingId === `official:${app.clientId}`"
+                      >{{ t('ui.devices.message017') }}</el-button
+                    ></template
+                  >
+                </el-popconfirm>
               </div>
             </div>
-            <el-popconfirm
-              :title="t('ui.official.privacyRevoke')"
-              :confirm-button-text="t('ui.devices.message017')"
-              :cancel-button-text="t('ui.addPasskey.message009')"
-              @confirm="handleRevokeOfficial(app.clientId)"
-            >
-              <template #reference
-                ><el-button
-                  type="danger"
-                  plain
-                  size="small"
-                  :loading="revokingId === `official:${app.clientId}`"
-                  >{{ t('ui.devices.message017') }}</el-button
-                ></template
-              >
-            </el-popconfirm>
-          </div>
-        </div>
-        <el-empty
-          v-else
-          :description="
-            officialApps.length ? t('ui.privacy.message016') : t('ui.official.privacyEmpty')
-          "
-        />
-        <el-pagination
-          v-if="filteredOfficialApps.length > PAGE_SIZE"
-          v-model:current-page="officialPage"
-          class="app-pagination"
-          :page-size="PAGE_SIZE"
-          :total="filteredOfficialApps.length"
-          layout="prev, pager, next"
-          small
-          background
-        />
-      </template>
-    </el-card>
+            <el-empty
+              v-else
+              :description="
+                officialApps.length ? t('ui.privacy.message016') : t('ui.official.privacyEmpty')
+              "
+            />
+            <el-pagination
+              v-if="filteredOfficialApps.length > PAGE_SIZE"
+              v-model:current-page="officialPage"
+              class="app-pagination"
+              :page-size="PAGE_SIZE"
+              :total="filteredOfficialApps.length"
+              layout="prev, pager, next"
+              small
+              background
+            />
+          </template>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <el-dialog
       v-model="ssoDetailDialogVisible"
@@ -571,7 +582,7 @@ import { intlLocale, t } from '@/i18n'
 
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, Monitor, Search, Share, WarningFilled } from '@element-plus/icons-vue'
+import { Download, Lock, Monitor, Search, Share, WarningFilled } from '@element-plus/icons-vue'
 import type { VerificationType } from '@/api/auth'
 import {
   getOAuth2Authorizations,
@@ -951,7 +962,7 @@ onMounted(() => {
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -1005,6 +1016,11 @@ onMounted(() => {
 .overview-icon.external {
   color: var(--el-color-success);
   background: var(--el-color-success-light-9);
+}
+
+.overview-icon.official {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
 }
 
 .overview-label {

@@ -9,6 +9,12 @@ struct LoadingActivity: Identifiable {
     let startedAt = Date()
 }
 
+private enum ApplicationAuthorizationKind {
+    case sso
+    case oauth
+    case official
+}
+
 @MainActor @Observable final class AppModel {
     let environment: AppEnvironment
     let pushNotifications: PushNotificationManager
@@ -71,6 +77,7 @@ struct LoadingActivity: Identifiable {
     @ObservationIgnored private let isUITesting: Bool
     @ObservationIgnored private var uiTestRevokedKsuserApps: Set<String> = []
     @ObservationIgnored private var uiTestRevokedThirdPartyApps: Set<String> = []
+    @ObservationIgnored private var uiTestRevokedOfficialApps: Set<String> = []
 
     init(native: any NativeAuthenticationProviding, repository: (any KsuserRepositoryProviding)? = nil, environment: AppEnvironment = .current) {
         self.native = native; self.environment = environment
@@ -406,35 +413,46 @@ struct LoadingActivity: Identifiable {
         if isUITesting {
             return AuthorizedAppsSnapshot(
                 ksuserApps: [KsuserAuthorizedApp(clientId: "campus", clientName: "Ksuser 校园", logoUrl: nil, redirectUri: "https://campus.example.invalid/callback", scopes: ["openid", "profile"], authorizedAt: "2026-10-01T10:00:00", lastAuthorizedAt: "2026-10-04T10:00:00", grantMode: "PERSISTENT", expiresAt: nil)].filter { !uiTestRevokedKsuserApps.contains($0.clientId) },
-                thirdPartyApps: [ThirdPartyAuthorizedApp(appId: "calendar", appName: "外部日历", logoUrl: nil, creatorName: "示例开发者", creatorVerificationType: "personal", contactInfo: "help@example.invalid", redirectUri: "https://calendar.example.invalid/callback", scopes: ["profile", "email"], authorizedAt: "2026-10-01T10:00:00", lastAuthorizedAt: "2026-10-04T10:00:00", grantMode: "TIME_LIMITED", expiresAt: "2026-11-01T10:00:00")].filter { !uiTestRevokedThirdPartyApps.contains($0.appId) }
+                thirdPartyApps: [ThirdPartyAuthorizedApp(appId: "calendar", appName: "外部日历", logoUrl: nil, creatorName: "示例开发者", creatorVerificationType: "personal", contactInfo: "help@example.invalid", redirectUri: "https://calendar.example.invalid/callback", scopes: ["profile", "email"], authorizedAt: "2026-10-01T10:00:00", lastAuthorizedAt: "2026-10-04T10:00:00", grantMode: "TIME_LIMITED", expiresAt: "2026-11-01T10:00:00")].filter { !uiTestRevokedThirdPartyApps.contains($0.appId) },
+                officialApps: [OfficialAuthorizedApp(clientId: "ksuser_console", clientName: "Ksuser Console", logoUrl: nil, scopes: ["openid", "email"], authorizedAt: "2026-10-01T10:00:00", lastAuthorizedAt: "2026-10-04T10:00:00")].filter { !uiTestRevokedOfficialApps.contains($0.clientId) }
             )
         }
         #endif
         async let ksuserApps = repository.ksuserAuthorizations()
         async let thirdPartyApps = repository.thirdPartyAuthorizations()
-        return try await AuthorizedAppsSnapshot(ksuserApps: ksuserApps, thirdPartyApps: thirdPartyApps)
+        async let officialApps = repository.officialAuthorizations()
+        return try await AuthorizedAppsSnapshot(ksuserApps: ksuserApps, thirdPartyApps: thirdPartyApps, officialApps: officialApps)
     }
     func revokeKsuserAuthorization(_ clientId: String) async -> Bool {
-        await revokeAuthorization(id: clientId, ksuser: true)
+        await revokeAuthorization(id: clientId, kind: .sso)
     }
     func revokeThirdPartyAuthorization(_ appId: String) async -> Bool {
-        await revokeAuthorization(id: appId, ksuser: false)
+        await revokeAuthorization(id: appId, kind: .oauth)
     }
-    private func revokeAuthorization(id: String, ksuser: Bool) async -> Bool {
+    func revokeOfficialAuthorization(_ clientId: String) async -> Bool {
+        await revokeAuthorization(id: clientId, kind: .official)
+    }
+    private func revokeAuthorization(id: String, kind: ApplicationAuthorizationKind) async -> Bool {
         guard isAuthenticated else { return false }
         let accountID = user?.uuid
         #if DEBUG
         if isUITesting {
-            if ksuser { uiTestRevokedKsuserApps.insert(id) }
-            else { uiTestRevokedThirdPartyApps.insert(id) }
+            switch kind {
+            case .sso: uiTestRevokedKsuserApps.insert(id)
+            case .oauth: uiTestRevokedThirdPartyApps.insert(id)
+            case .official: uiTestRevokedOfficialApps.insert(id)
+            }
             noticeMessage = "应用授权已撤销"
             return true
         }
         #endif
         var revoked = false
         await run(message: "正在撤销授权…") {
-            if ksuser { try await self.repository.revokeKsuserAuthorization(id) }
-            else { try await self.repository.revokeThirdPartyAuthorization(id) }
+            switch kind {
+            case .sso: try await self.repository.revokeKsuserAuthorization(id)
+            case .oauth: try await self.repository.revokeThirdPartyAuthorization(id)
+            case .official: try await self.repository.revokeOfficialAuthorization(id)
+            }
             guard accountID == self.user?.uuid else { return }
             self.noticeMessage = "应用授权已撤销"
             revoked = true

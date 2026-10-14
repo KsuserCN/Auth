@@ -3,8 +3,9 @@ import SwiftUI
 struct AuthorizedAppsView: View {
     @Environment(\.locale) private var localizationLocale
     @Environment(AppModel.self) private var model
-    @State private var ksuserApps: [KsuserAuthorizedApp] = []
-    @State private var thirdPartyApps: [ThirdPartyAuthorizedApp] = []
+    @State private var ssoApps: [KsuserAuthorizedApp] = []
+    @State private var oauthApps: [ThirdPartyAuthorizedApp] = []
+    @State private var officialApps: [OfficialAuthorizedApp] = []
     @State private var isLoading = false
     @State private var hasLoaded = false
     @State private var loadError: LocalizedMessage?
@@ -16,8 +17,9 @@ struct AuthorizedAppsView: View {
                 CardHeader(title: L10n.text("访问授权"), subtitle: L10n.text("查看哪些应用可以使用你的 Ksuser 账号信息"), icon: "person.crop.circle.badge.checkmark")
                 if hasLoaded {
                     HStack(spacing: 12) {
-                        countLabel(L10n.text("Ksuser 应用"), count: ksuserApps.count)
-                        countLabel(L10n.text("第三方应用"), count: thirdPartyApps.count)
+                        countLabel(L10n.text("SSO 应用"), count: ssoApps.count)
+                        countLabel(L10n.text("OAuth 应用"), count: oauthApps.count)
+                        countLabel(L10n.text("官方应用"), count: officialApps.count)
                     }
                     .accessibilityElement(children: .combine)
                 }
@@ -39,18 +41,18 @@ struct AuthorizedAppsView: View {
                     .padding(36)
             } else if hasLoaded {
                 AppCard {
-                    CardHeader(title: L10n.text("Ksuser 应用"), subtitle: L10n.text("已授权的 Ksuser 内部应用"), icon: "square.stack.3d.up")
-                    if ksuserApps.isEmpty {
-                        emptyState(L10n.text("暂无已授权的 Ksuser 应用"))
+                    CardHeader(title: L10n.text("SSO 应用"), subtitle: L10n.text("通过 Ksuser 单点登录的应用"), icon: "square.stack.3d.up")
+                    if ssoApps.isEmpty {
+                        emptyState(L10n.text("暂无已授权的 SSO 应用"))
                     } else {
-                        ForEach(ksuserApps) { app in
+                        ForEach(ssoApps) { app in
                             NavigationLink {
-                                AuthorizedAppDetailView(record: .ksuser(app)) {
+                                AuthorizedAppDetailView(record: .sso(app)) {
                                     let accountID = model.user?.uuid
                                     let revoked = await model.revokeKsuserAuthorization(app.clientId)
                                     if revoked && accountID == model.user?.uuid {
                                         authorizationRevision += 1
-                                        ksuserApps.removeAll { $0.clientId == app.clientId }
+                                        ssoApps.removeAll { $0.clientId == app.clientId }
                                     }
                                     return revoked
                                 }
@@ -58,24 +60,24 @@ struct AuthorizedAppsView: View {
                                 AuthorizedAppRow(name: app.clientName, logoURL: app.logoUrl, lastAuthorizedAt: app.lastAuthorizedAt, grantMode: app.grantMode)
                             }
                             .buttonStyle(.plain)
-                            if app.id != ksuserApps.last?.id { Divider() }
+                            if app.id != ssoApps.last?.id { Divider() }
                         }
                     }
                 }
 
                 AppCard {
-                    CardHeader(title: L10n.text("第三方应用"), subtitle: L10n.text("已通过 Ksuser 登录并获得授权的外部应用"), icon: "square.on.square")
-                    if thirdPartyApps.isEmpty {
+                    CardHeader(title: L10n.text("OAuth 应用"), subtitle: L10n.text("使用 Ksuser OAuth 登录的第三方应用"), icon: "square.on.square")
+                    if oauthApps.isEmpty {
                         emptyState(L10n.text("暂无已授权的第三方应用"))
                     } else {
-                        ForEach(thirdPartyApps) { app in
+                        ForEach(oauthApps) { app in
                             NavigationLink {
-                                AuthorizedAppDetailView(record: .thirdParty(app)) {
+                                AuthorizedAppDetailView(record: .oauth(app)) {
                                     let accountID = model.user?.uuid
                                     let revoked = await model.revokeThirdPartyAuthorization(app.appId)
                                     if revoked && accountID == model.user?.uuid {
                                         authorizationRevision += 1
-                                        thirdPartyApps.removeAll { $0.appId == app.appId }
+                                        oauthApps.removeAll { $0.appId == app.appId }
                                     }
                                     return revoked
                                 }
@@ -83,7 +85,32 @@ struct AuthorizedAppsView: View {
                                 AuthorizedAppRow(name: app.appName, logoURL: app.logoUrl, lastAuthorizedAt: app.lastAuthorizedAt, grantMode: app.grantMode)
                             }
                             .buttonStyle(.plain)
-                            if app.id != thirdPartyApps.last?.id { Divider() }
+                            if app.id != oauthApps.last?.id { Divider() }
+                        }
+                    }
+                }
+
+                AppCard {
+                    CardHeader(title: L10n.text("官方应用"), subtitle: L10n.text("可读取你明确授权的 Ksuser 资料"), icon: "checkmark.seal")
+                    if officialApps.isEmpty {
+                        emptyState(L10n.text("暂无官方应用授权"))
+                    } else {
+                        ForEach(officialApps) { app in
+                            NavigationLink {
+                                AuthorizedAppDetailView(record: .official(app)) {
+                                    let accountID = model.user?.uuid
+                                    let revoked = await model.revokeOfficialAuthorization(app.clientId)
+                                    if revoked && accountID == model.user?.uuid {
+                                        authorizationRevision += 1
+                                        officialApps.removeAll { $0.clientId == app.clientId }
+                                    }
+                                    return revoked
+                                }
+                            } label: {
+                                AuthorizedAppRow(name: app.clientName, logoURL: app.logoUrl, lastAuthorizedAt: app.lastAuthorizedAt, grantMode: "OFFICIAL")
+                            }
+                            .buttonStyle(.plain)
+                            if app.id != officialApps.last?.id { Divider() }
                         }
                     }
                 }
@@ -93,8 +120,9 @@ struct AuthorizedAppsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await loadAuthorizations() }
         .task(id: model.user?.uuid) {
-            ksuserApps = []
-            thirdPartyApps = []
+            ssoApps = []
+            oauthApps = []
+            officialApps = []
             hasLoaded = false
             loadError = nil
             await loadAuthorizations()
@@ -127,8 +155,9 @@ struct AuthorizedAppsView: View {
         do {
             let snapshot = try await model.authorizedApps()
             guard accountID == model.user?.uuid, revision == authorizationRevision else { return }
-            ksuserApps = snapshot.ksuserApps
-            thirdPartyApps = snapshot.thirdPartyApps
+            ssoApps = snapshot.ksuserApps
+            oauthApps = snapshot.thirdPartyApps
+            officialApps = snapshot.officialApps
             hasLoaded = true
             loadError = nil
         } catch {
@@ -167,21 +196,29 @@ private struct AuthorizedAppRow: View {
 }
 
 private enum AuthorizedAppRecord {
-    case ksuser(KsuserAuthorizedApp)
-    case thirdParty(ThirdPartyAuthorizedApp)
+    case sso(KsuserAuthorizedApp)
+    case oauth(ThirdPartyAuthorizedApp)
+    case official(OfficialAuthorizedApp)
 
-    var name: String { switch self { case .ksuser(let app): app.clientName; case .thirdParty(let app): app.appName } }
-    var logoURL: String? { switch self { case .ksuser(let app): app.logoUrl; case .thirdParty(let app): app.logoUrl } }
-    var redirectURI: String? { switch self { case .ksuser(let app): app.redirectUri; case .thirdParty(let app): app.redirectUri } }
-    var scopes: [String] { switch self { case .ksuser(let app): app.scopes; case .thirdParty(let app): app.scopes } }
-    var authorizedAt: String? { switch self { case .ksuser(let app): app.authorizedAt; case .thirdParty(let app): app.authorizedAt } }
-    var lastAuthorizedAt: String? { switch self { case .ksuser(let app): app.lastAuthorizedAt; case .thirdParty(let app): app.lastAuthorizedAt } }
-    var grantMode: String { switch self { case .ksuser(let app): app.grantMode; case .thirdParty(let app): app.grantMode } }
-    var expiresAt: String? { switch self { case .ksuser(let app): app.expiresAt; case .thirdParty(let app): app.expiresAt } }
-    var creatorName: String? { if case .thirdParty(let app) = self { return app.creatorName }; return nil }
-    var creatorVerificationType: String? { if case .thirdParty(let app) = self { return app.creatorVerificationType }; return nil }
-    var contactInfo: String? { if case .thirdParty(let app) = self { return app.contactInfo }; return nil }
-    var isKsuser: Bool { if case .ksuser = self { return true }; return false }
+    var name: String { switch self { case .sso(let app): app.clientName; case .oauth(let app): app.appName; case .official(let app): app.clientName } }
+    var logoURL: String? { switch self { case .sso(let app): app.logoUrl; case .oauth(let app): app.logoUrl; case .official(let app): app.logoUrl } }
+    var redirectURI: String? { switch self { case .sso(let app): app.redirectUri; case .oauth(let app): app.redirectUri; case .official: nil } }
+    var scopes: [String] { switch self { case .sso(let app): app.scopes; case .oauth(let app): app.scopes; case .official(let app): app.scopes } }
+    var authorizedAt: String? { switch self { case .sso(let app): app.authorizedAt; case .oauth(let app): app.authorizedAt; case .official(let app): app.authorizedAt } }
+    var lastAuthorizedAt: String? { switch self { case .sso(let app): app.lastAuthorizedAt; case .oauth(let app): app.lastAuthorizedAt; case .official(let app): app.lastAuthorizedAt } }
+    var grantMode: String? { switch self { case .sso(let app): app.grantMode; case .oauth(let app): app.grantMode; case .official: nil } }
+    var expiresAt: String? { switch self { case .sso(let app): app.expiresAt; case .oauth(let app): app.expiresAt; case .official: nil } }
+    var creatorName: String? { if case .oauth(let app) = self { return app.creatorName }; return nil }
+    var creatorVerificationType: String? { if case .oauth(let app) = self { return app.creatorVerificationType }; return nil }
+    var contactInfo: String? { if case .oauth(let app) = self { return app.contactInfo }; return nil }
+    var applicationType: String {
+        switch self {
+        case .sso: L10n.text("SSO 应用")
+        case .oauth: L10n.text("OAuth 应用")
+        case .official: L10n.text("官方应用")
+        }
+    }
+    var isOfficial: Bool { if case .official = self { return true }; return false }
 }
 
 private struct AuthorizedAppDetailView: View {
@@ -199,12 +236,14 @@ private struct AuthorizedAppDetailView: View {
                     AvatarView(url: record.logoURL, name: record.name, size: 56)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(record.name).font(.title3.weight(.semibold))
-                        Text(record.isKsuser ? L10n.text("Ksuser 应用") : L10n.text("第三方应用"))
+                        Text(record.applicationType)
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
-                InfoRow(title: L10n.text("网站"), value: website(from: record.redirectURI))
+                if record.redirectURI != nil {
+                    InfoRow(title: L10n.text("网站"), value: website(from: record.redirectURI))
+                }
                 if let creator = record.creatorName, !creator.isEmpty {
                     InfoRow(title: L10n.text("开发者"), value: creator)
                 }
@@ -220,7 +259,9 @@ private struct AuthorizedAppDetailView: View {
                 CardHeader(title: L10n.text("授权信息"), icon: "checkmark.shield")
                 DateInfoRow(title: L10n.text("首次授权"), value: record.authorizedAt)
                 DateInfoRow(title: L10n.text("最近授权"), value: record.lastAuthorizedAt)
-                InfoRow(title: L10n.text("授权方式"), value: authorizationGrantModeLabel(record.grantMode))
+                if let grantMode = record.grantMode {
+                    InfoRow(title: L10n.text("授权方式"), value: authorizationGrantModeLabel(grantMode))
+                }
                 if record.grantMode == "TIME_LIMITED", record.expiresAt != nil {
                     DateInfoRow(title: L10n.text("有效期至"), value: record.expiresAt)
                 }
@@ -276,9 +317,14 @@ private struct AuthorizedAppDetailView: View {
 
     private func scopeLabel(_ scope: String) -> String {
         switch scope {
-        case "openid": L10n.text("基础身份标识")
+        case "openid": record.isOfficial ? L10n.text("真实 UUID") : L10n.text("基础身份标识")
         case "profile": L10n.text("昵称与头像")
         case "email": L10n.text("邮箱地址")
+        case "real_name": L10n.text("真实姓名")
+        case "gender": L10n.text("性别")
+        case "birth_date": L10n.text("出生日期")
+        case "region": L10n.text("所在地区")
+        case "bio": L10n.text("个人简介")
         default: scope
         }
     }
@@ -295,6 +341,7 @@ private struct AuthorizedAppDetailView: View {
 
 private func authorizationGrantModeLabel(_ mode: String) -> String {
     switch mode {
+    case "OFFICIAL": L10n.text("资料授权")
     case "ONE_TIME": L10n.text("一次性")
     case "TIME_LIMITED": L10n.text("限时")
     default: L10n.text("长期")

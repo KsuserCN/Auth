@@ -2302,7 +2302,7 @@ class AppController extends ChangeNotifier {
   UserDetails? user;
   List<SessionItem> sessions = <SessionItem>[];
   List<SensitiveLogItem> sensitiveLogs = <SensitiveLogItem>[];
-  List<OAuth2AuthorizedApp> authorizedApps = <OAuth2AuthorizedApp>[];
+  List<AuthorizedAppRecord> authorizedApps = <AuthorizedAppRecord>[];
   bool authorizationsLoading = false;
   String Function()? _authorizationsError;
   String? get authorizationsError => _authorizationsError?.call();
@@ -2379,7 +2379,7 @@ class AppController extends ChangeNotifier {
     user = null;
     sessions = <SessionItem>[];
     sensitiveLogs = <SensitiveLogItem>[];
-    authorizedApps = <OAuth2AuthorizedApp>[];
+    authorizedApps = <AuthorizedAppRecord>[];
     _authorizationsError = null;
     passkeys = <PasskeyListItem>[];
     totpStatus = null;
@@ -2422,13 +2422,26 @@ class AppController extends ChangeNotifier {
     _authorizationsError = null;
     notifyListeners();
     try {
-      final dynamic data = await _apiClient.get(
-        '/oauth2/authorizations',
-        authorized: true,
-      );
-      authorizedApps = asList(data)
-          .map((dynamic item) => OAuth2AuthorizedApp.fromJson(asMap(item)))
+      final List<dynamic> responses =
+          await Future.wait<dynamic>(<Future<dynamic>>[
+            _apiClient.get('/oauth2/authorizations', authorized: true),
+            _apiClient.get('/sso/authorizations', authorized: true),
+            _apiClient.get('/official/authorizations', authorized: true),
+          ]);
+      final List<AuthorizedAppRecord> oauthApps = asList(responses[0])
+          .map((dynamic item) => AuthorizedAppRecord.fromOAuth(asMap(item)))
           .toList();
+      final List<AuthorizedAppRecord> ssoApps = asList(responses[1])
+          .map((dynamic item) => AuthorizedAppRecord.fromSSO(asMap(item)))
+          .toList();
+      final List<AuthorizedAppRecord> officialApps = asList(responses[2])
+          .map((dynamic item) => AuthorizedAppRecord.fromOfficial(asMap(item)))
+          .toList();
+      authorizedApps = <AuthorizedAppRecord>[
+        ...ssoApps,
+        ...oauthApps,
+        ...officialApps,
+      ];
     } catch (error) {
       _authorizationsError = () => error is ApiException
           ? error.message
@@ -2439,17 +2452,25 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> revokeAuthorization(String appId) async {
+  Future<void> revokeAuthorization(AuthorizedAppRecord app) async {
     if (revokingAuthorizationId != null) return;
-    revokingAuthorizationId = appId;
+    revokingAuthorizationId = app.authorizationKey;
     notifyListeners();
     try {
+      final String namespace = switch (app.type) {
+        AuthorizationApplicationType.oauth => 'oauth2',
+        AuthorizationApplicationType.sso => 'sso',
+        AuthorizationApplicationType.official => 'official',
+      };
       await _apiClient.delete(
-        '/oauth2/authorizations/${Uri.encodeComponent(appId)}',
+        '/$namespace/authorizations/${Uri.encodeComponent(app.appId)}',
         authorized: true,
       );
       authorizedApps = authorizedApps
-          .where((OAuth2AuthorizedApp app) => app.appId != appId)
+          .where(
+            (AuthorizedAppRecord item) =>
+                item.authorizationKey != app.authorizationKey,
+          )
           .toList();
       _authorizationsError = null;
     } finally {
@@ -5957,6 +5978,51 @@ class AuthorizationsPage extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: _AuthorizationCountCard(
+                        label: desktopL10n.ssoApps,
+                        count: controller.authorizedApps
+                            .where(
+                              (AuthorizedAppRecord app) =>
+                                  app.type == AuthorizationApplicationType.sso,
+                            )
+                            .length,
+                        icon: Icons.apartment_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _AuthorizationCountCard(
+                        label: desktopL10n.oauthApps,
+                        count: controller.authorizedApps
+                            .where(
+                              (AuthorizedAppRecord app) =>
+                                  app.type ==
+                                  AuthorizationApplicationType.oauth,
+                            )
+                            .length,
+                        icon: Icons.public_rounded,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _AuthorizationCountCard(
+                        label: desktopL10n.officialApps,
+                        count: controller.authorizedApps
+                            .where(
+                              (AuthorizedAppRecord app) =>
+                                  app.type ==
+                                  AuthorizationApplicationType.official,
+                            )
+                            .length,
+                        icon: Icons.verified_user_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 if (controller.authorizationsError != null)
                   _InlineStateCard(
                     icon: Icons.error_outline_rounded,
@@ -5985,7 +6051,7 @@ class AuthorizationsPage extends StatelessWidget {
                   Column(
                     children: controller.authorizedApps
                         .map(
-                          (OAuth2AuthorizedApp app) => _AuthorizedAppTile(
+                          (AuthorizedAppRecord app) => _AuthorizedAppTile(
                             app: app,
                             controller: controller,
                           ),
@@ -6016,10 +6082,52 @@ class AuthorizationsPage extends StatelessWidget {
   }
 }
 
+class _AuthorizationCountCard extends StatelessWidget {
+  const _AuthorizationCountCard({
+    required this.label,
+    required this.count,
+    required this.icon,
+  });
+
+  final String label;
+  final int count;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.48,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(icon, size: 18, color: theme.colorScheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$count',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AuthorizedAppTile extends StatelessWidget {
   const _AuthorizedAppTile({required this.app, required this.controller});
 
-  final OAuth2AuthorizedApp app;
+  final AuthorizedAppRecord app;
   final AppController controller;
 
   Future<void> _confirmRevoke(BuildContext context) async {
@@ -6030,7 +6138,7 @@ class _AuthorizedAppTile extends StatelessWidget {
             final Color errorColor = Theme.of(dialogContext).colorScheme.error;
             return AlertDialog(
               icon: Icon(Icons.link_off_rounded, color: errorColor),
-              title: Text(desktopL10n.revokeAccessFor(app.appName)),
+              title: Text(desktopL10n.revokeAccessFor(app.displayName)),
               content: Text(desktopL10n.theAppWillNoLongerBeAble),
               actions: <Widget>[
                 TextButton(
@@ -6057,12 +6165,9 @@ class _AuthorizedAppTile extends StatelessWidget {
       return;
     }
     try {
-      await controller.revokeAuthorization(app.appId);
+      await controller.revokeAuthorization(app);
       if (context.mounted) {
-        showAppMessage(
-          context,
-          desktopL10n.accessRevokedFor((app.appName).toString()),
-        );
+        showAppMessage(context, desktopL10n.accessRevokedFor(app.displayName));
       }
     } catch (error) {
       if (context.mounted) {
@@ -6077,16 +6182,14 @@ class _AuthorizedAppTile extends StatelessWidget {
     final Color border = theme.colorScheme.outlineVariant.withValues(
       alpha: 0.55,
     );
-    final String expiry = app.expiresAt == null
-        ? (app.grantMode == 'ONE_TIME'
-              ? desktopL10n.oneTimeAccess
-              : desktopL10n.noExpiration)
-        : desktopL10n.expires((formatDateTime(app.expiresAt)).toString());
+    final String? grantMode = app.grantMode;
     final String developer = app.creatorName?.isNotEmpty == true
         ? desktopL10n.developer((app.creatorName).toString())
-        : app.contactInfo.isNotEmpty
+        : app.contactInfo?.isNotEmpty == true
         ? desktopL10n.contact((app.contactInfo).toString())
-        : app.redirectUri;
+        : app.redirectUri?.isNotEmpty == true
+        ? app.redirectUri!
+        : app.typeLabel;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
@@ -6135,7 +6238,7 @@ class _AuthorizedAppTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      app.appName,
+                      app.displayName,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -6149,10 +6252,7 @@ class _AuthorizedAppTile extends StatelessWidget {
                   ],
                 ),
               ),
-              _StatusPill(
-                label: grantModeLabel(app.grantMode),
-                icon: Icons.verified_rounded,
-              ),
+              _StatusPill(label: app.typeLabel, icon: app.typeIcon),
             ],
           ),
           const SizedBox(height: 14),
@@ -6176,7 +6276,23 @@ class _AuthorizedAppTile extends StatelessWidget {
                   (formatDateTime(app.lastAuthorizedAt)).toString(),
                 ),
               ),
-              _MetadataLine(icon: Icons.timer_outlined, label: expiry),
+              if (grantMode != null)
+                _MetadataLine(
+                  icon: Icons.verified_rounded,
+                  label: grantModeLabel(grantMode),
+                ),
+              if (app.expiresAt != null)
+                _MetadataLine(
+                  icon: Icons.timer_outlined,
+                  label: desktopL10n.expires(
+                    (formatDateTime(app.expiresAt)).toString(),
+                  ),
+                )
+              else if (grantMode == null)
+                _MetadataLine(
+                  icon: Icons.timer_outlined,
+                  label: desktopL10n.untilRevoked,
+                ),
               OutlinedButton.icon(
                 onPressed: controller.revokingAuthorizationId == null
                     ? () => _confirmRevoke(context)
@@ -6192,7 +6308,7 @@ class _AuthorizedAppTile extends StatelessWidget {
                     vertical: 8,
                   ),
                 ),
-                icon: controller.revokingAuthorizationId == app.appId
+                icon: controller.revokingAuthorizationId == app.authorizationKey
                     ? SizedBox(
                         width: 16,
                         height: 16,
@@ -6298,6 +6414,16 @@ String scopeLabel(String scope) {
       return desktopL10n.email;
     case 'phone':
       return desktopL10n.phoneNumber;
+    case 'real_name':
+      return desktopL10n.realNameScope;
+    case 'gender':
+      return desktopL10n.genderScope;
+    case 'birth_date':
+      return desktopL10n.birthDateScope;
+    case 'region':
+      return desktopL10n.regionScope;
+    case 'bio':
+      return desktopL10n.bioScope;
     default:
       return scope;
   }
@@ -10595,10 +10721,102 @@ class UserSettings {
   final String? preferredSensitiveMethod;
 }
 
+enum AuthorizationApplicationType { oauth, sso, official }
+
+class AuthorizedAppRecord {
+  const AuthorizedAppRecord({
+    required this.appId,
+    required this.appName,
+    required this.type,
+    required this.scopes,
+    required this.authorizedAt,
+    required this.lastAuthorizedAt,
+    this.logoUrl,
+    this.creatorName,
+    this.contactInfo,
+    this.redirectUri,
+    this.grantMode,
+    this.expiresAt,
+  });
+
+  factory AuthorizedAppRecord.fromOAuth(Map<String, dynamic> json) =>
+      AuthorizedAppRecord(
+        appId: asString(json['appId']) ?? '',
+        appName: asString(json['appName']) ?? '',
+        type: AuthorizationApplicationType.oauth,
+        logoUrl: asString(json['logoUrl']),
+        creatorName: asString(json['creatorName']),
+        contactInfo: asString(json['contactInfo']),
+        redirectUri: asString(json['redirectUri']),
+        scopes: asList(
+          json['scopes'],
+        ).map((dynamic scope) => scope.toString()).toList(),
+        authorizedAt: asString(json['authorizedAt']) ?? '',
+        lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
+        grantMode: asString(json['grantMode']) ?? 'PERMANENT',
+        expiresAt: asString(json['expiresAt']),
+      );
+
+  factory AuthorizedAppRecord.fromSSO(Map<String, dynamic> json) =>
+      AuthorizedAppRecord(
+        appId: asString(json['clientId']) ?? '',
+        appName: asString(json['clientName']) ?? '',
+        type: AuthorizationApplicationType.sso,
+        logoUrl: asString(json['logoUrl']),
+        redirectUri: asString(json['redirectUri']),
+        scopes: asList(
+          json['scopes'],
+        ).map((dynamic scope) => scope.toString()).toList(),
+        authorizedAt: asString(json['authorizedAt']) ?? '',
+        lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
+        grantMode: asString(json['grantMode']) ?? 'PERMANENT',
+        expiresAt: asString(json['expiresAt']),
+      );
+
+  factory AuthorizedAppRecord.fromOfficial(Map<String, dynamic> json) =>
+      AuthorizedAppRecord(
+        appId: asString(json['clientId']) ?? '',
+        appName: asString(json['clientName']) ?? '',
+        type: AuthorizationApplicationType.official,
+        logoUrl: asString(json['logoUrl']),
+        scopes: asList(
+          json['scopes'],
+        ).map((dynamic scope) => scope.toString()).toList(),
+        authorizedAt: asString(json['authorizedAt']) ?? '',
+        lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
+      );
+
+  final String appId;
+  final String appName;
+  final AuthorizationApplicationType type;
+  final String? logoUrl;
+  final String? creatorName;
+  final String? contactInfo;
+  final String? redirectUri;
+  final List<String> scopes;
+  final String authorizedAt;
+  final String lastAuthorizedAt;
+  final String? grantMode;
+  final String? expiresAt;
+
+  String get displayName => appName.isEmpty ? desktopL10n.unnamedApp : appName;
+  String get authorizationKey => '${type.name}:$appId';
+  String get typeLabel => switch (type) {
+    AuthorizationApplicationType.oauth => desktopL10n.oauthApps,
+    AuthorizationApplicationType.sso => desktopL10n.ssoApps,
+    AuthorizationApplicationType.official => desktopL10n.officialApps,
+  };
+  IconData get typeIcon => switch (type) {
+    AuthorizationApplicationType.oauth => Icons.public_rounded,
+    AuthorizationApplicationType.sso => Icons.apartment_rounded,
+    AuthorizationApplicationType.official => Icons.verified_user_rounded,
+  };
+}
+
 class OAuth2AuthorizedApp {
   const OAuth2AuthorizedApp({
     required this.appId,
-    required String appName,
+    required this.appName,
     required this.contactInfo,
     required this.redirectUri,
     required this.scopes,
@@ -10608,29 +10826,27 @@ class OAuth2AuthorizedApp {
     this.logoUrl,
     this.creatorName,
     this.expiresAt,
-  }) : _appName = appName;
+  });
 
-  factory OAuth2AuthorizedApp.fromJson(Map<String, dynamic> json) {
-    return OAuth2AuthorizedApp(
-      appId: asString(json['appId']) ?? '',
-      appName: asString(json['appName']) ?? '',
-      logoUrl: asString(json['logoUrl']),
-      creatorName: asString(json['creatorName']),
-      contactInfo: asString(json['contactInfo']) ?? '',
-      redirectUri: asString(json['redirectUri']) ?? '',
-      scopes: asList(
-        json['scopes'],
-      ).map((dynamic scope) => scope.toString()).toList(),
-      authorizedAt: asString(json['authorizedAt']) ?? '',
-      lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
-      grantMode: asString(json['grantMode']) ?? 'PERMANENT',
-      expiresAt: asString(json['expiresAt']),
-    );
-  }
+  factory OAuth2AuthorizedApp.fromJson(Map<String, dynamic> json) =>
+      OAuth2AuthorizedApp(
+        appId: asString(json['appId']) ?? '',
+        appName: asString(json['appName']) ?? '',
+        logoUrl: asString(json['logoUrl']),
+        creatorName: asString(json['creatorName']),
+        contactInfo: asString(json['contactInfo']) ?? '',
+        redirectUri: asString(json['redirectUri']) ?? '',
+        scopes: asList(
+          json['scopes'],
+        ).map((dynamic scope) => scope.toString()).toList(),
+        authorizedAt: asString(json['authorizedAt']) ?? '',
+        lastAuthorizedAt: asString(json['lastAuthorizedAt']) ?? '',
+        grantMode: asString(json['grantMode']) ?? 'PERMANENT',
+        expiresAt: asString(json['expiresAt']),
+      );
 
   final String appId;
-  final String _appName;
-  String get appName => _appName.isEmpty ? desktopL10n.unnamedApp : _appName;
+  final String appName;
   final String? logoUrl;
   final String? creatorName;
   final String contactInfo;

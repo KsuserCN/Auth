@@ -703,7 +703,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authorizedApps => '已授权应用';
 
   @override
-  String get viewThirdPartyAppsThatCanAccess => '查看可访问您账号信息的第三方应用及授权范围。';
+  String get ssoApps => 'SSO 应用';
+
+  @override
+  String get oauthApps => 'OAuth 应用';
+
+  @override
+  String get officialApps => '官方应用';
+
+  @override
+  String get untilRevoked => '持续有效，直到撤销授权';
+
+  @override
+  String get realNameScope => '真实姓名';
+
+  @override
+  String get genderScope => '性别';
+
+  @override
+  String get birthDateScope => '出生日期';
+
+  @override
+  String get regionScope => '所在地区';
+
+  @override
+  String get bioScope => '个人简介';
+
+  @override
+  String get viewThirdPartyAppsThatCanAccess => '查看 OAuth、SSO 和官方应用已获得的账号访问权限。';
 
   @override
   String apps(int arg0) {
@@ -720,13 +747,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noAuthorizedAppsYet => '还没有授权应用';
 
   @override
-  String get thirdPartyAppsYouAuthorizeWillAppear => '您确认授权的第三方应用会显示在这里。';
+  String get thirdPartyAppsYouAuthorizeWillAppear => '您授权的应用会按类型显示在这里。';
 
   @override
   String get aboutAuthorization => '授权说明';
 
   @override
-  String get youCanManageThirdPartyAppsOn => '您可以随时在网页端访问授权页面管理第三方应用。';
+  String get youCanManageThirdPartyAppsOn => '您可以随时在这里管理 OAuth、SSO 和官方应用授权。';
 
   @override
   String get afterYouRevokeAccessTheAppCan => '撤销授权后，该应用将无法继续使用现有授权访问您的账户信息。';
@@ -2279,7 +2306,34 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get authorizedApps => '已授权应用';
 
   @override
-  String get viewThirdPartyAppsThatCanAccess => '查看可访问您账号信息的第三方应用及授权范围。';
+  String get ssoApps => 'SSO 应用';
+
+  @override
+  String get oauthApps => 'OAuth 应用';
+
+  @override
+  String get officialApps => '官方应用';
+
+  @override
+  String get untilRevoked => '持续有效，直到撤销授权';
+
+  @override
+  String get realNameScope => '真实姓名';
+
+  @override
+  String get genderScope => '性别';
+
+  @override
+  String get birthDateScope => '出生日期';
+
+  @override
+  String get regionScope => '所在地区';
+
+  @override
+  String get bioScope => '个人简介';
+
+  @override
+  String get viewThirdPartyAppsThatCanAccess => '查看 OAuth、SSO 和官方应用已获得的账号访问权限。';
 
   @override
   String apps(int arg0) {
@@ -2296,13 +2350,13 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get noAuthorizedAppsYet => '还没有授权应用';
 
   @override
-  String get thirdPartyAppsYouAuthorizeWillAppear => '您确认授权的第三方应用会显示在这里。';
+  String get thirdPartyAppsYouAuthorizeWillAppear => '您授权的应用会按类型显示在这里。';
 
   @override
   String get aboutAuthorization => '授权说明';
 
   @override
-  String get youCanManageThirdPartyAppsOn => '您可以随时在网页端访问授权页面管理第三方应用。';
+  String get youCanManageThirdPartyAppsOn => '您可以随时在这里管理 OAuth、SSO 和官方应用授权。';
 
   @override
   String get afterYouRevokeAccessTheAppCan => '撤销授权后，该应用将无法继续使用现有授权访问您的账户信息。';
