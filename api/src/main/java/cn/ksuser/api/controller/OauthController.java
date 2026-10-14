@@ -199,6 +199,10 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
         
+        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
+        }
+
         // 删除绑定
         oauthRepo.delete(acct);
         
@@ -345,6 +349,9 @@ public class OauthController {
             ResponseEntity<ApiResponse<Object>> conflict = ensureCanLinkOauth("qq", user, pending);
             if (conflict != null) {
                 return conflict;
+            }
+            if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+                return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
             }
             linkOauthAccount("qq", user, pending);
             sensitiveLogUtil.log(request, user.getId(), "BIND_OAUTH", "qq",
@@ -724,6 +731,10 @@ public class OauthController {
                         "绑定 Passkey 后可以使用无密码登录"
                     ));
                     return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
+                }
+
+                if (!sensitiveOperationService.consumeVerification(uuid, clientIpReq)) {
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
                 }
 
                 oauthRepo.delete(acct);
@@ -1640,6 +1651,10 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
+        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
+        }
+
         oauthRepo.delete(acct);
         sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "google",
             cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
@@ -1990,6 +2005,10 @@ public class OauthController {
                     return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
                 }
 
+                if (!sensitiveOperationService.consumeVerification(uuid, clientIpReq)) {
+                    return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
+                }
+
                 oauthRepo.delete(acct);
                 sensitiveLogUtil.log(request, user.getId(), "UNBIND_OAUTH", "microsoft",
                     cn.ksuser.api.entity.UserSensitiveLog.OperationResult.SUCCESS, null, System.currentTimeMillis());
@@ -2107,6 +2126,10 @@ public class OauthController {
                 "绑定 Passkey 后可以使用无密码登录"
             ));
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
+        }
+
+        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
 
         oauthRepo.delete(acct);
@@ -2262,6 +2285,10 @@ public class OauthController {
                 "绑定 Passkey 后可以使用无密码登录"
             ));
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
+        }
+
+        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
 
         // 删除绑定

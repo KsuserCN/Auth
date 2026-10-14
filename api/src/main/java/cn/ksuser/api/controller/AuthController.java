@@ -1146,6 +1146,10 @@ public class AuthController {
 
         String userAgent = rateLimitService.getClientUserAgent(request);
         try {
+            if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
+            }
             AccountRecoveryService.AccountRecoveryPayload payload =
                 accountRecoveryService.createAuthorization(user, sponsorSession.getId(), clientIp, userAgent);
             return ResponseEntity.status(HttpStatus.OK)
@@ -2646,6 +2650,12 @@ public class AuthController {
             }
         }
 
+        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
+        }
+
         // 更新邮箱
         user.setEmail(newEmail);
         User updatedUser = userService.save(user);
@@ -2813,6 +2823,11 @@ public class AuthController {
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_139));
         }
 
+        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
+        }
+
         // 删除用户账号
         userService.deleteUser(user);
 
@@ -2900,6 +2915,12 @@ public class AuthController {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Common weak password", startTime);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_021));
+        }
+
+        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Sensitive verification not completed", startTime);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         // 更新密码
@@ -3121,6 +3142,13 @@ public class AuthController {
             sensitiveLogUtil.logAddPasskey(httpRequest, null, false, "user_not_found", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
+        }
+
+        String clientIp = rateLimitService.getClientIp(httpRequest);
+        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            sensitiveLogUtil.logAddPasskey(httpRequest, user.getId(), false, "sensitive_verification_not_completed", startTime);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
         try {

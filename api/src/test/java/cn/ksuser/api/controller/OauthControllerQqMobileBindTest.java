@@ -77,6 +77,7 @@ class OauthControllerQqMobileBindTest {
         when(rateLimit.getClientIp(any())).thenReturn("127.0.0.1");
         when(rateLimit.isIpAllowed("127.0.0.1", RateLimitService.TYPE_LOGIN)).thenReturn(true);
         when(sensitive.isVerified("current", "127.0.0.1")).thenReturn(true);
+        when(sensitive.consumeVerification("current", "127.0.0.1")).thenReturn(true);
         when(qq.getForObject(anyString(), eq(String.class)))
             .thenReturn("{\"openid\":\"qq-openid\",\"unionid\":\"qq-unionid\",\"client_id\":\"12345\"}");
         request = new MockHttpServletRequest();

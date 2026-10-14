@@ -118,6 +118,10 @@ iOS 会话安全推送使用 APNs，默认关闭。启用与迁移步骤见 [iOS
 
 - Do not commit real secrets. Use `.env.example` as a template and keep env files private.
 - WebAuthn/Passkey requires correct `origin` and `rpId` to match your frontend host.
+- Sensitive verification status and risk evaluation do not consume a one-time QR
+  approval. Its remaining lifetime is returned in status responses, and the
+  approval is consumed atomically when authorizing a protected operation. Passkey
+  registration consumes it on final submission, after the options step.
 
 OAuth registration (`POST /oauth/{provider}/register-bind`, where `provider` is
 `qq`, `github`, `microsoft`, or `google`) requires `bindToken`, `username`, `email`,
@@ -197,6 +201,8 @@ cd api
 
 - 不要提交真实密钥/密码；请以 `.env.example` 为模板，并确保 env 文件不对外公开。
 - Passkey（WebAuthn）对 `origin` 与 `rpId` 要求严格，需与前端域名/端口一致。
+- 敏感验证状态查询与风险评估不会消费一次性扫码资格，状态会返回其剩余有效期；
+  执行受保护操作前原子消费资格。Passkey 注册在最终提交时消费，获取注册选项不会消费。
 
 OAuth 注册并绑定接口 `POST /oauth/{provider}/register-bind`（`qq`、`github`、
 `microsoft`、`google`）必须提交 `bindToken`、`username`、`email`、`password` 和

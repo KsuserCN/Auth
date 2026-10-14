@@ -352,6 +352,12 @@ public class TotpController {
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
+        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+            sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
+        }
+
         boolean success = totpService.disableTotp(user.getId());
         
         if (success) {
@@ -405,6 +411,10 @@ public class TotpController {
 
         try {
             byte[] masterKey = encryptionUtil.getMasterKey();
+            if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
+            }
             String[] newCodes = totpService.regenerateRecoveryCodes(user.getId(), masterKey);
             
             return ResponseEntity.status(HttpStatus.OK)
@@ -448,6 +458,10 @@ public class TotpController {
         }
         
         byte[] masterKey = encryptionUtil.getMasterKey();
+        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
+        }
         java.util.List<String> codes = totpService.getRecoveryCodes(user.getId(), masterKey);
         
         return ResponseEntity.status(HttpStatus.OK)
