@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_downloading">正在下载新版安装包，下载后将验证完整性与签名。</string>
+    <string name="update_failed_body">请在应用中重新检查并下载更新。</string>
+    <string name="update_allow_install">请允许 Ksuser Auth 安装应用，然后返回继续。</string>
+    <string name="update_retry_install">已保留验证通过的安装包，可在应用更新中继续安装。</string>
+    <string name="update_install_unavailable">无法打开系统安装程序，请重新下载后重试。</string>
+</resources>

@@ -102,9 +102,9 @@ class SecurityRepository(
         requireCode(envelope, 200)
     }
 
-    suspend fun getPasskeyRegistrationOptions(passkeyName: String): PasskeyRegistrationOptions {
+    suspend fun getPasskeyRegistrationOptions(passkeyName: String, authenticatorType: String = "auto"): PasskeyRegistrationOptions {
         val envelope = executeEnvelope(gson) {
-            api.getPasskeyRegistrationOptions(PasskeyRegistrationOptionsRequest(passkeyName))
+            api.getPasskeyRegistrationOptions(PasskeyRegistrationOptionsRequest(passkeyName, authenticatorType))
         }
         requireCode(envelope, 200)
         return envelope.data ?: error("Passkey 注册选项为空")
@@ -216,7 +216,9 @@ class SecurityRepository(
     ): UserProfile {
         val envelope = executeEnvelope(gson) { api.changeEmail(ChangeEmailRequest(newEmail, code)) }
         requireCode(envelope, 200)
-        return envelope.data ?: error("更新邮箱失败")
+        val profile = executeEnvelope(gson) { api.getUserInfo("details") }
+        requireCode(profile, 200)
+        return profile.data ?: error("更新邮箱后读取用户信息失败")
     }
 
     suspend fun changePassword(newPassword: String) {

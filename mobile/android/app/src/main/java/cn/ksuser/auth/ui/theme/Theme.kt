@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import cn.ksuser.auth.ui.settings.LocalAppPreferences
 
 private val DarkColorScheme = darkColorScheme(
     primary = GoldPrimaryDark,
@@ -74,7 +75,11 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun KsuserAuthAndroidTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = when (LocalAppPreferences.current.theme) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    },
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
@@ -99,7 +104,11 @@ fun KsuserAuthAndroidTheme(
 @Composable
 fun rememberAppBackgroundBrush(): Brush {
     val colorScheme = MaterialTheme.colorScheme
-    val darkTheme = isSystemInDarkTheme()
+    val darkTheme = when (LocalAppPreferences.current.theme) {
+        "light" -> false
+        "dark" -> true
+        else -> isSystemInDarkTheme()
+    }
     return remember(colorScheme, darkTheme) {
         val colors = if (darkTheme) {
             listOf(

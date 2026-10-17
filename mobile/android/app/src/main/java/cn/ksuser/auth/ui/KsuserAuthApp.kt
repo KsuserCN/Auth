@@ -33,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,11 @@ import cn.ksuser.auth.ui.components.AppRadius
 import cn.ksuser.auth.ui.components.AppSpacing
 import cn.ksuser.auth.ui.theme.rememberAppBackgroundBrush
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import cn.ksuser.auth.core.settings.L10n
 
 private const val UPDATE_PROMPT_PREFS = "app_update_prompt"
 private const val IGNORED_VERSION_CODE_KEY = "ignored_version_code"
@@ -70,6 +76,23 @@ fun KsuserAuthApp(
     val pendingMobileBridgeConfirmation = state.pendingMobileBridgeConfirmation
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val serviceUnavailable by container.serviceAvailability.unavailable.collectAsState()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var inForeground by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, _ -> inForeground = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(serviceUnavailable, inForeground) {
+        if (serviceUnavailable && inForeground) {
+            while (container.serviceAvailability.unavailable.value) {
+                delay(15_000)
+                runCatching { container.authRepository.getPasswordRequirement() }
+                    .onSuccess { container.serviceAvailability.reportAvailable() }
+            }
+        }
+    }
     var startupUpdateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
     var startupUpdateError by remember { mutableStateOf<String?>(null) }
     var startupUpdateDismissedVersionCode by remember { mutableStateOf<Long?>(null) }
@@ -77,6 +100,10 @@ fun KsuserAuthApp(
         mutableStateOf(updatePromptPrefs.getLong(IGNORED_VERSION_CODE_KEY, 0L))
     }
     var downloadStartedVersionCode by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(container) {
+        container.sessionRepository.cachedProfile.collect { viewModel.synchronizeStoredSession() }
+    }
 
     LaunchedEffect(container) {
         runCatching { container.appUpdateRepository.checkForUpdate() }
@@ -91,7 +118,8 @@ fun KsuserAuthApp(
 
     DisposableEffect(container) {
         onRegisterActivityResultHandler { requestCode, resultCode, data ->
-            container.qqLoginManager.handleActivityResult(requestCode, resultCode, data)
+            container.securityKeyManager.handleActivityResult(requestCode, resultCode, data) ||
+                container.qqLoginManager.handleActivityResult(requestCode, resultCode, data)
         }
         onRegisterNewIntentHandler { intent ->
             container.qqLoginManager.handleNewIntent(intent)
@@ -102,13 +130,13 @@ fun KsuserAuthApp(
         }
     }
 
-    LaunchedEffect(state.message, state.error) {
+    LaunchedEffect(state.message, state.localizedError, L10n.language) {
         state.message?.let {
-            snackbarHostState.showSnackbar(it)
+            snackbarHostState.showSnackbar(L10n.text(it))
             viewModel.clearTransientMessages()
         }
-        state.error?.let {
-            snackbarHostState.showSnackbar(it)
+        state.localizedError?.let {
+            snackbarHostState.showSnackbar(L10n.text(it))
             viewModel.clearTransientMessages()
         }
     }
@@ -144,6 +172,7 @@ fun KsuserAuthApp(
                 isBusy = state.isBusy,
                 onConfirm = { viewModel.confirmQrAction() },
                 onCancel = { viewModel.cancelQrAction() },
+                onAuthorizationOptionsChanged = viewModel::updateAuthorizationOptions,
             )
             state.pendingMfa != null || !state.isAuthenticated -> AuthFlowScreen(
                 state = state,
@@ -152,13 +181,13 @@ fun KsuserAuthApp(
                 snackbarHostState = snackbarHostState,
             )
 
-            else -> MainShell(
+            else -> key(state.currentUser?.uuid) { MainShell(
                 container = container,
                 state = state,
                 viewModel = viewModel,
                 snackbarHostState = snackbarHostState,
                 onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
-            )
+            ) }
         }
     }
 
@@ -175,11 +204,13 @@ fun KsuserAuthApp(
             updateInfo = visibleStartupUpdate,
             downloadStarted = downloadStartedVersionCode == visibleStartupUpdate.latestVersionCode,
             onDownload = {
-                container.appUpdateRepository.enqueueDownload(visibleStartupUpdate)
-                downloadStartedVersionCode = visibleStartupUpdate.latestVersionCode
-                scope.launch {
-                    snackbarHostState.showSnackbar("新版安装包已开始下载，请在通知栏或下载目录中打开安装")
-                }
+                runCatching { container.appUpdateRepository.enqueueDownload(visibleStartupUpdate) }
+                    .onSuccess {
+                        downloadStartedVersionCode = visibleStartupUpdate.latestVersionCode
+                        scope.launch { snackbarHostState.showSnackbar(L10n.text("下载完成后返回应用继续安装")) }
+                    }.onFailure { error -> scope.launch {
+                        snackbarHostState.showSnackbar(L10n.text(error.message ?: "下载失败，请重试"))
+                    } }
             },
             onDismiss = {
                 if (!visibleStartupUpdate.forceUpdate) {
@@ -196,6 +227,21 @@ fun KsuserAuthApp(
             },
             onExitApp = onExitApp,
         )
+    }
+
+    if (serviceUnavailable) {
+        Dialog(onDismissRequest = {}) {
+            Surface(shape = RoundedCornerShape(24.dp)) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(L10n.text("服务暂时不可用"), style = MaterialTheme.typography.titleLarge)
+                    Text(L10n.text("请检查网络连接。连接恢复后可继续使用，登录状态会保留。"))
+                    Button(onClick = { scope.launch {
+                        runCatching { container.authRepository.getPasswordRequirement() }
+                            .onSuccess { container.serviceAvailability.reportAvailable(); viewModel.bootstrap() }
+                    } }) { Text(L10n.text("重试")) }
+                }
+            }
+        }
     }
 
     LaunchedEffect(startupUpdateError) {
@@ -252,7 +298,7 @@ private fun StartupUpdateDialog(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = "新",
+                            text = L10n.text("新"),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold,
@@ -260,12 +306,12 @@ private fun StartupUpdateDialog(
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = if (updateInfo.forceUpdate) "需要更新" else "发现新版本",
+                            text = L10n.text(if (updateInfo.forceUpdate) "需要更新" else "发现新版本"),
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
-                            text = "版本 ${updateInfo.latestVersionName} (${updateInfo.latestVersionCode})",
+                            text = L10n.format("版本 {0} ({1})", updateInfo.latestVersionName, updateInfo.latestVersionCode),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -283,19 +329,19 @@ private fun StartupUpdateDialog(
                     ) {
                         Text(
                             text = updateInfo.releaseNotes?.takeIf { it.isNotBlank() }
-                                ?: "新版已准备好，建议尽快更新以获得更好的使用体验。",
+                                ?: L10n.text("新版已准备好，建议尽快更新以获得更好的使用体验。"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         if (downloadStarted) {
                             Text(
-                                text = "下载已开始，请在通知栏或下载目录中打开安装包。",
+                                text = L10n.text("下载完成后返回应用继续安装"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         } else if (updateInfo.forceUpdate) {
                             Text(
-                                text = "当前版本已不可继续使用，请更新后再进入应用。",
+                                text = L10n.text("当前版本已不可继续使用，请更新后再进入应用。"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -310,7 +356,7 @@ private fun StartupUpdateDialog(
                         .height(48.dp),
                     shape = RoundedCornerShape(AppRadius.R16),
                 ) {
-                    Text(if (downloadStarted) "重新下载最新版" else "下载最新版")
+                    Text(L10n.text(if (downloadStarted) "重新下载最新版" else "下载最新版"))
                 }
 
                 if (updateInfo.forceUpdate) {
@@ -321,7 +367,7 @@ private fun StartupUpdateDialog(
                             .height(46.dp),
                         shape = RoundedCornerShape(AppRadius.R16),
                     ) {
-                        Text("关闭应用")
+                        Text(L10n.text("关闭应用"))
                     }
                 } else {
                     Row(
@@ -330,11 +376,11 @@ private fun StartupUpdateDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         TextButton(onClick = onDismiss) {
-                            Text("稍后")
+                            Text(L10n.text("稍后"))
                         }
                         Spacer(modifier = Modifier.width(AppSpacing.S8))
                         TextButton(onClick = onIgnoreVersion) {
-                            Text("不再提示")
+                            Text(L10n.text("不再提示"))
                         }
                     }
                 }
@@ -358,7 +404,7 @@ private fun LoadingScreen() {
         ) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(AppSpacing.S16))
-            Text("正在初始化认证环境", style = MaterialTheme.typography.titleMedium)
+            Text(L10n.text("正在初始化认证环境"), style = MaterialTheme.typography.titleMedium)
         }
     }
 }

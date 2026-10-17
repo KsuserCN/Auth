@@ -27,4 +27,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Ksuser Auth Android"
 include(":app")
- 
+

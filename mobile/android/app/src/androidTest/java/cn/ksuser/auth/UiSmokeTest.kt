@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import cn.ksuser.auth.data.model.UserProfile
 import cn.ksuser.auth.data.model.UserSettings
 import cn.ksuser.auth.ui.HomeScreen
@@ -11,9 +12,16 @@ import cn.ksuser.auth.ui.OverviewCard
 import cn.ksuser.auth.ui.theme.KsuserAuthAndroidTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
+import org.junit.Before
+import org.junit.After
+import cn.ksuser.auth.core.settings.L10n
 import org.junit.Test
 
 class UiSmokeTest {
+
+    private var previousLanguage = "zh-Hans"
+    @Before fun useChinese() { previousLanguage = L10n.language; L10n.language = "zh-Hans" }
+    @After fun restoreLanguage() { L10n.language = previousLanguage }
 
     @get:Rule
     val composeRule = createComposeRule()
@@ -41,8 +49,9 @@ class UiSmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("Passkey 联调提示").assertIsDisplayed()
-        composeRule.onNodeWithText("刷新账号信息").assertIsDisplayed()
+        composeRule.onNodeWithText("tester@example.com").assertIsDisplayed()
+        composeRule.onNodeWithText("刷新状态").assertIsDisplayed()
+        composeRule.onNodeWithText("前往安全设置").performScrollTo().assertIsDisplayed()
     }
 
     @Test

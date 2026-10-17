@@ -49,7 +49,7 @@ data class UserSettings(
 data class UserProfile(
     val uuid: String,
     val username: String,
-    val email: String,
+    val email: String? = null,
     val avatarUrl: String? = null,
     val realName: String? = null,
     val gender: String? = null,
@@ -59,6 +59,7 @@ data class UserProfile(
     val verificationType: String? = null,
     val updatedAt: String? = null,
     val settings: UserSettings? = null,
+    val hasPassword: Boolean? = null,
 )
 
 data class TokenPayload(
@@ -260,7 +261,7 @@ data class SensitiveLogItem(
     val actionTaken: String? = null,
     val triggeredMultiErrorLock: Boolean = false,
     val triggeredRateLimitLock: Boolean = false,
-    val durationMs: Int = 0,
+    val durationMs: Int? = null,
     val createdAt: String,
 ) {
     val displayFailureReason: String? get() = SecurityLogPresentation.reason(failureReason)

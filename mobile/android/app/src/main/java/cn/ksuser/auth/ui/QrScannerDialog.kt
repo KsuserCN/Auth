@@ -1,5 +1,7 @@
 package cn.ksuser.auth.ui
 
+import cn.ksuser.auth.core.settings.L10n
+
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -63,6 +65,7 @@ import cn.ksuser.auth.ui.theme.BrandButtonGradientStart
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
+@androidx.annotation.OptIn(androidx.camera.core.ExperimentalGetImage::class)
 @Composable
 internal fun QrScannerDialog(
     onDismiss: () -> Unit,
@@ -183,13 +186,13 @@ internal fun QrScannerDialog(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = "扫描网页二维码",
+                    text = L10n.text("扫描网页二维码"),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "请将二维码对准屏幕中央",
+                    text = L10n.text("请将二维码对准屏幕中央"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
@@ -215,7 +218,7 @@ internal fun QrScannerDialog(
             ) {
                 Icon(
                     imageVector = Icons.Outlined.PhotoLibrary,
-                    contentDescription = "从相册识别二维码",
+                    contentDescription = L10n.text("从相册识别二维码"),
                 )
             }
         }
@@ -224,10 +227,10 @@ internal fun QrScannerDialog(
     if (showGalleryReason) {
         AlertDialog(
             onDismissRequest = { showGalleryReason = false },
-            title = { Text("需要选择图片") },
+            title = { Text(L10n.text("需要选择图片")) },
             text = {
                 Text(
-                    "从相册识别二维码时，Ksuser 会打开系统图片选择器，并只读取你主动选择的那一张图片，用来解析其中的二维码内容。应用不会浏览、扫描或上传你的整个图库。",
+                    L10n.text("从相册识别二维码时，Ksuser 会打开系统图片选择器，并只读取你主动选择的那一张图片，用来解析其中的二维码内容。应用不会浏览、扫描或上传你的整个图库。"),
                 )
             },
             confirmButton = {
@@ -256,7 +259,7 @@ private fun detectQrFromImage(
 ) {
     val inputImage = runCatching { InputImage.fromFilePath(context, imageUri) }
         .getOrElse {
-            onMessage("读取图片失败")
+            onMessage(L10n.text("读取图片失败"))
             return
         }
 
@@ -266,11 +269,11 @@ private fun detectQrFromImage(
             if (!rawValue.isNullOrBlank()) {
                 onDetected(rawValue)
             } else {
-                onMessage("未在图片中识别到二维码")
+                onMessage(L10n.text("未在图片中识别到二维码"))
             }
         }
         .addOnFailureListener {
-            onMessage("图片识别失败")
+            onMessage(L10n.text("图片识别失败"))
         }
 }
 

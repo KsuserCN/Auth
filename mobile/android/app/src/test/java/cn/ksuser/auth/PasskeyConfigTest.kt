@@ -3,12 +3,28 @@ package cn.ksuser.auth
 import cn.ksuser.auth.core.env.KsuserEnvironment
 import cn.ksuser.auth.core.passkey.passkeyAssetLinksUrl
 import cn.ksuser.auth.core.passkey.passkeyAvailability
+import cn.ksuser.auth.core.passkey.passkeyDeviceAvailability
 import cn.ksuser.auth.core.passkey.requirePasskeyRpMatch
 import cn.ksuser.auth.data.model.PasskeyAvailability
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class PasskeyConfigTest {
+    @Test fun android24To27CannotUsePlatformPasskeys() {
+        for (sdk in 24..27) assertEquals(PasskeyAvailability.UnsupportedDevice, passkeyDeviceAvailability(sdk, true))
+    }
+
+    @Test fun preAndroid14NeedsAvailableGoogleProvider() {
+        for (sdk in 28..33) {
+            assertEquals(PasskeyAvailability.MissingProvider, passkeyDeviceAvailability(sdk, false))
+            assertEquals(PasskeyAvailability.Available, passkeyDeviceAvailability(sdk, true))
+        }
+    }
+
+    @Test fun android14CanUseSystemCredentialProvidersWithoutGoogleServices() {
+        assertEquals(PasskeyAvailability.Available, passkeyDeviceAvailability(34, false))
+        assertEquals(PasskeyAvailability.Available, passkeyDeviceAvailability(37, false))
+    }
     @Test
     fun httpsOriginMatchingRpId_isAvailable() {
         val environment = testEnvironment(

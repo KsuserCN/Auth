@@ -29,6 +29,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
+import cn.ksuser.auth.core.settings.L10n
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -56,6 +58,8 @@ internal fun MobileBridgeConfirmScreen(
     onContinueToLogin: () -> Unit,
 ) {
     val backgroundBrush = rememberAppBackgroundBrush()
+    val remaining = requestSecondsRemaining(pending.expiresAtMillis)
+    BackHandler { if (!isBusy) onCancel() }
 
     Box(
         modifier = Modifier
@@ -74,7 +78,7 @@ internal fun MobileBridgeConfirmScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onCancel) {
-                    Icon(Icons.Outlined.Close, contentDescription = "关闭")
+                    Icon(Icons.Outlined.Close, contentDescription = L10n.text("关闭"))
                 }
 
                 Column(
@@ -82,12 +86,12 @@ internal fun MobileBridgeConfirmScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "网页登录确认",
+                        text = L10n.text("网页登录确认"),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
                     Text(
-                        text = if (pending.requiresLogin) "需要先登录 App" else "确认在浏览器中登录",
+                        text = if (pending.requiresLogin) L10n.text("需要先登录 App") else L10n.text("确认在浏览器中登录"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -147,9 +151,9 @@ internal fun MobileBridgeConfirmScreen(
                                 )
                                 Text(
                                     text = if (pending.requiresLogin) {
-                                        "需要先在当前 App 内登录，再重新从浏览器发起一次登录请求。"
+                                        L10n.text("请先在当前 App 内登录，完成后将继续原网页登录请求。")
                                     } else {
-                                        "浏览器已发起网页登录请求，确认后网页会自动建立自己的新会话。"
+                                        L10n.text("浏览器已发起网页登录请求，确认后网页会自动建立自己的新会话。")
                                     },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -158,7 +162,7 @@ internal fun MobileBridgeConfirmScreen(
                         }
 
                         SectionCard(modifier = Modifier.fillMaxWidth()) {
-                            Text("目标站点", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                            Text(L10n.text("目标站点"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -170,7 +174,7 @@ internal fun MobileBridgeConfirmScreen(
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
                                 Text(
-                                    text = pending.returnOrigin ?: "当前 Ksuser 网页",
+                                    text = pending.returnOrigin ?: L10n.text("当前 Ksuser 网页"),
                                     style = MaterialTheme.typography.bodyLarge,
                                 )
                             }
@@ -178,10 +182,10 @@ internal fun MobileBridgeConfirmScreen(
 
                         if (!pending.requiresLogin && currentUser != null) {
                             SectionCard(modifier = Modifier.fillMaxWidth()) {
-                                Text("当前 App 账号", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Text(L10n.text("当前 App 账号"), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                                 Text(currentUser.username, style = MaterialTheme.typography.bodyLarge)
                                 Text(
-                                    currentUser.email,
+                                    currentUser.email ?: L10n.text("未绑定邮箱"),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -189,19 +193,20 @@ internal fun MobileBridgeConfirmScreen(
                         }
                     }
 
+                    Text(if (remaining > 0) L10n.text("有效期") + ": ${remaining}s" else L10n.text("请求已过期，请重新发起"))
                     Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                         if (pending.requiresLogin) {
                             GradientPrimaryButton(
-                                text = "去登录",
+                                text = L10n.text("去登录"),
                                 onClick = onContinueToLogin,
-                                enabled = !isBusy,
+                                enabled = !isBusy && remaining > 0,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         } else {
                             GradientPrimaryButton(
-                                text = if (isBusy) "确认中..." else "确认网页登录",
+                                text = if (isBusy) L10n.text("确认中...") else L10n.text("确认网页登录"),
                                 onClick = onConfirm,
-                                enabled = !isBusy,
+                                enabled = !isBusy && remaining > 0,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -212,7 +217,7 @@ internal fun MobileBridgeConfirmScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(AppRadius.R12),
                         ) {
-                            Text(if (pending.requiresLogin) "关闭" else "取消请求")
+                            Text(if (pending.requiresLogin) L10n.text("关闭") else L10n.text("取消请求"))
                         }
                     }
                 }
@@ -228,13 +233,13 @@ private fun MobileBridgeHero(
 ) {
     val icon = if (requiresLogin) Icons.Outlined.PhoneAndroid else Icons.Outlined.Language
     val accent = MaterialTheme.colorScheme.primary
-    val title = if (requiresLogin) "需要先登录 App" else "确认网页登录请求"
+    val title = if (requiresLogin) L10n.text("需要先登录 App") else L10n.text("确认网页登录请求")
     val subtitle = if (requiresLogin) {
-        "请先在当前 App 完成账号登录，然后回到浏览器重新发起请求。"
+        L10n.text("请先在当前 App 完成账号登录，完成后将继续原请求。")
     } else {
-        "确认后网页端会创建新会话，不会影响当前 App 内的登录状态。"
+        L10n.text("确认后网页端会创建新会话，不会影响当前 App 内的登录状态。")
     }
-    val operationLabel = if (requiresLogin) "登录后继续" else "网页登录"
+    val operationLabel = if (requiresLogin) L10n.text("登录后继续") else L10n.text("网页登录")
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -293,7 +298,7 @@ private fun MobileBridgeHero(
                     textAlign = TextAlign.Center,
                 )
                 Text(
-                    text = returnOrigin ?: "来源于当前 Ksuser 网页",
+                    text = returnOrigin ?: L10n.text("来源于当前 Ksuser 网页"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

@@ -7,6 +7,7 @@ import cn.ksuser.auth.core.network.KsuserApiService
 import cn.ksuser.auth.core.network.executeEnvelope
 import cn.ksuser.auth.core.network.requireCode
 import cn.ksuser.auth.core.session.SessionRepository
+import cn.ksuser.auth.core.session.AuthenticationSession
 import cn.ksuser.auth.data.model.AuthResult
 import cn.ksuser.auth.data.model.AuthSource
 import cn.ksuser.auth.data.model.LoginWithCodeRequest
@@ -31,12 +32,29 @@ import cn.ksuser.auth.data.model.UserProfile
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class AuthRepository(
     private val api: KsuserApiService,
     private val sessionRepository: SessionRepository,
     private val gson: Gson,
 ) {
+    private val stageLock = Any()
+    @Volatile private var authenticationSession: AuthenticationSession? = null
+    private fun newStage(): AuthenticationSession = synchronized(stageLock) {
+        sessionRepository.stage().also { authenticationSession = it }
+    }
+    private fun currentStage(): AuthenticationSession = authenticationSession ?: newStage()
+    private fun requireStage(): AuthenticationSession = authenticationSession ?: error("Authentication was cancelled")
+    fun cancelAuthentication() = synchronized(stageLock) { authenticationSession = null }
+    private fun storeToken(stage: AuthenticationSession, token: String): String = synchronized(stageLock) {
+        check(authenticationSession === stage) { "Authentication was cancelled" }
+        require(token.isNotBlank()) { "Missing access token" }
+        stage.storage.setAccessToken(token)
+        token
+    }
+
     suspend fun getPasswordRequirement(): PasswordRequirement {
         val envelope = executeEnvelope(gson) { api.getPasswordRequirement() }
         requireCode(envelope, 200)
@@ -100,8 +118,9 @@ class AuthRepository(
     }
 
     suspend fun exchangeSessionTransferForMobile(transferCode: String): String {
+        val stage = newStage()
         val envelope = executeEnvelope(gson) {
-            api.exchangeSessionTransfer(
+            stage.api.exchangeSessionTransfer(
                 SessionTransferExchangeRequest(
                     transferCode = transferCode.trim(),
                     target = "mobile",
@@ -110,18 +129,20 @@ class AuthRepository(
         }
         requireCode(envelope, 200)
         return envelope.data?.accessToken
-            ?.also(sessionRepository::persistAccessToken)
+            ?.also { storeToken(stage, it) }
             ?: error("跨端登录 AccessToken 缺失")
     }
 
     suspend fun passwordLogin(email: String, password: String): AuthResult {
-        val envelope = executeEnvelope(gson) { api.login(PasswordLoginRequest(email, password)) }
-        return parseAuthEnvelope(envelope, AuthSource.PASSWORD)
+        val stage = newStage()
+        val envelope = executeEnvelope(gson) { stage.api.login(PasswordLoginRequest(email, password)) }
+        return parseAuthEnvelope(envelope, AuthSource.PASSWORD, stage)
     }
 
     suspend fun loginWithCode(email: String, code: String): AuthResult {
-        val envelope = executeEnvelope(gson) { api.loginWithCode(LoginWithCodeRequest(email, code)) }
-        return parseAuthEnvelope(envelope, AuthSource.EMAIL_CODE)
+        val stage = newStage()
+        val envelope = executeEnvelope(gson) { stage.api.loginWithCode(LoginWithCodeRequest(email, code)) }
+        return parseAuthEnvelope(envelope, AuthSource.EMAIL_CODE, stage)
     }
 
     suspend fun loginWithQqMobile(
@@ -131,8 +152,9 @@ class AuthRepository(
         unionid: String,
         expiresIn: String?,
     ): AuthResult {
+        val stage = newStage()
         val envelope = executeEnvelope(gson) {
-            api.loginWithQqMobile(
+            stage.api.loginWithQqMobile(
                 QqMobileLoginRequest(
                     appId = appId,
                     accessToken = accessToken,
@@ -142,7 +164,7 @@ class AuthRepository(
                 ),
             )
         }
-        return parseAuthEnvelope(envelope, AuthSource.QQ)
+        return parseAuthEnvelope(envelope, AuthSource.QQ, stage)
     }
 
     suspend fun bindPendingQqAccount(bindToken: String): OAuthBindCallbackResponse {
@@ -165,35 +187,69 @@ class AuthRepository(
         password: String,
         code: String,
     ): RegisterResponse {
-        val envelope = executeEnvelope(gson) { api.register(RegisterRequest(username, email, password, code)) }
+        val stage = newStage()
+        val envelope = executeEnvelope(gson) { stage.api.register(RegisterRequest(username, email, password, code)) }
         requireCode(envelope, 200)
         val response = envelope.data ?: error("注册响应为空")
-        sessionRepository.persistAccessToken(response.accessToken)
+        storeToken(stage, response.accessToken)
         return response
     }
 
     suspend fun getCurrentUser(type: String = "details"): UserProfile {
+        val expectedGeneration = sessionRepository.currentGeneration()
         val envelope = executeEnvelope(gson) { api.getUserInfo(type) }
         requireCode(envelope, 200)
-        return envelope.data ?: error("用户信息为空")
+        val user = envelope.data ?: error("用户信息为空")
+        check(sessionRepository.cacheUser(user, expectedGeneration)) { "The account changed while loading" }
+        return user
+    }
+
+    suspend fun completeAuthentication(): UserProfile {
+        val stage = requireStage()
+        try {
+            check(!stage.storage.getAccessToken().isNullOrBlank()) { "Authentication has not completed" }
+            val envelope = executeEnvelope(gson) { stage.api.getUserInfo("details") }
+            requireCode(envelope, 200)
+            val user = envelope.data ?: error("用户信息为空")
+            synchronized(stageLock) {
+                check(authenticationSession === stage) { "Authentication was cancelled" }
+                sessionRepository.commit(stage, user)
+                authenticationSession = null
+            }
+            return user
+        } catch (error: Exception) {
+            synchronized(stageLock) { if (authenticationSession === stage) authenticationSession = null }
+            throw error
+        }
     }
 
     suspend fun logout() {
-        try {
-            val envelope = executeEnvelope(gson) { api.logout() }
-            requireCode(envelope, 200)
-        } finally {
-            sessionRepository.clearSession()
-        }
+        cancelAuthentication()
+        val previous = sessionRepository.stage(copyCurrent = true)
+        // Revoke using the old installation snapshot; its response cannot mutate a later login.
+        sessionRepository.clearSessionIfGeneration(previous.generation)
+        val envelope = executeEnvelope(gson) { previous.api.logout() }
+        requireCode(envelope, 200)
     }
 
     suspend fun logoutAll() {
-        try {
-            val envelope = executeEnvelope(gson) { api.logoutAll() }
-            requireCode(envelope, 200)
-        } finally {
-            sessionRepository.clearSession()
+        cancelAuthentication()
+        val previous = sessionRepository.stage(copyCurrent = true)
+        val envelope = try {
+            executeEnvelope(gson) { previous.api.logoutAll() }
+        } catch (error: ApiException) {
+            if (error.statusCode != 401) throw error
+            check(sessionRepository.currentGeneration() == previous.generation) { "The account changed while signing out" }
+            // Share the normal refresh lock and retain rotated credentials if revocation fails.
+            withContext(Dispatchers.IO) {
+                sessionRepository.refreshAccessTokenBlocking(previous.storage.getAccessToken(), previous.generation)
+            } ?: throw error
+            val refreshed = sessionRepository.stage(copyCurrent = true)
+            check(refreshed.generation == previous.generation) { "The account changed while signing out" }
+            executeEnvelope(gson) { refreshed.api.logoutAll() }
         }
+        requireCode(envelope, 200)
+        check(sessionRepository.clearSessionIfGeneration(previous.generation)) { "The account changed while signing out" }
     }
 
     suspend fun verifyTotpMfa(
@@ -201,25 +257,30 @@ class AuthRepository(
         code: String? = null,
         recoveryCode: String? = null,
     ): String {
+        val stage = requireStage()
         val envelope = executeEnvelope(gson) {
-            api.verifyTotpMfa(TotpMfaVerifyRequest(challengeId, code, recoveryCode))
+            stage.api.verifyTotpMfa(TotpMfaVerifyRequest(challengeId, code, recoveryCode))
         }
         requireCode(envelope, 200)
         return envelope.data?.accessToken
-            ?.also(sessionRepository::persistAccessToken)
+            ?.also { storeToken(stage, it) }
             ?: error("MFA AccessToken 缺失")
     }
 
-    suspend fun getPasskeyAuthenticationOptions() = executeEnvelope(gson) {
-        api.getPasskeyAuthenticationOptions()
-    }.also { requireCode(it, 200) }.data ?: error("缺少 Passkey 认证选项")
+    suspend fun getPasskeyAuthenticationOptions(): cn.ksuser.auth.data.model.PasskeyAuthenticationOptions {
+        val stage = currentStage()
+        val envelope = executeEnvelope(gson) { stage.api.getPasskeyAuthenticationOptions() }
+        requireCode(envelope, 200)
+        return envelope.data ?: error("缺少 Passkey 认证选项")
+    }
 
     suspend fun verifyPasskeyLogin(
         challengeId: String,
         payload: PasskeyAuthenticationPayload,
     ): AuthResult {
+        val stage = requireStage()
         val envelope = executeEnvelope(gson) {
-            api.verifyPasskeyAuthentication(
+            stage.api.verifyPasskeyAuthentication(
                 challengeId = challengeId,
                 request = PasskeyAuthenticationVerifyRequest(
                     credentialRawId = payload.credentialRawId,
@@ -229,7 +290,7 @@ class AuthRepository(
                 ),
             )
         }
-        return parseAuthEnvelope(envelope, AuthSource.PASSKEY)
+        return parseAuthEnvelope(envelope, AuthSource.PASSKEY, stage)
     }
 
     suspend fun verifyPasskeyMfa(
@@ -237,8 +298,9 @@ class AuthRepository(
         passkeyChallengeId: String,
         payload: PasskeyAuthenticationPayload,
     ): String {
+        val stage = requireStage()
         val envelope = executeEnvelope(gson) {
-            api.verifyPasskeyMfa(
+            stage.api.verifyPasskeyMfa(
                 cn.ksuser.auth.data.model.PasskeyMfaVerifyRequest(
                     mfaChallengeId = mfaChallengeId,
                     passkeyChallengeId = passkeyChallengeId,
@@ -251,13 +313,14 @@ class AuthRepository(
         }
         requireCode(envelope, 200)
         return envelope.data?.accessToken
-            ?.also(sessionRepository::persistAccessToken)
+            ?.also { storeToken(stage, it) }
             ?: error("Passkey MFA AccessToken 缺失")
     }
 
     private fun parseAuthEnvelope(
         envelope: ApiEnvelope<JsonObject>,
         source: AuthSource,
+        stage: AuthenticationSession,
     ): AuthResult {
         val code = envelope.code ?: invalidAuthResponse()
         val payload = envelope.data ?: JsonObject()
@@ -276,7 +339,7 @@ class AuthRepository(
         }
         if (code == 200 && payload.has("accessToken")) {
             val token = payload.get("accessToken").asString
-            sessionRepository.persistAccessToken(token)
+            storeToken(stage, token)
             return AuthResult.Success(token)
         }
         if (code == 202 && payload.get("needBind")?.asBoolean == true) {

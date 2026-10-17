@@ -1,6 +1,7 @@
 package cn.ksuser.auth.core.network
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
@@ -56,20 +57,21 @@ data class SerializableCookie(
     }
 }
 
-class CookieStore(
-    context: Context,
+class CookieStore private constructor(
     private val gson: Gson,
+    private val prefs: SharedPreferences?,
 ) {
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        COOKIE_PREFS_NAME,
-        MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    constructor(context: Context, gson: Gson, preferences: SharedPreferences? = null) : this(gson,
+        preferences ?: EncryptedSharedPreferences.create(context, COOKIE_PREFS_NAME,
+            MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM))
+    companion object { fun inMemory(gson: Gson) = CookieStore(gson, null) }
+    private var memoryCookies: List<SerializableCookie> = emptyList()
     private val lock = Any()
+
+    fun snapshot(): List<SerializableCookie> = synchronized(lock) { readCookies().filterNot(::isExpired) }
+    fun replaceAll(cookies: List<SerializableCookie>) = synchronized(lock) { writeCookies(cookies.filterNot(::isExpired)) }
 
     fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         synchronized(lock) {
@@ -122,18 +124,25 @@ class CookieStore(
 
     fun clear() {
         synchronized(lock) {
-            prefs.edit().remove(COOKIE_PREFS_KEY).apply()
+            memoryCookies = emptyList()
+            prefs?.edit()?.remove(COOKIE_PREFS_KEY)?.commit()
         }
     }
 
     private fun readCookies(): List<SerializableCookie> {
-        val raw = prefs.getString(COOKIE_PREFS_KEY, null) ?: return emptyList()
+        val storage = prefs ?: return memoryCookies
+        val raw = runCatching { storage.getString(COOKIE_PREFS_KEY, null) }.getOrElse {
+            // Recover a damaged encrypted value together with its paired token/profile.
+            storage.edit().remove(COOKIE_PREFS_KEY).remove("access_token").remove("profile").commit()
+            null
+        } ?: return emptyList()
         val type = object : TypeToken<List<SerializableCookie>>() {}.type
-        return gson.fromJson(raw, type) ?: emptyList()
+        return runCatching { gson.fromJson<List<SerializableCookie>>(raw, type) }.getOrNull() ?: emptyList()
     }
 
     private fun writeCookies(cookies: List<SerializableCookie>) {
-        prefs.edit().putString(COOKIE_PREFS_KEY, gson.toJson(cookies)).apply()
+        memoryCookies = cookies.toList()
+        prefs?.edit()?.putString(COOKIE_PREFS_KEY, gson.toJson(cookies))?.commit()
     }
 
     private fun isExpired(cookie: SerializableCookie): Boolean = cookie.expiresAt <= System.currentTimeMillis()

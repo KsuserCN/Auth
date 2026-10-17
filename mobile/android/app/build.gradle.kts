@@ -111,17 +111,28 @@ android {
         applicationId = "cn.ksuser.auth"
         minSdk = 24
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.0.0.12"
+        versionCode = 13
+        versionName = "1.0.0.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val releaseSigning = listOf("ANDROID_KEYSTORE_PATH", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD")
+        .map { System.getenv(it).orEmpty() }
+    if (releaseSigning.all { it.isNotBlank() }) signingConfigs.create("production") {
+        storeFile = file(releaseSigning[0])
+        storePassword = releaseSigning[1]
+        keyAlias = releaseSigning[2]
+        keyPassword = releaseSigning[3]
+        enableV1Signing = true
+        enableV2Signing = true
+    }
     buildTypes {
         debug {
             configureEnvironment(debugEnv, "development")
         }
         release {
+            if (releaseSigning.all { it.isNotBlank() }) signingConfig = signingConfigs.getByName("production")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -131,6 +142,7 @@ android {
         }
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -147,6 +159,10 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("com.google.zxing:core:3.5.4")
+    implementation("com.google.android.gms:play-services-fido:21.2.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     implementation(files("libs/open_sdk_3.5.19_r9483ffc7_lite.jar"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

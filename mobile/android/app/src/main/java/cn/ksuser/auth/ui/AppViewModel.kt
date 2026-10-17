@@ -5,7 +5,14 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.core.network.ApiException
+import cn.ksuser.auth.core.env.EnvironmentProvider
+import cn.ksuser.auth.data.authorization.AuthenticationFlowRunner
+import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
+import cn.ksuser.auth.data.authorization.AuthorizationQrPreview
+import cn.ksuser.auth.data.authorization.MobileAuthorizationContext
+import cn.ksuser.auth.data.authorization.MobileAuthorizationLinks
 import cn.ksuser.auth.data.AppContainer
 import cn.ksuser.auth.data.model.AuthResult
 import cn.ksuser.auth.data.model.AuthSource
@@ -16,6 +23,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
 data class AppUiState(
@@ -31,7 +41,10 @@ data class AppUiState(
     val pendingQrConfirmation: PendingQrConfirmation? = null,
     val message: String? = null,
     val error: String? = null,
-)
+    val errorDescriptor: ApiException? = null,
+) {
+    val localizedError: String? get() = if (error == null) null else errorDescriptor?.message ?: L10n.text(error)
+}
 
 data class PendingOAuthBind(
     val provider: String,
@@ -40,18 +53,12 @@ data class PendingOAuthBind(
     val message: String? = null,
 )
 
-private data class RegisterCompletion(
-    val user: UserProfile,
-    val pendingOAuthBind: PendingOAuthBind?,
-    val message: String,
-    val error: String?,
-)
-
 data class PendingMobileBridgeConfirmation(
     val challengeId: String,
     val returnUrl: String? = null,
     val returnOrigin: String? = null,
     val requiresLogin: Boolean = false,
+    val expiresAtMillis: Long = Long.MAX_VALUE,
 )
 
 data class PendingQrConfirmation(
@@ -59,6 +66,12 @@ data class PendingQrConfirmation(
     val code: String,
     val preview: QrScanPreview? = null,
     val operationHint: String? = null,
+    val authorization: MobileAuthorizationContext? = null,
+    val authorizationPreview: AuthorizationQrPreview? = null,
+    val expiresAtMillis: Long = Long.MAX_VALUE,
+    val grantMode: AuthorizationGrantMode = AuthorizationGrantMode.PERSISTENT,
+    val grantTtlSeconds: Int = 3600,
+    val loginWeb: Boolean = false,
 )
 
 enum class QrConfirmationType {
@@ -66,6 +79,9 @@ enum class QrConfirmationType {
     APPROVE_MFA,
     APPROVE_SENSITIVE,
     APPROVE_RECOVERY,
+    APPROVE_APPLICATION,
+    APPROVE_OFFICIAL,
+    APPROVE_CONSOLE_LOGIN,
     LOGIN_THIS_PHONE,
     SWITCH_AND_LOGIN_THIS_PHONE,
 }
@@ -75,56 +91,47 @@ class AppViewModel(
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AppUiState())
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
+    private val webOrigin = EnvironmentProvider.current.passkeyOriginHint
+    private var pendingLoginRequest: MobileAuthorizationLinks.Request? = null
+    private var decisionInFlight = false
+    private var requestGeneration = 0L
+    private val authenticationFlow = AuthenticationFlowRunner(viewModelScope, container.authRepository::cancelAuthentication)
 
     init {
         bootstrap()
     }
 
     fun bootstrap() {
+        if (authenticationFlow.isRunning || decisionInFlight || _uiState.value.isBusy) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isBootstrapping = true, error = null) }
+            _uiState.update { it.copy(isBootstrapping = true, errorDescriptor = null, error = null) }
+            val requirement = runCatching { container.authRepository.getPasswordRequirement() }.getOrNull()
             runCatching {
                 val token = container.sessionRepository.bootstrap()
-                val requirement = container.authRepository.getPasswordRequirement()
-                if (token.isNullOrBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            isBootstrapping = false,
-                            isAuthenticated = false,
-                            pendingOAuthBind = null,
-                            pendingQrConfirmation = null,
-                            passwordRequirement = requirement,
-                        )
-                    }
-                } else {
-                    val user = container.authRepository.getCurrentUser()
-                    _uiState.update {
-                        it.copy(
-                            isBootstrapping = false,
-                            isAuthenticated = true,
-                            currentUser = user,
-                            pendingOAuthBind = null,
-                            pendingQrConfirmation = null,
-                            passwordRequirement = requirement,
-                        )
-                    }
-                }
+                val user = if (!token.isNullOrBlank()) container.authRepository.getCurrentUser()
+                    else container.sessionRepository.cachedUser().takeIf { container.sessionRepository.hasCredentials() }
+                _uiState.update { it.copy(isBootstrapping = false, isAuthenticated = user != null,
+                    currentUser = user, passwordRequirement = requirement ?: it.passwordRequirement) }
+                if (user != null) resumePendingRequest()
             }.onFailure { throwable ->
-                _uiState.update {
-                    it.copy(
-                        isBootstrapping = false,
-                        isAuthenticated = false,
-                        pendingOAuthBind = null,
-                        pendingQrConfirmation = null,
-                        error = throwable.toReadableMessage(),
-                    )
-                }
+                val cached = container.sessionRepository.cachedUser().takeIf { container.sessionRepository.hasCredentials() }
+                _uiState.update { it.copy(isBootstrapping = false, isAuthenticated = cached != null,
+                    currentUser = cached, passwordRequirement = requirement ?: it.passwordRequirement,
+                    errorDescriptor = throwable as? ApiException, error = throwable.toReadableMessage()) }
             }
         }
     }
 
     fun clearTransientMessages() {
-        _uiState.update { it.copy(message = null, error = null) }
+        _uiState.update { it.copy(message = null, errorDescriptor = null, error = null) }
+    }
+
+    fun synchronizeStoredSession() {
+        if (!_uiState.value.isAuthenticated || container.sessionRepository.hasCredentials()) return
+        authenticationFlow.cancel()
+        pendingLoginRequest = null
+        requestGeneration++
+        _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement) }
     }
 
     fun consumeMobileBridgeReturnUrl() {
@@ -132,12 +139,9 @@ class AppViewModel(
     }
 
     fun dismissMobileBridgeForLogin() {
-        _uiState.update {
-            it.copy(
-                pendingMobileBridgeConfirmation = null,
-                message = "请先在 App 内登录，然后回到浏览器重新发起网页登录",
-            )
-        }
+        val pending = _uiState.value.pendingMobileBridgeConfirmation ?: return
+        pendingLoginRequest = MobileAuthorizationLinks.Request.Bridge(pending.challengeId)
+        _uiState.update { it.copy(pendingMobileBridgeConfirmation = null, message = L10n.text("请先登录，完成后将继续原网页登录请求")) }
     }
 
     fun refreshCurrentUser() {
@@ -146,70 +150,80 @@ class AppViewModel(
                 val user = container.authRepository.getCurrentUser()
                 _uiState.update { state -> state.copy(isAuthenticated = true, currentUser = user) }
             }.onFailure { throwable ->
-                _uiState.update { it.copy(error = throwable.toReadableMessage()) }
+                _uiState.update { it.copy(errorDescriptor = throwable as? ApiException, error = throwable.toReadableMessage()) }
             }
         }
     }
 
     fun handleIncomingDeepLink(uri: Uri) {
-        val path = uri.path?.trim().orEmpty()
-        if (path != "/app/bridge-login") {
+        val request = MobileAuthorizationLinks.deepLink(uri.toString(), webOrigin)
+        if (request == null) {
+            _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("链接无效或不受信任")) }
             return
         }
+        dispatchIncomingRequest(request)
+    }
 
-        val challengeId = uri.getQueryParameter("challengeId")?.trim().orEmpty()
-        if (challengeId.isBlank()) {
-            _uiState.update { it.copy(error = "网页登录挑战参数缺失") }
+    private fun dispatchIncomingRequest(request: MobileAuthorizationLinks.Request, continuingAfterLogin: Boolean = false) {
+        val visible = _uiState.value
+        if (decisionInFlight || (authenticationFlow.isRunning && !continuingAfterLogin) || visible.isBusy || visible.pendingMfa != null || visible.pendingQrConfirmation != null || visible.pendingMobileBridgeConfirmation != null) {
+            _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("请先完成当前请求")) }
             return
         }
+        if (pendingLoginRequest != null && pendingLoginRequest != request) {
+            _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("请先完成登录后待处理的请求")) }
+            return
+        }
+        when (request) {
+            is MobileAuthorizationLinks.Request.Bridge -> previewMobileBridge(request.challengeId)
+            is MobileAuthorizationLinks.Request.Application -> {
+                if (!visible.isAuthenticated) deferUntilLogin(request) else previewApplication(request.ticket)
+            }
+            is MobileAuthorizationLinks.Request.Approval -> {
+                if (!visible.isAuthenticated) deferUntilLogin(request) else previewApproveQr(request.code)
+            }
+            is MobileAuthorizationLinks.Request.Transfer -> previewTransferQr(request.code)
+        }
+    }
 
+    private fun deferUntilLogin(request: MobileAuthorizationLinks.Request) {
+        pendingLoginRequest = request
+        _uiState.update { it.copy(message = L10n.text("请先登录，登录后将继续确认原请求")) }
+    }
+
+    private fun resumePendingRequest() {
+        val request = pendingLoginRequest ?: return
+        val state = _uiState.value
+        if (state.isBusy || state.pendingMfa != null || state.pendingQrConfirmation != null || state.pendingMobileBridgeConfirmation != null) return
+        pendingLoginRequest = null
+        dispatchIncomingRequest(request, continuingAfterLogin = true)
+    }
+
+    private fun previewMobileBridge(challengeId: String) {
+        val generation = ++requestGeneration
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
             runCatching {
                 val authenticated = resolveBridgeAuthentication()
                 val status = container.authRepository.getMobileBridgeStatus(challengeId)
+                require(status.expiresInSeconds > 0) { L10n.text("网页登录请求已过期") }
                 when (status.status.lowercase()) {
-                    "pending" -> PendingMobileBridgeConfirmation(
-                        challengeId = challengeId,
-                        returnUrl = status.returnUrl,
-                        returnOrigin = status.returnOrigin,
-                        requiresLogin = !authenticated,
-                    )
+                    "pending" -> PendingMobileBridgeConfirmation(challengeId,
+                        MobileAuthorizationLinks.bridgeReturn(status.returnUrl, webOrigin), status.returnOrigin,
+                        !authenticated, System.currentTimeMillis() + status.expiresInSeconds * 1000)
                     "approved" -> {
-                        if (!status.returnUrl.isNullOrBlank()) {
-                            _uiState.update {
-                                it.copy(
-                                    isBusy = false,
-                                    pendingMobileBridgeConfirmation = null,
-                                    mobileBridgeReturnUrl = status.returnUrl,
-                                    message = "网页登录已确认，正在返回浏览器",
-                                )
-                            }
-                        } else {
-                            _uiState.update { it.copy(isBusy = false, error = "网页登录已完成，请返回浏览器") }
-                        }
+                        val returnUrl = MobileAuthorizationLinks.bridgeReturn(status.returnUrl, webOrigin)
+                        requireNotNull(returnUrl) { L10n.text("网页登录返回地址无效") }
+                        if (generation == requestGeneration) _uiState.update { it.copy(mobileBridgeReturnUrl = returnUrl) }
                         null
                     }
-                    "cancelled" -> {
-                        _uiState.update { it.copy(isBusy = false, error = "当前网页登录请求已取消") }
-                        null
-                    }
-                    else -> {
-                        _uiState.update { it.copy(isBusy = false, error = "当前网页登录请求已过期，请回到浏览器重试") }
-                        null
-                    }
+                    "cancelled" -> error(L10n.text("当前网页登录请求已取消"))
+                    else -> error(L10n.text("当前网页登录请求已过期，请回到浏览器重试"))
                 }
             }.onSuccess { pending ->
-                if (pending != null) {
-                    _uiState.update {
-                        it.copy(
-                            isBusy = false,
-                            pendingMobileBridgeConfirmation = pending,
-                        )
-                    }
-                }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, pendingMobileBridgeConfirmation = pending) }
+            }.onFailure { error ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) }
             }
         }
     }
@@ -248,52 +262,41 @@ class AppViewModel(
 
     fun confirmMobileBridgeAction() {
         val pending = _uiState.value.pendingMobileBridgeConfirmation ?: return
-        if (pending.requiresLogin) {
-            dismissMobileBridgeForLogin()
+        if (pending.requiresLogin) { dismissMobileBridgeForLogin(); return }
+        if (decisionInFlight || _uiState.value.isBusy) return
+        if (pending.expiresAtMillis <= System.currentTimeMillis()) {
+            _uiState.update { it.copy(pendingMobileBridgeConfirmation = null, errorDescriptor = null, error = L10n.text("网页登录请求已过期")) }
             return
         }
-
+        decisionInFlight = true
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching { container.authRepository.approveMobileBridge(pending.challengeId) }
-                .onSuccess { response ->
-                    _uiState.update {
-                        it.copy(
-                            isBusy = false,
-                            pendingMobileBridgeConfirmation = null,
-                            mobileBridgeReturnUrl = response.returnUrl,
-                            message = "网页登录已确认，正在返回浏览器",
-                        )
-                    }
-                }
-                .onFailure { throwable ->
-                    val readable = throwable.toReadableMessage()
-                    _uiState.update { it.copy(isBusy = false, error = readable) }
-                }
+            runCatching {
+                val response = container.authRepository.approveMobileBridge(pending.challengeId)
+                requireNotNull(MobileAuthorizationLinks.bridgeReturn(response.returnUrl, webOrigin)) { L10n.text("网页登录返回地址无效") }
+            }.onSuccess { returnUrl ->
+                _uiState.update { it.copy(isBusy = false, pendingMobileBridgeConfirmation = null,
+                    mobileBridgeReturnUrl = returnUrl, message = L10n.text("网页登录已确认，正在返回浏览器")) }
+            }.onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
+            decisionInFlight = false
         }
     }
 
     fun cancelMobileBridgeAction() {
-        val pending = _uiState.value.pendingMobileBridgeConfirmation
-        if (pending == null) {
+        val pending = _uiState.value.pendingMobileBridgeConfirmation ?: return
+        if (decisionInFlight || _uiState.value.isBusy) return
+        pendingLoginRequest = null
+        if (pending.requiresLogin || pending.expiresAtMillis <= System.currentTimeMillis()) {
+            _uiState.update { it.copy(pendingMobileBridgeConfirmation = null) }
             return
         }
-
+        decisionInFlight = true
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
             runCatching { container.authRepository.cancelMobileBridge(pending.challengeId) }
-                .onSuccess {
-                    _uiState.update {
-                        it.copy(
-                            isBusy = false,
-                            pendingMobileBridgeConfirmation = null,
-                            message = "网页登录请求已取消",
-                        )
-                    }
-                }
-                .onFailure { throwable ->
-                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
-                }
+                .onSuccess { _uiState.update { it.copy(isBusy = false, pendingMobileBridgeConfirmation = null, message = L10n.text("网页登录请求已取消")) } }
+                .onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
+            decisionInFlight = false
         }
     }
 
@@ -304,7 +307,7 @@ class AppViewModel(
     }
 
     fun sendLoginCode(email: String) {
-        runBusyAction(successMessage = "验证码已发送") {
+        runBusyAction(successMessage = L10n.text("验证码已发送")) {
             container.authRepository.sendLoginCode(email)
         }
     }
@@ -316,7 +319,7 @@ class AppViewModel(
     }
 
     fun sendRegisterCode(email: String) {
-        runBusyAction(successMessage = "注册验证码已发送") {
+        runBusyAction(successMessage = L10n.text("注册验证码已发送")) {
             container.authRepository.sendRegisterCode(email)
         }
     }
@@ -326,14 +329,14 @@ class AppViewModel(
         onSent: () -> Unit,
     ) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
+            _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
             runCatching { container.authRepository.sendRegisterCode(email) }
                 .onSuccess {
                     onSent()
-                    _uiState.update { it.copy(isBusy = false, message = "注册验证码已发送") }
+                    _uiState.update { it.copy(isBusy = false, message = L10n.text("注册验证码已发送")) }
                 }
                 .onFailure { throwable ->
-                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                    _uiState.update { it.copy(isBusy = false, errorDescriptor = throwable as? ApiException, error = throwable.toReadableMessage()) }
                 }
         }
     }
@@ -343,449 +346,348 @@ class AppViewModel(
         onAvailable: () -> Unit,
     ) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
+            _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
             runCatching { container.authRepository.checkUsernameAvailable(username) }
                 .onSuccess { available ->
                     if (available) {
                         onAvailable()
-                        _uiState.update { it.copy(isBusy = false, message = "用户名可用") }
+                        _uiState.update { it.copy(isBusy = false, message = L10n.text("用户名可用")) }
                     } else {
-                        _uiState.update { it.copy(isBusy = false, error = "用户名已被使用") }
+                        _uiState.update { it.copy(isBusy = false, errorDescriptor = null, error = L10n.text("用户名已被使用")) }
                     }
                 }
                 .onFailure { throwable ->
-                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                    _uiState.update { it.copy(isBusy = false, errorDescriptor = throwable as? ApiException, error = throwable.toReadableMessage()) }
                 }
         }
     }
 
-    fun register(
-        username: String,
-        email: String,
-        password: String,
-        code: String,
-    ) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching {
-                container.authRepository.register(username, email, password, code)
-                val user = container.authRepository.getCurrentUser()
-                val bindResult = runCatching { bindPendingOAuthIfNeeded() }
-                if (bindResult.isSuccess) {
-                    RegisterCompletion(
-                        user = user,
-                        pendingOAuthBind = null,
-                        message = bindResult.getOrNull() ?: "注册成功",
-                        error = null,
-                    )
-                } else {
-                    RegisterCompletion(
-                        user = user,
-                        pendingOAuthBind = _uiState.value.pendingOAuthBind,
-                        message = "注册成功",
-                        error = "QQ 绑定失败：${bindResult.exceptionOrNull()?.toReadableMessage() ?: "请稍后重试"}",
-                    )
-                }
-            }.onSuccess { completion ->
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = true,
-                        currentUser = completion.user,
-                        pendingOAuthBind = completion.pendingOAuthBind,
-                        message = completion.message,
-                        error = completion.error,
-                    )
-                }
-            }.onFailure { throwable ->
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        error = throwable.toReadableMessage(),
-                    )
-                }
-            }
-        }
+    fun register(username: String, email: String, password: String, code: String) {
+        launchAuthentication(action = {
+            container.authRepository.register(username, email, password, code)
+            checkpoint()
+            container.authRepository.completeAuthentication()
+        }, success = { finishAuthentication(it, L10n.text("注册成功")) })
     }
 
     fun loginWithPasskey(activity: Activity) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching {
-                val options = container.authRepository.getPasskeyAuthenticationOptions()
-                val payload = container.passkeyManager.getForAuthentication(activity, options)
-                container.authRepository.verifyPasskeyLogin(options.challengeId, payload)
-            }.onSuccess { result ->
-                completeAuthResult(result, successMessage = "Passkey 登录成功")
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
-            }
-        }
+        launchAuthentication(action = {
+            val options = container.authRepository.getPasskeyAuthenticationOptions()
+            checkpoint()
+            val payload = container.passkeyManager.getForAuthentication(activity, options)
+            checkpoint()
+            container.authRepository.verifyPasskeyLogin(options.challengeId, payload)
+        }, success = { completeAuthResult(it, L10n.text("Passkey 登录成功")) })
+    }
+
+    fun loginWithSecurityKey(activity: Activity) {
+        launchAuthentication(action = {
+            check(container.securityKeyManager.available(activity)) { L10n.text("当前设备没有可用的安全密钥提供方") }
+            val options = container.authRepository.getPasskeyAuthenticationOptions()
+            checkpoint()
+            val payload = container.securityKeyManager.getForAuthentication(activity, options)
+            checkpoint()
+            container.authRepository.verifyPasskeyLogin(options.challengeId, payload)
+        }, success = { completeAuthResult(it, L10n.text("安全密钥登录成功")) })
     }
 
     fun loginWithQq(activity: Activity) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching {
-                val credential = container.qqLoginManager.login(activity)
-                container.authRepository.loginWithQqMobile(
-                    appId = credential.appId,
-                    accessToken = credential.accessToken,
-                    openid = credential.openid,
-                    unionid = credential.unionid,
-                    expiresIn = credential.expiresIn,
-                )
-            }.onSuccess { result ->
-                completeAuthResult(result, successMessage = "QQ 登录成功")
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
-            }
-        }
+        launchAuthentication(action = {
+            val credential = container.qqLoginManager.login(activity)
+            checkpoint()
+            container.authRepository.loginWithQqMobile(credential.appId, credential.accessToken,
+                credential.openid, credential.unionid, credential.expiresIn)
+        }, success = { completeAuthResult(it, L10n.text("QQ 登录成功")) })
     }
 
     fun verifyTotpMfa(code: String? = null, recoveryCode: String? = null) {
         val pending = _uiState.value.pendingMfa ?: return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching {
-                container.authRepository.verifyTotpMfa(
-                    challengeId = pending.challengeId,
-                    code = code,
-                    recoveryCode = recoveryCode,
-                )
-                container.authRepository.getCurrentUser()
-            }.onSuccess { user ->
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = true,
-                        currentUser = user,
-                        pendingMfa = null,
-                        message = "MFA 验证成功",
-                    )
-                }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
-            }
-        }
+        launchAuthentication(action = {
+            container.authRepository.verifyTotpMfa(pending.challengeId, code, recoveryCode)
+            checkpoint()
+            container.authRepository.completeAuthentication()
+        }, success = { finishAuthentication(it, L10n.text("MFA 验证成功")) })
     }
 
-    fun verifyPasskeyMfa(activity: Activity) {
+    fun verifyPasskeyMfa(activity: Activity) = verifyCredentialMfa(activity, false)
+    fun verifySecurityKeyMfa(activity: Activity) = verifyCredentialMfa(activity, true)
+
+    private fun verifyCredentialMfa(activity: Activity, useSecurityKey: Boolean) {
         val pending = _uiState.value.pendingMfa ?: return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching {
-                val options = container.authRepository.getPasskeyAuthenticationOptions()
-                val payload = container.passkeyManager.getForAuthentication(activity, options)
-                container.authRepository.verifyPasskeyMfa(
-                    mfaChallengeId = pending.challengeId,
-                    passkeyChallengeId = options.challengeId,
-                    payload = payload,
-                )
-                container.authRepository.getCurrentUser()
-            }.onSuccess { user ->
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = true,
-                        currentUser = user,
-                        pendingMfa = null,
-                        message = "Passkey MFA 验证成功",
-                    )
-                }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
-            }
-        }
+        launchAuthentication(action = {
+            val options = container.authRepository.getPasskeyAuthenticationOptions()
+            checkpoint()
+            val payload = if (useSecurityKey) {
+                check(container.securityKeyManager.available(activity)) { L10n.text("当前设备没有可用的安全密钥提供方") }
+                container.securityKeyManager.getForAuthentication(activity, options)
+            } else container.passkeyManager.getForAuthentication(activity, options)
+            checkpoint()
+            container.authRepository.verifyPasskeyMfa(pending.challengeId, options.challengeId, payload)
+            checkpoint()
+            container.authRepository.completeAuthentication()
+        }, success = { finishAuthentication(it, L10n.text("MFA 验证成功")) })
     }
 
     fun logout() {
+        authenticationFlow.cancel()
+        if (_uiState.value.isBusy) return
+        _uiState.update { it.copy(isBusy = true) }
+        pendingLoginRequest = null
+        requestGeneration++
         viewModelScope.launch {
             runCatching { container.authRepository.logout() }
-            _uiState.update {
-                it.copy(
-                    isAuthenticated = false,
-                    currentUser = null,
-                    pendingMfa = null,
-                    pendingOAuthBind = null,
-                    pendingMobileBridgeConfirmation = null,
-                    mobileBridgeReturnUrl = null,
-                    pendingQrConfirmation = null,
-                    message = "已退出登录",
-                )
+            val current = _uiState.value
+            if (!container.sessionRepository.hasCredentials() && !authenticationFlow.isRunning &&
+                current.pendingMfa == null && current.pendingOAuthBind == null) {
+                _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement, message = L10n.text("已退出登录")) }
             }
         }
     }
 
     fun logoutAll() {
+        if (_uiState.value.isBusy) return
+        authenticationFlow.cancel()
+        _uiState.update { it.copy(isBusy = true, message = null, errorDescriptor = null, error = null) }
         viewModelScope.launch {
             runCatching { container.authRepository.logoutAll() }
-            _uiState.update {
-                it.copy(
-                    isAuthenticated = false,
-                    currentUser = null,
-                    pendingMfa = null,
-                    pendingOAuthBind = null,
-                    pendingMobileBridgeConfirmation = null,
-                    mobileBridgeReturnUrl = null,
-                    pendingQrConfirmation = null,
-                    message = "已从所有设备退出",
-                )
-            }
+                .onSuccess {
+                    pendingLoginRequest = null
+                    requestGeneration++
+                    _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement, message = L10n.text("已从所有设备退出")) }
+                }
+                .onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
         }
+    }
+
+    fun cancelAuthentication() {
+        authenticationFlow.cancel()
+        pendingLoginRequest = null
+        _uiState.update { it.copy(pendingMfa = null, pendingOAuthBind = null, isBusy = false, message = null, errorDescriptor = null, error = null) }
+    }
+
+    fun accountDeleted() {
+        authenticationFlow.cancel()
+        container.sessionRepository.clearSession()
+        pendingLoginRequest = null
+        requestGeneration++
+        _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement,
+            message = L10n.text("账号已注销")) }
     }
 
     fun handleScannedQr(rawContent: String) {
-        val operationHint = extractOperationHint(rawContent)
-        val transferCode = extractTransferCode(rawContent)
-        if (!transferCode.isNullOrBlank()) {
-            previewTransferQr(transferCode, operationHint)
+        val request = MobileAuthorizationLinks.qr(rawContent, webOrigin)
+        if (request == null) {
+            _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("未识别到受信任的有效二维码，请重试")) }
             return
         }
+        dispatchIncomingRequest(request)
+    }
 
-        val approveCode = extractApproveCode(rawContent)
-        if (approveCode.isNullOrBlank()) {
-            _uiState.update { it.copy(error = "未识别到有效二维码，请重试") }
-            return
-        }
-
-        previewApproveQr(approveCode, operationHint)
+    fun updateAuthorizationOptions(mode: AuthorizationGrantMode, ttl: Int, loginWeb: Boolean) {
+        val pending = _uiState.value.pendingQrConfirmation ?: return
+        if (_uiState.value.isBusy || pending.authorization == null) return
+        if (ttl !in setOf(300, 3600, 86400, 604800)) return
+        _uiState.update { it.copy(pendingQrConfirmation = pending.copy(grantMode = mode, grantTtlSeconds = ttl, loginWeb = loginWeb)) }
     }
 
     fun confirmQrAction() {
-        val pending = _uiState.value.pendingQrConfirmation
-        if (pending == null || pending.code.isBlank()) {
-            _uiState.update { it.copy(error = "二维码票据无效，请重新扫码") }
+        val pending = _uiState.value.pendingQrConfirmation ?: return
+        if (_uiState.value.isBusy || decisionInFlight) return
+        if (pending.expiresAtMillis <= System.currentTimeMillis()) {
+            _uiState.update { it.copy(pendingQrConfirmation = null, errorDescriptor = null, error = L10n.text("二维码或授权已过期，请重新发起")) }
             return
         }
         when (pending.type) {
-            QrConfirmationType.APPROVE_LOGIN -> approveQrChallenge(pending.code)
-            QrConfirmationType.APPROVE_MFA -> approveQrChallenge(pending.code)
-            QrConfirmationType.APPROVE_SENSITIVE -> approveQrChallenge(pending.code)
-            QrConfirmationType.APPROVE_RECOVERY -> approveQrChallenge(pending.code)
-            QrConfirmationType.LOGIN_THIS_PHONE,
-            QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE,
-            -> exchangeSessionTransferAndLogin(pending.code)
+            QrConfirmationType.APPROVE_APPLICATION -> decideApplication(pending, true)
+            QrConfirmationType.APPROVE_OFFICIAL -> decideOfficial(pending, true)
+            QrConfirmationType.APPROVE_LOGIN, QrConfirmationType.APPROVE_MFA,
+            QrConfirmationType.APPROVE_SENSITIVE, QrConfirmationType.APPROVE_RECOVERY,
+            QrConfirmationType.APPROVE_CONSOLE_LOGIN -> approveQrChallenge(pending.code)
+            QrConfirmationType.LOGIN_THIS_PHONE, QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE -> exchangeSessionTransferAndLogin(pending.code)
         }
     }
 
     fun cancelQrAction() {
+        val pending = _uiState.value.pendingQrConfirmation ?: return
+        if (_uiState.value.isBusy || decisionInFlight) return
+        if (pending.expiresAtMillis > System.currentTimeMillis()) {
+            when (pending.type) {
+                QrConfirmationType.APPROVE_APPLICATION -> { decideApplication(pending, false); return }
+                QrConfirmationType.APPROVE_OFFICIAL -> { decideOfficial(pending, false); return }
+                else -> Unit
+            }
+        }
         _uiState.update { it.copy(pendingQrConfirmation = null) }
     }
 
-    private fun previewApproveQr(
-        approveCode: String,
-        operationHint: String? = null,
-    ) {
+    private fun previewApproveQr(approveCode: String) {
+        val generation = ++requestGeneration
+        _uiState.update { it.copy(isBusy = true, message = null, errorDescriptor = null, error = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, message = null, error = null, pendingQrConfirmation = null) }
             runCatching {
-                val preview = container.authRepository.getQrScanPreview(approveCode = approveCode)
+                val preview = container.mobileAuthorizationRepository.preview(approveCode = approveCode)
+                require(preview.expiresInSeconds > 0) { L10n.text("二维码已过期") }
                 val type = when (preview.codeType) {
+                    "approve_login" -> QrConfirmationType.APPROVE_LOGIN
                     "approve_mfa" -> QrConfirmationType.APPROVE_MFA
                     "approve_sensitive" -> QrConfirmationType.APPROVE_SENSITIVE
                     "approve_recovery" -> QrConfirmationType.APPROVE_RECOVERY
-                    else -> QrConfirmationType.APPROVE_LOGIN
+                    "approve_application" -> QrConfirmationType.APPROVE_APPLICATION
+                    "approve_official" -> QrConfirmationType.APPROVE_OFFICIAL
+                    "approve_console_login" -> QrConfirmationType.APPROVE_CONSOLE_LOGIN
+                    else -> error(L10n.text("不支持的二维码类型，请更新 App"))
                 }
-                PendingQrConfirmation(
-                    type = type,
-                    code = approveCode,
-                    preview = preview,
-                    operationHint = resolveOperationHint(
-                        parsedHint = operationHint,
-                        fallbackType = type,
-                    ),
-                )
+                val context = if (type == QrConfirmationType.APPROVE_APPLICATION) {
+                    val ticket = requireNotNull(preview.authorizationTicket) { L10n.text("缺少应用授权票据") }
+                    container.mobileAuthorizationRepository.context(ticket).also { require(it.qr) { L10n.text("二维码授权类型不匹配") } }
+                } else null
+                PendingQrConfirmation(type, approveCode, preview.legacyPreview(), authorization = context,
+                    authorizationPreview = preview, expiresAtMillis = System.currentTimeMillis() +
+                        minOf(preview.expiresInSeconds, context?.expiresInSeconds ?: Long.MAX_VALUE) * 1000)
             }.onSuccess { pending ->
-                _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = pending) }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = pending) }
+            }.onFailure { error ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) }
             }
         }
     }
 
-    private fun previewTransferQr(
-        transferCode: String,
-        operationHint: String? = null,
-    ) {
-        val isAuthenticated = _uiState.value.isAuthenticated
+    private fun previewApplication(ticket: String) {
+        val generation = ++requestGeneration
+        _uiState.update { it.copy(isBusy = true, message = null, errorDescriptor = null, error = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, message = null, error = null, pendingQrConfirmation = null) }
             runCatching {
-                val preview = container.authRepository.getQrScanPreview(transferCode = transferCode)
-                val type = if (isAuthenticated) {
-                    QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE
-                } else {
-                    QrConfirmationType.LOGIN_THIS_PHONE
-                }
-                PendingQrConfirmation(
-                    type = type,
-                    code = transferCode,
-                    preview = preview,
-                    operationHint = resolveOperationHint(
-                        parsedHint = operationHint,
-                        fallbackType = type,
-                    ),
-                )
+                val context = container.mobileAuthorizationRepository.context(ticket)
+                require(!context.qr) { L10n.text("请扫描原授权二维码继续") }
+                PendingQrConfirmation(QrConfirmationType.APPROVE_APPLICATION, ticket, authorization = context,
+                    expiresAtMillis = System.currentTimeMillis() + context.expiresInSeconds * 1000)
             }.onSuccess { pending ->
-                _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = pending) }
-            }.onFailure { throwable ->
-                _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = pending) }
+            }.onFailure { error ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) }
             }
+        }
+    }
+
+    private fun previewTransferQr(transferCode: String) {
+        val generation = ++requestGeneration
+        _uiState.update { it.copy(isBusy = true, message = null, errorDescriptor = null, error = null) }
+        viewModelScope.launch {
+            runCatching {
+                val preview = container.mobileAuthorizationRepository.preview(transferCode = transferCode)
+                require(preview.codeType == "transfer" && preview.expiresInSeconds > 0) { L10n.text("登录二维码类型无效或已过期") }
+                val type = if (_uiState.value.isAuthenticated) QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE else QrConfirmationType.LOGIN_THIS_PHONE
+                PendingQrConfirmation(type, transferCode, preview.legacyPreview(), authorizationPreview = preview,
+                    expiresAtMillis = System.currentTimeMillis() + preview.expiresInSeconds * 1000)
+            }.onSuccess { pending ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = pending) }
+            }.onFailure { error ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) }
+            }
+        }
+    }
+
+    private fun decideApplication(pending: PendingQrConfirmation, approve: Boolean) {
+        val context = pending.authorization ?: return
+        decisionInFlight = true
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
+        viewModelScope.launch {
+            runCatching {
+                val result = container.mobileAuthorizationRepository.decide(context, approve, pending.grantMode, pending.grantTtlSeconds, pending.loginWeb)
+                if (context.qr) null else requireNotNull(MobileAuthorizationLinks.applicationReturn(result.returnUrl, webOrigin)) { L10n.text("应用授权返回地址无效") }
+            }.onSuccess { returnUrl ->
+                _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = null, mobileBridgeReturnUrl = returnUrl,
+                    message = if (approve) L10n.text("应用授权已完成") else L10n.text("已拒绝应用授权")) }
+            }.onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
+            decisionInFlight = false
+        }
+    }
+
+    private fun decideOfficial(pending: PendingQrConfirmation, approve: Boolean) {
+        decisionInFlight = true
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
+        viewModelScope.launch {
+            runCatching { container.mobileAuthorizationRepository.decideOfficial(pending.code, approve) }
+                .onSuccess { _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = null, message = if (approve) L10n.text("官方应用授权成功") else L10n.text("已拒绝官方应用授权")) } }
+                .onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
+            decisionInFlight = false
         }
     }
 
     private fun approveQrChallenge(approveCode: String) {
+        decisionInFlight = true
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null, pendingQrConfirmation = null) }
             runCatching { container.authRepository.approveQrChallenge(approveCode) }
-                .onSuccess {
-                    _uiState.update { it.copy(isBusy = false, message = "扫码授权成功") }
-                }
-                .onFailure { throwable ->
-                    val readable = throwable.toReadableMessage()
-                    _uiState.update { it.copy(isBusy = false, error = readable) }
-                }
+                .onSuccess { _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = null, message = L10n.text("扫码确认成功")) } }
+                .onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
+            decisionInFlight = false
         }
     }
 
     private fun exchangeSessionTransferAndLogin(transferCode: String) {
-        val previousState = _uiState.value
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    isBusy = true,
-                    error = null,
-                    message = null,
-                    pendingMfa = null,
-                    pendingMobileBridgeConfirmation = null,
-                    mobileBridgeReturnUrl = null,
-                    pendingQrConfirmation = null,
-                )
-            }
-            runCatching {
-                container.authRepository.exchangeSessionTransferForMobile(transferCode)
-                container.authRepository.getCurrentUser()
-            }.onSuccess { user ->
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = true,
-                        currentUser = user,
-                        pendingMfa = null,
-                        pendingMobileBridgeConfirmation = null,
-                        mobileBridgeReturnUrl = null,
-                        pendingQrConfirmation = null,
-                        message = "扫码登录成功",
-                    )
-                }
-            }.onFailure { throwable ->
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = previousState.isAuthenticated,
-                        currentUser = previousState.currentUser,
-                        pendingMobileBridgeConfirmation = previousState.pendingMobileBridgeConfirmation,
-                        mobileBridgeReturnUrl = null,
-                        pendingQrConfirmation = null,
-                        error = throwable.toReadableMessage(),
-                    )
-                }
-            }
-        }
+        launchAuthentication(action = {
+            container.authRepository.exchangeSessionTransferForMobile(transferCode)
+            checkpoint()
+            container.authRepository.completeAuthentication()
+        }, success = { finishAuthentication(it, L10n.text("扫码登录成功")) })
+    }
+
+    private fun <T> launchAuthentication(action: suspend AuthenticationFlowRunner.Attempt.() -> T,
+                                         success: suspend (T) -> Unit) {
+        if (_uiState.value.isBusy || decisionInFlight || authenticationFlow.isRunning) return
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
+        authenticationFlow.launch(action, success, failure = { error ->
+            _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) }
+        })
     }
 
     private fun runAuthAction(action: suspend () -> AuthResult) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
-            runCatching { action() }
-                .onSuccess { result -> completeAuthResult(result, successMessage = "登录成功") }
-                .onFailure { throwable ->
-                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
-                }
-        }
+        launchAuthentication(action = { action() }, success = { completeAuthResult(it, L10n.text("登录成功")) })
     }
 
-    private fun completeAuthResult(result: AuthResult, successMessage: String) {
+    private suspend fun completeAuthResult(result: AuthResult, successMessage: String) {
         when (result) {
-            is AuthResult.Success -> {
-                viewModelScope.launch {
-                    runCatching { container.authRepository.getCurrentUser() }
-                        .onSuccess { user ->
-                            _uiState.update {
-                                it.copy(
-                                    isBusy = false,
-                                    isAuthenticated = true,
-                                    currentUser = user,
-                                    pendingMfa = null,
-                                    pendingOAuthBind = null,
-                                    pendingMobileBridgeConfirmation = null,
-                                    mobileBridgeReturnUrl = null,
-                                    pendingQrConfirmation = null,
-                                    message = successMessage,
-                                )
-                            }
-                        }
-                        .onFailure { throwable ->
-                            _uiState.update {
-                                it.copy(
-                                    isBusy = false,
-                                    error = throwable.toReadableMessage(),
-                                )
-                            }
-                        }
-                }
-            }
-
+            is AuthResult.Success -> finishAuthentication(container.authRepository.completeAuthentication(), successMessage)
             is AuthResult.NeedsMfa -> {
                 val sourceLabel = when (result.source) {
-                    AuthSource.PASSWORD -> "密码"
-                    AuthSource.EMAIL_CODE -> "验证码"
+                    AuthSource.PASSWORD -> L10n.text("密码")
+                    AuthSource.EMAIL_CODE -> L10n.text("验证码")
                     AuthSource.PASSKEY -> "Passkey"
                     AuthSource.QQ -> "QQ"
                 }
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = false,
-                        pendingMfa = result,
-                        pendingOAuthBind = null,
-                        pendingMobileBridgeConfirmation = null,
-                        mobileBridgeReturnUrl = null,
-                        pendingQrConfirmation = null,
-                        message = "$sourceLabel 验证通过，请完成 MFA",
-                    )
-                }
+                _uiState.update { it.copy(isBusy = false, pendingMfa = result, pendingMobileBridgeConfirmation = null,
+                    mobileBridgeReturnUrl = null, pendingQrConfirmation = null,
+                    message = L10n.format("{0} 验证通过，请完成 MFA", sourceLabel)) }
             }
-
             is AuthResult.NeedsOAuthBind -> {
-                val providerLabel = when (result.provider.lowercase()) {
-                    "qq" -> "QQ"
-                    else -> "第三方"
-                }
-                _uiState.update {
-                    it.copy(
-                        isBusy = false,
-                        isAuthenticated = false,
-                        pendingOAuthBind = PendingOAuthBind(
-                            provider = result.provider,
-                            bindToken = result.bindToken,
-                            openid = result.openid,
-                            message = result.message,
-                        ),
-                        pendingMfa = null,
-                        pendingMobileBridgeConfirmation = null,
-                        mobileBridgeReturnUrl = null,
-                        pendingQrConfirmation = null,
-                        message = result.message ?: "该 $providerLabel 账号尚未绑定，请注册新账号后继续",
-                    )
-                }
+                val providerLabel = if (result.provider.lowercase() == "qq") "QQ" else L10n.text("第三方")
+                _uiState.update { it.copy(isBusy = false, isAuthenticated = false,
+                    pendingOAuthBind = PendingOAuthBind(result.provider, result.bindToken, result.openid, result.message),
+                    pendingMfa = null, pendingMobileBridgeConfirmation = null, mobileBridgeReturnUrl = null, pendingQrConfirmation = null,
+                    message = result.message ?: L10n.format("该 {0} 账号尚未绑定，请注册新账号后继续", providerLabel)) }
             }
         }
     }
 
+    private suspend fun finishAuthentication(user: UserProfile, successMessage: String) {
+        currentCoroutineContext().ensureActive()
+        // completeAuthentication has committed this account; reflect it before an optional QQ network call.
+        _uiState.update { it.copy(isAuthenticated = true, currentUser = user, pendingMfa = null) }
+        val bindResult = try { Result.success(bindPendingOAuthIfNeeded()) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Throwable) { Result.failure(error) }
+        currentCoroutineContext().ensureActive()
+        _uiState.update { it.copy(isBusy = false, isAuthenticated = true, currentUser = user,
+            pendingMfa = null, pendingMobileBridgeConfirmation = null, mobileBridgeReturnUrl = null,
+            pendingQrConfirmation = null, message = bindResult.getOrNull() ?: successMessage,
+            errorDescriptor = bindResult.exceptionOrNull() as? ApiException,
+            error = bindResult.exceptionOrNull()?.toReadableMessage()) }
+        resumePendingRequest()
+    }
+
     fun clearPendingOAuthBind() {
-        _uiState.update { it.copy(pendingOAuthBind = null, message = null, error = null) }
+        _uiState.update { it.copy(pendingOAuthBind = null, message = null, errorDescriptor = null, error = null) }
     }
 
     private suspend fun bindPendingOAuthIfNeeded(): String? {
@@ -794,119 +696,13 @@ class AppViewModel(
             return null
         }
         val result = container.authRepository.bindPendingQqAccount(pending.bindToken)
-        return result.message?.takeIf { it.isNotBlank() } ?: "注册成功，QQ 账号已绑定"
+        _uiState.update { it.copy(pendingOAuthBind = null) }
+        return result.message?.takeIf { it.isNotBlank() } ?: L10n.text("注册成功，QQ 账号已绑定")
     }
 
-    private fun extractApproveCode(content: String): String? {
-        val raw = content.trim()
-        if (raw.isBlank()) return null
-
-        val prefix = "KSUSER-AUTH-QR:"
-        if (raw.startsWith(prefix, ignoreCase = true)) {
-            return raw.substring(prefix.length).trim().takeIf { it.isNotBlank() }
-        }
-
-        val markerIndex = raw.indexOf(prefix, ignoreCase = true)
-        if (markerIndex >= 0) {
-            return raw.substring(markerIndex + prefix.length)
-                .substringBefore('&')
-                .substringBefore('#')
-                .trim()
-                .takeIf { it.isNotBlank() }
-        }
-
-        return runCatching {
-            val uri = Uri.parse(raw)
-            (uri.getQueryParameter("approveCode") ?: uri.getQueryParameter("code"))
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-        }.getOrNull()
-    }
-
-    private fun extractTransferCode(content: String): String? {
-        val raw = content.trim()
-        if (raw.isBlank()) return null
-
-        val prefix = "KSUSER-AUTH-XFER:v1:"
-        if (raw.startsWith(prefix, ignoreCase = true)) {
-            return raw.substring(prefix.length).trim().takeIf { it.isNotBlank() }
-        }
-
-        val markerIndex = raw.indexOf(prefix, ignoreCase = true)
-        if (markerIndex >= 0) {
-            return raw.substring(markerIndex + prefix.length)
-                .substringBefore('&')
-                .substringBefore('#')
-                .trim()
-                .takeIf { it.isNotBlank() }
-        }
-
-        return runCatching {
-            val uri = Uri.parse(raw)
-            uri.getQueryParameter("transferCode")
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-        }.getOrNull()
-    }
-
-    private fun extractOperationHint(content: String): String? {
-        val raw = content.trim()
-        if (raw.isBlank()) return null
-
-        val uriHint = runCatching {
-            val uri = Uri.parse(raw)
-            listOf("operationType", "operation", "type", "action", "scene")
-                .firstNotNullOfOrNull { key ->
-                    uri.getQueryParameter(key)?.trim()?.takeIf { it.isNotBlank() }
-                }
-        }.getOrNull()
-        canonicalizeOperationHint(uriHint)?.let { return it }
-
-        val tokenHint = raw.split('?', '&', '#', ':', '/', '=', ';', ',', ' ')
-            .asSequence()
-            .map { it.trim() }
-            .firstNotNullOfOrNull { token -> canonicalizeOperationHint(token) }
-        return tokenHint
-    }
-
-    private fun resolveOperationHint(
-        parsedHint: String?,
-        fallbackType: QrConfirmationType,
-    ): String {
-        return canonicalizeOperationHint(parsedHint) ?: when (fallbackType) {
-            QrConfirmationType.APPROVE_LOGIN -> "LOGIN"
-            QrConfirmationType.APPROVE_MFA -> "MFA_VERIFY"
-            QrConfirmationType.APPROVE_SENSITIVE -> "SENSITIVE_VERIFY"
-            QrConfirmationType.APPROVE_RECOVERY -> "ACCOUNT_RECOVERY"
-            QrConfirmationType.LOGIN_THIS_PHONE -> "LOGIN_THIS_PHONE"
-            QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE -> "SWITCH_AND_LOGIN_THIS_PHONE"
-        }
-    }
-
-    private fun canonicalizeOperationHint(raw: String?): String? {
-        val normalized = raw
-            ?.trim()
-            ?.replace('-', '_')
-            ?.replace(' ', '_')
-            ?.uppercase()
-            ?.takeIf { it.isNotBlank() }
-            ?: return null
-
-        return when (normalized) {
-            "APPROVE_LOGIN", "LOGIN", "LOGIN_WEB", "LOGIN_DESKTOP" -> "LOGIN"
-            "APPROVE_MFA", "MFA", "MFA_VERIFY", "VERIFY_MFA", "LOGIN_MFA" -> "MFA_VERIFY"
-            "APPROVE_SENSITIVE", "SENSITIVE", "SENSITIVE_VERIFY", "VERIFY_SENSITIVE" -> "SENSITIVE_VERIFY"
-            "APPROVE_RECOVERY", "RECOVERY", "ACCOUNT_RECOVERY", "RECOVERY_ENDORSE", "RECOVERY_SPONSOR" -> "ACCOUNT_RECOVERY"
-            "CHANGE_PASSWORD", "UPDATE_PASSWORD", "RESET_PASSWORD" -> "CHANGE_PASSWORD"
-            "CHANGE_EMAIL", "UPDATE_EMAIL", "BIND_EMAIL" -> "CHANGE_EMAIL"
-            "ADD_PASSKEY", "CREATE_PASSKEY", "REGISTER_PASSKEY" -> "ADD_PASSKEY"
-            "DELETE_PASSKEY", "REMOVE_PASSKEY" -> "DELETE_PASSKEY"
-            "ENABLE_TOTP", "OPEN_TOTP" -> "ENABLE_TOTP"
-            "DISABLE_TOTP", "CLOSE_TOTP" -> "DISABLE_TOTP"
-            "LOGIN_THIS_PHONE", "TRANSFER", "TRANSFER_LOGIN", "BRIDGE_TO_MOBILE" -> "LOGIN_THIS_PHONE"
-            "SWITCH_AND_LOGIN_THIS_PHONE", "SWITCH_LOGIN", "TRANSFER_SWITCH_LOGIN" -> "SWITCH_AND_LOGIN_THIS_PHONE"
-            else -> null
-        }
+    override fun onCleared() {
+        authenticationFlow.cancel()
+        super.onCleared()
     }
 
     private fun runBusyAction(
@@ -914,13 +710,13 @@ class AppViewModel(
         action: suspend () -> Unit,
     ) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isBusy = true, error = null, message = null) }
+            _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
             runCatching { action() }
                 .onSuccess {
                     _uiState.update { it.copy(isBusy = false, message = successMessage) }
                 }
                 .onFailure { throwable ->
-                    _uiState.update { it.copy(isBusy = false, error = throwable.toReadableMessage()) }
+                    _uiState.update { it.copy(isBusy = false, errorDescriptor = throwable as? ApiException, error = throwable.toReadableMessage()) }
                 }
         }
     }
@@ -938,6 +734,6 @@ class AppViewModelFactory(
 private fun Throwable.toReadableMessage(): String {
     return when (this) {
         is ApiException -> message
-        else -> message ?: "操作失败"
+        else -> message ?: L10n.text("操作失败")
     }
 }

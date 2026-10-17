@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="update_downloading">Downloading update. Integrity and signature will be verified.</string>
+    <string name="update_failed_body">Check for updates and download again in the app.</string>
+    <string name="update_allow_install">Allow Ksuser Auth to install apps, then return to continue.</string>
+    <string name="update_retry_install">The verified APK is saved. Continue installation from app updates.</string>
+    <string name="update_install_unavailable">Cannot open the system installer. Download the update again and retry.</string>
+</resources>

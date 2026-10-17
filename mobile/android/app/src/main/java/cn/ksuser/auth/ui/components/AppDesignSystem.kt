@@ -128,6 +128,8 @@ fun AppOutlinedField(
     label: @Composable (() -> Unit)? = null,
     singleLine: Boolean = true,
     textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
+    visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
+    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
 ) {
     OutlinedTextField(
         value = value,
@@ -139,6 +141,8 @@ fun AppOutlinedField(
         singleLine = singleLine,
         shape = RoundedCornerShape(AppRadius.R12),
         textStyle = textStyle,
+        visualTransformation = visualTransformation,
+        keyboardOptions = keyboardOptions,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = MaterialTheme.colorScheme.primary,
             focusedContainerColor = MaterialTheme.colorScheme.surface,

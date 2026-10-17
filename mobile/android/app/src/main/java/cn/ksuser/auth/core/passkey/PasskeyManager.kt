@@ -1,6 +1,8 @@
 package cn.ksuser.auth.core.passkey
 
 import android.app.Activity
+import android.content.Context
+import android.os.Build
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.CredentialManager
@@ -13,6 +15,7 @@ import androidx.credentials.exceptions.CreateCredentialUnsupportedException
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
 import androidx.credentials.exceptions.GetCredentialUnsupportedException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.credentials.exceptions.publickeycredential.CreatePublicKeyCredentialDomException
 import androidx.credentials.exceptions.publickeycredential.GetPublicKeyCredentialDomException
 import cn.ksuser.auth.core.env.KsuserEnvironment
@@ -25,20 +28,34 @@ import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.android.gms.common.GoogleApiAvailability
+import cn.ksuser.auth.core.settings.L10n
 
 class PasskeyManager(
     private val credentialManager: CredentialManager,
     private val gson: Gson,
     private val environment: KsuserEnvironment,
+    private val context: Context,
 ) {
-    fun availability(): PasskeyAvailability = passkeyAvailability(environment)
+    fun availability(): PasskeyAvailability {
+        val configured = passkeyAvailability(environment)
+        if (configured != PasskeyAvailability.Available) return configured
+        return passkeyDeviceAvailability(Build.VERSION.SDK_INT, Build.VERSION.SDK_INT >= 34 ||
+            GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == 0)
+    }
 
-    fun availabilityMessage(): String = passkeyAvailabilityMessage(environment)
+    fun availabilityMessage(): String = when (availability()) {
+        PasskeyAvailability.UnsupportedDevice -> L10n.text("当前设备不支持原生 Passkey。")
+        PasskeyAvailability.MissingProvider -> L10n.text("当前设备没有可用的凭据提供方，请确认已启用 Google Password Manager。")
+        else -> passkeyAvailabilityMessage(environment)
+    }
 
     suspend fun createForRegistration(
         activity: Activity,
         options: PasskeyRegistrationOptions,
     ): PasskeyRegistrationPayload {
+        if (Build.VERSION.SDK_INT < 28) error(availabilityMessage())
+        check(availability() == PasskeyAvailability.Available) { availabilityMessage() }
         val requestJson = buildRegistrationRequestJson(options)
         return try {
             val response = credentialManager.createCredential(
@@ -57,6 +74,8 @@ class PasskeyManager(
         activity: Activity,
         options: PasskeyAuthenticationOptions,
     ): PasskeyAuthenticationPayload {
+        if (Build.VERSION.SDK_INT < 28) error(availabilityMessage())
+        check(availability() == PasskeyAvailability.Available) { availabilityMessage() }
         val requestJson = buildAuthenticationRequestJson(options)
         return try {
             val response = credentialManager.getCredential(
@@ -73,7 +92,7 @@ class PasskeyManager(
         }
     }
 
-    private fun buildRegistrationRequestJson(options: PasskeyRegistrationOptions): String {
+    internal fun buildRegistrationRequestJson(options: PasskeyRegistrationOptions): String {
         val rp = JsonParser.parseString(options.rp).asJsonObject
         val user = JsonParser.parseString(options.user).asJsonObject
         val pubKeyCredParams = JsonParser.parseString(options.pubKeyCredParams).asJsonArray
@@ -118,7 +137,7 @@ class PasskeyManager(
         return gson.toJson(json)
     }
 
-    private fun parseRegistrationResponse(json: String): PasskeyRegistrationPayload {
+    internal fun parseRegistrationResponse(json: String): PasskeyRegistrationPayload {
         val root = JsonParser.parseString(json).asJsonObject
         val response = root.getAsJsonObject("response")
         val transports = response.getAsJsonArray("transports")
@@ -133,7 +152,7 @@ class PasskeyManager(
         )
     }
 
-    private fun parseAuthenticationResponse(json: String): PasskeyAuthenticationPayload {
+    internal fun parseAuthenticationResponse(json: String): PasskeyAuthenticationPayload {
         val root = JsonParser.parseString(json).asJsonObject
         val response = root.getAsJsonObject("response")
         return PasskeyAuthenticationPayload(
@@ -145,6 +164,7 @@ class PasskeyManager(
     }
 
     private fun mapPasskeyFailure(throwable: Throwable): Throwable {
+        if (throwable is kotlinx.coroutines.CancellationException) return throwable
         if (throwable is IllegalStateException || throwable is IllegalArgumentException) {
             return throwable
         }
@@ -152,6 +172,7 @@ class PasskeyManager(
         val assetLinksUrl = passkeyAssetLinksUrl(environment.passkeyOriginHint)
         val fallbackMessage = throwable.message ?: "Passkey 操作失败"
         val message = when (throwable) {
+            is NoCredentialException -> "没有可用的 Passkey，请使用其他方式登录"
             is GetCredentialCancellationException,
             is CreateCredentialCancellationException,
             -> "已取消 Passkey 操作"
@@ -183,7 +204,7 @@ class PasskeyManager(
                 }
             }
         }
-        return IllegalStateException(message, throwable)
+        return IllegalStateException(L10n.text(message), throwable)
     }
 
     private fun domExceptionMessage(

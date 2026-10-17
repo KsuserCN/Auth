@@ -38,6 +38,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.activity.compose.BackHandler
+import cn.ksuser.auth.core.settings.L10n
+import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -64,7 +67,14 @@ internal fun QrLoginConfirmScreen(
     isBusy: Boolean,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
+    onAuthorizationOptionsChanged: (AuthorizationGrantMode, Int, Boolean) -> Unit = { _, _, _ -> },
 ) {
+    if (pending.type in setOf(QrConfirmationType.APPROVE_APPLICATION, QrConfirmationType.APPROVE_OFFICIAL, QrConfirmationType.APPROVE_CONSOLE_LOGIN)) {
+        ApplicationConsentScreen(pending, currentUser, isBusy, onConfirm, onCancel, onAuthorizationOptionsChanged)
+        return
+    }
+    BackHandler { if (!isBusy) onCancel() }
+    val remaining = requestSecondsRemaining(pending.expiresAtMillis)
     val visual = rememberConfirmationVisual(pending, currentUser)
     val backgroundBrush = rememberAppBackgroundBrush()
 
@@ -88,7 +98,7 @@ internal fun QrLoginConfirmScreen(
                 IconButton(onClick = onCancel) {
                     Icon(
                         imageVector = Icons.Outlined.Close,
-                        contentDescription = "关闭",
+                        contentDescription = L10n.text("关闭"),
                     )
                 }
 
@@ -97,7 +107,7 @@ internal fun QrLoginConfirmScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "扫码确认",
+                        text = L10n.text("扫码确认"),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -137,10 +147,18 @@ internal fun QrLoginConfirmScreen(
                     pending.preview?.let { preview ->
                         PreviewDetailsCard(preview = preview)
                     }
+                    currentUser?.let { user ->
+                        SectionCard(modifier = Modifier.fillMaxWidth()) {
+                            Text(L10n.text("使用账号"), fontWeight = FontWeight.SemiBold)
+                            Text(user.username)
+                            Text(user.email ?: L10n.text("未绑定邮箱"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Text(if (remaining > 0) L10n.text("有效期") + ": ${remaining}s" else L10n.text("请求已过期，请重新发起"))
 
                     SectionCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = "安全提醒",
+                            text = L10n.text("安全提醒"),
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                         )
@@ -155,7 +173,7 @@ internal fun QrLoginConfirmScreen(
                         GradientPrimaryButton(
                             text = if (isBusy) visual.loadingLabel else visual.confirmLabel,
                             onClick = onConfirm,
-                            enabled = !isBusy,
+                            enabled = !isBusy && remaining > 0,
                             modifier = Modifier.fillMaxWidth(),
                         )
 
@@ -253,15 +271,15 @@ private fun PreviewDetailsCard(
 ) {
     SectionCard(modifier = Modifier.fillMaxWidth()) {
         Text(
-            text = "请求来源",
+            text = L10n.text("请求来源"),
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.SemiBold,
         )
-        PreviewRow("客户端", preview.clientName)
-        PreviewRow("浏览器", preview.browser)
-        PreviewRow("系统", preview.system)
-        PreviewRow("IP 地址", preview.ipAddress)
-        PreviewRow("IP 属地", preview.ipLocation)
+        PreviewRow(L10n.text("客户端"), preview.clientName)
+        PreviewRow(L10n.text("浏览器"), preview.browser)
+        PreviewRow(L10n.text("系统"), preview.system)
+        PreviewRow(L10n.text("IP 地址"), preview.ipAddress)
+        PreviewRow(L10n.text("IP 属地"), preview.ipLocation)
     }
 }
 
@@ -270,7 +288,7 @@ private fun PreviewRow(
     label: String,
     value: String?,
 ) {
-    val displayValue = value?.trim().orEmpty().ifBlank { "未知" }
+    val displayValue = value?.trim().orEmpty().ifBlank { L10n.text("未知") }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -313,20 +331,20 @@ private fun rememberConfirmationVisual(
     currentUser: UserProfile?,
 ): QrConfirmationVisual {
     val username = remember(currentUser) {
-        currentUser?.username?.takeIf { it.isNotBlank() } ?: "当前账号"
+        currentUser?.username?.takeIf { it.isNotBlank() } ?: L10n.text("当前账号")
     }
     val operation = pending.operationHint ?: defaultOperationHint(pending.type)
     val loginCopy = remember(pending.preview) { resolveLoginCopy(pending.preview) }
 
     return when (operation) {
         "CHANGE_PASSWORD" -> buildVisual(
-            pageTitle = "修改密码确认",
-            operationLabel = "修改密码",
-            title = "是否允许本次密码修改",
-            subtitle = "检测到网页端或桌面端正在尝试修改账号 $username 的登录密码。",
-            securityHint = "确认前请先核对设备信息。若不是你本人正在修改密码，请立即取消并检查账号安全。",
-            confirmLabel = "允许修改",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("修改密码确认"),
+            operationLabel = L10n.text("修改密码"),
+            title = L10n.text("是否允许本次密码修改"),
+            subtitle = L10n.format("检测到网页端或桌面端正在尝试修改账号 {0} 的登录密码。", username),
+            securityHint = L10n.text("确认前请先核对设备信息。若不是你本人正在修改密码，请立即取消并检查账号安全。"),
+            confirmLabel = L10n.text("允许修改"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.Password,
             accent = MaterialTheme.colorScheme.error,
             accentSoft = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
@@ -334,13 +352,13 @@ private fun rememberConfirmationVisual(
         )
 
         "CHANGE_EMAIL" -> buildVisual(
-            pageTitle = "修改邮箱确认",
-            operationLabel = "修改邮箱",
-            title = "是否允许本次邮箱变更",
-            subtitle = "检测到网页端或桌面端正在尝试修改账号 $username 绑定的邮箱地址。",
-            securityHint = "邮箱会影响验证码接收和账号找回。若不是你本人操作，请不要继续。",
-            confirmLabel = "允许修改",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("修改邮箱确认"),
+            operationLabel = L10n.text("修改邮箱"),
+            title = L10n.text("是否允许本次邮箱变更"),
+            subtitle = L10n.format("检测到网页端或桌面端正在尝试修改账号 {0} 绑定的邮箱地址。", username),
+            securityHint = L10n.text("邮箱会影响验证码接收和账号找回。若不是你本人操作，请不要继续。"),
+            confirmLabel = L10n.text("允许修改"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.AlternateEmail,
             accent = MaterialTheme.colorScheme.secondary,
             accentSoft = MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f),
@@ -348,13 +366,13 @@ private fun rememberConfirmationVisual(
         )
 
         "ADD_PASSKEY" -> buildVisual(
-            pageTitle = "新增 Passkey 确认",
-            operationLabel = "新增 Passkey",
-            title = "是否允许新增 Passkey",
-            subtitle = "检测到网页端或桌面端正在为账号 $username 绑定新的 Passkey 凭证。",
-            securityHint = "只有在你本人正在添加新的安全凭证时才应继续，避免他人向账号写入可登录凭证。",
-            confirmLabel = "允许添加",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("新增 Passkey 确认"),
+            operationLabel = L10n.text("新增 Passkey"),
+            title = L10n.text("是否允许新增 Passkey"),
+            subtitle = L10n.format("检测到网页端或桌面端正在为账号 {0} 绑定新的 Passkey 凭证。", username),
+            securityHint = L10n.text("只有在你本人正在添加新的安全凭证时才应继续，避免他人向账号写入可登录凭证。"),
+            confirmLabel = L10n.text("允许添加"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.Key,
             accent = MaterialTheme.colorScheme.primary,
             accentSoft = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
@@ -362,13 +380,13 @@ private fun rememberConfirmationVisual(
         )
 
         "DELETE_PASSKEY" -> buildVisual(
-            pageTitle = "删除 Passkey 确认",
-            operationLabel = "删除 Passkey",
-            title = "是否允许删除 Passkey",
-            subtitle = "检测到网页端或桌面端正在删除账号 $username 的某个 Passkey。",
-            securityHint = "删除后可能影响你后续无密码登录。请确认这是你本人在管理安全凭证。",
-            confirmLabel = "允许删除",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("删除 Passkey 确认"),
+            operationLabel = L10n.text("删除 Passkey"),
+            title = L10n.text("是否允许删除 Passkey"),
+            subtitle = L10n.format("检测到网页端或桌面端正在删除账号 {0} 的某个 Passkey。", username),
+            securityHint = L10n.text("删除后可能影响你后续无密码登录。请确认这是你本人在管理安全凭证。"),
+            confirmLabel = L10n.text("允许删除"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.Key,
             accent = MaterialTheme.colorScheme.tertiary,
             accentSoft = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f),
@@ -376,13 +394,13 @@ private fun rememberConfirmationVisual(
         )
 
         "ENABLE_TOTP" -> buildVisual(
-            pageTitle = "启用 TOTP 确认",
-            operationLabel = "启用 TOTP",
-            title = "是否允许启用 TOTP",
-            subtitle = "检测到网页端或桌面端正在为账号 $username 开启动态验证码验证。",
-            securityHint = "启用后将提升账号安全性，但请确保这是你本人在配置新的验证方式。",
-            confirmLabel = "允许启用",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("启用 TOTP 确认"),
+            operationLabel = L10n.text("启用 TOTP"),
+            title = L10n.text("是否允许启用 TOTP"),
+            subtitle = L10n.format("检测到网页端或桌面端正在为账号 {0} 开启动态验证码验证。", username),
+            securityHint = L10n.text("启用后将提升账号安全性，但请确保这是你本人在配置新的验证方式。"),
+            confirmLabel = L10n.text("允许启用"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.Shield,
             accent = MaterialTheme.colorScheme.primary,
             accentSoft = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
@@ -390,13 +408,13 @@ private fun rememberConfirmationVisual(
         )
 
         "DISABLE_TOTP" -> buildVisual(
-            pageTitle = "禁用 TOTP 确认",
-            operationLabel = "禁用 TOTP",
-            title = "是否允许禁用 TOTP",
-            subtitle = "检测到网页端或桌面端正在尝试关闭账号 $username 的动态验证码验证。",
-            securityHint = "关闭二次验证会降低账号安全性。若不是你本人在调整安全设置，请立即取消。",
-            confirmLabel = "允许关闭",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("禁用 TOTP 确认"),
+            operationLabel = L10n.text("禁用 TOTP"),
+            title = L10n.text("是否允许禁用 TOTP"),
+            subtitle = L10n.format("检测到网页端或桌面端正在尝试关闭账号 {0} 的动态验证码验证。", username),
+            securityHint = L10n.text("关闭二次验证会降低账号安全性。若不是你本人在调整安全设置，请立即取消。"),
+            confirmLabel = L10n.text("允许关闭"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.AdminPanelSettings,
             accent = MaterialTheme.colorScheme.error,
             accentSoft = MaterialTheme.colorScheme.error.copy(alpha = 0.08f),
@@ -404,13 +422,13 @@ private fun rememberConfirmationVisual(
         )
 
         "MFA_VERIFY" -> buildVisual(
-            pageTitle = "验证确认",
-            operationLabel = "二次验证",
-            title = "是否确认本次登录验证",
-            subtitle = "检测到网页端或桌面端正在进行二次验证。确认后，该设备将继续完成账号 $username 的登录流程。",
-            securityHint = "仅当这是你本人正在登录时才继续。若不是你发起的操作，请立即取消。",
-            confirmLabel = "确认验证",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("验证确认"),
+            operationLabel = L10n.text("二次验证"),
+            title = L10n.text("是否确认本次登录验证"),
+            subtitle = L10n.format("检测到网页端或桌面端正在进行二次验证。确认后，该设备将继续完成账号 {0} 的登录流程。", username),
+            securityHint = L10n.text("仅当这是你本人正在登录时才继续。若不是你发起的操作，请立即取消。"),
+            confirmLabel = L10n.text("确认验证"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.Shield,
             accent = MaterialTheme.colorScheme.secondary,
             accentSoft = MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f),
@@ -418,13 +436,13 @@ private fun rememberConfirmationVisual(
         )
 
         "SENSITIVE_VERIFY" -> buildVisual(
-            pageTitle = "敏感操作确认",
-            operationLabel = "敏感操作",
-            title = "是否允许本次敏感操作",
-            subtitle = "检测到网页端或桌面端正在执行需要额外验证的账号操作。",
-            securityHint = "请确认这是你本人正在执行的设置修改、账号安全或其他敏感操作。若非本人操作，请取消。",
-            confirmLabel = "允许操作",
-            loadingLabel = "提交中...",
+            pageTitle = L10n.text("敏感操作确认"),
+            operationLabel = L10n.text("敏感操作"),
+            title = L10n.text("是否允许本次敏感操作"),
+            subtitle = L10n.text("检测到网页端或桌面端正在执行需要额外验证的账号操作。"),
+            securityHint = L10n.text("请确认这是你本人正在执行的设置修改、账号安全或其他敏感操作。若非本人操作，请取消。"),
+            confirmLabel = L10n.text("允许操作"),
+            loadingLabel = L10n.text("提交中..."),
             icon = Icons.Outlined.Security,
             accent = MaterialTheme.colorScheme.tertiary,
             accentSoft = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f),
@@ -432,13 +450,13 @@ private fun rememberConfirmationVisual(
         )
 
         "ACCOUNT_RECOVERY" -> buildVisual(
-            pageTitle = "账号恢复背书",
-            operationLabel = "账号恢复",
-            title = "是否为当前恢复请求背书",
-            subtitle = "检测到网页端或桌面端正在请求为账号 $username 发起一次性恢复授权。确认后，对方设备可继续重置密码。",
-            securityHint = "仅当这是你本人正在恢复账号时才继续。恢复成功后，旧会话会被撤销，当前恢复设备会获得新的登录态。",
-            confirmLabel = "确认背书",
-            loadingLabel = "背书中...",
+            pageTitle = L10n.text("账号恢复背书"),
+            operationLabel = L10n.text("账号恢复"),
+            title = L10n.text("是否为当前恢复请求背书"),
+            subtitle = L10n.format("检测到网页端或桌面端正在请求为账号 {0} 发起一次性恢复授权。确认后，对方设备可继续重置密码。", username),
+            securityHint = L10n.text("仅当这是你本人正在恢复账号时才继续。恢复成功后，旧会话会被撤销，当前恢复设备会获得新的登录态。"),
+            confirmLabel = L10n.text("确认背书"),
+            loadingLabel = L10n.text("背书中..."),
             icon = Icons.Outlined.Security,
             accent = MaterialTheme.colorScheme.primary,
             accentSoft = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
@@ -446,28 +464,28 @@ private fun rememberConfirmationVisual(
         )
 
         "LOGIN_THIS_PHONE" -> buildVisual(
-            pageTitle = "登录此手机",
-            operationLabel = "跨端登录",
-            title = "是否登录此手机",
-            subtitle = "确认后，此手机将使用二维码对应账号完成登录，并进入账号主页。",
-            securityHint = "请确认二维码来自你信任的网页登录页或设备，避免在陌生场景下登录他人账号。",
-            confirmLabel = "确认登录",
-            loadingLabel = "登录中...",
+            pageTitle = L10n.text("登录此手机"),
+            operationLabel = L10n.text("跨端登录"),
+            title = L10n.text("是否登录此手机"),
+            subtitle = L10n.text("确认后，此手机将使用二维码对应账号完成登录，并进入账号主页。"),
+            securityHint = L10n.text("请确认二维码来自你信任的网页登录页或设备，避免在陌生场景下登录他人账号。"),
+            confirmLabel = L10n.text("确认登录"),
+            loadingLabel = L10n.text("登录中..."),
             icon = Icons.Outlined.PhoneAndroid,
             accent = MaterialTheme.colorScheme.primary,
             accentSoft = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-            accountLabel = "将登录到本机",
+            accountLabel = L10n.text("将登录到本机"),
         )
 
         "SWITCH_AND_LOGIN_THIS_PHONE" -> buildVisual(
-            pageTitle = "切换并登录",
-            operationLabel = "切换账号登录",
-            title = "是否切换并登录此手机",
-            subtitle = "当前手机已登录其他账号。确认后，将切换为二维码对应账号并继续使用此设备。",
-            securityHint = "切换后，当前账号会被替换。若这不是你本人操作，请取消，避免账号混用或误登录。",
-            confirmLabel = "继续登录",
-            cancelLabel = "暂不切换",
-            loadingLabel = "切换中...",
+            pageTitle = L10n.text("切换并登录"),
+            operationLabel = L10n.text("切换账号登录"),
+            title = L10n.text("是否切换并登录此手机"),
+            subtitle = L10n.text("当前手机已登录其他账号。确认后，将切换为二维码对应账号并继续使用此设备。"),
+            securityHint = L10n.text("切换后，当前账号会被替换。若这不是你本人操作，请取消，避免账号混用或误登录。"),
+            confirmLabel = L10n.text("继续登录"),
+            cancelLabel = L10n.text("暂不切换"),
+            loadingLabel = L10n.text("切换中..."),
             icon = Icons.Outlined.SyncAlt,
             accent = MaterialTheme.colorScheme.tertiary,
             accentSoft = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.10f),
@@ -478,10 +496,10 @@ private fun rememberConfirmationVisual(
             pageTitle = loginCopy.pageTitle,
             operationLabel = loginCopy.operationLabel,
             title = loginCopy.title,
-            subtitle = loginCopy.subtitlePrefix + "确认后，对应设备将使用账号 $username 登录。",
+            subtitle = loginCopy.subtitlePrefix + L10n.format("确认后，对应设备将使用账号 {0} 登录。", username),
             securityHint = loginCopy.securityHint,
-            confirmLabel = "允许登录",
-            loadingLabel = "提交中...",
+            confirmLabel = L10n.text("允许登录"),
+            loadingLabel = L10n.text("提交中..."),
             icon = loginCopy.icon,
             accent = MaterialTheme.colorScheme.primary,
             accentSoft = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
@@ -503,7 +521,7 @@ private fun buildVisual(
     accent: Color,
     accentSoft: Color,
     accountLabel: String,
-    cancelLabel: String = "取消",
+    cancelLabel: String = L10n.text("取消"),
 ): QrConfirmationVisual {
     return QrConfirmationVisual(
         pageTitle = pageTitle,
@@ -527,6 +545,9 @@ private fun defaultOperationHint(type: QrConfirmationType): String {
         QrConfirmationType.APPROVE_MFA -> "MFA_VERIFY"
         QrConfirmationType.APPROVE_SENSITIVE -> "SENSITIVE_VERIFY"
         QrConfirmationType.APPROVE_RECOVERY -> "ACCOUNT_RECOVERY"
+        QrConfirmationType.APPROVE_APPLICATION -> "APPLICATION"
+        QrConfirmationType.APPROVE_OFFICIAL -> "OFFICIAL"
+        QrConfirmationType.APPROVE_CONSOLE_LOGIN -> "CONSOLE"
         QrConfirmationType.LOGIN_THIS_PHONE -> "LOGIN_THIS_PHONE"
         QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE -> "SWITCH_AND_LOGIN_THIS_PHONE"
     }
@@ -544,25 +565,25 @@ private data class LoginCopy(
 private fun resolveLoginCopy(preview: QrScanPreview?): LoginCopy {
     val clientName = preview?.clientName.orEmpty().trim()
     val browser = preview?.browser.orEmpty().trim()
-    val isDesktop = clientName.contains("桌面", ignoreCase = true) ||
+    val isDesktop = clientName.contains(L10n.text("桌面"), ignoreCase = true) ||
         browser.startsWith("Ksuser Auth Desktop", ignoreCase = true)
 
     return if (isDesktop) {
         LoginCopy(
-            pageTitle = "桌面登录确认",
-            operationLabel = "桌面端登录",
-            title = "确认这次桌面登录吗",
-            subtitlePrefix = "检测到一台桌面设备正在请求登录。 ",
-            securityHint = "请确认这是你本人正在使用的桌面设备。若非本人发起，请立即取消，避免账号被其他电脑登录。",
+            pageTitle = L10n.text("桌面登录确认"),
+            operationLabel = L10n.text("桌面端登录"),
+            title = L10n.text("确认这次桌面登录吗"),
+            subtitlePrefix = L10n.text("检测到一台桌面设备正在请求登录。 "),
+            securityHint = L10n.text("请确认这是你本人正在使用的桌面设备。若非本人发起，请立即取消，避免账号被其他电脑登录。"),
             icon = Icons.Outlined.DesktopWindows,
         )
     } else {
         LoginCopy(
-            pageTitle = "网页登录确认",
-            operationLabel = "网页登录",
-            title = "确认这次网页登录吗",
-            subtitlePrefix = "检测到浏览器发起新的登录请求。 ",
-            securityHint = "请确认这是你本人正在访问的网页。若非本人发起，请立即取消，避免账号被其他浏览器登录。",
+            pageTitle = L10n.text("网页登录确认"),
+            operationLabel = L10n.text("网页登录"),
+            title = L10n.text("确认这次网页登录吗"),
+            subtitlePrefix = L10n.text("检测到浏览器发起新的登录请求。 "),
+            securityHint = L10n.text("请确认这是你本人正在访问的网页。若非本人发起，请立即取消，避免账号被其他浏览器登录。"),
             icon = Icons.Outlined.Security,
         )
     }

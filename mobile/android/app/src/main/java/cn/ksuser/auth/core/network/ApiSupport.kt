@@ -16,9 +16,14 @@ data class ApiEnvelope<T>(
 
 class ApiException(
     val statusCode: Int,
-    override val message: String,
+    message: String,
     val errorCode: String? = null,
-) : RuntimeException(message)
+    val params: Map<String, JsonElement>? = null,
+) : RuntimeException(message) {
+    override val message: String get() = if (errorCode != null)
+        ApiResultCodeResolver.message(errorCode, params, statusCode)
+        else cn.ksuser.auth.core.settings.L10n.text(super.message.orEmpty())
+}
 
 suspend fun <T> executeEnvelope(
     gson: Gson,
@@ -29,6 +34,9 @@ suspend fun <T> executeEnvelope(
     if (response.isSuccessful && body != null) {
         return body
     }
+    if (response.isSuccessful) {
+        throw ApiException(500, ApiResultCodeResolver.message("INVALID_RESPONSE"), "INVALID_RESPONSE")
+    }
 
     val parsedError = response.errorBody()?.charStream()?.use { reader ->
         runCatching { gson.fromJson(reader, ApiEnvelope::class.java) }.getOrNull()
@@ -38,6 +46,7 @@ suspend fun <T> executeEnvelope(
         response.code(),
         ApiResultCodeResolver.message(result?.errorCode, result?.params, response.code()),
         result?.errorCode,
+        result?.params,
     )
 }
 
@@ -47,5 +56,5 @@ fun requireCode(
 ) {
     val code = envelope.code ?: throw ApiException(500, ApiResultCodeResolver.message("INVALID_RESPONSE"), "INVALID_RESPONSE")
     if (acceptedCodes.contains(code)) return
-    throw ApiException(code, envelope.resultMessage, envelope.errorCode)
+    throw ApiException(code, envelope.resultMessage, envelope.errorCode, envelope.params)
 }

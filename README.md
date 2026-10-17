@@ -173,6 +173,7 @@ npm run dev:web
 - [API 详细接口索引](./api/docs/README.md)
 - [Web 文档](./web/README.md)
 - [Desktop 文档](./desktop/README.md)
+- [Android 文档](./mobile/android/README.md)、[验收记录](./mobile/android/ACCEPTANCE.md)、[发布流程](./mobile/android/RELEASE.md)
 - [iOS 文档](./docs/ios/README.md)
 - [Demo 索引](./demos/README.md)
 

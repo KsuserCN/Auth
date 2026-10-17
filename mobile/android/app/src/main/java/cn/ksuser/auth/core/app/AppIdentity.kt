@@ -15,14 +15,15 @@ data class AppIdentity(
 
 object AppIdentityProvider {
     fun current(context: Context): AppIdentity {
-        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.packageManager.getPackageInfo(
                 context.packageName,
                 PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()),
             )
         } else {
             @Suppress("DEPRECATION")
-            context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES)
+            context.packageManager.getPackageInfo(context.packageName,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES)
         }
 
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
