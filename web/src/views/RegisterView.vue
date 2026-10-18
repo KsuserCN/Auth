@@ -1,274 +1,222 @@
 <template>
   <div class="login-container" :class="{ dark: isDark }">
     <div class="login-box">
-      <!-- 左侧：Logo和说明 -->
       <div class="login-left">
         <div class="logo-section">
           <img src="/favicon.ico" alt="Logo" class="logo-icon" />
         </div>
         <h1 class="login-title">
-          {{ getPendingOAuthBind() ? t('ui.register.message001') : t('ui.register.message002') }}
+          {{ pendingOAuthBind ? t('ui.register.message001') : t('ui.register.message002') }}
         </h1>
         <p class="login-description">
-          {{ getPendingOAuthBind() ? t('ui.register.message003') : t('ui.register.message004') }}
+          {{ pendingOAuthBind ? t('ui.register.message003') : t('ui.register.message004') }}
         </p>
-        <p v-if="!getPendingOAuthBind()" class="login-description">
+        <p v-if="!pendingOAuthBind" class="login-description">
           {{ t('ui.register.message005')
           }}<router-link to="/login" class="link">{{ t('ui.register.message006') }}</router-link>
         </p>
         <div class="feature-list">
           <div class="feature-item">
-            <el-icon class="feature-icon" :size="20">
-              <Lock />
-            </el-icon>
+            <el-icon class="feature-icon" :size="20"><Lock /></el-icon>
             <span class="feature-text">{{ t('ui.appleRegister.message003') }}</span>
           </div>
           <div class="feature-item">
-            <el-icon class="feature-icon" :size="20">
-              <Lightning />
-            </el-icon>
+            <el-icon class="feature-icon" :size="20"><Lightning /></el-icon>
             <span class="feature-text">{{ t('ui.appleRegister.message004') }}</span>
           </div>
           <div class="feature-item">
-            <el-icon class="feature-icon" :size="20">
-              <Key />
-            </el-icon>
+            <el-icon class="feature-icon" :size="20"><Key /></el-icon>
             <span class="feature-text">{{ t('ui.changePassword.message005') }}</span>
           </div>
         </div>
       </div>
 
-      <!-- 右侧：表单内容 -->
       <div class="login-right">
+        <p class="step-progress" role="status">
+          {{ t('ui.register.progress', { current: step === 'details' ? 1 : 2, total: 2 }) }}
+        </p>
         <Transition
-          :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
+          :name="step === 'code' ? 'step-slide-forward' : 'step-slide-backward'"
           mode="out-in"
+          @after-enter="focusCurrentStep"
         >
-          <!-- 第一步：用户名 -->
-          <div v-if="step === 'username'" class="step-container" key="username">
-            <h2 class="step-title">{{ t('ui.appleRegister.message019') }}</h2>
-            <p class="step-subtitle">{{ t('ui.register.message007') }}</p>
-
-            <el-form
-              ref="usernameFormRef"
-              :model="formData"
-              :rules="usernameRules"
-              label-position="top"
-              @submit.prevent="goToPassword"
+          <div v-if="accountCreated" key="created" class="step-container created-account">
+            <h2 class="step-title">{{ t('ui.register.accountCreatedTitle') }}</h2>
+            <p v-if="completionError" class="form-notice" role="alert">
+              {{ t('ui.register.completionFailed') }}
+            </p>
+            <el-button
+              class="next-btn continue-account-btn"
+              :loading="registerLoading"
+              :disabled="registerLoading"
+              @click="retryCompletion"
             >
-              <el-form-item prop="username">
+              {{ t('ui.register.openAccount') }}
+            </el-button>
+          </div>
+          <div v-else-if="step === 'details'" key="details" class="step-container">
+            <h2 class="step-title">{{ t('ui.register.detailsTitle') }}</h2>
+            <p class="step-subtitle">{{ t('ui.register.detailsSubtitle') }}</p>
+            <p v-if="detailsError" class="form-notice" role="alert">
+              {{ renderMessage(detailsError) }}
+            </p>
+            <el-form
+              ref="detailsFormRef"
+              data-testid="details-form"
+              :model="formData"
+              :rules="detailsRules"
+              :disabled="busy"
+              label-position="top"
+              novalidate
+              @submit.prevent="handleContinue"
+            >
+              <el-form-item prop="username" :label="t('ui.register.usernameLabel')">
                 <el-input
+                  id="register-username"
                   v-model="formData.username"
+                  name="username"
                   :placeholder="t('ui.deleteAccount.message012')"
-                  autocomplete="off"
+                  autocomplete="username"
                   autofocus
+                  aria-describedby="register-username-hint"
                 />
               </el-form-item>
-            </el-form>
-
-            <div
-              v-if="usernameCheckResult"
-              class="status-tip"
-              :class="usernameAvailable ? 'available' : 'unavailable'"
-            >
-              <el-icon :size="14">
-                <CircleCheck v-if="usernameAvailable" />
-                <CircleClose v-else />
-              </el-icon>
-              <span>{{ renderMessage(usernameCheckResult) }}</span>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="handleCancel">{{
-                t('ui.addPasskey.message009')
-              }}</el-button>
-              <el-button class="next-btn" @click="goToPassword" :loading="usernameLoading">
-                {{ t('ui.changePassword.message009') }}
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 第二步：密码 -->
-          <div v-else-if="step === 'password'" class="step-container" key="password">
-            <h2 class="step-title">{{ t('ui.register.message008') }}</h2>
-            <p class="step-subtitle">
-              {{
-                resolveApiResult({
-                  errorCode: passwordRequirement.requirementCode,
-                  params: passwordRequirement.requirementParams,
-                })
-              }}
-            </p>
-
-            <el-form
-              ref="passwordFormRef"
-              :model="formData"
-              :rules="passwordRules"
-              label-position="top"
-              @submit.prevent="goToPasswordConfirm"
-            >
-              <el-form-item prop="password">
+              <p id="register-username-hint" class="field-hint">
+                {{ t('ui.register.message007') }}
+              </p>
+              <div
+                v-if="usernameCheckResult"
+                class="status-tip"
+                :class="usernameAvailable ? 'available' : 'unavailable'"
+                role="status"
+              >
+                <el-icon :size="14">
+                  <CircleCheck v-if="usernameAvailable" /><CircleClose v-else />
+                </el-icon>
+                <span>{{ renderMessage(usernameCheckResult) }}</span>
+              </div>
+              <el-form-item prop="email" :label="t('ui.register.emailLabel')">
                 <el-input
+                  id="register-email"
+                  v-model="formData.email"
+                  name="email"
+                  type="email"
+                  :placeholder="t('ui.login.message011')"
+                  autocomplete="email"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
+              </el-form-item>
+              <el-form-item prop="password" :label="t('ui.register.passwordLabel')">
+                <el-input
+                  id="register-password"
                   v-model="formData.password"
+                  name="password"
                   type="password"
                   :placeholder="t('ui.sensitiveVerificationDialog.message006')"
                   show-password
                   autocomplete="new-password"
-                  autofocus
+                  aria-describedby="register-password-hint"
                 />
               </el-form-item>
-            </el-form>
-
-            <div class="password-requirements">
-              <div class="requirement-title">{{ t('ui.changePassword.message008') }}</div>
-              <div
-                v-for="(item, index) in requirementItems"
-                :key="index"
-                class="requirement-item"
-                :class="{ met: item.met }"
-              >
-                <el-icon :size="14">
-                  <CircleCheck v-if="item.met" />
-                  <CircleClose v-else />
-                </el-icon>
-                <span>{{ item.text }}</span>
+              <div id="register-password-hint" class="password-requirements">
+                <div
+                  v-for="item in requirementItems"
+                  :key="item.text"
+                  class="requirement-item"
+                  :class="{ met: item.met }"
+                >
+                  <el-icon :size="14">
+                    <CircleCheck v-if="item.met" /><CircleClose v-else />
+                  </el-icon>
+                  <span>{{ item.text }}</span>
+                </div>
               </div>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToUsername">{{
-                t('ui.sensitiveVerificationDialog.message007')
-              }}</el-button>
-              <el-button class="next-btn" @click="goToPasswordConfirm">
-                {{ t('ui.changePassword.message009') }}
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 第三步：确认密码 -->
-          <div
-            v-else-if="step === 'password-confirm'"
-            class="step-container"
-            key="password-confirm"
-          >
-            <h2 class="step-title">{{ t('ui.register.message009') }}</h2>
-            <p class="step-subtitle">{{ t('ui.register.message010') }}</p>
-
-            <el-form
-              ref="passwordConfirmFormRef"
-              :model="formData"
-              :rules="passwordConfirmRules"
-              label-position="top"
-              @submit.prevent="goToEmail"
-            >
-              <el-form-item prop="passwordConfirm">
-                <el-input
-                  v-model="formData.passwordConfirm"
-                  type="password"
-                  :placeholder="t('ui.register.message011')"
-                  show-password
-                  autocomplete="new-password"
-                  autofocus
-                />
-              </el-form-item>
+              <div class="step-actions">
+                <el-button class="back-btn" :disabled="busy" @click="handleCancel">
+                  {{ t('ui.addPasskey.message009') }}
+                </el-button>
+                <el-button
+                  class="next-btn"
+                  native-type="submit"
+                  :loading="sendLoading"
+                  :disabled="busy || (!hasUsableCode && !canResendCode)"
+                >
+                  {{
+                    hasUsableCode
+                      ? t('ui.register.continueVerification')
+                      : !canResendCode
+                        ? t('ui.register.resendCountdown', { seconds: codeCountdown })
+                        : t('ui.register.sendAndContinue')
+                  }}
+                </el-button>
+              </div>
             </el-form>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToPassword">{{
-                t('ui.sensitiveVerificationDialog.message007')
-              }}</el-button>
-              <el-button class="next-btn" @click="goToEmail">
-                {{ t('ui.changePassword.message009') }}
-              </el-button>
-            </div>
           </div>
 
-          <!-- 第四步：邮箱 -->
-          <div v-else-if="step === 'email'" class="step-container" key="email">
-            <h2 class="step-title">{{ t('ui.register.message012') }}</h2>
-            <p class="step-subtitle">{{ t('ui.register.message013') }}</p>
-
-            <el-form
-              ref="emailFormRef"
-              :model="formData"
-              :rules="emailRules"
-              label-position="top"
-              @submit.prevent="handleSendCode"
-            >
-              <el-form-item prop="email">
-                <el-input
-                  v-model="formData.email"
-                  type="email"
-                  :placeholder="t('ui.login.message011')"
-                  autocomplete="email"
-                  autofocus
-                />
-              </el-form-item>
-            </el-form>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToPasswordConfirm">{{
-                t('ui.sensitiveVerificationDialog.message007')
-              }}</el-button>
-              <el-button class="next-btn" @click="handleSendCode" :loading="sendLoading">
-                {{ t('ui.changeEmail.message009') }}
-              </el-button>
-            </div>
-          </div>
-
-          <!-- 第五步：验证码 -->
-          <div v-else-if="step === 'code'" class="step-container" key="code">
-            <h2 class="step-title">{{ t('ui.changeEmail.message010') }}</h2>
-            <p class="step-subtitle">{{ t('ui.changeEmail.message011') }} {{ formData.email }}</p>
-
+          <div v-else key="code" class="step-container">
+            <h2 class="step-title">{{ t('ui.register.verifyTitle') }}</h2>
+            <p class="step-subtitle">{{ t('ui.changeEmail.message011') }}</p>
             <div class="email-confirm">
               <span class="email-display">{{ formData.email }}</span>
-              <el-button link class="change-email-btn" @click="backToEmail">{{
-                t('ui.changeEmail.message012')
-              }}</el-button>
+              <el-button link class="change-email-btn" :disabled="busy" @click="backToDetails">
+                {{ t('ui.register.editDetails') }}
+              </el-button>
             </div>
-
+            <p v-if="!hasUsableCode" class="form-notice" role="alert">
+              {{ t('ui.register.codeRequiredAgain') }}
+            </p>
             <el-form
               ref="codeFormRef"
+              data-testid="code-form"
               :model="formData"
               :rules="codeRules"
+              :disabled="busy"
               label-position="top"
+              novalidate
               @submit.prevent="handleRegister"
             >
-              <el-form-item prop="code">
+              <el-form-item prop="code" :label="t('ui.register.codeLabel')">
                 <el-input
+                  id="register-code"
                   v-model="formData.code"
+                  name="code"
                   :placeholder="t('ui.sensitiveVerificationDialog.message010')"
                   maxlength="6"
-                  @input="formData.code = formData.code.replace(/[^\d]/g, '')"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  @input="formData.code = formData.code.replace(/[^\d]/g, '').slice(0, 6)"
                   autofocus
                 />
               </el-form-item>
+              <div class="code-actions">
+                <el-button
+                  class="resend-btn"
+                  :disabled="busy || !canResendCode"
+                  :loading="resendLoading"
+                  @click="resendCode"
+                >
+                  {{
+                    canResendCode
+                      ? t('ui.sensitiveVerificationDialog.message012')
+                      : t('ui.register.resendCountdown', { seconds: codeCountdown })
+                  }}
+                </el-button>
+              </div>
+              <div class="step-actions">
+                <el-button class="back-btn" :disabled="busy" @click="backToDetails">
+                  {{ t('ui.sensitiveVerificationDialog.message007') }}
+                </el-button>
+                <el-button
+                  class="next-btn"
+                  native-type="submit"
+                  :loading="registerLoading"
+                  :disabled="busy || !hasUsableCode"
+                >
+                  {{ pendingOAuthBind ? t('ui.register.bindSubmit') : t('ui.register.message002') }}
+                </el-button>
+              </div>
             </el-form>
-
-            <div class="code-actions">
-              <el-button v-if="!canResendCode" disabled class="resend-btn resend-disabled">
-                {{ codeCountdown }}{{ t('ui.changeEmail.message013') }}
-              </el-button>
-              <el-button
-                v-else
-                type="primary"
-                @click="resendCode"
-                class="resend-btn"
-                :loading="resendLoading"
-              >
-                {{ t('ui.sensitiveVerificationDialog.message012') }}
-              </el-button>
-            </div>
-
-            <div class="step-actions">
-              <el-button class="back-btn" @click="backToEmail">{{
-                t('ui.sensitiveVerificationDialog.message007')
-              }}</el-button>
-              <el-button class="next-btn" @click="handleRegister" :loading="registerLoading">
-                {{ t('ui.register.message002') }}
-              </el-button>
-            </div>
           </div>
         </Transition>
       </div>
@@ -278,9 +226,8 @@
 
 <script setup lang="ts">
 import { t, uiMessage, renderMessage, type LocalizedMessage, LocalizedError } from '@/i18n'
-
-import { resolveApiResult } from '@/utils/apiResult'
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ApiError } from '@/utils/apiResult'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { Lock, Lightning, Key, CircleCheck, CircleClose } from '@element-plus/icons-vue'
@@ -299,348 +246,50 @@ import { finalizeWebLogin } from '@/utils/desktopBridge'
 
 const router = useRouter()
 const route = useRoute()
-// 表单引用
-const usernameFormRef = ref<FormInstance>()
-const passwordFormRef = ref<FormInstance>()
-const passwordConfirmFormRef = ref<FormInstance>()
-const emailFormRef = ref<FormInstance>()
+const detailsFormRef = ref<FormInstance>()
 const codeFormRef = ref<FormInstance>()
-
-// 流程步骤
-const step = ref<'username' | 'password' | 'password-confirm' | 'email' | 'code'>('username')
-const stepDirection = ref<'forward' | 'backward'>('forward')
-
-const stepOrder = ['username', 'password', 'password-confirm', 'email', 'code']
-
-const updateStep = (newStep: 'username' | 'password' | 'password-confirm' | 'email' | 'code') => {
-  const currentIndex = stepOrder.indexOf(step.value)
-  const newIndex = stepOrder.indexOf(newStep)
-  stepDirection.value = newIndex > currentIndex ? 'forward' : 'backward'
-  step.value = newStep
-}
-
-// 使用 VueUse 的 useDark 同步暗黑模式
+const step = ref<'details' | 'code'>('details')
 const isDark = useDark({
   storageKey: 'theme-preference',
   valueDark: 'dark',
   valueLight: 'light',
 })
-
-// 表单数据
-const formData = ref({
-  username: '',
-  password: '',
-  passwordConfirm: '',
-  email: '',
-  code: '',
-})
-
-// 密码要求
+const formData = ref({ username: '', email: '', password: '', code: '' })
+// Match the server's defaults until the configured policy has loaded.
 const passwordRequirement = ref<PasswordRequirement>({
   minLength: 6,
   maxLength: 66,
-  requireUppercase: true,
-  requireLowercase: true,
+  requireUppercase: false,
+  requireLowercase: false,
   requireDigits: true,
   requireSpecialChars: false,
   rejectCommonWeakPasswords: true,
-  requirementCode: 'PASSWORD_REQUIREMENTS_7',
-  requirementParams: { minLength: 6, maxLength: 66 },
+  requirementCode: 'PASSWORD_REQUIREMENTS_4',
 })
-
-// 用户名检查
-const usernameLoading = ref(false)
 const usernameCheckResult = ref<LocalizedMessage>('')
 const usernameAvailable = ref(false)
-
-// 密码验证规则
-const validatePassword = (rule: any, value: any, callback: any) => {
-  const req = passwordRequirement.value
-
-  if (value === '') {
-    callback(new LocalizedError('ui.sensitiveVerificationDialog.message036'))
-  } else if (value.length < req.minLength || value.length > req.maxLength) {
-    callback(
-      new LocalizedError('ui.changePassword.message014', {
-        arg0: req.minLength,
-        arg1: req.maxLength,
-      }),
-    )
-  } else if (req.requireUppercase && !/[A-Z]/.test(value)) {
-    callback(new LocalizedError('ui.changePassword.message015'))
-  } else if (req.requireLowercase && !/[a-z]/.test(value)) {
-    callback(new LocalizedError('ui.changePassword.message016'))
-  } else if (req.requireDigits && !/\d/.test(value)) {
-    callback(new LocalizedError('ui.changePassword.message017'))
-  } else if (req.requireSpecialChars && !/[!@#$%^&*(),.?":{}|<>]/.test(value)) {
-    callback(new LocalizedError('ui.changePassword.message018'))
-  } else {
-    callback()
-  }
-}
-
-const validatePasswordConfirm = (rule: any, value: any, callback: any) => {
-  if (value === '') {
-    callback(new LocalizedError('ui.register.message014'))
-  } else if (value !== formData.value.password) {
-    callback(new LocalizedError('ui.changePassword.message020'))
-  } else {
-    callback()
-  }
-}
-
-// 表单验证规则
-const usernameRules = computed<FormRules>(() => ({
-  username: [
-    { required: true, message: t('ui.deleteAccount.message021'), trigger: 'blur' },
-    { min: 3, max: 20, message: t('ui.register.message015'), trigger: 'blur' },
-    {
-      pattern: /^[a-zA-Z0-9_\-\u4e00-\u9fa5]+$/,
-      message: t('ui.register.message016'),
-      trigger: 'blur',
-    },
-  ],
-}))
-
-const passwordRules: FormRules = {
-  password: [{ required: true, validator: validatePassword, trigger: 'blur' }],
-}
-
-const passwordConfirmRules: FormRules = {
-  passwordConfirm: [{ required: true, validator: validatePasswordConfirm, trigger: 'blur' }],
-}
-
-const emailRules = computed<FormRules>(() => ({
-  email: [
-    { required: true, message: t('ui.login.message069'), trigger: 'blur' },
-    {
-      validator: (_rule, value, callback) => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(value)) {
-          callback(new LocalizedError('ui.changeEmail.message016'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur',
-    },
-  ],
-}))
-
-const codeRules = computed<FormRules>(() => ({
-  code: [
-    { required: true, message: t('ui.sensitiveVerificationDialog.message037'), trigger: 'blur' },
-    { len: 6, message: t('ui.sensitiveVerificationDialog.message038'), trigger: 'blur' },
-  ],
-}))
-
-// 加载状态
+const detailsError = ref<LocalizedMessage>('')
 const sendLoading = ref(false)
 const resendLoading = ref(false)
 const registerLoading = ref(false)
+const accountCreated = ref(false)
+const completionError = ref(false)
+const busy = computed(
+  () => sendLoading.value || resendLoading.value || registerLoading.value || accountCreated.value,
+)
 
-// 验证码倒计时
-const codeCountdown = ref(0)
-const canResendCode = ref(false)
-let codeCountdownTimer: number | null = null
+// Keep each email's cooldown when returning to edit details or switching addresses.
+const verification = ref<Record<string, { resendAt: number; usable: boolean }>>({})
+const now = ref(Date.now())
+const emailVerification = computed(() => verification.value[formData.value.email.trim()])
+const hasUsableCode = computed(() => emailVerification.value?.usable === true)
+const codeCountdown = computed(() =>
+  Math.max(0, Math.ceil(((emailVerification.value?.resendAt ?? 0) - now.value) / 1000)),
+)
+const canResendCode = computed(() => codeCountdown.value === 0)
+let codeCountdownTimer: ReturnType<typeof setInterval> | undefined
 
-// 密码要求检查
-const requirementItems = computed(() => {
-  const req = passwordRequirement.value
-  const pwd = formData.value.password
-  const items: Array<{ text: string; met: boolean }> = []
-
-  if (req.minLength || req.maxLength) {
-    items.push({
-      text: t('ui.register.message017', { arg0: req.minLength, arg1: req.maxLength }),
-      met: pwd.length >= req.minLength && pwd.length <= req.maxLength,
-    })
-  }
-
-  if (req.requireUppercase) {
-    items.push({
-      text: t('ui.register.message018'),
-      met: /[A-Z]/.test(pwd),
-    })
-  }
-
-  if (req.requireLowercase) {
-    items.push({
-      text: t('ui.register.message019'),
-      met: /[a-z]/.test(pwd),
-    })
-  }
-
-  if (req.requireDigits) {
-    items.push({
-      text: t('ui.register.message020'),
-      met: /\d/.test(pwd),
-    })
-  }
-
-  if (req.requireSpecialChars) {
-    items.push({
-      text: t('ui.register.message021'),
-      met: /[!@#$%^&*(),.?":{}|<>]/.test(pwd),
-    })
-  }
-
-  return items
-})
-
-onMounted(async () => {
-  try {
-    passwordRequirement.value = await getPasswordRequirement()
-  } catch (error) {
-    console.error('Failed to get password requirement:', error)
-  }
-})
-
-onBeforeUnmount(() => {
-  cleanupCodeCountdown()
-})
-
-const handleCancel = () => {
-  router.push({ path: '/login', query: getPendingOAuthBind() ? route.query : {} })
-}
-
-// 用户名检查
-const checkUsernameAvailability = async () => {
-  if (!formData.value.username) {
-    usernameCheckResult.value = ''
-    return false
-  }
-
-  try {
-    const available = await checkUsername(formData.value.username)
-    usernameAvailable.value = available
-    usernameCheckResult.value = available
-      ? uiMessage('ui.register.message022')
-      : uiMessage('ui.register.message023')
-    return available
-  } catch (error) {
-    usernameCheckResult.value = uiMessage('ui.register.message024')
-    usernameAvailable.value = false
-    return false
-  }
-}
-
-// 导航函数
-const goToPassword = async () => {
-  if (usernameLoading.value) return
-  usernameLoading.value = true
-  try {
-    await usernameFormRef.value?.validate()
-
-    // 点击下一步时检查用户名是否可用
-    const available = await checkUsernameAvailability()
-    if (!available) {
-      ElMessage.error(t('ui.register.message025'))
-      return
-    }
-
-    updateStep('password')
-  } catch {
-    // 验证失败
-  } finally {
-    usernameLoading.value = false
-  }
-}
-
-const backToUsername = () => {
-  updateStep('username')
-}
-
-const goToPasswordConfirm = async () => {
-  try {
-    await passwordFormRef.value?.validate()
-    updateStep('password-confirm')
-  } catch {
-    // 验证失败
-  }
-}
-
-const backToPassword = () => {
-  updateStep('password')
-}
-
-const goToEmail = async () => {
-  try {
-    await passwordConfirmFormRef.value?.validate()
-    updateStep('email')
-  } catch {
-    // 验证失败
-  }
-}
-
-const backToPasswordConfirm = () => {
-  updateStep('password-confirm')
-}
-
-const backToEmail = () => {
-  updateStep('email')
-  formData.value.code = ''
-  cleanupCodeCountdown()
-}
-
-// 验证码相关
-const startCodeCountdown = () => {
-  cleanupCodeCountdown()
-  codeCountdown.value = 60
-  canResendCode.value = false
-
-  codeCountdownTimer = window.setInterval(() => {
-    codeCountdown.value -= 1
-    if (codeCountdown.value <= 0) {
-      cleanupCodeCountdown()
-      canResendCode.value = true
-    }
-  }, 1000)
-}
-
-const cleanupCodeCountdown = () => {
-  if (codeCountdownTimer) {
-    clearInterval(codeCountdownTimer)
-    codeCountdownTimer = null
-  }
-  if (codeCountdown.value <= 0) {
-    canResendCode.value = true
-  }
-}
-
-const handleSendCode = async () => {
-  if (sendLoading.value) return
-  sendLoading.value = true
-  try {
-    await emailFormRef.value?.validate()
-
-    await sendRegisterCode({ email: formData.value.email })
-    ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
-
-    startCodeCountdown()
-    updateStep('code')
-  } catch (error: any) {
-    console.error('Send register code failed:', error)
-  } finally {
-    sendLoading.value = false
-  }
-}
-
-const resendCode = async () => {
-  if (resendLoading.value) return
-  resendLoading.value = true
-  try {
-    await sendRegisterCode({ email: formData.value.email })
-    ElMessage.success(t('ui.sensitiveVerificationDialog.message050'))
-    startCodeCountdown()
-  } catch (error: any) {
-    console.error('Resend register code failed:', error)
-  } finally {
-    resendLoading.value = false
-  }
-}
-
-const getPendingOAuthBind = (): { provider: OAuthProvider; bindToken: string } | null => {
+const pendingOAuthBind = computed<{ provider: OAuthProvider; bindToken: string } | null>(() => {
   const provider = route.query.oauthBindProvider
   const bindToken = route.query.oauthBindToken
   if (
@@ -651,51 +300,274 @@ const getPendingOAuthBind = (): { provider: OAuthProvider; bindToken: string } |
     typeof bindToken === 'string' &&
     bindToken.trim()
   ) {
-    return {
-      provider,
-      bindToken: bindToken.trim(),
-    }
+    return { provider, bindToken: bindToken.trim() }
   }
   return null
+})
+
+const requirementItems = computed(() => {
+  const req = passwordRequirement.value
+  const pwd = formData.value.password
+  return [
+    {
+      text: t('ui.register.message017', { arg0: req.minLength, arg1: req.maxLength }),
+      met: pwd.length >= req.minLength && pwd.length <= req.maxLength,
+    },
+    ...(req.requireUppercase
+      ? [{ text: t('ui.register.message018'), met: /[A-Z]/.test(pwd) }]
+      : []),
+    ...(req.requireLowercase
+      ? [{ text: t('ui.register.message019'), met: /[a-z]/.test(pwd) }]
+      : []),
+    ...(req.requireDigits ? [{ text: t('ui.register.message020'), met: /\d/.test(pwd) }] : []),
+    ...(req.requireSpecialChars
+      ? [{ text: t('ui.register.message021'), met: /[@$!%*?&]/.test(pwd) }]
+      : []),
+  ]
+})
+
+const detailsRules = computed<FormRules>(() => ({
+  username: [
+    { required: true, message: t('ui.deleteAccount.message021'), trigger: 'blur' },
+    { min: 3, max: 20, message: t('ui.register.message015'), trigger: 'blur' },
+    {
+      pattern: /^[a-zA-Z0-9_\-\u4e00-\u9fa5]+$/,
+      message: t('ui.register.message016'),
+      trigger: 'blur',
+    },
+  ],
+  email: [
+    { required: true, message: t('ui.login.message069'), trigger: 'blur' },
+    {
+      pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      message: t('ui.changeEmail.message016'),
+      trigger: 'blur',
+    },
+  ],
+  password: [
+    {
+      required: true,
+      trigger: 'blur',
+      validator: (_rule, value: string, callback) => {
+        const req = passwordRequirement.value
+        let error: LocalizedError | undefined
+        if (!value) error = new LocalizedError('ui.sensitiveVerificationDialog.message036')
+        else if (value.length < req.minLength || value.length > req.maxLength) {
+          error = new LocalizedError('ui.changePassword.message014', {
+            arg0: req.minLength,
+            arg1: req.maxLength,
+          })
+        } else if (req.requireUppercase && !/[A-Z]/.test(value))
+          error = new LocalizedError('ui.changePassword.message015')
+        else if (req.requireLowercase && !/[a-z]/.test(value))
+          error = new LocalizedError('ui.changePassword.message016')
+        else if (req.requireDigits && !/\d/.test(value))
+          error = new LocalizedError('ui.changePassword.message017')
+        else if (req.requireSpecialChars && !/[@$!%*?&]/.test(value))
+          error = new LocalizedError('ui.changePassword.message018')
+        callback(error)
+      },
+    },
+  ],
+}))
+const codeRules = computed<FormRules>(() => ({
+  code: [
+    { required: true, message: t('ui.sensitiveVerificationDialog.message037'), trigger: 'blur' },
+    {
+      pattern: /^\d{6}$/,
+      message: t('ui.sensitiveVerificationDialog.message038'),
+      trigger: 'blur',
+    },
+  ],
+}))
+
+watch(
+  () => formData.value.username,
+  () => {
+    usernameCheckResult.value = ''
+    usernameAvailable.value = false
+    detailsError.value = ''
+  },
+)
+watch(
+  () => formData.value.email.trim(),
+  () => {
+    formData.value.code = ''
+    detailsError.value = ''
+  },
+)
+
+onMounted(async () => {
+  try {
+    passwordRequirement.value = await getPasswordRequirement()
+  } catch (error) {
+    console.error('Failed to get password requirement:', error)
+  }
+})
+onBeforeUnmount(() => clearInterval(codeCountdownTimer))
+
+const focusCurrentStep = () => {
+  const form = step.value === 'details' ? detailsFormRef.value : codeFormRef.value
+  const input: HTMLInputElement | undefined = form?.$el.querySelector('input')
+  input?.focus()
+}
+const handleCancel = () => {
+  if (!busy.value)
+    void router.push({ path: '/login', query: pendingOAuthBind.value ? route.query : {} })
+}
+const backToDetails = () => {
+  if (!busy.value) step.value = 'details'
+}
+const recordCodeAttempt = (usable = true) => {
+  now.value = Date.now()
+  verification.value[formData.value.email] = { resendAt: now.value + 60_000, usable }
+  formData.value.code = ''
+  if (codeCountdownTimer === undefined) {
+    codeCountdownTimer = setInterval(() => {
+      now.value = Date.now()
+    }, 1000)
+  }
+}
+const handleContinue = async () => {
+  if (busy.value || step.value !== 'details' || !detailsFormRef.value) return
+  sendLoading.value = true
+  try {
+    formData.value.username = formData.value.username.trim()
+    formData.value.email = formData.value.email.trim()
+    await detailsFormRef.value.validate()
+    const available = await checkUsername(formData.value.username)
+    usernameAvailable.value = available
+    usernameCheckResult.value = uiMessage(
+      available ? 'ui.register.message022' : 'ui.register.usernameCheckUnavailable',
+    )
+    if (!available) return
+    now.value = Date.now()
+    if (!hasUsableCode.value) {
+      if (!canResendCode.value) return
+      await sendRegisterCode({ email: formData.value.email })
+      recordCodeAttempt()
+      ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
+    }
+    detailsError.value = ''
+    step.value = 'code'
+  } catch (error) {
+    // Delivery failed after the server replaced the code and reserved the send quota.
+    if (error instanceof ApiError && error.errorCode === 'AUTH_015') recordCodeAttempt(false)
+    // Field errors render inline; the request interceptor displays API failures.
+    console.error('Continue registration failed:', error)
+  } finally {
+    sendLoading.value = false
+  }
+}
+const resendCode = async () => {
+  now.value = Date.now()
+  if (busy.value || !canResendCode.value || step.value !== 'code') return
+  resendLoading.value = true
+  try {
+    await sendRegisterCode({ email: formData.value.email })
+    recordCodeAttempt()
+    ElMessage.success(t('ui.sensitiveVerificationDialog.message050'))
+  } catch (error) {
+    if (error instanceof ApiError && error.errorCode === 'AUTH_015') recordCodeAttempt(false)
+    console.error('Resend register code failed:', error)
+  } finally {
+    resendLoading.value = false
+  }
 }
 
-const bindPendingOAuthAfterRegister = async () => {
-  const pending = getPendingOAuthBind()
-  if (!pending) {
-    return
+const recoverRegistrationError = (error: unknown) => {
+  if (!(error instanceof ApiError)) return
+  const code = error.errorCode
+  if (['AUTH_029', 'AUTH_028', 'AUTH_031', 'AUTH_023', 'AUTH_026'].includes(code)) {
+    if (emailVerification.value) emailVerification.value.usable = false
+    formData.value.code = ''
   }
-  const result = await bindPendingOAuthAccount(pending)
-  ElMessage.success(resolveApiResult(result))
+  if (code === 'AUTH_029') {
+    detailsError.value = uiMessage('ui.register.usernameConflict')
+    usernameCheckResult.value = ''
+    usernameAvailable.value = false
+    step.value = 'details'
+  } else if (code === 'AUTH_028' || code === 'AUTH_031') {
+    detailsError.value = uiMessage('ui.register.accountExists')
+    step.value = 'details'
+  } else if (
+    [
+      'AUTH_002',
+      'AUTH_007',
+      'AUTH_008',
+      'AUTH_017',
+      'AUTH_019',
+      'AUTH_020',
+      'AUTH_021',
+      'AUTH_022',
+    ].includes(code) ||
+    code.startsWith('PASSWORD_REQUIREMENTS_')
+  ) {
+    step.value = 'details'
+  }
+}
+let createdLogin: Parameters<typeof finalizeWebLogin>[0] | undefined
+let loginFinalized = false
+let bindingAttempted = false
+let resultNotified = false
+let desktopSynced = false
+
+const completeCreatedAccount = async () => {
+  if (!createdLogin) return
+  if (!loginFinalized) {
+    desktopSynced = await finalizeWebLogin(createdLogin)
+    loginFinalized = true
+  }
+  if (!bindingAttempted) {
+    bindingAttempted = true
+    if (pendingOAuthBind.value) {
+      try {
+        await bindPendingOAuthAccount(pendingOAuthBind.value)
+      } catch (error) {
+        console.error('Bind after registration failed:', error)
+        ElMessage.warning(t('ui.register.bindFailed'))
+        resultNotified = true
+      }
+    }
+  }
+  if (!resultNotified) {
+    ElMessage.success(t(desktopSynced ? 'ui.register.message026' : 'ui.register.message027'))
+    resultNotified = true
+  }
+  if (await router.push('/home')) throw new Error('Account navigation did not complete')
+}
+
+const retryCompletion = async () => {
+  if (!accountCreated.value || registerLoading.value) return
+  registerLoading.value = true
+  completionError.value = false
+  try {
+    await completeCreatedAccount()
+  } catch (error) {
+    completionError.value = true
+    console.error('Complete registration failed:', error)
+  } finally {
+    registerLoading.value = false
+  }
 }
 
 const handleRegister = async () => {
-  if (registerLoading.value) return
+  if (busy.value || step.value !== 'code' || !hasUsableCode.value || !codeFormRef.value) return
   registerLoading.value = true
   try {
-    await codeFormRef.value?.validate()
-
-    const response = await register({
-      username: formData.value.username,
-      email: formData.value.email,
-      password: formData.value.password,
-      code: formData.value.code,
-    })
-
-    const desktopSynced = await finalizeWebLogin({
+    await codeFormRef.value.validate()
+    const response = await register({ ...formData.value })
+    // Once created, later binding/navigation failures must never allow registration to replay.
+    accountCreated.value = true
+    formData.value.password = ''
+    createdLogin = {
       accessToken: response.accessToken,
-      user: {
-        uuid: response.uuid,
-        username: response.username,
-        email: response.email,
-      },
-    })
-
-    await bindPendingOAuthAfterRegister()
-
-    ElMessage.success(desktopSynced ? t('ui.register.message026') : t('ui.register.message027'))
-    // 直接跳转到首页
-    router.push('/home')
-  } catch (error: any) {
+      user: { uuid: response.uuid, username: response.username, email: response.email },
+    }
+    await completeCreatedAccount()
+  } catch (error) {
+    if (accountCreated.value) completionError.value = true
+    else recoverRegistrationError(error)
     console.error('Register failed:', error)
   } finally {
     registerLoading.value = false
@@ -717,12 +589,15 @@ const handleRegister = async () => {
   width: 100%;
   height: 100%;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  overflow: hidden;
+  box-sizing: border-box;
+  padding: 48px 24px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .login-container.dark {
@@ -732,6 +607,8 @@ const handleRegister = async () => {
 .login-box {
   width: 100%;
   max-width: 1000px;
+  flex-shrink: 0;
+  margin-block: auto;
   display: flex;
   background: var(--el-bg-color);
   border-radius: 20px;
@@ -746,8 +623,9 @@ const handleRegister = async () => {
 }
 
 .login-left {
-  flex: 1;
-  padding: 60px 48px;
+  flex: 0.9;
+  min-width: 0;
+  padding: 48px 40px;
   background: linear-gradient(135deg, #fff8f0, #fffbf5);
   border-right: 1px solid var(--el-border-color-light);
   display: flex;
@@ -760,8 +638,9 @@ const handleRegister = async () => {
 }
 
 .login-right {
-  flex: 1;
-  padding: 48px 48px;
+  flex: 1.1;
+  min-width: 0;
+  padding: 36px 40px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -871,6 +750,27 @@ const handleRegister = async () => {
   width: 100%;
 }
 
+.step-progress {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.field-hint {
+  margin: -8px 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+
+.form-notice {
+  color: var(--el-color-danger);
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 0 0 16px;
+}
+
 .step-title {
   font-size: 28px;
   font-weight: 600;
@@ -890,12 +790,14 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
 .email-display {
   font-size: 13px;
   color: var(--el-text-color-secondary);
+  overflow-wrap: anywhere;
 }
 
 .change-email-btn {
@@ -955,7 +857,11 @@ const handleRegister = async () => {
 .next-btn,
 .back-btn {
   min-width: 100px;
-  height: 44px;
+  min-height: 44px;
+  height: auto;
+  padding: 12px 16px;
+  white-space: normal;
+  line-height: 1.4;
   font-size: 15px;
   font-weight: 600;
   border-radius: 10px;
@@ -1005,8 +911,11 @@ const handleRegister = async () => {
 
 /* 密码要求 */
 .password-requirements {
-  margin: 20px 0;
-  padding: 16px;
+  margin: 12px 0;
+  padding: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   background: var(--el-fill-color-light);
   border-radius: 8px;
   border: 1px solid var(--el-border-color-lighter);
@@ -1025,7 +934,7 @@ const handleRegister = async () => {
   gap: 8px;
   font-size: 13px;
   color: var(--el-text-color-regular);
-  margin-bottom: 8px;
+  margin-bottom: 0;
   transition: all 0.2s ease;
 }
 
@@ -1096,12 +1005,12 @@ const handleRegister = async () => {
 
   .login-left {
     border-right: none;
-    border-bottom: 1px solid #f0f0f0;
-    padding: 40px 32px;
+    border-bottom: 1px solid var(--el-border-color-light);
+    padding: 24px 32px 16px;
   }
 
   .login-right {
-    padding: 40px 32px;
+    padding: 24px 32px;
   }
 
   .login-title {
@@ -1113,7 +1022,18 @@ const handleRegister = async () => {
   }
 
   .login-container {
-    padding: 20px;
+    padding: 48px 16px 20px;
+  }
+
+  .logo-section,
+  .feature-list,
+  .login-left > .login-description:first-of-type {
+    display: none;
+  }
+
+  .login-description {
+    margin-bottom: 0;
+    font-size: 13px;
   }
 }
 
@@ -1123,11 +1043,11 @@ const handleRegister = async () => {
   }
 
   .login-left {
-    padding: 32px 24px;
+    padding: 20px 24px 16px;
   }
 
   .login-right {
-    padding: 32px 24px;
+    padding: 24px;
   }
 
   .login-title {
@@ -1145,6 +1065,12 @@ const handleRegister = async () => {
   .next-btn,
   .back-btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-left {
+    padding-top: 68px;
   }
 }
 </style>
