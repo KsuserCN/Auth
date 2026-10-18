@@ -46,6 +46,7 @@
               :model="emailInput"
               :rules="emailRules"
               label-position="top"
+              @submit.prevent="handleSendCode"
             >
               <el-form-item prop="email">
                 <el-input
@@ -53,7 +54,6 @@
                   type="email"
                   :placeholder="t('ui.changeEmail.message008')"
                   autocomplete="email"
-                  @keyup.enter="handleSendCode"
                   autofocus
                 />
               </el-form-item>
@@ -81,14 +81,19 @@
               }}</el-button>
             </div>
 
-            <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
+            <el-form
+              ref="codeFormRef"
+              :model="codeInput"
+              :rules="codeRules"
+              label-position="top"
+              @submit.prevent="handleSubmit"
+            >
               <el-form-item prop="code">
                 <el-input
                   v-model="codeInput.code"
                   :placeholder="t('ui.sensitiveVerificationDialog.message010')"
                   maxlength="6"
                   @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
-                  @keyup.enter="handleSubmit"
                   autofocus
                 />
               </el-form-item>
@@ -270,9 +275,10 @@ const cleanupCodeCountdown = () => {
 }
 
 const handleSendCode = async () => {
+  if (sendLoading.value) return
+  sendLoading.value = true
   try {
     await emailFormRef.value?.validate()
-    sendLoading.value = true
 
     await sendChangeEmailCode({ email: emailInput.value.email })
     ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
@@ -315,9 +321,10 @@ const resendCode = async () => {
 }
 
 const handleSubmit = async () => {
+  if (submitLoading.value) return
+  submitLoading.value = true
   try {
     await codeFormRef.value?.validate()
-    submitLoading.value = true
 
     const updatedUser = await changeEmail({
       newEmail: emailInput.value.email,

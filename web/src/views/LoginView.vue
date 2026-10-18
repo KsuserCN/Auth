@@ -79,13 +79,13 @@
                   :model="emailInput"
                   :rules="emailRules"
                   label-position="top"
+                  @submit.prevent="goToNextStep"
                 >
                   <el-form-item prop="email">
                     <el-input
                       v-model="emailInput.email"
                       type="email"
                       :placeholder="t('ui.login.message011')"
-                      @keyup.enter="goToNextStep"
                       autocomplete="username email"
                       autofocus
                     />
@@ -271,6 +271,7 @@
                   :model="passwordInput"
                   :rules="passwordRules"
                   label-position="top"
+                  @submit.prevent="handlePasswordLogin"
                 >
                   <el-form-item prop="password">
                     <el-input
@@ -278,7 +279,6 @@
                       type="password"
                       :placeholder="t('ui.loginOptions.message004')"
                       show-password
-                      @keyup.enter="handlePasswordLogin"
                       autocomplete="current-password"
                       autofocus
                     />
@@ -319,6 +319,7 @@
                   :model="codeInput"
                   :rules="codeRules"
                   label-position="top"
+                  @submit.prevent="handleEmailCodeLogin"
                 >
                   <el-form-item prop="code">
                     <el-input
@@ -326,7 +327,6 @@
                       :placeholder="t('ui.sensitiveVerificationDialog.message010')"
                       maxlength="6"
                       @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
-                      @keyup.enter="handleEmailCodeLogin"
                       autofocus
                     />
                   </el-form-item>
@@ -564,6 +564,7 @@
                   :model="totpInput"
                   :rules="totpRules"
                   label-position="top"
+                  @submit.prevent="handleTotpVerify"
                 >
                   <el-form-item prop="code">
                     <el-input
@@ -575,7 +576,6 @@
                       "
                       :maxlength="totpMode === 'totp' ? 6 : 8"
                       @input="handleTotpInput"
-                      @keyup.enter="handleTotpVerify"
                       autofocus
                     />
                   </el-form-item>
@@ -1574,6 +1574,7 @@ const handleTransferCodeLogin = async (transferCode: string) => {
 // ===== 第一步：邮箱验证 =====
 
 const goToNextStep = async () => {
+  if (validateLoading.value) return
   try {
     validateLoading.value = true
     await emailFormRef.value?.validate()
@@ -1613,9 +1614,10 @@ const backToMethod = () => {
 // ===== 第三步：密码登录 =====
 
 const handlePasswordLogin = async () => {
+  if (passwordLoading.value) return
+  passwordLoading.value = true
   try {
     await passwordFormRef.value?.validate()
-    passwordLoading.value = true
 
     // 调用密码登录接口
     const response = await passwordLogin({
@@ -1705,9 +1707,10 @@ const cleanupCodeCountdown = () => {
 }
 
 const handleEmailCodeLogin = async () => {
+  if (codeLoading.value) return
+  codeLoading.value = true
   try {
     await codeFormRef.value?.validate()
-    codeLoading.value = true
 
     // 调用邮箱验证码登录接口
     const response = await loginWithCode({
@@ -2055,9 +2058,10 @@ const handlePasskeyMfaVerify = async () => {
 }
 
 const handleTotpVerify = async () => {
+  if (totpLoading.value) return
+  totpLoading.value = true
   try {
     await totpFormRef.value?.validate()
-    totpLoading.value = true
 
     if (!mfaChallenge.value) {
       ElMessage.error(t('ui.login.message094'))

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { ElForm, ElFormItem, ElInput, ElButton } from 'element-plus'
 import LoginView from './LoginView.vue'
 import { setLanguagePreference } from '@/i18n'
 
@@ -17,14 +18,25 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
   apple: vi.fn(),
+  passwordLogin: vi.fn(),
+  sendLoginCode: vi.fn(),
+  loginWithCode: vi.fn(),
+  verifyTotp: vi.fn(),
   route: { path: '/login', query: {} as Record<string, string> },
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
   useRouter: () => ({ replace: mocks.replace, push: mocks.push }),
 }))
-vi.mock('@vueuse/core', () => ({ useDark: () => ref(false) }))
+vi.mock('@vueuse/core', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@vueuse/core')>()),
+  useDark: () => ref(false),
+}))
 vi.mock('@/api/auth', () => ({
+  passwordLogin: mocks.passwordLogin,
+  sendLoginCode: mocks.sendLoginCode,
+  loginWithCode: mocks.loginWithCode,
+  verifyTOTPForLogin: mocks.verifyTotp,
   cancelMobileBridgeChallenge: mocks.cancel,
   exchangeSessionTransfer: mocks.exchange,
   refreshAccessToken: vi.fn().mockRejectedValue(new Error('No browser session')),
@@ -66,24 +78,27 @@ vi.mock('@/utils/webauthn', () => ({ isWebAuthnSupported: () => true }))
 const challengeId = 'a'.repeat(32)
 const appLink = `https://auth.ksuser.cn/app/bridge-login?challengeId=${challengeId}`
 const mounted: ReturnType<typeof mount>[] = []
-const render = () => {
+const render = (realForms = false) => {
   const wrapper = mount(LoginView, {
     global: {
+      components: { ElForm, ElFormItem, ElInput, ElButton },
       stubs: {
         'router-link': true,
         'el-skeleton': {
           props: ['loading'],
           template: '<div><slot v-if="!loading" /><slot v-else name="template" /></div>',
         },
-        'el-button': {
-          props: ['disabled', 'loading'],
-          template: '<button :disabled="disabled || loading"><slot /></button>',
-        },
+        'el-button': realForms
+          ? false
+          : {
+              props: ['disabled', 'loading'],
+              template: '<button :disabled="disabled || loading"><slot /></button>',
+            },
         'el-icon': true,
         'el-skeleton-item': true,
-        'el-form': { template: '<div><slot /></div>' },
-        'el-form-item': { template: '<div><slot /></div>' },
-        'el-input': true,
+        'el-form': realForms ? false : { template: '<div><slot /></div>' },
+        'el-form-item': realForms ? false : { template: '<div><slot /></div>' },
+        'el-input': !realForms,
       },
     },
   })
@@ -106,11 +121,112 @@ beforeEach(() => {
   mocks.cancel.mockResolvedValue(undefined)
   mocks.finalize.mockResolvedValue(undefined)
   mocks.exchange.mockResolvedValue({ accessToken: 'web-token', user: { uuid: 'app-account' } })
+  mocks.passwordLogin.mockResolvedValue({ accessToken: 'password-session', user: { uuid: 'user' } })
+  mocks.sendLoginCode.mockResolvedValue(undefined)
+  mocks.loginWithCode.mockResolvedValue({ accessToken: 'code-session', user: { uuid: 'user' } })
+  mocks.verifyTotp.mockResolvedValue({ accessToken: 'mfa-session', user: { uuid: 'user' } })
   mocks.replace.mockImplementation(async (target) => {
     if (typeof target !== 'string') {
       mocks.route.query = target.query
       window.history.replaceState({}, '', target.path + '?' + new URLSearchParams(target.query))
     }
+  })
+})
+
+describe('login form submission', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  const submit = async (wrapper: ReturnType<typeof render>) => {
+    const event = new Event('submit', { bubbles: true, cancelable: true })
+    wrapper.get('form').element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    await flushPromises()
+  }
+  const chooseMethod = async (methodIndex: number) => {
+    mocks.ios.mockReturnValue(false)
+    const wrapper = render(true)
+    await flushPromises()
+    await wrapper.get('input').setValue('enter@example.com')
+    await submit(wrapper)
+    await wrapper.findAll('.method-option')[methodIndex]!.trigger('click')
+    await vi.waitFor(() => expect(wrapper.find('form').exists()).toBe(true))
+    return wrapper
+  }
+
+  it('prevents native submission and keeps invalid email addresses on the first step', async () => {
+    const wrapper = render(true)
+    await flushPromises()
+    await wrapper.get('input').setValue('invalid-email')
+    await submit(wrapper)
+    expect(wrapper.find('.el-form-item.is-error').exists()).toBe(true)
+    expect(wrapper.find('.method-list').exists()).toBe(false)
+    await wrapper.get('input').setValue('enter@example.com')
+    await submit(wrapper)
+    expect(wrapper.find('.method-list').exists()).toBe(true)
+  })
+
+  it('submits the password once and ignores repeated submits while login is pending', async () => {
+    let finishLogin!: (response: object) => void
+    mocks.passwordLogin.mockReturnValue(
+      new Promise((resolve) => {
+        finishLogin = resolve
+      }),
+    )
+    const wrapper = await chooseMethod(0)
+    await wrapper.get('input').setValue('StrongPass123')
+    await submit(wrapper)
+    await submit(wrapper)
+    expect(mocks.passwordLogin).toHaveBeenCalledExactlyOnceWith({
+      email: 'enter@example.com',
+      password: 'StrongPass123',
+    })
+    finishLogin({ accessToken: 'password-session', user: { uuid: 'user' } })
+    await flushPromises()
+    expect(mocks.finalize).toHaveBeenCalledWith({
+      accessToken: 'password-session',
+      user: { uuid: 'user' },
+    })
+    expect(mocks.replace).toHaveBeenCalledWith('/home/security')
+  })
+
+  it('validates and submits the email verification code without navigating the page', async () => {
+    const wrapper = await chooseMethod(1)
+    expect(mocks.sendLoginCode).toHaveBeenCalledWith({ email: 'enter@example.com' })
+    await wrapper.get('input').setValue('123')
+    await submit(wrapper)
+    expect(mocks.loginWithCode).not.toHaveBeenCalled()
+    await wrapper.get('input').setValue('123456')
+    await submit(wrapper)
+    expect(mocks.loginWithCode).toHaveBeenCalledExactlyOnceWith({
+      email: 'enter@example.com',
+      code: '123456',
+    })
+    expect(mocks.finalize).toHaveBeenCalledWith({
+      accessToken: 'code-session',
+      user: { uuid: 'user' },
+    })
+  })
+
+  it('validates and submits the current MFA challenge without navigating the page', async () => {
+    mocks.route.query = { challengeId: 'mfa-challenge', method: 'totp', redirect: '/home/security' }
+    const wrapper = render(true)
+    await flushPromises()
+    await wrapper.get('input').setValue('123')
+    await submit(wrapper)
+    expect(mocks.verifyTotp).not.toHaveBeenCalled()
+    await wrapper.get('input').setValue('123456')
+    await submit(wrapper)
+    expect(mocks.verifyTotp).toHaveBeenCalledExactlyOnceWith({
+      challengeId: 'mfa-challenge',
+      code: '123456',
+    })
+    expect(mocks.finalize).toHaveBeenCalledWith({
+      accessToken: 'mfa-session',
+      user: { uuid: 'user' },
+    })
   })
 })
 afterEach(() => {

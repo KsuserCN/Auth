@@ -53,6 +53,7 @@
               :model="passwordInput"
               :rules="newPasswordRules"
               label-position="top"
+              @submit.prevent="goToConfirmStep"
             >
               <el-form-item prop="newPassword">
                 <el-input
@@ -60,7 +61,6 @@
                   type="password"
                   :placeholder="t('ui.changePassword.message007')"
                   show-password
-                  @keyup.enter="goToConfirmStep"
                   autocomplete="new-password"
                   autofocus
                 />
@@ -107,6 +107,7 @@
               :model="passwordInput"
               :rules="confirmPasswordRules"
               label-position="top"
+              @submit.prevent="handleSubmit"
             >
               <el-form-item prop="confirmPassword">
                 <el-input
@@ -114,7 +115,6 @@
                   type="password"
                   :placeholder="t('ui.changePassword.message012')"
                   show-password
-                  @keyup.enter="handleSubmit"
                   autocomplete="new-password"
                   autofocus
                 />
@@ -330,9 +330,10 @@ const backToNewPassword = () => {
 }
 
 const handleSubmit = async () => {
+  if (submitLoading.value) return
+  submitLoading.value = true
   try {
     await confirmPasswordFormRef.value?.validate()
-    submitLoading.value = true
 
     // 调用修改密码接口
     await changePassword({

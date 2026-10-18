@@ -71,6 +71,7 @@
               :model="passkeyInput"
               :rules="nameRules"
               label-position="top"
+              @submit.prevent="handleSubmit"
             >
               <el-form-item prop="name">
                 <el-input
@@ -78,7 +79,6 @@
                   :placeholder="t('ui.addPasskey.message013')"
                   maxlength="50"
                   show-word-limit
-                  @keyup.enter="handleSubmit"
                   autofocus
                 />
               </el-form-item>
@@ -225,9 +225,10 @@ const handleCreateCredential = async () => {
 }
 
 const handleSubmit = async () => {
+  if (submitLoading.value) return
+  submitLoading.value = true
   try {
     await nameFormRef.value?.validate()
-    submitLoading.value = true
 
     if (!credentialData) {
       throw new LocalizedError('ui.addPasskey.message024')

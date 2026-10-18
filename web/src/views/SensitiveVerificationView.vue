@@ -179,6 +179,7 @@
               :model="passwordInput"
               :rules="passwordRules"
               label-position="top"
+              @submit.prevent="handlePasswordVerify"
             >
               <el-form-item prop="password">
                 <el-input
@@ -186,7 +187,6 @@
                   type="password"
                   :placeholder="t('ui.loginOptions.message004')"
                   show-password
-                  @keyup.enter="handlePasswordVerify"
                   autocomplete="current-password"
                   autofocus
                 />
@@ -219,14 +219,19 @@
               <span>{{ t('ui.login.message049') }}</span>
             </div>
 
-            <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
+            <el-form
+              ref="codeFormRef"
+              :model="codeInput"
+              :rules="codeRules"
+              label-position="top"
+              @submit.prevent="handleCodeVerify"
+            >
               <el-form-item prop="code">
                 <el-input
                   v-model="codeInput.code"
                   :placeholder="t('ui.sensitiveVerificationDialog.message010')"
                   maxlength="6"
                   @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
-                  @keyup.enter="handleCodeVerify"
                   autofocus
                 />
               </el-form-item>
@@ -370,7 +375,13 @@
               <span>{{ t('ui.login.message049') }}</span>
             </div>
 
-            <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
+            <el-form
+              ref="totpFormRef"
+              :model="totpInput"
+              :rules="totpRules"
+              label-position="top"
+              @submit.prevent="handleTotpVerify"
+            >
               <el-form-item prop="code">
                 <el-input
                   v-model="totpInput.code"
@@ -381,7 +392,6 @@
                   "
                   :maxlength="totpMode === 'totp' ? 6 : 8"
                   @input="handleTotpInput"
-                  @keyup.enter="handleTotpVerify"
                   autofocus
                 />
               </el-form-item>
@@ -789,9 +799,10 @@ const handleCancel = () => {
 // 密码验证
 const handlePasswordVerify = async () => {
   if (!ensureAuthenticated()) return
+  if (passwordLoading.value) return
+  passwordLoading.value = true
   try {
     await passwordFormRef.value?.validate()
-    passwordLoading.value = true
 
     await verifySensitiveOperation({
       method: 'password',
@@ -842,9 +853,10 @@ const resendCode = async () => {
 // 验证码验证
 const handleCodeVerify = async () => {
   if (!ensureAuthenticated()) return
+  if (codeLoading.value) return
+  codeLoading.value = true
   try {
     await codeFormRef.value?.validate()
-    codeLoading.value = true
 
     await verifySensitiveOperation({
       method: 'email-code',
@@ -866,9 +878,10 @@ const handleCodeVerify = async () => {
 // TOTP 验证
 const handleTotpVerify = async () => {
   if (!ensureAuthenticated()) return
+  if (totpLoading.value) return
+  totpLoading.value = true
   try {
     await totpFormRef.value?.validate()
-    totpLoading.value = true
 
     const normalizedInput = totpInput.value.code.trim()
 

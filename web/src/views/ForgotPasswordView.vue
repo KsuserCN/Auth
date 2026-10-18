@@ -45,12 +45,12 @@
               :model="recoveryInput"
               :rules="recoveryRules"
               label-position="top"
+              @submit.prevent="loadRecoveryContext"
             >
               <el-form-item prop="recoveryCode">
                 <el-input
                   v-model="recoveryInput.recoveryCode"
                   :placeholder="t('ui.forgotPassword.message007')"
-                  @keyup.enter="loadRecoveryContext"
                   autofocus
                 />
               </el-form-item>
@@ -135,6 +135,7 @@
               :model="passwordInput"
               :rules="newPasswordRules"
               label-position="top"
+              @submit.prevent="goToConfirmStep"
             >
               <el-form-item prop="newPassword">
                 <el-input
@@ -143,7 +144,6 @@
                   :placeholder="t('ui.changePassword.message007')"
                   show-password
                   autocomplete="new-password"
-                  @keyup.enter="goToConfirmStep"
                   autofocus
                 />
               </el-form-item>
@@ -184,6 +184,7 @@
               :model="passwordInput"
               :rules="confirmPasswordRules"
               label-position="top"
+              @submit.prevent="handleSubmit"
             >
               <el-form-item prop="confirmPassword">
                 <el-input
@@ -192,7 +193,6 @@
                   :placeholder="t('ui.changePassword.message012')"
                   show-password
                   autocomplete="new-password"
-                  @keyup.enter="handleSubmit"
                   autofocus
                 />
               </el-form-item>
@@ -439,9 +439,10 @@ const requirementItems = computed(() => {
 })
 
 const loadRecoveryContext = async () => {
+  if (recoveryLoading.value) return
+  recoveryLoading.value = true
   try {
     await recoveryFormRef.value?.validate()
-    recoveryLoading.value = true
 
     const normalized = recoveryInput.value.recoveryCode.trim()
     const status = await getAccountRecoveryStatus(normalized)
@@ -551,9 +552,10 @@ const goToLogin = () => {
 }
 
 const handleSubmit = async () => {
+  if (submitLoading.value) return
+  submitLoading.value = true
   try {
     await confirmPasswordFormRef.value?.validate()
-    submitLoading.value = true
 
     const result = await completeAccountRecovery({
       recoveryCode: recoveryInput.value.recoveryCode.trim(),

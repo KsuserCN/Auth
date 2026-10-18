@@ -8,6 +8,8 @@ export default mergeConfig(
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
+      // Transform Element Plus so its form validator gets correct CommonJS interop.
+      server: { deps: { inline: ['element-plus'] } },
       exclude: [...configDefaults.exclude, 'e2e/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
     },

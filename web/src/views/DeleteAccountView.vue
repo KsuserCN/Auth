@@ -53,12 +53,12 @@
               :model="usernameInput"
               :rules="usernameRules"
               label-position="top"
+              @submit.prevent="goToConfirmStep"
             >
               <el-form-item prop="username">
                 <el-input
                   v-model="usernameInput.username"
                   :placeholder="t('ui.deleteAccount.message009')"
-                  @keyup.enter="goToConfirmStep"
                   autofocus
                 />
               </el-form-item>
@@ -102,12 +102,12 @@
               :model="confirmTextInput"
               :rules="confirmTextRules"
               label-position="top"
+              @submit.prevent="handleSubmit"
             >
               <el-form-item prop="confirmText">
                 <el-input
                   v-model="confirmTextInput.confirmText"
                   :placeholder="t('ui.deleteAccount.message016')"
-                  @keyup.enter="handleSubmit"
                   autofocus
                 />
               </el-form-item>
@@ -260,6 +260,8 @@ const backToUsername = () => {
 }
 
 const handleSubmit = async () => {
+  if (submitLoading.value) return
+  submitLoading.value = true
   try {
     await confirmTextFormRef.value?.validate()
 
@@ -279,7 +281,6 @@ const handleSubmit = async () => {
       },
     )
 
-    submitLoading.value = true
     // Fixed protocol confirmation token expected by the API, independent of interface language.
     await deleteAccount({ confirmText: '我真的不想要我的号辣' })
 

@@ -54,12 +54,12 @@
               :model="formData"
               :rules="usernameRules"
               label-position="top"
+              @submit.prevent="goToPassword"
             >
               <el-form-item prop="username">
                 <el-input
                   v-model="formData.username"
                   :placeholder="t('ui.deleteAccount.message012')"
-                  @keyup.enter="goToPassword"
                   autocomplete="off"
                   autofocus
                 />
@@ -105,6 +105,7 @@
               :model="formData"
               :rules="passwordRules"
               label-position="top"
+              @submit.prevent="goToPasswordConfirm"
             >
               <el-form-item prop="password">
                 <el-input
@@ -112,7 +113,6 @@
                   type="password"
                   :placeholder="t('ui.sensitiveVerificationDialog.message006')"
                   show-password
-                  @keyup.enter="goToPasswordConfirm"
                   autocomplete="new-password"
                   autofocus
                 />
@@ -159,6 +159,7 @@
               :model="formData"
               :rules="passwordConfirmRules"
               label-position="top"
+              @submit.prevent="goToEmail"
             >
               <el-form-item prop="passwordConfirm">
                 <el-input
@@ -166,7 +167,6 @@
                   type="password"
                   :placeholder="t('ui.register.message011')"
                   show-password
-                  @keyup.enter="goToEmail"
                   autocomplete="new-password"
                   autofocus
                 />
@@ -188,13 +188,18 @@
             <h2 class="step-title">{{ t('ui.register.message012') }}</h2>
             <p class="step-subtitle">{{ t('ui.register.message013') }}</p>
 
-            <el-form ref="emailFormRef" :model="formData" :rules="emailRules" label-position="top">
+            <el-form
+              ref="emailFormRef"
+              :model="formData"
+              :rules="emailRules"
+              label-position="top"
+              @submit.prevent="handleSendCode"
+            >
               <el-form-item prop="email">
                 <el-input
                   v-model="formData.email"
                   type="email"
                   :placeholder="t('ui.login.message011')"
-                  @keyup.enter="handleSendCode"
                   autocomplete="email"
                   autofocus
                 />
@@ -223,14 +228,19 @@
               }}</el-button>
             </div>
 
-            <el-form ref="codeFormRef" :model="formData" :rules="codeRules" label-position="top">
+            <el-form
+              ref="codeFormRef"
+              :model="formData"
+              :rules="codeRules"
+              label-position="top"
+              @submit.prevent="handleRegister"
+            >
               <el-form-item prop="code">
                 <el-input
                   v-model="formData.code"
                   :placeholder="t('ui.sensitiveVerificationDialog.message010')"
                   maxlength="6"
                   @input="formData.code = formData.code.replace(/[^\d]/g, '')"
-                  @keyup.enter="handleRegister"
                   autofocus
                 />
               </el-form-item>
@@ -501,7 +511,6 @@ const checkUsernameAvailability = async () => {
     return false
   }
 
-  usernameLoading.value = true
   try {
     const available = await checkUsername(formData.value.username)
     usernameAvailable.value = available
@@ -513,13 +522,13 @@ const checkUsernameAvailability = async () => {
     usernameCheckResult.value = uiMessage('ui.register.message024')
     usernameAvailable.value = false
     return false
-  } finally {
-    usernameLoading.value = false
   }
 }
 
 // 导航函数
 const goToPassword = async () => {
+  if (usernameLoading.value) return
+  usernameLoading.value = true
   try {
     await usernameFormRef.value?.validate()
 
@@ -533,6 +542,8 @@ const goToPassword = async () => {
     updateStep('password')
   } catch {
     // 验证失败
+  } finally {
+    usernameLoading.value = false
   }
 }
 
@@ -598,9 +609,10 @@ const cleanupCodeCountdown = () => {
 }
 
 const handleSendCode = async () => {
+  if (sendLoading.value) return
+  sendLoading.value = true
   try {
     await emailFormRef.value?.validate()
-    sendLoading.value = true
 
     await sendRegisterCode({ email: formData.value.email })
     ElMessage.success(t('ui.sensitiveVerificationDialog.message049'))
@@ -657,9 +669,10 @@ const bindPendingOAuthAfterRegister = async () => {
 }
 
 const handleRegister = async () => {
+  if (registerLoading.value) return
+  registerLoading.value = true
   try {
     await codeFormRef.value?.validate()
-    registerLoading.value = true
 
     const response = await register({
       username: formData.value.username,

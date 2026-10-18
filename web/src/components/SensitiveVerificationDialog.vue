@@ -59,6 +59,7 @@
         :model="passwordInput"
         :rules="passwordRules"
         label-position="top"
+        @submit.prevent="handlePasswordVerify"
       >
         <el-form-item prop="password">
           <el-input
@@ -67,7 +68,6 @@
             show-password
             :placeholder="t('ui.sensitiveVerificationDialog.message006')"
             autocomplete="current-password"
-            @keyup.enter="handlePasswordVerify"
           />
         </el-form-item>
       </el-form>
@@ -83,14 +83,19 @@
 
     <div v-else-if="step === 'email-code'" class="panel">
       <p class="subtitle">{{ t('ui.sensitiveVerificationDialog.message009') }}</p>
-      <el-form ref="codeFormRef" :model="codeInput" :rules="codeRules" label-position="top">
+      <el-form
+        ref="codeFormRef"
+        :model="codeInput"
+        :rules="codeRules"
+        label-position="top"
+        @submit.prevent="handleCodeVerify"
+      >
         <el-form-item prop="code">
           <el-input
             v-model="codeInput.code"
             :placeholder="t('ui.sensitiveVerificationDialog.message010')"
             maxlength="6"
             @input="codeInput.code = codeInput.code.replace(/[^\d]/g, '')"
-            @keyup.enter="handleCodeVerify"
           />
         </el-form-item>
       </el-form>
@@ -179,7 +184,13 @@
           {{ t('ui.sensitiveVerificationDialog.message021') }}
         </button>
       </div>
-      <el-form ref="totpFormRef" :model="totpInput" :rules="totpRules" label-position="top">
+      <el-form
+        ref="totpFormRef"
+        :model="totpInput"
+        :rules="totpRules"
+        label-position="top"
+        @submit.prevent="handleTotpVerify"
+      >
         <el-form-item prop="code">
           <el-input
             v-model="totpInput.code"
@@ -190,7 +201,6 @@
             "
             :maxlength="totpMode === 'totp' ? 6 : 8"
             @input="handleTotpInput"
-            @keyup.enter="handleTotpVerify"
           />
         </el-form-item>
       </el-form>
@@ -576,9 +586,10 @@ const verifySuccess = () => {
 }
 
 const handlePasswordVerify = async () => {
+  if (passwordLoading.value) return
+  passwordLoading.value = true
   try {
     await passwordFormRef.value?.validate()
-    passwordLoading.value = true
     await verifySensitiveOperation({
       method: 'password',
       password: passwordInput.value.password,
@@ -614,9 +625,10 @@ const resendCode = async () => {
 }
 
 const handleCodeVerify = async () => {
+  if (codeLoading.value) return
+  codeLoading.value = true
   try {
     await codeFormRef.value?.validate()
-    codeLoading.value = true
     await verifySensitiveOperation({ method: 'email-code', code: codeInput.value.code })
     verifySuccess()
   } catch (error) {
@@ -645,9 +657,10 @@ const setTotpMode = (mode: 'totp' | 'recovery') => {
 }
 
 const handleTotpVerify = async () => {
+  if (totpLoading.value) return
+  totpLoading.value = true
   try {
     await totpFormRef.value?.validate()
-    totpLoading.value = true
 
     const normalizedInput = totpInput.value.code.trim()
     await verifySensitiveOperation(
