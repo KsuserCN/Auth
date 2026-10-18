@@ -318,7 +318,7 @@ import XCTest
     }
 
     func testRegistrationUsernameValidationAndFiveSteps() {
-        let app = launch()
+        let app = launch(arguments: ["--ui-test-password-rejected"])
         let registration = app.buttons["registrationLink"]
         for _ in 0..<4 {
             if registration.isHittable { break }
@@ -338,7 +338,13 @@ import XCTest
         XCTAssertTrue(password.waitForExistence(timeout: 5))
         replaceSecureText(password, with: "Weak")
         XCTAssertFalse(next.isEnabled)
-        password.typeText("Password123")
+        replaceSecureText(password, with: "Password123")
+        XCTAssertTrue(next.isEnabled)
+        next.tap()
+        XCTAssertTrue(app.staticTexts["密码过于简单，请使用更复杂的密码"].waitForExistence(timeout: 5))
+        XCTAssertTrue(password.exists)
+        XCTAssertFalse(app.secureTextFields["确认密码"].exists)
+        password.typeText("!")
         XCTAssertTrue(next.isEnabled)
         next.tap()
         let confirmation = app.secureTextFields["确认密码"]
@@ -346,7 +352,7 @@ import XCTest
         replaceSecureText(confirmation, with: "Wrong")
         XCTAssertFalse(next.isEnabled)
         attach(app, name: "Registration validation")
-        replaceSecureText(confirmation, with: "WeakPassword123")
+        replaceSecureText(confirmation, with: "Password123!")
         app.buttons["keyboardDone"].tap()
         XCTAssertTrue(next.isEnabled)
         next.tap()

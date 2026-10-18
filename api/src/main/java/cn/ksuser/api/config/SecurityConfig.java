@@ -107,6 +107,7 @@ public class SecurityConfig {
                     "/oauth/google/register-bind", "/oauth/google/register-bind/",
                     "/oauth/google/callback/login", "/oauth/google/callback/login/",
                     "/info/password-requirement", "/info/password-requirement/",
+                    "/info/validate-password", "/info/validate-password/",
                     "/static/**")
                 .permitAll()
                 .anyRequest().authenticated()

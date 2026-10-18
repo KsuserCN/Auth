@@ -5,9 +5,13 @@ import cn.ksuser.api.result.ApiResultCode;
 import cn.ksuser.api.config.AppProperties;
 import cn.ksuser.api.dto.ApiResponse;
 import cn.ksuser.api.dto.PasswordRequirementResponse;
+import cn.ksuser.api.service.RegistrationValidationService;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,9 +21,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class InfoController {
 
     private final AppProperties appProperties;
+    private final RegistrationValidationService registrationValidation;
 
-    public InfoController(AppProperties appProperties) {
+    public InfoController(AppProperties appProperties, RegistrationValidationService registrationValidation) {
         this.appProperties = appProperties;
+        this.registrationValidation = registrationValidation;
+    }
+
+    public record PasswordValidationRequest(String password) {}
+
+    @PostMapping("/validate-password")
+    public ResponseEntity<ApiResponse<Void>> validatePassword(@RequestBody PasswordValidationRequest request) {
+        var rejection = registrationValidation.validatePassword(request.password());
+        if (rejection != null) {
+            return ResponseEntity.status(rejection.status()).cacheControl(CacheControl.noStore())
+                .body(new ApiResponse<>(rejection.status().value(), rejection.result()));
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(new ApiResponse<>(200, ApiResultCode.REQUEST_SUCCESS));
     }
 
     /**

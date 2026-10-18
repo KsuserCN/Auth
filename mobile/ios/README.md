@@ -31,6 +31,15 @@ App 继续接收 `ksuserauth://authorize?ticket=…` 与 `/app/authorize?ticket=
 
 验证覆盖 API `MobileAuthorizationServiceTest`、Web 授权页与扫码组件测试、iOS `CoreTests` 和 `testQRApplicationConsentWebLoginIsOffByDefaultAndCanBeSelected`。隔离 UI 预览使用 `--ui-testing --ui-test-authenticated --ui-test-application-consent --ui-test-qr-consent`。
 
+# iOS 注册密码预校验
+
+注册第二步点击“继续”时，App 通过 `POST /info/validate-password` 使用服务端当前注册规则校验密码，
+成功后才进入确认密码。常见弱密码名单不保存在客户端；失败或断网时保留当前步骤和输入，允许修改或重试。
+长度和字符要求仍通过 `/info/password-requirement` 提供本地输入提示，最终注册再次执行服务端完整校验。
+
+上线时先部署包含预校验接口的 API，再发布新版 iOS App。旧 API 没有此接口时，新版 App 会提示请求失败并停留在密码页。
+回归覆盖后端规则更新、iOS 对新增拒绝规则的处理、网络失败重试，以及五步注册 UI 流程。
+
 # iOS 显示语言
 
 原生 iOS App 支持简体中文和英语。“关于与设置 → 语言”提供跟随系统、简体中文和 English，登录前后均可更改。偏好保存在此设备的 `UserDefaults.language`，切换即时生效，保留当前输入、登录状态和已加载内容。默认读取设备的首选语言；任何中文语言变体显示简体中文，其他语言显示英语。回到前台时会重新读取系统语言。

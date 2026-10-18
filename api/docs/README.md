@@ -242,6 +242,8 @@
 ### 7. 查询密码强度要求
 [GET /info/password-requirement](info-password-requirement.md)
 
+[POST /info/validate-password](info-password-requirement.md#密码预校验)
+
 获取当前密码强度要求，供前端动态校验和提示。
 
 ### 8. 更新用户信息

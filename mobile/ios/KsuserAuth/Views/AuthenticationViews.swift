@@ -379,6 +379,9 @@ struct RegistrationView: View {
                 AsyncActionButton(title: step == 4 ? L10n.text("注册并登录") : step == 3 ? L10n.text("发送验证码并继续") : L10n.text("继续"), isBusy: model.isBusy, disabled: !canContinue) {
                     switch step {
                     case 0: if await model.checkUsername(username.trimmingCharacters(in: .whitespacesAndNewlines)) { step += 1 }
+                    case 1:
+                        let candidate = password
+                        if await model.validateRegistrationPassword(candidate), step == 1, password == candidate { step += 1 }
                     case 3:
                         await model.sendCode(email: email, type: "register")
                         if model.errorMessage == nil { resendAt = Date().addingTimeInterval(60); step += 1 }

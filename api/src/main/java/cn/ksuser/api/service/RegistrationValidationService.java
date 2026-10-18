@@ -42,17 +42,8 @@ public class RegistrationValidationService {
         if (!validator.isValidUsername(username)) {
             return reject(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_019, "Invalid username format");
         }
-        if (!validator.isValidPasswordLength(password)) {
-            return new Rejection(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_020.withParams(
-                "min", properties.getPassword().getMinLength(), "max", properties.getPassword().getMaxLength()),
-                "Invalid password length");
-        }
-        if (!validator.isStrongPassword(password)) {
-            return reject(HttpStatus.BAD_REQUEST, PasswordRequirementResult.from(properties.getPassword()), "Weak password");
-        }
-        if (validator.isCommonWeakPassword(password)) {
-            return reject(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_021, "Common weak password");
-        }
+        Rejection passwordRejection = validatePassword(password);
+        if (passwordRejection != null) return passwordRejection;
         if (validator.possibleSqlInjection(username) || validator.possibleSqlInjection(email)) {
             return reject(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_022, "SQL injection detected");
         }
@@ -76,6 +67,25 @@ public class RegistrationValidationService {
             (result == 1 ? ApiResultCode.AUTH_026 : ApiResultCode.AUTH_027)
                 .withParams("count", codes.getErrorCount(email)),
             result == 1 ? "Verification code expired" : "Invalid verification code");
+    }
+
+    /** Side-effect-free preflight shared with final registration; never consumes email proof. */
+    public Rejection validatePassword(String password) {
+        if (password == null || password.isBlank()) {
+            return reject(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_017, "Empty password");
+        }
+        if (!validator.isValidPasswordLength(password)) {
+            return new Rejection(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_020.withParams(
+                "min", properties.getPassword().getMinLength(), "max", properties.getPassword().getMaxLength()),
+                "Invalid password length");
+        }
+        if (!validator.isStrongPassword(password)) {
+            return reject(HttpStatus.BAD_REQUEST, PasswordRequirementResult.from(properties.getPassword()), "Weak password");
+        }
+        if (validator.isCommonWeakPassword(password)) {
+            return reject(HttpStatus.BAD_REQUEST, ApiResultCode.AUTH_021, "Common weak password");
+        }
+        return null;
     }
 
     private static Rejection reject(HttpStatus status, ApiResultCode code, String reason) {

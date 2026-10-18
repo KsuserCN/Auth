@@ -210,6 +210,56 @@ final class CoreTests: XCTestCase {
         let lengthPolicy = PasswordRequirement(minLength: 8, maxLength: 8, requireUppercase: false, requireLowercase: false, requireDigits: false, requireSpecialChars: false, rejectCommonWeakPasswords: true, requirementCode: nil, requirementParams: nil)
         XCTAssertNil(lengthPolicy.validationError(for: "Ab1234😀"))
     }
+    @MainActor func testRegistrationPasswordPreflightUsesServerRulesAndPreservesPassword() async throws {
+        let transport = FixtureTransport(mode: .passwordValidation)
+        let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        let rejected = await model.validateRegistrationPassword("PreviouslyAllowed123")
+        XCTAssertFalse(rejected)
+        XCTAssertEqual(model.errorMessage, APIResultCodeResolver.message(errorCode: "AUTH_021", statusCode: 400))
+        let password = "  NewPassword123!  "
+        let accepted = await model.validateRegistrationPassword(password)
+        XCTAssertTrue(accepted)
+        XCTAssertNil(model.errorMessage)
+        let requests = await transport.inputRequests
+        XCTAssertEqual(requests.count, 2)
+        for request in requests {
+            XCTAssertEqual(request.url?.path, "/info/validate-password")
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertNil(request.url?.query)
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-XSRF-TOKEN"), "csrf-fixture")
+        }
+        let body = try JSONDecoder().decode([String: JSONValue].self, from: XCTUnwrap(requests.last?.httpBody))
+        XCTAssertEqual(body, ["password": .string(password)])
+        let session = await client.snapshot()
+        XCTAssertNil(session.accessToken)
+        XCTAssertNil(model.user)
+    }
+    @MainActor func testRegistrationPasswordPreflightWaitsForServerAndRetriesNetworkFailure() async {
+        let path = "/info/validate-password"
+        let transport = LoadingGateTransport(mode: .passwordValidation, paths: [path])
+        let client = APIClient(environment: environment, storage: MemorySessionStore(), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        let first = Task { await model.validateRegistrationPassword("NewPassword123!") }
+        await transport.waitForRequest(path)
+        XCTAssertTrue(model.isBusy)
+        let duplicate = await model.validateRegistrationPassword("NewPassword123!")
+        XCTAssertFalse(duplicate)
+        let count = await transport.requestCount(path)
+        XCTAssertEqual(count, 1)
+        await transport.release(path, error: URLError(.notConnectedToInternet))
+        let rejected = await first.value
+        XCTAssertFalse(rejected)
+        XCTAssertFalse(model.isBusy)
+        XCTAssertNotNil(model.errorMessage)
+        let retry = Task { await model.validateRegistrationPassword("NewPassword123!") }
+        await transport.waitForRequest(path)
+        await transport.release(path)
+        let accepted = await retry.value
+        XCTAssertTrue(accepted)
+        XCTAssertNil(model.errorMessage)
+    }
     func testCookieDomainPathAndSecureMatching() {
         let cookie = StoredCookie(HTTPCookie(properties: [.name: "refreshToken", .value: "fixture", .domain: ".ksuser.cn", .path: "/auth", .secure: "TRUE"])!)
         XCTAssertTrue(cookie.matches(URL(string: "https://api.ksuser.cn/auth/refresh")!))
@@ -703,7 +753,7 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr, passwordValidation }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
@@ -723,6 +773,15 @@ private actor FixtureTransport: HTTPTransport {
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let path = request.url!.path
         if path == "/auth/csrf-token" { return response(request, 200, #"{"code":200,"data":{"csrfToken":"csrf-fixture"}}"#, cookie: "XSRF-TOKEN=csrf-fixture; Path=/; Secure; SameSite=Lax") }
+        if mode == .passwordValidation {
+            inputRequests.append(request)
+            guard path == "/info/validate-password" else { throw APIError.invalidResponse }
+            let body = try JSONDecoder().decode([String: JSONValue].self, from: request.httpBody!)
+            if body["password"] == .string("PreviouslyAllowed123") {
+                return response(request, 400, #"{"code":400,"errorCode":"AUTH_021"}"#)
+            }
+            return response(request, 200, #"{"code":200,"errorCode":"REQUEST_SUCCESS"}"#)
+        }
         if mode == .applicationQr {
             let ticket = String(repeating: "a", count: 32)
             if path == "/auth/qr/preview" {

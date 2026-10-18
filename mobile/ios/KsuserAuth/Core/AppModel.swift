@@ -129,6 +129,26 @@ private enum ApplicationAuthorizationKind {
         if !(await repository.client.hasSession()) { try? native.clearAppleCredential(); clearUserState() }
     }
     func loadPasswordRequirement() async { await run { self.passwordRequirement = try await self.repository.passwordRequirement() } }
+    func validateRegistrationPassword(_ password: String) async -> Bool {
+        guard !isBusy else { return false }
+        #if DEBUG
+        if isUITesting {
+            errorMessage = nil
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-password-rejected"), password == "Password123" {
+                errorNotice = LocalizedMessage(errorCode: "AUTH_021", params: nil, statusCode: 400)
+                return false
+            }
+            return true
+        }
+        #endif
+        var valid = false
+        await run {
+            try await self.repository.validatePassword(password)
+            try Task.checkCancellation()
+            valid = true
+        }
+        return valid
+    }
     func checkUsername(_ username: String) async -> Bool {
         if isUITesting { return username.count >= 3 }
         var available = false

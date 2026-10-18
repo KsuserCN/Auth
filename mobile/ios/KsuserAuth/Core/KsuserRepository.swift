@@ -5,6 +5,9 @@ struct KsuserRepository: KsuserRepositoryProviding { let client: APIClient }
 
 extension KsuserRepositoryProviding {
     func passwordRequirement() async throws -> PasswordRequirement { try await client.request("/info/password-requirement", authenticated: false) }
+    func validatePassword(_ password: String) async throws {
+        let _: EmptyPayload = try await client.request("/info/validate-password", method: "POST", body: ["password": .string(password)], authenticated: false)
+    }
     func usernameAvailable(_ username: String) async throws -> Bool {
         let response: JSONValue = try await client.request("/auth/check-username", query: ["username": trimmedUserInput(username)], authenticated: false)
         guard let exists = response.objectValue?["exists"]?.boolValue else { throw APIError.invalidResponse }
