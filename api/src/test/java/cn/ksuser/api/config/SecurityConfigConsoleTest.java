@@ -196,6 +196,23 @@ class SecurityConfigConsoleTest {
             .andExpect(status().isOk()).andExpect(jsonPath("$.uuid").value("passport-user"));
     }
 
+    @Test
+    void nativeCapabilitiesArePublicButConsentRequiresPassportAndCsrf() throws Exception {
+        for (String path : List.of("/auth/native-authorization/create", "/auth/native-authorization/cancel")) {
+            mvc.perform(post(path)).andExpect(status().isOk());
+        }
+        mvc.perform(get("/auth/native-authorization/context")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/auth/native-authorization/context").cookie(CONSOLE_COOKIE)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/auth/native-authorization/context").header("Authorization", "Bearer passport-token"))
+            .andExpect(status().isOk());
+        mvc.perform(post("/auth/native-authorization/decide").header("Authorization", "Bearer passport-token"))
+            .andExpect(status().isForbidden()).andExpect(jsonPath("$.errorCode").value("SECURITY_CSRF_INVALID"));
+        mvc.perform(post("/auth/native-authorization/decide").with(csrf())).andExpect(status().isUnauthorized());
+        mvc.perform(post("/auth/native-authorization/decide").with(csrf()).header("Authorization", "Bearer passport-token"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.uuid").value("passport-user"));
+        mvc.perform(post("/auth/native-authorization/consume").with(csrf())).andExpect(status().isNotFound());
+    }
+
     @Configuration @EnableWebMvc @Import(SecurityConfig.class)
     static class TestConfiguration {
         @Bean JwtUtil jwt() { return mock(JwtUtil.class); }
@@ -224,10 +241,14 @@ class SecurityConfigConsoleTest {
             "/console/users/{uuid}/role","/console/users/{uuid}/verification","/console/official-applications","/console/official-applications/{clientId}",
             "/console/official-applications/{clientId}/rotate-secret"},method={RequestMethod.POST,RequestMethod.PUT,RequestMethod.DELETE})
         Map<String,Object> write() { return Map.of("accepted",true); }
-        @GetMapping({"/auth/test-profile","/auth/console-verification/context"})
+        @GetMapping({"/auth/test-profile","/auth/console-verification/context","/auth/native-authorization/context"})
         Map<String,Object> passport(Authentication auth) { return Map.of("uuid",auth.getPrincipal().toString()); }
         @PostMapping({"/auth/console-verification/complete","/auth/verify-sensitive","/auth/passkey/sensitive-verification-verify","/auth/qr/official/approve","/auth/qr/official/reject","/auth/mobile-authorization/decide"})
         Map<String,Object> complete(Authentication auth) { return passport(auth); }
+        @PostMapping({"/auth/native-authorization/create", "/auth/native-authorization/cancel"})
+        Map<String,Object> nativeCapability() { return Map.of("accepted", true); }
+        @PostMapping("/auth/native-authorization/decide")
+        Map<String,Object> nativeConsent(Authentication auth) { return passport(auth); }
         @PostMapping("/official/token")
         Map<String,Object> token() { return Map.of("protocolReached",true); }
         @PostMapping("/official/authorize/approve")

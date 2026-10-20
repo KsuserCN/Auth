@@ -18,6 +18,18 @@ mobile/ios/**/xcuserdata/
 mobile/ios/**/*.xcuserstate
 mobile/ios/DerivedData/
 
+# Swift Package Manager local state and SDK build output
+/.build/
+/.swiftpm/
+sdk/ios/DerivedData/
+sdk/ios/**/xcuserdata/
+sdk/ios/**/*.xcuserstate
+
+# iOS authorization demo local settings and build output
+demos/ios-auth-demo/DerivedData/
+demos/ios-auth-demo/**/xcuserdata/
+demos/ios-auth-demo/**/*.xcuserstate
+
 CLAUDE.md
 AGENTS.md
 build
@@ -58,3 +70,5 @@ api/docs/*
 !api/docs/api-result-codes.md
 !api/docs/official-app-integration.md
 !api/docs/user-verification-entity.md
+!api/docs/native-app-authorization.md
+!api/docs/open-platform-applications.md

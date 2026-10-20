@@ -4148,6 +4148,104 @@
       "messageEn": "The requested user was not found",
       "params": [],
       "sources": []
+    },
+    "OAUTH2_CLIENT_TYPE_INVALID": {
+      "message": "应用客户端类型不正确",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
+      ],
+      "messageEn": "Invalid application client type"
+    },
+    "OAUTH2_STATE_INVALID": {
+      "message": "授权状态参数不正确，请重新发起登录",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
+      ],
+      "messageEn": "Invalid authorization state. Start sign-in again."
+    },
+    "OAUTH2_PKCE_INVALID": {
+      "message": "应用登录验证失败，请重新发起登录",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/Oauth2PlatformService.java"
+      ],
+      "messageEn": "Application PKCE verification failed. Start sign-in again."
+    },
+    "NATIVE_AUTHORIZATION_UNAVAILABLE": {
+      "message": "App 授权暂未开放，请稍后重试",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "App authorization is not available. Try again later."
+    },
+    "NATIVE_AUTHORIZATION_INVALID": {
+      "message": "App 授权参数不正确，请重新发起",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "Invalid app authorization request. Start again."
+    },
+    "NATIVE_AUTHORIZATION_EXPIRED": {
+      "message": "App 授权请求已过期或已取消，请重新发起",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "App authorization expired or was cancelled. Start again."
+    },
+    "NATIVE_AUTHORIZATION_CONFLICT": {
+      "message": "此授权请求正在处理或已由其他操作完成",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "This authorization is being processed or was completed by another action."
+    },
+    "NATIVE_AUTHORIZATION_CANCEL_INVALID": {
+      "message": "无法取消此授权请求",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "Cannot cancel this authorization request."
+    },
+    "NATIVE_AUTHORIZATION_RATE_LIMITED": {
+      "message": "App 授权请求过于频繁，请稍后重试",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "Too many app authorization requests. Try again later."
+    },
+    "NATIVE_AUTHORIZATION_FAILED": {
+      "message": "App 授权未完成，请重新发起",
+      "params": [],
+      "sources": [
+        "api/src/main/java/cn/ksuser/api/service/NativeAuthorizationService.java"
+      ],
+      "messageEn": "App authorization could not be completed. Start again."
+    },
+    "OAUTH2_APPLICATION_TYPE_INVALID": {
+      "message": "应用类目或平台配置不正确",
+      "messageEn": "Invalid application category or platform configuration",
+      "params": [],
+      "sources": []
+    },
+    "OAUTH2_UNIONID_REASON_INVALID": {
+      "message": "请填写有效的 UnionID 申请或审核理由（最多1000字）",
+      "messageEn": "Provide a valid UnionID application or review reason (up to 1000 characters)",
+      "params": [],
+      "sources": []
+    },
+    "OAUTH2_UNIONID_STATE_INVALID": {
+      "message": "UnionID 申请状态已变化，请刷新后重试",
+      "messageEn": "UnionID application state changed. Refresh and try again.",
+      "params": [],
+      "sources": []
     }
   }
 }

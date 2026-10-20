@@ -32,7 +32,7 @@ struct ApplicationConsentView: View {
                 if context.officialApplication != true {
                     consentDetail(title: L10n.text("联系方式"), value: context.contactInfo?.isEmpty == false ? context.contactInfo! : L10n.text("应用未提供联系方式"))
                 }
-                consentDetail(title: L10n.text("返回网站"), value: redirectOrigin)
+                consentDetail(title: L10n.text(context.nativeAuthorization == true ? "返回应用" : "返回网站"), value: redirectOrigin)
                 if context.consoleApplication == true {
                     Text(L10n.text("仅超级管理员可登录管理中心。确认后，浏览器将以当前账号登录。"))
                         .font(.caption).foregroundStyle(.secondary)
@@ -101,14 +101,17 @@ struct ApplicationConsentView: View {
             if let error = model.errorMessage {
                 Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(Brand.danger)
             }
-            if returnError { Text(L10n.text("无法自动打开浏览器，请点击下方按钮继续。")).font(.subheadline).foregroundStyle(.secondary) }
+            if returnError { Text(L10n.text(context.nativeAuthorization == true ? "无法自动返回应用，请点击下方按钮继续。" : "无法自动打开浏览器，请点击下方按钮继续。")).font(.subheadline).foregroundStyle(.secondary) }
         }
         .navigationTitle(L10n.text("应用授权")).navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("关闭")) { model.dismissMobileAuthorization() } } }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("关闭")) {
+            if context.nativeAuthorization == true, returnURL == nil { submit(approve: false) }
+            else { model.dismissMobileAuthorization() }
+        } } }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 10) {
                 if let returnURL {
-                    Button(L10n.text("返回网页继续"), systemImage: "arrow.up.forward.app") { returnToBrowser(returnURL) }.buttonStyle(GoldButtonStyle())
+                    Button(L10n.text(context.nativeAuthorization == true ? "返回应用继续" : "返回网页继续"), systemImage: "arrow.up.forward.app") { returnToBrowser(returnURL) }.buttonStyle(GoldButtonStyle())
                 } else {
                     Button { submit(approve: true) } label: {
                         HStack { if submitting { ProgressView() }; Text(submitting ? L10n.text("正在提交…") : L10n.text("同意并继续")) }
@@ -116,7 +119,7 @@ struct ApplicationConsentView: View {
                     Button(L10n.text("拒绝授权")) { submit(approve: false) }.font(.subheadline).foregroundStyle(.secondary)
                         .frame(minHeight: 44).accessibilityIdentifier("applicationConsentDeny")
                 }
-                Text(context.qr == true ? L10n.text("确认后请返回发起扫码请求的设备") : L10n.text("完成后将自动返回网页")).font(.caption2).foregroundStyle(.secondary)
+                Text(context.qr == true ? L10n.text("确认后请返回发起扫码请求的设备") : L10n.text(context.nativeAuthorization == true ? "完成后将自动返回应用" : "完成后将自动返回网页")).font(.caption2).foregroundStyle(.secondary)
             }.padding(.horizontal, 20).padding(.vertical, 12).background(.regularMaterial)
         }
         .disabled(submitting)
@@ -187,6 +190,13 @@ struct ApplicationConsentView: View {
         }
     }
     private func returnToBrowser(_ url: URL) {
+        if context.nativeAuthorization == true {
+            UIApplication.shared.open(url, options: [.universalLinksOnly: true]) { accepted in
+                if accepted { model.dismissMobileAuthorization() }
+                else { returnError = true }
+            }
+            return
+        }
         // Bypass AppNavigationStack's HTTP(S) openURL handler, which presents SFSafariViewController.
         // For Chrome-originated requests, try Chrome's URL scheme first, then use the system browser.
         let preferredURL = MobileAuthorizationLink.preferredReturnURL(url, browser: model.pendingMobileAuthorizationReturnBrowser)

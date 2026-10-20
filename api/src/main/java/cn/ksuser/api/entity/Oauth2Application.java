@@ -18,8 +18,32 @@ public class Oauth2Application {
     @Column(name = "app_id", length = 64, nullable = false, unique = true)
     private String appId;
 
-    @Column(name = "app_secret_hash", length = 255, nullable = false)
+    @Column(name = "app_secret_hash", length = 255)
     private String appSecretHash;
+
+    @Column(name = "client_type", length = 32, nullable = false)
+    private String clientType = "confidential";
+
+    @Column(name = "application_type", length = 16, nullable = false)
+    private String applicationType = "website";
+
+    @Column(name = "unionid_status", length = 16, nullable = false)
+    private String unionidStatus = "none";
+
+    @Column(name = "unionid_reason", length = 1000)
+    private String unionidReason;
+
+    @Column(name = "unionid_review_reason", length = 1000)
+    private String unionidReviewReason;
+
+    public String getApplicationType() { return applicationType == null ? "website" : applicationType; }
+    public void setApplicationType(String value) { applicationType = value; }
+    public String getUnionidStatus() { return unionidStatus == null ? "none" : unionidStatus; }
+    public void setUnionidStatus(String value) { unionidStatus = value; }
+    public String getUnionidReason() { return unionidReason; }
+    public void setUnionidReason(String value) { unionidReason = value; }
+    public String getUnionidReviewReason() { return unionidReviewReason; }
+    public void setUnionidReviewReason(String value) { unionidReviewReason = value; }
 
     @Column(name = "app_name", length = 100, nullable = false)
     private String appName;
@@ -97,6 +121,14 @@ public class Oauth2Application {
 
     public void setAppSecretHash(String appSecretHash) {
         this.appSecretHash = appSecretHash;
+    }
+
+    public String getClientType() {
+        return clientType == null ? "confidential" : clientType;
+    }
+
+    public void setClientType(String clientType) {
+        this.clientType = clientType;
     }
 
     public String getAppName() {

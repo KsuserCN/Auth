@@ -301,11 +301,11 @@ public class ConsoleAdminService {
     public record UserApplicationsView(UserView user, List<OwnedApplicationView> applications) {}
     public record OwnedApplicationView(String protocol, String clientId, String clientName, String logoUrl,
                                        List<String> redirectUris, List<String> scopes, String contactInfo,
-                                       Boolean isActive, LocalDateTime createdAt, LocalDateTime updatedAt) {
+                                       Boolean isActive, LocalDateTime createdAt, LocalDateTime updatedAt, String clientType, String applicationType, String unionidStatus) {
         public static OwnedApplicationView of(Oauth2Application app) {
             return new OwnedApplicationView("oauth2", app.getAppId(), app.getAppName(), app.getLogoUrl(),
                 OfficialAuthorizationService.parseRedirectUris(app.getRedirectUri()), OfficialAuthorizationService.parseScopes(app.getScopes()), app.getContactInfo(),
-                app.getIsActive(), app.getCreatedAt(), app.getUpdatedAt());
+                app.getIsActive(), app.getCreatedAt(), app.getUpdatedAt(), app.getClientType(), app.getApplicationType(), app.getUnionidStatus());
         }
     }
     public record ApplicationView(String clientId,String clientName,String logoUrl,String clientType,List<String> redirectUris,List<String> scopes,

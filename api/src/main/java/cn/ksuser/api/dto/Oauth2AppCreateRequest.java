@@ -3,10 +3,26 @@ package cn.ksuser.api.dto;
 import java.util.List;
 
 public class Oauth2AppCreateRequest {
+
+    private String applicationType;
+    private MobileAppPlatforms platforms;
+    public String getApplicationType() { return applicationType; }
+    public void setApplicationType(String value) { applicationType = value; }
+    public MobileAppPlatforms getPlatforms() { return platforms; }
+    public void setPlatforms(MobileAppPlatforms value) { platforms = value; }
     private String appName;
     private String redirectUri;
     private String contactInfo;
     private List<String> scopes;
+    private String clientType;
+
+    public String getClientType() {
+        return clientType;
+    }
+
+    public void setClientType(String clientType) {
+        this.clientType = clientType;
+    }
 
     public String getAppName() {
         return appName;

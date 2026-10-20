@@ -18,7 +18,8 @@
 | `desktop/` | 桌面客户端，当前支持 `macOS` / `Windows` | Flutter |
 | `mobile/android/` | Android 客户端 | Kotlin, Jetpack Compose, Retrofit |
 | `mobile/ios/` | iOS 客户端 | SwiftUI, URLSession |
-| `demos/` | 本地 OAuth / OIDC / SSPU 接入演示 | Python, HTML/JS |
+| `sdk/ios/` | 官方应用与第三方应用的 iOS 授权 SDK、示例 | Swift Package, AuthenticationServices, PKCE |
+| `demos/` | iOS 授权与本地 OAuth / OIDC / SSPU 接入演示 | SwiftUI, Python, HTML/JS |
 | `.github/workflows/` | 分模块 CI 构建工作流 | GitHub Actions |
 
 ## 功能概览
@@ -29,6 +30,7 @@
 - 多设备会话管理、刷新与撤销
 - OAuth 登录 / 绑定（GitHub / Google / Microsoft / QQ）
 - 官方应用 OIDC Discovery
+- iOS App-to-App 授权及同事务网页备用授权，公开客户端使用 PKCE
 - 风控、限流、敏感操作日志
 
 ## 技术栈
@@ -167,6 +169,14 @@ npm run dev:web
 - 原生认证配置和发布验收：[iOS 文档](./docs/ios/README.md)
 - iOS 安全推送、APNs 密钥和数据库迁移：[推送配置](./mobile/ios/PUSH_NOTIFICATIONS.md)
 
+### iOS 授权 SDK
+
+其他 iOS 17.4+ App 可通过根目录的 Swift Package 集成 `KsuserAuthSDK`，唤起 Ksuser 安全 App 确认授权；无法唤起时使用系统网页认证。官方应用使用 OIDC，第三方应用使用 OAuth；两者都以 public 客户端和 PKCE 接入。
+
+接入与示例见 [SDK 文档](./sdk/ios/README.md)，API、数据库迁移和部署开关见 [原生授权协议](./api/docs/native-app-authorization.md)。`APP_NATIVE_AUTHORIZATION_ENABLED` 默认关闭，须在 API、Web/AASA 和 iOS App 部署完成后启用。接入 App 必须配置自己的 HTTPS 回调域名与 AASA。
+
+小型原生示例位于 [demos/ios-auth-demo](./demos/ios-auth-demo/README.md)，运行 `npm run dev:demo:ios` 打开 Xcode 工程，`npm run build:demo:ios` 验证模拟器构建。
+
 ## 子项目文档
 
 - [API 文档](./api/README.md)
@@ -175,6 +185,7 @@ npm run dev:web
 - [Desktop 文档](./desktop/README.md)
 - [Android 文档](./mobile/android/README.md)、[验收记录](./mobile/android/ACCEPTANCE.md)、[发布流程](./mobile/android/RELEASE.md)
 - [iOS 文档](./docs/ios/README.md)
+- [iOS 授权 SDK](./sdk/ios/README.md)
 - [Demo 索引](./demos/README.md)
 
 ## CI / 构建工作流

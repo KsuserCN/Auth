@@ -51,7 +51,7 @@ class MobileAuthorizationServiceTest {
             return keys.stream().filter(key -> memory.remove(key) != null).count();
         });
         when(redis.getExpire(anyString(), eq(TimeUnit.SECONDS))).thenReturn(240L);
-        when(oauth.buildAuthorizeContext(any(), any(), any(), any(), any())).thenReturn(new Oauth2AuthorizeContextResponse("client", "日历", "https://client.example/logo.png", "help@client.example", CALLBACK, List.of("profile", "email"), false, "PERSISTENT", null));
+        when(oauth.buildAuthorizeContext(any(), any(), any(), any(), any(), any(), any(), any())).thenReturn(new Oauth2AuthorizeContextResponse("client", "日历", "https://client.example/logo.png", "help@client.example", CALLBACK, List.of("profile", "email"), false, "PERSISTENT", null));
         when(official.buildAuthorizeContext(any(), any())).thenReturn(new OfficialAuthorizationService.AuthorizeContext(
             "client", "官方应用", null, List.of("openid", "real_name"), List.of(), true, false, false));
         when(qr.createApplicationAuthorizationChallenge(anyString(), any(), any())).thenAnswer(inv -> {
@@ -90,6 +90,8 @@ class MobileAuthorizationServiceTest {
         verify(oauth).approveAuthorization(eq(user), captured.capture());
         assertEquals(CALLBACK, captured.getValue().getRedirectUri());
         assertEquals("state +&中文", captured.getValue().getState());
+        assertEquals("original-challenge", captured.getValue().getCodeChallenge());
+        assertEquals("S256", captured.getValue().getCodeChallengeMethod());
         assertEquals(3600, captured.getValue().getGrantTtlSeconds());
     }
     @Test void wrongSecretCannotConsumeResultAndDenialPreservesState() {

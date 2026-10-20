@@ -184,6 +184,9 @@
 - 令牌刷新和撤销
 
 ## 文档导航
+- [网站、移动应用及 UnionID 申请](open-platform-applications.md) - 分类、平台登记验证、权限申请与审核
+- [原生应用 App-to-App 授权](native-app-authorization.md) - public 客户端、ticket 协议、回调、开关与上线顺序
+- [第三方 OAuth 授权上下文](oauth2-authorize-context.md) / [批准](oauth2-authorize-approve.md) / [Token](oauth2-token.md) - public/confidential、PKCE 与存量兼容
 - [Ksuser 官方应用接入指南](official-app-integration.md) - 官方应用 OAuth 2.0 / OIDC 接入、客户端类型与资料范围
 - [验证码系统设计约束](VERIFICATION_CODE_DESIGN.md) - 验证码系统的核心功能和设计原则
 - [请求类型处理指南](REQUEST_TYPE_HANDLING.md) - Content-Type 验证和错误处理说明

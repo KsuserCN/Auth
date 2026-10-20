@@ -89,6 +89,9 @@ export interface VerificationInput {
 }
 export interface OwnedApplication {
   protocol: 'oauth2'
+  applicationType?: 'website' | 'mobile'
+  unionidStatus?: UnionidStatus
+  clientType?: 'public' | 'confidential'
   clientId: string
   clientName: string
   logoUrl?: string | null
@@ -102,6 +105,21 @@ export interface OwnedApplication {
 export interface UserApplications {
   user: ConsoleUser
   applications: OwnedApplication[]
+}
+export type UnionidStatus = 'none' | 'pending' | 'approved' | 'rejected' | 'revoked'
+export type UnionidApplicationStatus = Exclude<UnionidStatus, 'none'> | 'withdrawn'
+export interface UnionidApplication {
+  id: number
+  appId: string
+  appName: string
+  applicationType: 'website' | 'mobile'
+  ownerUserId: number
+  ownerUsername: string
+  status: UnionidApplicationStatus
+  reason: string
+  reviewReason?: string | null
+  createdAt: string
+  reviewedAt?: string | null
 }
 export type OfficialScope =
   | 'openid'
@@ -381,6 +399,12 @@ export const consoleApi = {
         `/console/users/${encodeURIComponent(uuid)}/applications`,
       )
     ).data.data
+  },
+  async unionidApplications(params: { page: number; size: number; status: UnionidApplicationStatus | 'all' }): Promise<PageResult<UnionidApplication>> {
+    return (await request.get<ApiResult<PageResult<UnionidApplication>>>('/console/unionid-applications', { params })).data.data
+  },
+  async reviewUnionidApplication(id: number, input: { decision: 'approve' | 'reject' | 'revoke'; reason: string }): Promise<UnionidApplication> {
+    return (await request.post<ApiResult<UnionidApplication>>(`/console/unionid-applications/${id}/review`, input)).data.data
   },
   async deleteUser(uuid: string): Promise<void> {
     await request.delete(`/console/users/${encodeURIComponent(uuid)}`)

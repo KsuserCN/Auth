@@ -47,6 +47,15 @@ beforeEach(async () => {
   mocks.get.mockResolvedValue(result({ token: 'csrf-token' }))
 })
 describe('console API boundary', () => {
+  it('uses the existing console session boundary for UnionID review requests', async () => {
+    const { consoleApi } = await import('./console')
+    mocks.get.mockResolvedValue(result({ items: [], total: 0, page: 0, size: 20 }))
+    mocks.post.mockResolvedValue(result({ id: 7, status: 'approved' }))
+    await consoleApi.unionidApplications({ page: 0, size: 20, status: 'withdrawn' })
+    await consoleApi.reviewUnionidApplication(7, { decision: 'approve', reason: '账号互通' })
+    expect(mocks.get).toHaveBeenCalledWith('/console/unionid-applications', { params: { page: 0, size: 20, status: 'withdrawn' } })
+    expect(mocks.post).toHaveBeenCalledWith('/console/unionid-applications/7/review', { decision: 'approve', reason: '账号互通' })
+  })
   it('uses an encoded user path for certification updates and owned application reads', async () => {
     const { consoleApi } = await import('./console')
     mocks.put.mockResolvedValue(result({ uuid: 'user/path' }))

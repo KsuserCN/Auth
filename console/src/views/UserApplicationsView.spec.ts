@@ -23,6 +23,7 @@ const owner = {
 }
 const applications = ['oauth2'].map((protocol) => ({
   protocol,
+  clientType: 'public',
   clientId: `${protocol}-app`,
   clientName: `${protocol} 应用`,
   redirectUris: ['https://example.test/callback'],
@@ -62,6 +63,7 @@ describe('certified user applications', () => {
     expect(mocks.userApplications).toHaveBeenCalledExactlyOnceWith('first-user')
     expect(wrapper.text()).toContain('oauth2 应用')
     expect(wrapper.text()).toContain('https://example.test/callback')
+    expect(wrapper.text()).toContain('公开客户端 / S256 PKCE')
     wrapper.unmount()
   })
   it('ignores an older response when switching owners', async () => {

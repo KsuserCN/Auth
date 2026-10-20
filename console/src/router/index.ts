@@ -28,6 +28,7 @@ const router = createRouter({
         { path: '', redirect: '/users' },
         { path: 'users', component: () => import('@/views/UsersView.vue') },
         { path: 'user-applications', component: () => import('@/views/UserApplicationsView.vue') },
+        { path: 'unionid-applications', component: () => import('@/views/UnionidApplicationsView.vue') },
         {
           path: 'applications',
           component: () => import('@/views/ApplicationsView.vue'),

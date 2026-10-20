@@ -1,0 +1,4 @@
+{
+  "applinks": {"details": [{"appIDs": ["8LDARH2S3X.cn.ksuser.demo.oauth"], "components": [{"/": "/ksuser/callback"}]}]},
+  "webcredentials": {"apps": ["8LDARH2S3X.cn.ksuser.demo.oauth"]}
+}

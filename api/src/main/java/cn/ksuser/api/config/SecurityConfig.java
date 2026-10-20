@@ -69,6 +69,8 @@ public class SecurityConfig {
                     "/auth/mobile-authorization/qr/status", "/auth/mobile-authorization/qr/status/",
                     "/auth/mobile-authorization/consume", "/auth/mobile-authorization/consume/",
                     "/auth/mobile-authorization/cancel", "/auth/mobile-authorization/cancel/",
+                    "/auth/native-authorization/create", "/auth/native-authorization/create/",
+                    "/auth/native-authorization/cancel", "/auth/native-authorization/cancel/",
                     "/auth/mobile-bridge/create", "/auth/mobile-bridge/create/",
                     "/auth/mobile-bridge/status", "/auth/mobile-bridge/status/",
                     "/auth/mobile-bridge/cancel", "/auth/mobile-bridge/cancel/",
@@ -142,6 +144,10 @@ public class SecurityConfig {
                 .csrfTokenRequestHandler(new org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler())
                 // 只为查询接口排除 CSRF 检查
                 .ignoringRequestMatchers(
+                    // These endpoints cannot act with a Passport session: create only freezes a public request,
+                    // and cancel requires an independent per-request secret. Consent still requires CSRF.
+                    "/auth/native-authorization/create", "/auth/native-authorization/create/",
+                    "/auth/native-authorization/cancel", "/auth/native-authorization/cancel/",
                     "/oauth/apple/notifications", "/oauth/apple/notifications/",
                     "/auth/check-username", "/auth/check-username/",
                     "/oauth/qq/callback/login", "/oauth/qq/callback/login/",

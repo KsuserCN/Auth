@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   officialContext: vi.fn(),
   officialApprove: vi.fn(),
   oauthApprove: vi.fn(),
+  nativeContext: vi.fn(),
+  nativeDecide: vi.fn(),
   token: null as string | null,
   account: null as { username: string; email: string } | null,
   desktopStatus: vi.fn(),
@@ -60,6 +62,11 @@ vi.mock('@/api/official', () => ({
     ({ openid: '真实用户 UUID', email: '邮箱', real_name: '真实姓名' })[
       scope as 'openid' | 'email' | 'real_name'
     ] || scope,
+}))
+vi.mock('@/api/nativeAuthorization', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/nativeAuthorization')>(),
+  getNativeAuthorizationContext: mocks.nativeContext,
+  decideNativeAuthorization: mocks.nativeDecide,
 }))
 vi.mock('@/utils/desktopBridge', () => ({
   getDesktopBridgeStatus: mocks.desktopStatus,
@@ -120,6 +127,7 @@ beforeEach(() => {
   mocks.route.path = '/oauth/authorize'
   mocks.route.fullPath = '/oauth/authorize?client_id=client'
   Reflect.deleteProperty(mocks.route.query, 'login_method')
+  Reflect.deleteProperty(mocks.route.query, 'ticket')
   mocks.token = null
   mocks.account = null
   mocks.ios.mockReturnValue(true)
@@ -131,6 +139,7 @@ beforeEach(() => {
   mocks.cancel.mockResolvedValue(undefined)
   mocks.desktopStatus.mockResolvedValue(null)
   mocks.oauthApprove.mockImplementation(() => new Promise(() => {}))
+  mocks.nativeDecide.mockImplementation(() => new Promise(() => {}))
 })
 
 describe('compact authorization mode controls', () => {
@@ -147,6 +156,7 @@ describe('compact authorization mode controls', () => {
     mocks.route.path = path
     const wrapper = render()
     await flushPromises()
+    expect(mocks.oauthContext).toHaveBeenCalledWith(expect.objectContaining({ state: 'original-state', codeChallenge: 'original-challenge', codeChallengeMethod: 'S256' }))
     expect((wrapper.get('input[value="PERSISTENT"]').element as HTMLInputElement).checked).toBe(
       true,
     )
@@ -167,6 +177,8 @@ describe('compact authorization mode controls', () => {
         clientId: 'client',
         state: 'original-state',
         grantMode: mode,
+        codeChallenge: 'original-challenge',
+        codeChallengeMethod: 'S256',
         grantTtlSeconds: mode === 'TIME_LIMITED' ? 604800 : undefined,
       }),
     )
@@ -185,6 +197,77 @@ describe('compact authorization mode controls', () => {
     await wrapper.get('input[value="ONE_TIME"]').setValue(true)
     expect(wrapper.get('.grant-policy-existing').text()).toContain('已有：限时')
     expect(wrapper.get('.grant-policy-note').text()).toContain('仅本次有效')
+  })
+})
+
+describe('native SDK web fallback', () => {
+  const nativeTicket = 'n'.repeat(32)
+  beforeEach(() => {
+    mocks.route.path = '/app/sdk-authorize/web'
+    mocks.route.fullPath = '/app/sdk-authorize/web?ticket=' + nativeTicket
+    Object.assign(mocks.route.query, { ticket: nativeTicket })
+    mocks.token = 'passport-session'
+    mocks.account = { username: 'Ksuser', email: 'ksuser@example.com' }
+    mocks.nativeContext.mockResolvedValue({ ...context, ticket: nativeTicket, nativeAuthorization: true, officialApplication: false, consoleApplication: false, expiresInSeconds: 300 })
+  })
+
+  it('keeps the ticket through browser login and does not create another authorization', async () => {
+    mocks.token = null
+    render()
+    await flushPromises()
+    expect(mocks.replace).toHaveBeenCalledWith({ path: '/login', query: { redirect: mocks.route.fullPath } })
+    expect(mocks.nativeContext).not.toHaveBeenCalled()
+    expect(mocks.oauthContext).not.toHaveBeenCalled()
+    expect(mocks.create).not.toHaveBeenCalled()
+  })
+
+  it('uses server metadata and sends only the frozen ticket and selected policy', async () => {
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).toContain('校园日历')
+    expect(wrapper.find('.qr-login-toggle').exists()).toBe(false)
+    await wrapper.get('input[value="TIME_LIMITED"]').setValue(true)
+    await wrapper.get('.grant-ttl-select').setValue('604800')
+    await wrapper.get('.consent-primary-btn').trigger('click')
+    expect(mocks.nativeContext).toHaveBeenCalledWith(nativeTicket)
+    expect(mocks.nativeDecide).toHaveBeenCalledWith({ ticket: nativeTicket, approve: true, grantMode: 'TIME_LIMITED', grantTtlSeconds: 604800 })
+    expect(mocks.oauthApprove).not.toHaveBeenCalled()
+    expect(mocks.officialApprove).not.toHaveBeenCalled()
+  })
+
+  it('uses the same native decision endpoint for denial', async () => {
+    const wrapper = render()
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === '拒绝')!.trigger('click')
+    expect(mocks.nativeDecide).toHaveBeenCalledWith({ ticket: nativeTicket, approve: false, grantMode: 'PERSISTENT', grantTtlSeconds: undefined })
+    expect(mocks.oauthApprove).not.toHaveBeenCalled()
+  })
+
+  it('preserves official application scope labels and hides OAuth grant policy', async () => {
+    mocks.nativeContext.mockResolvedValue({ ...context, ticket: nativeTicket, nativeAuthorization: true, officialApplication: true, consoleApplication: true, expiresInSeconds: 300, requestedScopes: ['openid', 'real_name'] })
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.text()).toContain('真实用户 UUID')
+    expect(wrapper.text()).toContain('真实姓名')
+    expect(wrapper.find('.grant-policy-options').exists()).toBe(false)
+    expect(mocks.officialContext).not.toHaveBeenCalled()
+  })
+
+  it('blocks a server response that points outside the frozen callback', async () => {
+    mocks.nativeDecide.mockResolvedValue({ completed: true, returnUrl: 'https://evil.example/callback?code=stolen&state=s' })
+    const wrapper = render()
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === '拒绝')!.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.error-panel').text()).toContain('授权请求无效')
+  })
+
+  it('rejects duplicate ticket parameters before accessing the request', async () => {
+    Object.assign(mocks.route.query, { ticket: [nativeTicket, nativeTicket] })
+    const wrapper = render()
+    await flushPromises()
+    expect(wrapper.get('.error-panel').text()).toContain('授权链接无效')
+    expect(mocks.nativeContext).not.toHaveBeenCalled()
   })
 })
 

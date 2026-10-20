@@ -8,14 +8,21 @@ import OpenPlatformView from './OpenPlatformView.vue'
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   oauth: vi.fn(),
+  create: vi.fn(),
+  verify: vi.fn(),
+  applyUnionid: vi.fn(),
+  closeUnionid: vi.fn(),
 }))
 vi.mock('@/api/auth', () => ({ getUserInfo: mocks.user, getUserDetailsInfo: vi.fn() }))
 vi.mock('@/api/oauth2', () => ({
   getOAuth2Apps: mocks.oauth,
-  createOAuth2App: vi.fn(),
+  createOAuth2App: mocks.create,
   deleteOAuth2App: vi.fn(),
   uploadOAuth2AppLogo: vi.fn(),
   updateOAuth2App: vi.fn(),
+  verifyApplicationPlatform: mocks.verify,
+  applyApplicationUnionid: mocks.applyUnionid,
+  closeApplicationUnionid: mocks.closeUnionid,
 }))
 
 const account = {
@@ -67,9 +74,54 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.user.mockResolvedValue({ ...account })
   mocks.oauth.mockResolvedValue({ ...oauthOverview })
+  mocks.create.mockResolvedValue({ ...oauthApp, clientType: 'public', appSecret: null })
 })
 
 describe('service integration account identity and applications', () => {
+  it('creates websites without offering a client authentication type selector', async () => {
+    const wrapper = await render()
+    await wrapper.get('.toolbar-actions .el-button--primary').trigger('click')
+    const dialog = wrapper.get('[role="dialog"]')
+    expect(dialog.find('input[value="public"]').exists()).toBe(false)
+    await dialog.get('input[placeholder="例如：Ksuser Demo"]').setValue('校园网站')
+    await dialog.get('input[placeholder="邮箱 / 工单地址 / 说明"]').setValue('support@example.com')
+    await dialog.get('textarea').setValue('https://native.example/callback')
+    await dialog.findAll('button').find((button) => button.text() === '创建应用')!.trigger('click')
+    await flushPromises()
+    expect(mocks.create).toHaveBeenCalledWith({ applicationType: 'website', appName: '校园网站', contactInfo: 'support@example.com', redirectUri: 'https://native.example/callback', scopes: ['profile'] })
+    wrapper.unmount()
+  })
+
+  it('registers iOS under the mobile category without sending a website callback or secret', async () => {
+    const wrapper = await render()
+    await wrapper.get('#tab-mobile').trigger('click')
+    expect(wrapper.text()).toContain('暂无移动应用')
+    await wrapper.get('.toolbar-actions .el-button--primary').trigger('click')
+    const dialog = wrapper.get('[role="dialog"]')
+    await dialog.get('input[placeholder="例如：Ksuser Demo"]').setValue('原生校园应用')
+    await dialog.get('input[placeholder="邮箱 / 工单地址 / 说明"]').setValue('support@example.com')
+    await dialog.findAll('.el-checkbox').find((checkbox) => checkbox.text() === '登记 iOS 平台')!.get('input').setValue(true)
+    await dialog.get('input[placeholder="com.example.app"]').setValue('com.example.campus')
+    await dialog.get('input[placeholder="TEAMID1234"]').setValue('TEAMID1234')
+    await dialog.get('input[placeholder="https://login.example.app/ksuser/callback"]').setValue('https://native.example/callback')
+    await dialog.findAll('button').find((button) => button.text() === '创建应用')!.trigger('click')
+    await flushPromises()
+    expect(mocks.create).toHaveBeenCalledWith({ applicationType: 'mobile', appName: '原生校园应用', contactInfo: 'support@example.com', platforms: { ios: { bundleId: 'com.example.campus', appIdPrefix: 'TEAMID1234', universalLink: 'https://native.example/callback', urlScheme: '', appStoreId: '' } }, scopes: ['profile'] })
+    expect(wrapper.findAll('.secret-label').map((label) => label.text())).toEqual(['AppID'])
+    expect(wrapper.get('.secret-panel').text()).toContain('S256 PKCE')
+    wrapper.unmount()
+  })
+
+  it('separates category lists while keeping the shared quota', async () => {
+    mocks.oauth.mockResolvedValue({ ...oauthOverview, currentCount: 2, apps: [oauthApp, { ...oauthApp, appId: 'mobile-1', appName: '校园 App', applicationType: 'mobile', clientType: 'public' }] })
+    const wrapper = await render()
+    expect(wrapper.findAll('.app-name').map((app) => app.text())).toEqual(['校园服务'])
+    await wrapper.get('#tab-mobile').trigger('click')
+    expect(wrapper.findAll('.app-name').map((app) => app.text())).toEqual(['校园 App'])
+    expect(wrapper.get('.applications-description').text()).toContain('2 / 5')
+    wrapper.unmount()
+  })
+
   it.each([
     ['personal', '张三', '个人认证'],
     ['enterprise', '示例科技有限公司', '企业认证'],

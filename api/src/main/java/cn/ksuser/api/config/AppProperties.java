@@ -18,6 +18,7 @@ public class AppProperties {
     private final SensitiveOperation sensitiveOperation = new SensitiveOperation();
     private final Passkey passkey = new Passkey();
     private final MobileBridge mobileBridge = new MobileBridge();
+    private final NativeAuthorization nativeAuthorization = new NativeAuthorization();
     private final Oauth oauth = new Oauth();
     private final Qq qq = new Qq();
     private final Google google = new Google();
@@ -54,6 +55,8 @@ public class AppProperties {
     public MobileBridge getMobileBridge() {
         return mobileBridge;
     }
+
+    public NativeAuthorization getNativeAuthorization() { return nativeAuthorization; }
 
     public Oauth getOauth() { return oauth; }
 
@@ -187,6 +190,22 @@ public class AppProperties {
 
         public java.util.List<String> getRedirectUris() { return redirectUris; }
         public void setRedirectUris(java.util.List<String> redirectUris) { this.redirectUris = redirectUris; }
+    }
+
+    public static class NativeAuthorization {
+        private boolean enabled;
+        private java.util.List<String> allowedClientIds = new java.util.ArrayList<>();
+        private int createIpPerMinute = 30;
+        private int createClientPerMinute = 120;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean value) { enabled = value; }
+        public java.util.List<String> getAllowedClientIds() { return allowedClientIds; }
+        public void setAllowedClientIds(java.util.List<String> value) { allowedClientIds = value; }
+        public int getCreateIpPerMinute() { return createIpPerMinute; }
+        public void setCreateIpPerMinute(int value) { createIpPerMinute = value; }
+        public int getCreateClientPerMinute() { return createClientPerMinute; }
+        public void setCreateClientPerMinute(int value) { createClientPerMinute = value; }
     }
 
     public static class MobileBridge {

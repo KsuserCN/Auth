@@ -10,6 +10,7 @@ struct MobileAuthorizationContext: Decodable, Sendable, Identifiable {
     let alreadyAuthorized: Bool
     let existingGrantMode: String
     let expiresInSeconds: Int
+    var nativeAuthorization: Bool? = nil
     var qr: Bool? = nil
     var officialApplication: Bool? = nil
     var consoleApplication: Bool? = nil
@@ -76,5 +77,43 @@ extension KsuserRepositoryProviding {
         var body: [String: JSONValue] = ["ticket": .string(ticket), "approve": .bool(approve), "grantMode": .string(mode), "loginWeb": .bool(approve && loginWeb)]
         if mode == "TIME_LIMITED" { body["grantTtlSeconds"] = .number(Double(ttl)) }
         return try await client.request("/auth/mobile-authorization/decide", method: "POST", body: body)
+    }
+}
+
+/// Native clients use a separate HTTPS route and a registered HTTPS callback.
+/// Never relax browserReturn: the legacy browser receipt must stay on Ksuser domains.
+enum NativeAuthorizationLink {
+    static func ticket(from url: URL, environment: AppEnvironment) -> String? {
+        guard url.scheme == "https", url.host == environment.webURL.host,
+              url.port == environment.webURL.port, url.path == "/app/sdk-authorize",
+              url.user == nil, url.password == nil, url.fragment == nil,
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              items.count == 1, items[0].name == "ticket", let ticket = items[0].value,
+              ticket.range(of: #"^[A-Za-z0-9_-]{32}$"#, options: .regularExpression) != nil else { return nil }
+        return ticket
+    }
+    static func callback(_ value: String, registered: String) -> URL? {
+        guard let expected = URLComponents(string: registered), expected.scheme == "https",
+              expected.host != nil, expected.user == nil, expected.password == nil,
+              expected.query == nil, expected.fragment == nil,
+              let actual = URLComponents(string: value), actual.scheme == expected.scheme,
+              actual.host == expected.host, actual.port == expected.port,
+              actual.percentEncodedPath == expected.percentEncodedPath,
+              actual.user == nil, actual.password == nil, actual.fragment == nil,
+              let items = actual.queryItems, items.count == 2,
+              items.filter({ $0.name == "state" && $0.value?.isEmpty == false }).count == 1,
+              items.filter({ ($0.name == "code" || $0.name == "error") && $0.value?.isEmpty == false }).count == 1 else { return nil }
+        return actual.url
+    }
+}
+
+extension KsuserRepositoryProviding {
+    func nativeAuthorization(_ ticket: String) async throws -> MobileAuthorizationContext {
+        try await client.request("/auth/native-authorization/context", query: ["ticket": ticket])
+    }
+    func decideNativeAuthorization(_ ticket: String, approve: Bool, mode: String, ttl: Int) async throws -> MobileAuthorizationReturn {
+        var body: [String: JSONValue] = ["ticket": .string(ticket), "approve": .bool(approve), "grantMode": .string(mode)]
+        if mode == "TIME_LIMITED" { body["grantTtlSeconds"] = .number(Double(ttl)) }
+        return try await client.request("/auth/native-authorization/decide", method: "POST", body: body)
     }
 }

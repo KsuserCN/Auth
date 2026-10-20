@@ -49,3 +49,13 @@ App 继续接收 `ksuserauth://authorize?ticket=…` 与 `/app/authorize?ticket=
 App 图标名称、相机权限等系统界面的资源位于 `zh-Hans.lproj/InfoPlist.strings` 和 `en.lproj/InfoPlist.strings`，由 iOS 选择 App 语言；App 内语言选择无法即时覆盖系统权限弹窗或主屏幕 App 名称。App 内原生裁剪界面和动态快捷操作会跟随 App 内语言。
 
 验证使用 `npm run test:mobile:ios`、`npm run build:mobile:ios`。已有中文 UI 回归测试显式指定中文系统语言；新增本地化测试覆盖语言解析、偏好存储、API 文案及请求语言、时间格式，以及切换时的输入与提示保留。
+
+# iOS App-to-App SDK 授权
+
+新版通过独立 HTTPS `/app/sdk-authorize?ticket=…` 接收原生 public client 请求，登录后复用应用授权页。SDK 对第三方 OAuth 和官方模式都在创建请求顶层发送 `platform: "ios"`。第三方必须在开放平台的“移动应用”登记 iOS Bundle ID、App ID 前缀和 HTTPS Universal Link 回调，并通过 AASA 的 `applinks`、`webcredentials` 验证；修改关联资料后需要重新验证。“网站”类目不开放原生授权。同一个移动应用 AppID 可以登记 iOS、Android，本次只开放 iOS；Android 提供登记与 App Link 验证，授权入口和 SDK 后续提供。官方应用仍在独立体系注册 public client。
+
+App 从 `/auth/native-authorization/context` 读取登记的应用、完整范围及回调地址，审批使用 `/auth/native-authorization/decide`，仅打开精确匹配登记 URI 的 HTTPS code/state 或 error/state 回调。平台参数不作为调用方身份凭据。原有网页收据回跳、扫码流程保持独立；回跳失败的重试复用同一已签发结果。
+
+第三方应用的 UnionID 由开发者逐个网站／移动应用申请，管理员批准后 Token 和 UserInfo 才提供；同一开发者账号下获批应用共享同一用户的 UnionID。未获批或撤销后不影响基于 OpenID 的登录。原生 Host 仅批准本次申请范围，不代替管理员开通 UnionID。
+
+SDK 最低 iOS 17.4，Host App 仍支持 iOS 17.0。SDK 的 SPM 安装、回调域名 AASA/entitlement、Keychain 恢复及同 ticket 网页 fallback 见 [SDK 接入文档](../../sdk/ios/README.md)。API 的 `APP_NATIVE_AUTHORIZATION_ENABLED` 默认关闭，可使用 `APP_NATIVE_AUTHORIZATION_ALLOWED_CLIENT_IDS` 灰度；需同时部署 API、网页、含 `/app/sdk-authorize` 的 Ksuser AASA 和新版 App。

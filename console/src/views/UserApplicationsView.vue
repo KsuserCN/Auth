@@ -3,7 +3,7 @@
     <div class="page-heading">
       <div>
         <h1>认证用户应用</h1>
-        <p>按个人认证、企业认证或管理员账号，查看其创建的 OAuth 应用。</p>
+        <p>按个人认证、企业认证或管理员账号，查看其创建的网站与移动应用。</p>
       </div>
       <el-button @click="load">刷新</el-button>
     </div>
@@ -118,7 +118,7 @@
         <el-table
           :data="selected.applications"
           :row-key="(app: OwnedApplication) => `${app.protocol}:${app.clientId}`"
-          empty-text="该用户暂无 OAuth 应用"
+          empty-text="该用户暂无网站或移动应用"
         >
           <el-table-column type="expand">
             <template #default="{ row }">
@@ -130,6 +130,9 @@
                 >
                 <el-descriptions-item label="权限范围">{{
                   row.scopes.join(' ') || '—'
+                }}</el-descriptions-item>
+                <el-descriptions-item label="客户端类型">{{
+                  row.clientType === 'public' ? '公开客户端 / S256 PKCE' : '服务端客户端'
                 }}</el-descriptions-item>
                 <el-descriptions-item label="联系信息">{{
                   row.contactInfo || '—'
@@ -153,10 +156,8 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="协议" width="120"
-            ><template #default="{ row }">{{
-              'OAuth'
-            }}</template></el-table-column
+          <el-table-column label="类别" width="120"
+            ><template #default="{ row }">{{ row.applicationType === 'mobile' ? '移动应用' : '网站' }}</template></el-table-column
           >
           <el-table-column label="状态" width="90"
             ><template #default="{ row }"

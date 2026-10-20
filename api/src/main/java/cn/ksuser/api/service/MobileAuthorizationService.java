@@ -120,7 +120,8 @@ public class MobileAuthorizationService {
                 user != null && !c.consentRequired(), "PERSISTENT", seconds, stored.qr(), true, c.consoleApplication(),
                 stored.returnOrigin(), null, null);
         }
-        var c = oauth.buildAuthorizeContext(user, a.getClientId(), a.getRedirectUri(), a.getResponseType(), a.getScope());
+        var c = oauth.buildAuthorizeContext(user, a.getClientId(), a.getRedirectUri(), a.getResponseType(), a.getScope(),
+            a.getState(), a.getCodeChallenge(), a.getCodeChallengeMethod());
         return new Context(ticket, c.getAppName(), c.getLogoUrl(), c.getContactInfo(), c.getRedirectUri(),
             c.getRequestedScopes(), c.isAlreadyAuthorized(), c.getExistingGrantMode(), seconds, stored.qr(), false,
             false, stored.returnOrigin(), c.getSubjectName(), c.getSubjectVerificationType());
@@ -148,6 +149,7 @@ public class MobileAuthorizationService {
                 request.setClientId(a.getClientId()); request.setRedirectUri(a.getRedirectUri());
                 request.setResponseType(a.getResponseType()); request.setScope(a.getScope());
                 request.setState(a.getState()); request.setGrantMode(a.getGrantMode());
+                request.setCodeChallenge(a.getCodeChallenge()); request.setCodeChallengeMethod(a.getCodeChallengeMethod());
                 request.setGrantTtlSeconds(a.getGrantTtlSeconds());
                 redirect = oauth.approveAuthorization(user, request).getRedirectUrl();
             }

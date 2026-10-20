@@ -354,7 +354,7 @@ class Oauth2PlatformServiceTest {
         when(applicationRepository.countByOwnerUserId(1L)).thenReturn(0L);
         when(applicationRepository.existsByAppId(anyString())).thenReturn(false);
         when(passwordEncoder.encode(anyString())).thenReturn("encoded-secret");
-        when(applicationRepository.save(any(Oauth2Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(applicationRepository.saveAndFlush(any(Oauth2Application.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Oauth2AppCreateRequest request = new Oauth2AppCreateRequest();
         request.setAppName("OAuth Demo");
@@ -365,7 +365,7 @@ class Oauth2PlatformServiceTest {
         service.createApplication(user, request);
 
         ArgumentCaptor<Oauth2Application> captor = ArgumentCaptor.forClass(Oauth2Application.class);
-        verify(applicationRepository).save(captor.capture());
+        verify(applicationRepository).saveAndFlush(captor.capture());
         assertEquals("https://demo.example.com/oauth/callback;http://localhost:9000/callback", captor.getValue().getRedirectUri());
     }
 
@@ -392,6 +392,7 @@ class Oauth2PlatformServiceTest {
     private Oauth2Application buildApplication() {
         Oauth2Application application = new Oauth2Application();
         application.setAppId("ksapp_demo");
+        application.setUnionidStatus("approved");
         application.setAppSecretHash("encoded-secret");
         application.setAppName("Demo App");
         application.setRedirectUri("http://localhost:9000/callback");

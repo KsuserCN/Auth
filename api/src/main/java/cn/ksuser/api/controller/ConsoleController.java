@@ -25,6 +25,8 @@ public class ConsoleController {
     private final ConsoleSessionService sessions;
     private final ConsoleAdminService admin;
     private final RateLimitService rateLimit;
+    @org.springframework.beans.factory.annotation.Autowired
+    private cn.ksuser.api.service.UnionidApplicationService unionidApplications;
     public ConsoleController(ConsoleSessionService sessions,ConsoleAdminService admin,RateLimitService rateLimit) {
         this.sessions=sessions; this.admin=admin; this.rateLimit=rateLimit;
     }
@@ -111,6 +113,17 @@ public class ConsoleController {
     @PostMapping("/official-applications/{clientId}/rotate-secret")
     public ApiResponse<ConsoleAdminService.ApplicationSecret> rotate(@PathVariable String clientId,Authentication auth,HttpServletRequest request) {
         return success(admin.rotateSecret(principal(auth),clientId,clientIp(request)));
+    }
+    @GetMapping("/unionid-applications")
+    public ApiResponse<ConsoleAdminService.PageView<cn.ksuser.api.service.UnionidApplicationService.View>> unionidApplications(
+        @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size,
+        @RequestParam(defaultValue="pending") String status) {
+        return success(unionidApplications.list(page, size, status));
+    }
+    @PostMapping("/unionid-applications/{id}/review")
+    public ApiResponse<cn.ksuser.api.service.UnionidApplicationService.View> reviewUnionid(@PathVariable Long id,
+        @RequestBody cn.ksuser.api.service.UnionidApplicationService.Review body, Authentication auth, HttpServletRequest request) {
+        return success(unionidApplications.review(principal(auth), id, body, clientIp(request)));
     }
     @GetMapping("/audit-logs")
     public ApiResponse<ConsoleAdminService.PageView<ConsoleAuditLog>> audits(@RequestParam(defaultValue="0") int page,@RequestParam(defaultValue="20") int size,

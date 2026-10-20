@@ -72,7 +72,7 @@
         >
         <el-table-column label="类型" prop="clientType" width="145" sortable="custom"
           ><template #default="{ row }">{{
-            row.clientType === 'public' ? '公开客户端 / SPA' : '服务端客户端'
+            row.clientType === 'public' ? '公开客户端 / 原生 App / SPA' : '服务端客户端'
           }}</template></el-table-column
         >
         <el-table-column label="状态" prop="isActive" width="160" sortable="custom"
@@ -150,10 +150,13 @@
         /></el-form-item>
         <el-form-item label="客户端类型（创建后固定）" required
           ><el-radio-group v-model="form.clientType" :disabled="form.editing"
-            ><el-radio value="public">公开客户端 / SPA</el-radio
+            ><el-radio value="public">公开客户端 / 原生 App / SPA</el-radio
             ><el-radio value="confidential">服务端客户端</el-radio></el-radio-group
           ></el-form-item
         >
+        <p v-if="form.clientType === 'public'" class="muted form-notice">
+          公开客户端使用 S256 PKCE，不签发客户端密钥。iOS SDK 回调须使用无查询参数的 HTTPS 地址，并为调用方 App 配置 Associated Domains 和 AASA。
+        </p>
         <el-form-item v-if="form.clientType === 'confidential' && !editingReserved" label="OIDC 兼容">
           <el-switch v-model="form.allowMissingNonce" active-text="允许省略 nonce" />
           <p class="muted">仅供无法发送 nonce 的服务端 OIDC 客户端使用；仍必须使用 state、PKCE 和客户端密钥。</p>

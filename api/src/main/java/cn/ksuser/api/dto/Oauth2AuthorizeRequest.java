@@ -6,6 +6,8 @@ public class Oauth2AuthorizeRequest {
     private String responseType;
     private String scope;
     private String state;
+    private String codeChallenge;
+    private String codeChallengeMethod;
     private String grantMode;
     private Integer grantTtlSeconds;
 
@@ -47,6 +49,22 @@ public class Oauth2AuthorizeRequest {
 
     public void setState(String state) {
         this.state = state;
+    }
+
+    public String getCodeChallenge() {
+        return codeChallenge;
+    }
+
+    public void setCodeChallenge(String codeChallenge) {
+        this.codeChallenge = codeChallenge;
+    }
+
+    public String getCodeChallengeMethod() {
+        return codeChallengeMethod;
+    }
+
+    public void setCodeChallengeMethod(String codeChallengeMethod) {
+        this.codeChallengeMethod = codeChallengeMethod;
     }
 
     public String getGrantMode() {

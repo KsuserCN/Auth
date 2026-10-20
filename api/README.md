@@ -108,6 +108,7 @@ Official OIDC:
 
 iOS 会话安全推送使用 APNs，默认关闭。启用与迁移步骤见 [iOS 推送配置](../mobile/ios/PUSH_NOTIFICATIONS.md)。
 
+- [原生应用 App-to-App 授权 API](docs/native-app-authorization.md)（ticket、Universal Link、CSRF、功能开关与上线顺序）
 - [Ksuser 官方应用接入指南](docs/official-app-integration.md)（客户端类型、OIDC 授权、scope、令牌校验与撤销）
 - [EzBookKeep 官方应用迁移](ezbookkeep-official-migration.md)（原版客户端配置和分阶段发布）
 
@@ -202,6 +203,7 @@ cd api
 
 ## 文档
 
+- [原生应用 App-to-App 授权 API](docs/native-app-authorization.md)（ticket、Universal Link、CSRF、功能开关与上线顺序）
 - [Ksuser 官方应用接入指南](docs/official-app-integration.md)（客户端类型、OIDC 授权、scope、令牌校验与撤销）
 - [EzBookKeep 官方应用迁移](ezbookkeep-official-migration.md)（原版客户端配置和分阶段发布）
 - `docs/README.md`（文档索引）

@@ -28,7 +28,7 @@ OAuth2/官方应用的 token、userinfo、JWKS、OIDC discovery 成功响应保�
 
 ## 客户端语言
 
-Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；Android 继续使用中文表。源文件保留 `message` 并新增完整的 `messageEn`，生成时验证两种文案的参数一致。语言变化不改变结果码或响应格式。验证码邮件通过发送请求的 `Accept-Language` 单独选择文案。
+Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；Android 同样按当前显示语言选择本地结果表。源文件保留 `message` 并新增完整的 `messageEn`，生成时验证两种文案的参数一致。语言变化不改变结果码或响应格式。验证码邮件通过发送请求的 `Accept-Language` 单独选择文案。
 
 ## 对照表
 
@@ -555,3 +555,16 @@ Web、Desktop、iOS 按当前生效的 `zh-Hans` / `en` 选择本地结果表；
 | `CONSOLE_FLOW_INVALID` | 管理面板验证流程已失效，请重试 | Console verification flow is invalid or expired. Try again. | — | 公共/客户端 |
 | `CONSOLE_APPLICATION_INVALID` | 官方应用配置不正确或操作不被允许 | Invalid official application configuration or operation | — | 公共/客户端 |
 | `CONSOLE_USER_NOT_FOUND` | 未找到指定用户 | The requested user was not found | — | 公共/客户端 |
+| `OAUTH2_CLIENT_TYPE_INVALID` | 应用客户端类型不正确 | Invalid application client type | — | Oauth2PlatformService.java |
+| `OAUTH2_STATE_INVALID` | 授权状态参数不正确，请重新发起登录 | Invalid authorization state. Start sign-in again. | — | Oauth2PlatformService.java |
+| `OAUTH2_PKCE_INVALID` | 应用登录验证失败，请重新发起登录 | Application PKCE verification failed. Start sign-in again. | — | Oauth2PlatformService.java |
+| `NATIVE_AUTHORIZATION_UNAVAILABLE` | App 授权暂未开放，请稍后重试 | App authorization is not available. Try again later. | — | NativeAuthorizationService.java |
+| `NATIVE_AUTHORIZATION_INVALID` | App 授权参数不正确，请重新发起 | Invalid app authorization request. Start again. | — | NativeAuthorizationService.java |
+| `NATIVE_AUTHORIZATION_EXPIRED` | App 授权请求已过期或已取消，请重新发起 | App authorization expired or was cancelled. Start again. | — | NativeAuthorizationService.java |
+| `NATIVE_AUTHORIZATION_CONFLICT` | 此授权请求正在处理或已由其他操作完成 | This authorization is being processed or was completed by another action. | — | NativeAuthorizationService.java |
+| `NATIVE_AUTHORIZATION_CANCEL_INVALID` | 无法取消此授权请求 | Cannot cancel this authorization request. | — | NativeAuthorizationService.java |
+| `NATIVE_AUTHORIZATION_RATE_LIMITED` | App 授权请求过于频繁，请稍后重试 | Too many app authorization requests. Try again later. | — | NativeAuthorizationService.java |
+| `NATIVE_AUTHORIZATION_FAILED` | App 授权未完成，请重新发起 | App authorization could not be completed. Start again. | — | NativeAuthorizationService.java |
+| `OAUTH2_APPLICATION_TYPE_INVALID` | 应用类目或平台配置不正确 | Invalid application category or platform configuration | — | 公共/客户端 |
+| `OAUTH2_UNIONID_REASON_INVALID` | 请填写有效的 UnionID 申请或审核理由（最多1000字） | Provide a valid UnionID application or review reason (up to 1000 characters) | — | 公共/客户端 |
+| `OAUTH2_UNIONID_STATE_INVALID` | UnionID 申请状态已变化，请刷新后重试 | UnionID application state changed. Refresh and try again. | — | 公共/客户端 |

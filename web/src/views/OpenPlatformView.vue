@@ -60,9 +60,14 @@
           <span aria-hidden="true">↗</span>
         </a>
       </div>
+      <el-tabs v-model="applicationCategory" class="category-tabs">
+        <el-tab-pane :label="t('ui.openPlatform.websites')" name="website" />
+        <el-tab-pane :label="t('ui.openPlatform.mobileApps')" name="mobile" />
+      </el-tabs>
       <div class="applications-toolbar">
         <div class="applications-description">
-          <p>{{ t('ui.openPlatform.message010') }}</p>
+          <p>{{ t(applicationCategory === 'mobile' ? 'ui.openPlatform.mobileHint' : 'ui.openPlatform.websiteHint') }}</p>
+          <span class="shared-quota-note">{{ t('ui.openPlatform.sharedQuota') }}</span>
           <span v-if="oauthQuota" class="quota-text">{{ oauthQuota }}</span>
         </div>
         <div class="toolbar-actions">
@@ -97,14 +102,14 @@
             <span>{{ t('ui.openPlatform.limitReached') }}</span>
           </div>
           <el-empty
-            v-if="!oauthOverview.apps.length"
+            v-if="!visibleApplications.length"
             :image-size="72"
-            :description="t('ui.openPlatform.message020')"
+            :description="t(applicationCategory === 'mobile' ? 'ui.openPlatform.emptyMobileApps' : 'ui.openPlatform.emptyWebsites')"
           >
-            <p class="empty-hint">{{ t('ui.openPlatform.oauthEmptyHint') }}</p>
+            <p class="empty-hint">{{ t(applicationCategory === 'mobile' ? 'ui.openPlatform.mobileHint' : 'ui.openPlatform.oauthEmptyHint') }}</p>
           </el-empty>
           <div v-else class="app-list">
-            <div v-for="app in oauthOverview.apps" :key="app.appId" class="app-item">
+            <div v-for="app in visibleApplications" :key="app.appId" class="app-item">
               <button
                 class="app-title-wrap"
                 type="button"
@@ -185,8 +190,14 @@
           </div>
         </div>
 
+        <el-tabs v-model="detailTab">
+          <el-tab-pane :label="t('ui.openPlatform.basicInfo')" name="basic">
         <el-descriptions class="detail-desc" :column="1" border>
-          <el-descriptions-item :label="t('ui.openPlatform.message035')">
+          <el-descriptions-item :label="t('ui.openPlatform.applicationType')">{{ t(oauthDetailApp.applicationType === 'mobile' ? 'ui.openPlatform.mobileApps' : 'ui.openPlatform.websites') }}</el-descriptions-item>
+          <el-descriptions-item :label="t('ui.openPlatform.clientType')">
+            {{ t(oauthDetailApp.clientType === 'public' ? 'ui.openPlatform.publicClient' : 'ui.openPlatform.confidentialClient') }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="oauthDetailApp.applicationType !== 'mobile'" :label="t('ui.openPlatform.message035')">
             <div class="detail-stack">
               <div
                 v-for="uri in oauthRedirectUris(oauthDetailApp.redirectUri)"
@@ -225,6 +236,14 @@
             formatDateTime(oauthDetailApp.updatedAt)
           }}</el-descriptions-item>
         </el-descriptions>
+          </el-tab-pane>
+          <el-tab-pane v-if="oauthDetailApp.applicationType === 'mobile'" :label="t('ui.openPlatform.platformInfo')" name="platforms">
+            <MobilePlatformDetails :app="oauthDetailApp" @updated="replaceApplication" />
+          </el-tab-pane>
+          <el-tab-pane :label="t('ui.openPlatform.apiPermissions')" name="permissions">
+            <ApplicationPermissions :app="oauthDetailApp" @updated="replaceApplication" />
+          </el-tab-pane>
+        </el-tabs>
       </div>
       <el-empty v-else :description="t('ui.openPlatform.message041')" />
     </el-dialog>
@@ -232,7 +251,7 @@
     <el-dialog
       v-model="oauthCreateDialogVisible"
       class="app-dialog"
-      :title="t('ui.openPlatform.message044')"
+      :title="t(applicationCategory === 'mobile' ? 'ui.openPlatform.createMobile' : 'ui.openPlatform.createWebsite')"
       width="620px"
     >
       <el-form
@@ -242,6 +261,7 @@
         :rules="oauthCreateRules"
         label-position="top"
       >
+        <el-alert :title="t(applicationCategory === 'mobile' ? 'ui.openPlatform.mobileHint' : 'ui.openPlatform.websiteHint')" type="info" :closable="false" />
         <el-row :gutter="12">
           <el-col :xs="24" :md="12">
             <el-form-item :label="t('ui.openPlatform.message045')" prop="appName">
@@ -263,7 +283,7 @@
           </el-col>
         </el-row>
 
-        <el-form-item :label="t('ui.openPlatform.message035')" prop="redirectUri">
+        <el-form-item v-if="applicationCategory === 'website'" :label="t('ui.openPlatform.message035')" prop="redirectUri">
           <el-input
             v-model="oauthCreateForm.redirectUri"
             type="textarea"
@@ -272,6 +292,7 @@
           />
         </el-form-item>
 
+        <MobilePlatformFields v-if="applicationCategory === 'mobile'" v-model="createPlatforms" />
         <el-form-item :label="t('ui.openPlatform.message049')" prop="scopes">
           <el-checkbox-group v-model="oauthCreateForm.scopes">
             <el-checkbox value="profile">{{ t('ui.openPlatform.message050') }}</el-checkbox>
@@ -324,7 +345,7 @@
           </el-col>
         </el-row>
 
-        <el-form-item :label="t('ui.openPlatform.message035')" prop="redirectUri">
+        <el-form-item v-if="editingApplicationType === 'website'" :label="t('ui.openPlatform.message035')" prop="redirectUri">
           <el-input
             v-model="oauthEditForm.redirectUri"
             type="textarea"
@@ -332,6 +353,7 @@
             :placeholder="t('ui.openPlatform.message048')"
           />
         </el-form-item>
+        <MobilePlatformFields v-if="editingApplicationType === 'mobile'" v-model="editPlatforms" />
       </el-form>
 
       <template #footer>
@@ -408,7 +430,7 @@
           type="success"
           :closable="false"
           show-icon
-          :title="t('ui.openPlatform.message068')"
+          :title="t(oauthCreatedApp.appSecret ? 'ui.openPlatform.message068' : 'ui.openPlatform.mobileCreated')"
         />
         <div class="secret-item">
           <span class="secret-label">AppID</span>
@@ -419,7 +441,7 @@
             }}</el-button>
           </div>
         </div>
-        <div class="secret-item">
+        <div v-if="oauthCreatedApp.appSecret" class="secret-item">
           <span class="secret-label">AppSecret</span>
           <div class="secret-value">
             <code>{{ oauthCreatedApp.appSecret }}</code>
@@ -435,6 +457,10 @@
 </template>
 
 <script setup lang="ts">
+import MobilePlatformFields from '@/components/openPlatform/MobilePlatformFields.vue'
+import MobilePlatformDetails from '@/components/openPlatform/MobilePlatformDetails.vue'
+import ApplicationPermissions from '@/components/openPlatform/ApplicationPermissions.vue'
+import { buildPlatforms, platformDraft } from '@/components/openPlatform/mobilePlatforms'
 import { isSystemAdmin } from '@/utils/userRoles'
 import { intlLocale, t, LocalizedError } from '@/i18n'
 import { documentUrl } from '@/utils/documentLinks'
@@ -453,8 +479,15 @@ import {
   type OAuth2App,
   type OAuth2AppsOverview,
   type OAuth2Scope,
+  type ApplicationType,
 } from '@/api/oauth2'
 const userStore = useUserStore()
+const applicationCategory = ref<ApplicationType>('website')
+const editingApplicationType = ref<ApplicationType>('website')
+const detailTab = ref('basic')
+const createPlatforms = ref(platformDraft())
+const editPlatforms = ref(platformDraft())
+const visibleApplications = computed(() => oauthOverview.value?.apps.filter((app) => (app.applicationType || 'website') === applicationCategory.value) ?? [])
 const oauthQuota = computed(() => {
   if (!oauthOverview.value || oauthLoadFailed.value) return ''
   return t('ui.openPlatform.quota', {
@@ -606,7 +639,7 @@ const oauthCreateRules = computed<FormRules>(() => ({
     { required: true, message: t('ui.openPlatform.message084'), trigger: 'blur' },
     { min: 2, max: 100, message: t('ui.openPlatform.message085'), trigger: 'blur' },
   ],
-  redirectUri: [{ validator: redirectUriValidator, trigger: 'blur' }],
+  redirectUri: applicationCategory.value === 'website' ? [{ validator: redirectUriValidator, trigger: 'blur' }] : [],
   contactInfo: [
     { required: true, message: t('ui.openPlatform.message086'), trigger: 'blur' },
     { min: 3, max: 120, message: t('ui.openPlatform.message087'), trigger: 'blur' },
@@ -615,7 +648,7 @@ const oauthCreateRules = computed<FormRules>(() => ({
 
 const oauthEditRules = computed<FormRules>(() => ({
   appName: oauthCreateRules.value.appName,
-  redirectUri: oauthCreateRules.value.redirectUri,
+  redirectUri: editingApplicationType.value === 'website' ? [{ validator: redirectUriValidator, trigger: 'blur' }] : [],
   contactInfo: oauthCreateRules.value.contactInfo,
 }))
 
@@ -631,6 +664,7 @@ const formatDateTime = (value?: string) => {
 
 const resetOAuthCreateForm = () => {
   oauthCreateForm.appName = ''
+  createPlatforms.value = platformDraft()
   oauthCreateForm.redirectUri = ''
   oauthCreateForm.contactInfo = ''
   oauthCreateForm.scopes = ['profile']
@@ -686,6 +720,7 @@ const ensureOAuthDetailExists = () => {
 
 const openOAuthDetailDialog = (appId: string) => {
   oauthDetailAppId.value = appId
+  detailTab.value = 'basic'
   oauthDetailDialogVisible.value = true
 }
 
@@ -704,6 +739,8 @@ const openOAuthCreateDialog = () => {
 
 const openOAuthEditDialog = (app: OAuth2App) => {
   editingOAuthAppId.value = app.appId
+  editingApplicationType.value = app.applicationType || 'website'
+  editPlatforms.value = platformDraft(app.platforms)
   oauthEditForm.appName = app.appName
   oauthEditForm.redirectUri = app.redirectUri
   oauthEditForm.contactInfo = app.contactInfo
@@ -712,11 +749,15 @@ const openOAuthEditDialog = (app: OAuth2App) => {
 
 const handleOAuthCreate = async () => {
   await oauthCreateFormRef.value?.validate()
+  let platforms
+  try { platforms = applicationCategory.value === 'mobile' ? buildPlatforms(createPlatforms.value) : undefined }
+  catch (error) { ElMessage.error(error instanceof Error ? error.message : String(error)); return }
   oauthSubmitting.value = true
   try {
     oauthCreatedApp.value = await createOAuth2App({
       appName: oauthCreateForm.appName.trim(),
-      redirectUri: normalizeSemicolonValues(oauthCreateForm.redirectUri).join(';'),
+      applicationType: applicationCategory.value,
+      ...(applicationCategory.value === 'website' ? { redirectUri: normalizeSemicolonValues(oauthCreateForm.redirectUri).join(';') } : { platforms }),
       contactInfo: oauthCreateForm.contactInfo.trim(),
       scopes: [...oauthCreateForm.scopes],
     })
@@ -736,11 +777,14 @@ const handleOAuthEdit = async () => {
     return
   }
 
+  let platforms
+  try { platforms = editingApplicationType.value === 'mobile' ? buildPlatforms(editPlatforms.value) : undefined }
+  catch (error) { ElMessage.error(error instanceof Error ? error.message : String(error)); return }
   oauthEditSubmitting.value = true
   try {
     await updateOAuth2App(editingOAuthAppId.value, {
       appName: oauthEditForm.appName.trim(),
-      redirectUri: normalizeSemicolonValues(oauthEditForm.redirectUri).join(';'),
+      ...(editingApplicationType.value === 'website' ? { redirectUri: normalizeSemicolonValues(oauthEditForm.redirectUri).join(';') } : { platforms }),
       contactInfo: oauthEditForm.contactInfo.trim(),
     })
     oauthEditDialogVisible.value = false
@@ -750,6 +794,11 @@ const handleOAuthEdit = async () => {
   } finally {
     oauthEditSubmitting.value = false
   }
+}
+
+const replaceApplication = (app: OAuth2App) => {
+  const index = oauthOverview.value?.apps.findIndex((item) => item.appId === app.appId) ?? -1
+  if (oauthOverview.value && index >= 0) oauthOverview.value.apps[index] = app
 }
 
 const handleOAuthDelete = async (appId: string) => {
@@ -992,6 +1041,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.client-type-hint {
+  width: 100%;
+  margin: 8px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
 :deep(.el-dialog.app-dialog) {
   overflow: hidden;
   border: 1px solid var(--el-border-color-lighter);
@@ -1196,6 +1252,14 @@ onBeforeUnmount(() => {
   border-radius: 4px;
 }
 
+.category-tabs {
+  margin: 12px 24px 0;
+}
+
+.app-dialog-form :deep(.el-alert) {
+  margin-bottom: 20px;
+}
+
 .applications-toolbar {
   display: flex;
   align-items: center;
@@ -1211,7 +1275,8 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-regular);
 }
 
-.quota-text {
+.quota-text,
+.shared-quota-note {
   display: block;
   margin-top: 4px;
   font-size: 12px;

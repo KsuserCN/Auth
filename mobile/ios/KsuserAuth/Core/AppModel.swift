@@ -54,6 +54,8 @@ private enum ApplicationAuthorizationKind {
     var mobileAuthorization: MobileAuthorizationContext?
     var pendingMobileAuthorizationTicket: String?
     var pendingMobileAuthorizationReturnBrowser = MobileAuthorizationReturnBrowser.system
+    private var pendingNativeAuthorization = false
+    private var completedNativeAuthorizationURL: URL?
     private var mobileAuthorizationLoading = false
     private var mobileAuthorizationExpiresAt: Date?
     var recoveryTicket: AccountRecoveryTicket?
@@ -541,8 +543,11 @@ private enum ApplicationAuthorizationKind {
         mobileAuthorizationLoading = true
         defer { mobileAuthorizationLoading = false }
         await run {
-            let context = try await self.repository.mobileAuthorization(ticket)
-            guard self.pendingMobileAuthorizationTicket == ticket else { return }
+            let native = self.pendingNativeAuthorization
+            let generation = self.authGeneration
+            let context = try await (native ? self.repository.nativeAuthorization(ticket) : self.repository.mobileAuthorization(ticket))
+            guard self.pendingMobileAuthorizationTicket == ticket, self.authGeneration == generation else { return }
+            guard context.ticket == ticket, !native || context.nativeAuthorization == true else { throw APIError.invalidResponse }
             guard context.expiresInSeconds > 0 else { throw APIError.server(410, "授权请求已过期") }
             self.mobileAuthorization = context
             self.mobileAuthorizationExpiresAt = Date().addingTimeInterval(Double(context.expiresInSeconds))
@@ -550,9 +555,20 @@ private enum ApplicationAuthorizationKind {
     }
     func decideMobileAuthorization(approve: Bool, mode: String, ttl: Int, loginWeb: Bool = false) async -> URL? {
         guard let context = mobileAuthorization, isAuthenticated else { return nil }
+        if context.nativeAuthorization == true, let completedNativeAuthorizationURL { return completedNativeAuthorizationURL }
         var browserURL: URL?
         await run {
             guard let expires = self.mobileAuthorizationExpiresAt, expires > Date() else { throw APIError.server(410, "授权请求已过期，请返回网页重新发起") }
+            if context.nativeAuthorization == true {
+                let generation = self.authGeneration
+                let result = try await self.repository.decideNativeAuthorization(context.ticket, approve: approve, mode: mode, ttl: ttl)
+                guard generation == self.authGeneration, self.pendingMobileAuthorizationTicket == context.ticket else { return }
+                guard result.completed == true, let value = result.returnUrl,
+                      let url = NativeAuthorizationLink.callback(value, registered: context.redirectUri) else { throw APIError.invalidResponse }
+                self.completedNativeAuthorizationURL = url
+                browserURL = url
+                return
+            }
             let result = try await self.repository.decideMobileAuthorization(context.ticket, approve: approve, mode: mode, ttl: ttl, loginWeb: context.qr == true && loginWeb)
             if context.qr == true {
                 guard result.completed == true, result.returnUrl == nil else { throw APIError.invalidResponse }
@@ -567,11 +583,15 @@ private enum ApplicationAuthorizationKind {
     }
     func dismissMobileAuthorization() {
         mobileAuthorization = nil; pendingMobileAuthorizationTicket = nil; pendingMobileAuthorizationReturnBrowser = .system; mobileAuthorizationExpiresAt = nil
+        pendingNativeAuthorization = false; completedNativeAuthorizationURL = nil
     }
     func handleURL(_ url: URL) async {
-        if let ticket = MobileAuthorizationLink.ticket(from: url, environment: environment) {
+        let nativeTicket = NativeAuthorizationLink.ticket(from: url, environment: environment)
+        if let ticket = nativeTicket ?? MobileAuthorizationLink.ticket(from: url, environment: environment) {
             guard pendingMobileAuthorizationTicket == nil || pendingMobileAuthorizationTicket == ticket else { errorMessage = "请先完成当前授权请求"; return }
+            guard pendingMobileAuthorizationTicket == nil || pendingNativeAuthorization == (nativeTicket != nil) else { errorMessage = "请先完成当前授权请求"; return }
             pendingMobileAuthorizationTicket = ticket
+            pendingNativeAuthorization = nativeTicket != nil
             pendingMobileAuthorizationReturnBrowser = MobileAuthorizationLink.returnBrowser(from: url)
             if isAuthenticated { await loadMobileAuthorization() }
             else { noticeMessage = "请先登录，登录后将继续应用授权" }
@@ -669,7 +689,7 @@ private enum ApplicationAuthorizationKind {
     }
     private func clearUserState() {
         pushNotifications.signOut()
-        mobileAuthorization = nil; mobileAuthorizationExpiresAt = nil
+        mobileAuthorization = nil; mobileAuthorizationExpiresAt = nil; completedNativeAuthorizationURL = nil
         authGeneration += 1; user = nil; mfaChallenge = nil; authenticationRepository = nil; pendingOAuth = nil
         sensitiveRequest = nil; sensitiveContinuation = nil; bindingAfterAuthentication = false
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; qqBound = false; totpSetup = nil

@@ -151,6 +151,14 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var language: LanguageSettings
     @State private var model = AppModel(native: NativeAuthenticationProvider())
+    private var hostsUnitTests: Bool {
+        #if DEBUG
+        // Hosted XCTest must reach its run loop without rendering or starting the live login flow.
+        return ProcessInfo.processInfo.environment["XCTestBundlePath"]?.hasSuffix("KsuserAuthTests.xctest") == true
+        #else
+        return false
+        #endif
+    }
     init() {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-test-reset-preferences") {
@@ -163,12 +171,16 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     }
     var body: some Scene {
         WindowGroup {
-            ContentView().environment(model).environment(language).environment(\.locale, language.locale)
-                .onChange(of: language.preference) { _, _ in AppDelegate.refreshShortcuts() }
-                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                    language.refreshSystemLanguage()
-                    AppDelegate.refreshShortcuts()
-                }
+            if hostsUnitTests {
+                Color.clear
+            } else {
+                ContentView().environment(model).environment(language).environment(\.locale, language.locale)
+                    .onChange(of: language.preference) { _, _ in AppDelegate.refreshShortcuts() }
+                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                        language.refreshSystemLanguage()
+                        AppDelegate.refreshShortcuts()
+                    }
+            }
         }
     }
 }

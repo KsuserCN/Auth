@@ -58,6 +58,11 @@ public class OfficialAuthorizationService {
         this.passwordEncoder = passwordEncoder; this.rsa = rsa;
     }
 
+    /** App-to-app requests must never rely on a secret embedded in an installation package. */
+    public void validateNativeClient(String clientId) {
+        if (!"public".equals(activeClient(clientId).getClientType())) throw invalidClient();
+    }
+
     public AuthorizeContext buildAuthorizeContext(User user, OfficialAuthorizeRequest request) {
         OfficialApplication app = activeClient(request.clientId());
         List<String> requested = validateRequest(app, request);

@@ -12,6 +12,10 @@
         ],
         "components": [
           {
+            "/": "/app/sdk-authorize",
+            "comment": "Ksuser native application authorization"
+          },
+          {
             "/": "/app/bridge-login",
             "comment": "Ksuser mobile browser authorization"
           },

@@ -291,7 +291,7 @@
 
 <script setup lang="ts">
 import { localizedError } from '@/utils/apiResult'
-import { intlLocale, t, uiMessage, renderMessage, type LocalizedMessage } from '@/i18n'
+import { intlLocale, t, uiMessage, renderMessage, LocalizedError, type LocalizedMessage } from '@/i18n'
 
 import { computed, onMounted, ref } from 'vue'
 import { useDark } from '@vueuse/core'
@@ -308,6 +308,13 @@ import {
   type AuthorizationGrantMode,
 } from '@/api/oauth2'
 import { approveOfficialAuthorize, getOfficialAuthorizeContext } from '@/api/official'
+import {
+  getNativeAuthorizationContext,
+  decideNativeAuthorization,
+  readNativeAuthorizationTicket,
+  validatedNativeAuthorizationReturn,
+  type NativeAuthorizationContext,
+} from '@/api/nativeAuthorization'
 import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { clearAuthSession, getStoredAccessToken } from '@/utils/authSession'
@@ -353,7 +360,10 @@ const errorMessage = ref<LocalizedMessage>('')
 const context = ref<NormalizedAuthorizeContext | null>(null)
 const desktopBridgeUser = ref<DesktopBridgeUser | null>(null)
 const qrVisible = ref(false)
-const qrSupported = !isMobileAuthorizationBrowser()
+const isNativeAuthorization = route.path === '/app/sdk-authorize/web'
+const nativeTicket = readNativeAuthorizationTicket(route.query.ticket)
+const nativeContext = ref<NativeAuthorizationContext | null>(null)
+const qrSupported = !isNativeAuthorization && !isMobileAuthorizationBrowser()
 const resumeWebLogin = async () => {
   qrVisible.value = false
   // Do not force QR again when Passport returns after the user explicitly chose web login.
@@ -368,7 +378,7 @@ const grantMode = ref<AuthorizationGrantMode>('PERSISTENT')
 const grantTtlSeconds = ref(3600)
 
 const mode = computed<'oauth' | 'official'>(() =>
-  route.path.startsWith('/official/') ? 'official' : 'oauth',
+  (isNativeAuthorization ? nativeContext.value?.officialApplication : route.path.startsWith('/official/')) ? 'official' : 'oauth',
 )
 
 // 使用 VueUse 的 useDark 同步暗黑模式
@@ -555,6 +565,9 @@ const loadAuthorizeContext = async () => {
     redirectUri,
     responseType,
     scope,
+    state: requestParams.value.state,
+    codeChallenge: requestParams.value.codeChallenge,
+    codeChallengeMethod: requestParams.value.codeChallengeMethod,
   })
   context.value = {
     clientId: response.clientId,
@@ -572,6 +585,31 @@ const loadAuthorizeContext = async () => {
 }
 
 const loadContext = async () => {
+  if (isNativeAuthorization) {
+    try {
+      if (!nativeTicket) throw new LocalizedError('ui.oAuthAuthorize.message053')
+      if (!(await ensureAuthenticated())) {
+        redirectToLogin()
+        return
+      }
+      const response = await getNativeAuthorizationContext(nativeTicket)
+      if (response.nativeAuthorization !== true || response.ticket !== nativeTicket || response.expiresInSeconds <= 0) {
+        throw new LocalizedError('ui.oAuthAuthorize.message054')
+      }
+      nativeContext.value = response
+      context.value = {
+        ...response,
+        clientId: '',
+        logoUrl: response.logoUrl || undefined,
+        consoleApplication: response.consoleApplication,
+      }
+    } catch (error) {
+      errorMessage.value = localizedError(error, 'ui.oAuthAuthorize.message054')
+    } finally {
+      loading.value = false
+    }
+    return
+  }
   const { clientId, redirectUri, responseType } = requestParams.value
 
   if (!clientId || !redirectUri || !responseType) {
@@ -599,13 +637,30 @@ const loadContext = async () => {
   }
 }
 
+const decideNative = async (approve: boolean) => {
+  if (!nativeTicket || !nativeContext.value) throw new LocalizedError('ui.oAuthAuthorize.message053')
+  const result = await decideNativeAuthorization({
+    ticket: nativeTicket,
+    approve,
+    grantMode: grantMode.value,
+    grantTtlSeconds: grantMode.value === 'TIME_LIMITED' ? grantTtlSeconds.value : undefined,
+  })
+  const destination = validatedNativeAuthorizationReturn(result, nativeContext.value.redirectUri)
+  if (!destination) throw new LocalizedError('ui.oAuthAuthorize.message054')
+  window.location.replace(destination)
+}
+
 const handleApprove = async (silent = false) => {
-  if (!context.value) {
+  if (!context.value || approving.value) {
     return
   }
 
   approving.value = true
   try {
+    if (isNativeAuthorization) {
+      await decideNative(true)
+      return
+    }
     if (mode.value === 'official') {
       const response = await approveOfficialAuthorize({
         ...requestParams.value,
@@ -621,6 +676,8 @@ const handleApprove = async (silent = false) => {
       responseType: 'code',
       scope: requestParams.value.scope,
       state: requestParams.value.state,
+      codeChallenge: requestParams.value.codeChallenge,
+      codeChallengeMethod: requestParams.value.codeChallengeMethod,
       grantMode: grantMode.value,
       grantTtlSeconds: grantMode.value === 'TIME_LIMITED' ? grantTtlSeconds.value : undefined,
     })
@@ -646,6 +703,18 @@ const handleApprove = async (silent = false) => {
 }
 
 const handleDeny = async () => {
+  if (isNativeAuthorization) {
+    if (approving.value || !context.value) return
+    approving.value = true
+    try {
+      await decideNative(false)
+    } catch (error) {
+      errorMessage.value = localizedError(error, 'ui.oAuthAuthorize.message055')
+    } finally {
+      approving.value = false
+    }
+    return
+  }
   if (mode.value === 'official') {
     if (approving.value) return
     approving.value = true
@@ -672,7 +741,8 @@ const handleDeny = async () => {
 }
 
 const backToLogin = () => {
-  router.push('/login')
+  if (isNativeAuthorization) redirectToLogin()
+  else router.push('/login')
 }
 
 const continueWithDesktopAccount = async () => {

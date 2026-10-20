@@ -13,6 +13,8 @@
           ><el-icon><Grid /></el-icon>官方应用</RouterLink
         ><RouterLink to="/user-applications"
           ><el-icon><Collection /></el-icon>认证用户应用</RouterLink
+        ><RouterLink to="/unionid-applications"
+          ><el-icon><Connection /></el-icon>UnionID 审核</RouterLink
         ><RouterLink to="/audit"
           ><el-icon><Document /></el-icon>操作记录</RouterLink
         >
@@ -58,7 +60,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Grid, Collection, Document, Monitor, Moon, Sunny } from '@element-plus/icons-vue'
+import { User, Grid, Collection, Connection, Document, Monitor, Moon, Sunny } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { consoleApi } from '@/api/console'
 import { avatarFallback } from '@/utils/avatar'

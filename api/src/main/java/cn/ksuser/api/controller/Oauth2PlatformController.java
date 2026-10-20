@@ -37,6 +37,8 @@ public class Oauth2PlatformController {
     private final Oauth2PlatformService oauth2PlatformService;
     private final UserService userService;
     private final AppProperties appProperties;
+    @org.springframework.beans.factory.annotation.Autowired
+    private cn.ksuser.api.service.UnionidApplicationService unionidApplications;
 
     public Oauth2PlatformController(Oauth2PlatformService oauth2PlatformService,
                                     UserService userService,
@@ -121,16 +123,43 @@ public class Oauth2PlatformController {
         }
     }
 
+    @PostMapping("/apps/{appId}/platforms/{platform}/verify")
+    public ResponseEntity<ApiResponse<Oauth2AppResponse>> verifyPlatform(@PathVariable String appId,
+        @PathVariable String platform, Authentication authentication) {
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004,
+            oauth2PlatformService.verifyPlatform(requireUser(authentication), appId, platform)));
+    }
+
+    @PostMapping("/apps/{appId}/unionid/apply")
+    public ResponseEntity<ApiResponse<Oauth2AppResponse>> applyUnionid(@PathVariable String appId,
+        @RequestBody UnionidReason request, Authentication authentication) {
+        User user = requireUser(authentication);
+        unionidApplications.apply(user, appId, request == null ? null : request.reason());
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, oauth2PlatformService.application(user, appId)));
+    }
+
+    @DeleteMapping("/apps/{appId}/unionid")
+    public ResponseEntity<ApiResponse<Oauth2AppResponse>> disableUnionid(@PathVariable String appId, Authentication authentication) {
+        User user = requireUser(authentication);
+        unionidApplications.disable(user, appId);
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, oauth2PlatformService.application(user, appId)));
+    }
+
+    public record UnionidReason(String reason) { }
+
     @GetMapping("/authorize/context")
     public ResponseEntity<ApiResponse<Oauth2AuthorizeContextResponse>> authorizeContext(
         @RequestParam(name = "client_id") String clientId,
         @RequestParam(name = "redirect_uri") String redirectUri,
         @RequestParam(name = "response_type") String responseType,
         @RequestParam(name = "scope", required = false) String scope,
+        @RequestParam(name = "state", required = false) String state,
+        @RequestParam(name = "code_challenge", required = false) String codeChallenge,
+        @RequestParam(name = "code_challenge_method", required = false) String codeChallengeMethod,
         Authentication authentication) {
         User user = resolveUser(authentication);
         Oauth2AuthorizeContextResponse response = oauth2PlatformService.buildAuthorizeContext(
-            user, clientId, redirectUri, responseType, scope
+            user, clientId, redirectUri, responseType, scope, state, codeChallenge, codeChallengeMethod
         );
         return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.APPLE_004, response));
     }
@@ -165,9 +194,15 @@ public class Oauth2PlatformController {
         @RequestParam(name = "code", required = false) String code,
         @RequestParam(name = "client_id", required = false) String clientId,
         @RequestParam(name = "client_secret", required = false) String clientSecret,
-        @RequestParam(name = "redirect_uri", required = false) String redirectUri) {
+        @RequestParam(name = "redirect_uri", required = false) String redirectUri,
+        @RequestParam(name = "code_verifier", required = false) String codeVerifier,
+        @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        // This registry supports only none and client_secret_post; never silently ignore another method.
+        if (authorization != null) {
+            throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", ApiResultCode.OAUTH2_015);
+        }
         Map<String, Object> response = oauth2PlatformService.exchangeAuthorizationCode(
-            grantType, code, clientId, clientSecret, redirectUri
+            grantType, code, clientId, clientSecret, redirectUri, codeVerifier
         );
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
@@ -195,7 +230,8 @@ public class Oauth2PlatformController {
             body.put("error_description", ex.getDescription());
             body.put("errorCode", ex.getResult().errorCode());
             if (!ex.getResult().params().isEmpty()) body.put("params", ex.getResult().params());
-            return ResponseEntity.status(ex.getStatus()).body(body);
+            return ResponseEntity.status(ex.getStatus()).cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.PRAGMA, "no-cache").body(body);
         }
 
         return ResponseEntity.status(ex.getStatus())

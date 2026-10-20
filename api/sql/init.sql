@@ -6,6 +6,8 @@
 -- ===========================
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS oauth2_app_platforms;
+DROP TABLE IF EXISTS oauth2_unionid_applications;
 DROP TABLE IF EXISTS user_official_authorizations;
 DROP TABLE IF EXISTS official_applications;
 DROP TABLE IF EXISTS console_audit_logs;
@@ -111,7 +113,12 @@ CREATE TABLE oauth2_applications (
   owner_user_id BIGINT UNSIGNED NOT NULL COMMENT '应用创建者（users.id）',
 
   app_id VARCHAR(64) NOT NULL COMMENT '公开 AppID',
-  app_secret_hash VARCHAR(255) NOT NULL COMMENT 'AppSecret 哈希，仅创建时返回明文',
+  app_secret_hash VARCHAR(255) DEFAULT NULL COMMENT '服务端客户端 AppSecret 哈希，仅创建时返回明文',
+  client_type VARCHAR(32) NOT NULL DEFAULT 'confidential' COMMENT '协议客户端类型，创建后固定',
+  application_type VARCHAR(16) NOT NULL DEFAULT 'website' COMMENT 'website 或 mobile，创建后固定',
+  unionid_status VARCHAR(16) NOT NULL DEFAULT 'none' COMMENT 'none/pending/approved/rejected/revoked',
+  unionid_reason VARCHAR(1000) DEFAULT NULL,
+  unionid_review_reason VARCHAR(1000) DEFAULT NULL,
 
   app_name VARCHAR(100) NOT NULL COMMENT '应用名称',
   logo_url VARCHAR(255) DEFAULT NULL COMMENT '应用 Logo 地址',
@@ -136,7 +143,40 @@ CREATE TABLE oauth2_applications (
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_unicode_ci
-  COMMENT='开发者 OAuth2 应用表';
+  COMMENT='开发者网站与移动应用表';
+
+CREATE TABLE IF NOT EXISTS oauth2_app_platforms (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  app_id VARCHAR(64) NOT NULL,
+  platform VARCHAR(16) NOT NULL,
+  config_json TEXT NOT NULL,
+  config_revision VARCHAR(36) NOT NULL,
+  is_configured TINYINT(1) NOT NULL DEFAULT 1,
+  verification_status VARCHAR(16) NOT NULL DEFAULT 'unverified',
+  verification_message VARCHAR(255) DEFAULT NULL,
+  verified_at DATETIME(6) DEFAULT NULL,
+  last_verification_attempt_at DATETIME(6) DEFAULT NULL,
+  version BIGINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_oauth2_app_platform (app_id, platform),
+  CONSTRAINT fk_oauth2_app_platform_app FOREIGN KEY (app_id)
+    REFERENCES oauth2_applications(app_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS oauth2_unionid_applications (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  app_id VARCHAR(64) NOT NULL,
+  status VARCHAR(16) NOT NULL,
+  reason VARCHAR(1000) NOT NULL,
+  review_reason VARCHAR(1000) DEFAULT NULL,
+  reviewer_uuid CHAR(36) DEFAULT NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  reviewed_at DATETIME(6) DEFAULT NULL,
+  KEY idx_unionid_status_created (status, created_at, id),
+  KEY idx_unionid_app_created (app_id, created_at, id),
+  CONSTRAINT fk_unionid_application_app FOREIGN KEY (app_id)
+    REFERENCES oauth2_applications(app_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 DROP TABLE IF EXISTS user_oauth2_authorizations;
 CREATE TABLE user_oauth2_authorizations (

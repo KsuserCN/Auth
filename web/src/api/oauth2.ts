@@ -3,11 +3,43 @@ import type { ApiResponse } from '@/utils/request'
 import type { VerificationType, SystemRole } from '@/api/auth'
 
 export type OAuth2Scope = 'profile' | 'email'
+export type OAuth2ClientType = 'public' | 'confidential'
+export type ApplicationType = 'website' | 'mobile'
+export type MobilePlatform = 'ios' | 'android'
+export type UnionidStatus = 'none' | 'pending' | 'approved' | 'rejected' | 'revoked'
+export interface PlatformVerification {
+  verificationStatus?: 'unverified' | 'verified' | 'failed'
+  verificationMessage?: string | null
+  verifiedAt?: string | null
+}
+export interface IOSApplicationPlatform extends PlatformVerification {
+  bundleId: string
+  appIdPrefix: string
+  universalLink: string
+  urlScheme?: string
+  appStoreId?: string
+}
+export interface AndroidApplicationPlatform extends PlatformVerification {
+  packageName: string
+  sha256CertFingerprints: string[]
+  appLink: string
+  downloadUrl?: string
+}
+export interface ApplicationPlatforms {
+  ios?: IOSApplicationPlatform
+  android?: AndroidApplicationPlatform
+}
 export type AuthorizationGrantMode = 'PERSISTENT' | 'ONE_TIME' | 'TIME_LIMITED'
 
 export interface OAuth2App {
   appId: string
   appName: string
+  clientType?: OAuth2ClientType
+  applicationType?: ApplicationType
+  platforms?: ApplicationPlatforms
+  unionidStatus?: UnionidStatus
+  unionidReason?: string | null
+  unionidReviewReason?: string | null
   logoUrl?: string
   redirectUri: string
   contactInfo: string
@@ -29,19 +61,23 @@ export interface OAuth2AppsOverview {
 
 export interface CreateOAuth2AppRequest {
   appName: string
-  redirectUri: string
+  clientType?: OAuth2ClientType
+  applicationType?: ApplicationType
+  platforms?: ApplicationPlatforms
+  redirectUri?: string
   contactInfo: string
   scopes: OAuth2Scope[]
 }
 
 export interface UpdateOAuth2AppRequest {
   appName: string
-  redirectUri: string
+  redirectUri?: string
+  platforms?: ApplicationPlatforms
   contactInfo: string
 }
 
 export interface CreateOAuth2AppResponse extends OAuth2App {
-  appSecret: string
+  appSecret: string | null
 }
 
 export interface OAuth2AuthorizeContext {
@@ -64,6 +100,8 @@ export interface OAuth2AuthorizeApproveRequest {
   responseType: 'code'
   scope?: string
   state?: string
+  codeChallenge?: string
+  codeChallengeMethod?: 'S256'
   grantMode?: AuthorizationGrantMode
   grantTtlSeconds?: number
 }
@@ -88,7 +126,7 @@ export interface OAuth2AuthorizedApp {
 }
 
 export const getOAuth2Apps = async (): Promise<OAuth2AppsOverview> => {
-  const response = await request.get<any>('/oauth2/apps')
+  const response = await request.get<OAuth2AppsOverview>('/oauth2/apps')
   return response.data as OAuth2AppsOverview
 }
 
@@ -124,18 +162,39 @@ export const uploadOAuth2AppLogo = async (appId: string, file: Blob): Promise<OA
   return (response as unknown as ApiResponse<OAuth2App>).data
 }
 
+export const verifyApplicationPlatform = async (appId: string, platform: MobilePlatform): Promise<OAuth2App> => {
+  const response = await request.post<ApiResponse<OAuth2App>>(`/oauth2/apps/${encodeURIComponent(appId)}/platforms/${platform}/verify`)
+  return (response as unknown as ApiResponse<OAuth2App>).data
+}
+
+export const applyApplicationUnionid = async (appId: string, reason: string): Promise<OAuth2App> => {
+  const response = await request.post<ApiResponse<OAuth2App>>(`/oauth2/apps/${encodeURIComponent(appId)}/unionid/apply`, { reason })
+  return (response as unknown as ApiResponse<OAuth2App>).data
+}
+
+export const closeApplicationUnionid = async (appId: string): Promise<OAuth2App> => {
+  const response = await request.delete<ApiResponse<OAuth2App>>(`/oauth2/apps/${encodeURIComponent(appId)}/unionid`)
+  return (response as unknown as ApiResponse<OAuth2App>).data
+}
+
 export const getOAuth2AuthorizeContext = async (params: {
   clientId: string
   redirectUri: string
   responseType: string
   scope?: string
+  state?: string
+  codeChallenge?: string
+  codeChallengeMethod?: 'S256'
 }): Promise<OAuth2AuthorizeContext> => {
-  const response = await request.get<any>('/oauth2/authorize/context', {
+  const response = await request.get<OAuth2AuthorizeContext>('/oauth2/authorize/context', {
     params: {
       client_id: params.clientId,
       redirect_uri: params.redirectUri,
       response_type: params.responseType,
       scope: params.scope,
+      state: params.state,
+      code_challenge: params.codeChallenge,
+      code_challenge_method: params.codeChallengeMethod,
     },
   })
   return response.data as OAuth2AuthorizeContext
@@ -144,12 +203,12 @@ export const getOAuth2AuthorizeContext = async (params: {
 export const approveOAuth2Authorize = async (
   data: OAuth2AuthorizeApproveRequest,
 ): Promise<OAuth2AuthorizeApproveResponse> => {
-  const response = await request.post<any>('/oauth2/authorize/approve', data)
+  const response = await request.post<OAuth2AuthorizeApproveResponse>('/oauth2/authorize/approve', data)
   return response.data as OAuth2AuthorizeApproveResponse
 }
 
 export const getOAuth2Authorizations = async (): Promise<OAuth2AuthorizedApp[]> => {
-  const response = await request.get<any>('/oauth2/authorizations')
+  const response = await request.get<OAuth2AuthorizedApp[]>('/oauth2/authorizations')
   return response.data as OAuth2AuthorizedApp[]
 }
 

@@ -2,6 +2,7 @@ package cn.ksuser.api.service;
 
 import cn.ksuser.api.result.ApiResultCode;
 
+import cn.ksuser.api.dto.MobileAppPlatforms;
 import cn.ksuser.api.dto.Oauth2AppCreateRequest;
 import cn.ksuser.api.dto.Oauth2AppCreateResponse;
 import cn.ksuser.api.dto.Oauth2AppResponse;
@@ -33,6 +34,7 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -63,6 +65,11 @@ public class Oauth2PlatformService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Oauth2TokenService oauth2TokenService;
     private final SecureRandom secureRandom = new SecureRandom();
+    private MobileAppPlatformService mobilePlatforms;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMobileAppPlatformService(MobileAppPlatformService value) { mobilePlatforms = value; }
+
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -107,6 +114,7 @@ public class Oauth2PlatformService {
         return overview;
     }
 
+    @Transactional
     public Oauth2AppCreateResponse createApplication(User user, Oauth2AppCreateRequest request) {
         ensureOauthCreator(user);
 
@@ -115,24 +123,37 @@ public class Oauth2PlatformService {
         }
 
         String appName = normalizeAppName(request == null ? null : request.getAppName());
-        String redirectUri = normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUri());
+        String applicationType = normalizeApplicationType(request == null ? null : request.getApplicationType());
+        MobileAppPlatforms platforms = "mobile".equals(applicationType)
+            ? mobilePlatforms.normalize(request.getPlatforms()) : null;
+        if ("website".equals(applicationType) && request != null && request.getPlatforms() != null) throw invalidApplicationType();
+        String redirectUri = platforms == null
+            ? normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUri())
+            : mobilePlatforms.redirectUris(platforms);
         String contactInfo = normalizeContactInfo(request == null ? null : request.getContactInfo());
         List<String> scopes = normalizeAppScopes(request == null ? null : request.getScopes());
+        String clientType = "mobile".equals(applicationType) ? "public" : "confidential";
+        if (request != null && request.getClientType() != null && !clientType.equals(request.getClientType())) {
+            throw invalidApplicationType();
+        }
 
         String appId = generateUniqueAppId();
-        String appSecret = generateOpaqueValue("ksapp_secret_", 36);
+        String appSecret = "confidential".equals(clientType) ? generateOpaqueValue("ksapp_secret_", 36) : null;
 
         Oauth2Application application = new Oauth2Application();
         application.setOwnerUserId(user.getId());
         application.setAppId(appId);
-        application.setAppSecretHash(passwordEncoder.encode(appSecret));
+        application.setClientType(clientType);
+        application.setApplicationType(applicationType);
+        application.setAppSecretHash(appSecret == null ? null : passwordEncoder.encode(appSecret));
         application.setAppName(appName);
         application.setRedirectUri(redirectUri);
         application.setContactInfo(contactInfo);
         application.setScopes(joinScopes(scopes));
-        Oauth2Application saved = applicationRepository.save(application);
+        Oauth2Application saved = applicationRepository.saveAndFlush(application);
+        if (platforms != null) mobilePlatforms.savePlatforms(saved.getAppId(), platforms);
 
-        return new Oauth2AppCreateResponse(
+        Oauth2AppCreateResponse response = new Oauth2AppCreateResponse(
             saved.getAppId(),
             saved.getAppName(),
             saved.getLogoUrl(),
@@ -143,31 +164,63 @@ public class Oauth2PlatformService {
             saved.getUpdatedAt(),
             appSecret
         );
+        decorateAppResponse(response, saved);
+        return response;
     }
 
+    @Transactional
     public Oauth2AppResponse updateApplication(User user, String appId, Oauth2AppUpdateRequest request) {
-        Oauth2Application application = findOwnedApplication(user, appId);
+        Oauth2Application application = findOwnedApplicationForUpdate(user, appId);
+        if (request != null && request.getApplicationType() != null
+            && !application.getApplicationType().equals(request.getApplicationType())) throw invalidApplicationType();
         application.setAppName(normalizeAppName(request == null ? null : request.getAppName()));
-        application.setRedirectUri(normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUri()));
+        if ("mobile".equals(application.getApplicationType())) {
+            MobileAppPlatforms platforms = mobilePlatforms.normalize(request == null ? null : request.getPlatforms());
+            application.setRedirectUri(mobilePlatforms.redirectUris(platforms));
+            mobilePlatforms.savePlatforms(appId, platforms);
+        } else {
+            if (request != null && request.getPlatforms() != null) throw invalidApplicationType();
+            application.setRedirectUri(normalizeAndValidateRedirectUris(request == null ? null : request.getRedirectUri()));
+        }
         application.setContactInfo(normalizeContactInfo(request == null ? null : request.getContactInfo()));
         return toAppResponse(applicationRepository.save(application));
     }
 
+    @Transactional
     public void deleteApplication(User user, String appId) {
-        applicationRepository.delete(findOwnedApplication(user, appId));
+        applicationRepository.delete(findOwnedApplicationForUpdate(user, appId));
     }
 
+    @Transactional
     public Oauth2AppResponse updateApplicationLogo(User user, String appId, String logoUrl) {
-        Oauth2Application application = findOwnedApplication(user, appId);
+        Oauth2Application application = findOwnedApplicationForUpdate(user, appId);
         application.setLogoUrl(normalizeOptional(logoUrl));
         return toAppResponse(applicationRepository.save(application));
     }
 
+    public Oauth2AppResponse verifyPlatform(User user, String appId, String platform) {
+        Oauth2Application app = findOwnedApplication(user, appId);
+        if (!"mobile".equals(app.getApplicationType())) throw invalidApplicationType();
+        mobilePlatforms.verifyPlatform(app.getAppId(), platform);
+        return toAppResponse(findOwnedApplication(user, appId));
+    }
+
+    public Oauth2AppResponse application(User user, String appId) {
+        return toAppResponse(findOwnedApplication(user, appId));
+    }
+
     public Oauth2AuthorizeContextResponse buildAuthorizeContext(User user, String clientId, String redirectUri,
                                                                 String responseType, String scope) {
+        return buildAuthorizeContext(user, clientId, redirectUri, responseType, scope, null, null, null);
+    }
+
+    public Oauth2AuthorizeContextResponse buildAuthorizeContext(User user, String clientId, String redirectUri,
+                                                                String responseType, String scope, String state,
+                                                                String codeChallenge, String codeChallengeMethod) {
         validateResponseType(responseType);
         Oauth2Application application = findActiveApplication(clientId, HttpStatus.BAD_REQUEST);
         String normalizedRedirectUri = validateRedirectUriMatches(application, redirectUri);
+        validateAuthorizationProof(application, state, codeChallenge, codeChallengeMethod);
         List<String> requestedScopes = resolveRequestedScopes(application, scope);
         UserOauth2Authorization existingAuthorization = findReusableAuthorization(user, application.getAppId(), requestedScopes)
             .orElse(null);
@@ -194,7 +247,10 @@ public class Oauth2PlatformService {
             request == null ? null : request.getClientId(),
             request == null ? null : request.getRedirectUri(),
             request == null ? null : request.getResponseType(),
-            request == null ? null : request.getScope()
+            request == null ? null : request.getScope(),
+            request == null ? null : request.getState(),
+            request == null ? null : request.getCodeChallenge(),
+            request == null ? null : request.getCodeChallengeMethod()
         );
 
         Oauth2Application application = findActiveApplication(context.getClientId(), HttpStatus.BAD_REQUEST);
@@ -214,7 +270,11 @@ public class Oauth2PlatformService {
             application.getAppId(),
             context.getRedirectUri(),
             joinScopes(context.getRequestedScopes()),
-            authorization.getId()
+            authorization.getId(),
+            request.getCodeChallenge(),
+            request.getCodeChallengeMethod(),
+            "mobile".equals(application.getApplicationType())
+                ? mobilePlatforms.nativeRevision(application.getAppId(), "ios", context.getRedirectUri()) : null
         );
         storeAuthorizationCode(code, payload);
 
@@ -242,13 +302,20 @@ public class Oauth2PlatformService {
 
     public Map<String, Object> exchangeAuthorizationCode(String grantType, String code, String clientId,
                                                          String clientSecret, String redirectUri) {
+        return exchangeAuthorizationCode(grantType, code, clientId, clientSecret, redirectUri, null);
+    }
+
+    public Map<String, Object> exchangeAuthorizationCode(String grantType, String code, String clientId,
+                                                         String clientSecret, String redirectUri, String codeVerifier) {
         if (!"authorization_code".equals(normalizeOptional(grantType))) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "unsupported_grant_type", ApiResultCode.OAUTH2_014);
         }
 
         Oauth2Application application = findActiveApplication(clientId, HttpStatus.UNAUTHORIZED);
-        if (clientSecret == null || clientSecret.isBlank()
-            || !passwordEncoder.matches(clientSecret, application.getAppSecretHash())) {
+        if ("public".equals(application.getClientType()) ? clientSecret != null
+            : (!"confidential".equals(application.getClientType()) || clientSecret == null || clientSecret.isBlank()
+                || application.getAppSecretHash() == null
+                || !passwordEncoder.matches(clientSecret, application.getAppSecretHash()))) {
             throw new Oauth2Exception(HttpStatus.UNAUTHORIZED, "invalid_client", ApiResultCode.OAUTH2_015);
         }
 
@@ -261,6 +328,11 @@ public class Oauth2PlatformService {
             || !normalizedRedirectUri.equals(payload.redirectUri())) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_017);
         }
+        validateTokenProof(application, payload, codeVerifier);
+        if ("mobile".equals(application.getApplicationType()) && (payload.mobileRevision() == null
+            || !payload.mobileRevision().equals(mobilePlatforms.nativeRevision(application.getAppId(), "ios", normalizedRedirectUri)))) {
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_017);
+        }
 
         User user = userRepository.findById(payload.userId())
             .orElseThrow(() -> new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_018));
@@ -269,7 +341,8 @@ public class Oauth2PlatformService {
         }
 
         String openid = buildOpenId(application.getAppId(), user.getUuid());
-        String unionid = buildUnionId(payload.ownerUserId(), user.getUuid());
+        String unionid = "approved".equals(application.getUnionidStatus())
+            ? buildUnionId(application.getOwnerUserId(), user.getUuid()) : null;
         String scope = payload.scope() == null ? "" : payload.scope();
         String accessToken = oauth2TokenService.generateAccessToken(
             application.getAppId(),
@@ -288,7 +361,7 @@ public class Oauth2PlatformService {
         response.put("expires_in", oauth2TokenService.getAccessTokenExpiresInSeconds());
         response.put("scope", scope);
         response.put("openid", openid);
-        response.put("unionid", unionid);
+        if (unionid != null) response.put("unionid", unionid);
         return response;
     }
 
@@ -308,8 +381,10 @@ public class Oauth2PlatformService {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("openid", parsed.openid() == null || parsed.openid().isBlank()
             ? buildOpenId(application.getAppId(), user.getUuid()) : parsed.openid());
-        response.put("unionid", parsed.unionid() == null || parsed.unionid().isBlank()
-            ? buildUnionId(parsed.ownerUserId(), user.getUuid()) : parsed.unionid());
+        // Permission is mutable; an old JWT must not bypass a later capability revocation.
+        if ("approved".equals(application.getUnionidStatus())) {
+            response.put("unionid", buildUnionId(application.getOwnerUserId(), user.getUuid()));
+        }
 
         Set<String> scopes = new LinkedHashSet<>(parseScopes(parsed.scope()));
         if (scopes.contains("profile")) {
@@ -330,6 +405,51 @@ public class Oauth2PlatformService {
         return "personal".equalsIgnoreCase(verificationType)
             || "enterprise".equalsIgnoreCase(verificationType)
             || (user != null && user.isSystemAdmin());
+    }
+
+    public void validateNativeClient(String clientId) {
+        Oauth2Application application = findActiveApplication(clientId, HttpStatus.BAD_REQUEST);
+        if (!"mobile".equals(application.getApplicationType()) || !"public".equals(application.getClientType())) {
+            throw invalidApplicationType();
+        }
+    }
+
+    public void validateNativeClient(String clientId, String platform, String redirectUri) {
+        validateNativeClient(clientId);
+        mobilePlatforms.validateNative(clientId, platform, redirectUri);
+    }
+
+    private String normalizeApplicationType(String value) {
+        if (value == null) return "website";
+        if (!Set.of("website", "mobile").contains(value)) throw invalidApplicationType();
+        return value;
+    }
+
+    private static Oauth2Exception invalidApplicationType() {
+        return new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_APPLICATION_TYPE_INVALID);
+    }
+
+    private void validateAuthorizationProof(Oauth2Application application, String state, String challenge, String method) {
+        if ("public".equals(application.getClientType()) && (state == null || state.isBlank() || state.length() > 512)) {
+            throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_STATE_INVALID);
+        }
+        if ("public".equals(application.getClientType()) || challenge != null || method != null) {
+            if (!"S256".equals(method) || challenge == null || !challenge.matches("[A-Za-z0-9_-]{43}")) {
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_PKCE_INVALID);
+            }
+        }
+    }
+
+    private void validateTokenProof(Oauth2Application application, AuthorizationCodePayload payload, String verifier) {
+        if ("public".equals(application.getClientType()) || payload.codeChallenge() != null || payload.codeChallengeMethod() != null) {
+            if (!"S256".equals(payload.codeChallengeMethod()) || payload.codeChallenge() == null
+                || !payload.codeChallenge().matches("[A-Za-z0-9_-]{43}")
+                || verifier == null || !verifier.matches("[A-Za-z0-9._~-]{43,128}")
+                || !MessageDigest.isEqual(PkceUtil.toS256CodeChallenge(verifier).getBytes(StandardCharsets.US_ASCII),
+                    payload.codeChallenge().getBytes(StandardCharsets.US_ASCII))) {
+                throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_PKCE_INVALID);
+            }
+        }
     }
 
     private void ensureOauthCreator(User user) {
@@ -365,6 +485,9 @@ public class Oauth2PlatformService {
         String normalizedRedirectUri = normalizeAndValidateRedirectUri(redirectUri);
         if (!parseRegisteredRedirectUris(application.getRedirectUri()).contains(normalizedRedirectUri)) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.OAUTH2_026);
+        }
+        if ("mobile".equals(application.getApplicationType())) {
+            mobilePlatforms.validateMobileRedirect(application.getAppId(), normalizedRedirectUri);
         }
         return normalizedRedirectUri;
     }
@@ -500,7 +623,7 @@ public class Oauth2PlatformService {
     }
 
     private Oauth2AppResponse toAppResponse(Oauth2Application application) {
-        return new Oauth2AppResponse(
+        Oauth2AppResponse response = new Oauth2AppResponse(
             application.getAppId(),
             application.getAppName(),
             application.getLogoUrl(),
@@ -510,6 +633,24 @@ public class Oauth2PlatformService {
             application.getCreatedAt(),
             application.getUpdatedAt()
         );
+        decorateAppResponse(response, application);
+        return response;
+    }
+
+    private void decorateAppResponse(Oauth2AppResponse response, Oauth2Application application) {
+        response.setClientType(application.getClientType());
+        response.setApplicationType(application.getApplicationType());
+        response.setPlatforms("mobile".equals(application.getApplicationType()) ? mobilePlatforms.getPlatforms(application.getAppId()) : null);
+        response.setUnionidStatus(application.getUnionidStatus());
+        response.setUnionidReason(application.getUnionidReason());
+        response.setUnionidReviewReason(application.getUnionidReviewReason());
+    }
+
+    private Oauth2Application findOwnedApplicationForUpdate(User user, String appId) {
+        Oauth2Application application = applicationRepository.findByAppIdForUpdate(normalizeRequired(appId, ApiResultCode.OAUTH2_009))
+            .filter(app -> Objects.equals(app.getOwnerUserId(), user.getId()))
+            .orElseThrow(() -> new Oauth2Exception(HttpStatus.NOT_FOUND, "invalid_client", ApiResultCode.OAUTH2_023));
+        return application;
     }
 
     private Oauth2AuthorizedAppResponse toAuthorizedAppResponse(UserOauth2Authorization authorization) {
@@ -673,6 +814,9 @@ public class Oauth2PlatformService {
                                             String clientId,
                                             String redirectUri,
                                             String scope,
-                                            Long authorizationId) {
+                                            Long authorizationId,
+                                            String codeChallenge,
+                                            String codeChallengeMethod,
+                                            String mobileRevision) {
     }
 }
