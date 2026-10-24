@@ -1,22 +1,33 @@
 package cn.ksuser.auth.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -25,15 +36,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
 import cn.ksuser.auth.data.authorization.MobileAuthorizationLinks
 import cn.ksuser.auth.data.model.UserProfile
+import cn.ksuser.auth.ui.components.AppRadius
+import cn.ksuser.auth.ui.components.GradientPrimaryButton
 import cn.ksuser.auth.ui.components.SectionCard
-import coil.compose.AsyncImage
+import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlinx.coroutines.delay
+import cn.ksuser.auth.ui.components.ApplicationLogo
 
 @Composable
 internal fun requestSecondsRemaining(expiresAtMillis: Long): Long {
@@ -64,62 +79,92 @@ internal fun ApplicationConsentScreen(
     val scopes = context?.requestedScopes ?: preview?.requestedScopes.orEmpty()
     val remaining = requestSecondsRemaining(pending.expiresAtMillis)
     BackHandler { if (!isBusy) onCancel() }
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())
-                .padding(20.dp).widthIn(max = 840.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(copy(if (console) "管理中心登录" else "应用授权", if (console) "Console sign-in" else "Application authorization"), style = MaterialTheme.typography.titleLarge)
-            AsyncImage(model = context?.logoUrl ?: preview?.targetLogoUrl, contentDescription = null, modifier = Modifier.size(64.dp).align(Alignment.CenterHorizontally))
-            Text(appName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(when {
-                console -> copy("仅超级管理员可登录管理中心，权限由服务器校验。", "Only super administrators can sign in to Console. The server checks your access.")
-                official -> copy("官方应用授权 · 可在已授权应用中撤销", "Official application · Revoke access in Authorized applications")
-                else -> context?.subjectName?.takeIf { it.isNotBlank() } ?: copy("开发者信息未提供", "Developer information unavailable")
-            }, color = MaterialTheme.colorScheme.primary)
-            SectionCard(Modifier.fillMaxWidth()) {
-                Text(copy("应用信息", "Application details"), fontWeight = FontWeight.SemiBold)
-                Detail(copy("应用名称", "Application"), appName)
-                if (!official && !console) {
-                    Detail(copy("开发者", "Developer"), context?.subjectName ?: copy("未提供", "Not provided"))
-                    context?.subjectVerificationType?.let { Detail(copy("认证类型", "Verification"), when (it) {
-                        "personal" -> copy("个人认证", "Individual")
-                        "enterprise" -> copy("企业认证", "Enterprise")
-                        "admin" -> copy("管理员", "Administrator")
-                        else -> it
-                    }) }
-                    Detail(copy("联系方式", "Contact"), context?.contactInfo?.takeIf { it.isNotBlank() } ?: copy("未提供", "Not provided"))
-                }
-                Detail(copy("返回网站", "Return website"), context?.redirectUri?.let { MobileAuthorizationLinks.origin(it) } ?: preview?.targetOrigin ?: copy("未提供", "Not provided"))
+    ConfirmationScreenLayout(
+        title = copy(if (console) "管理中心登录" else "应用授权", if (console) "Console sign-in" else "Application authorization"),
+        isBusy = isBusy,
+        onCancel = onCancel,
+        actions = {
+            Text(
+                if (remaining > 0) copy("请求将在 $remaining 秒后过期", "Request expires in $remaining seconds") else copy("请求已过期，请重新发起", "Request expired. Start again."),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (remaining == 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            GradientPrimaryButton(
+                text = if (isBusy) copy("正在提交…", "Submitting…") else if (console) copy("确认登录管理中心", "Sign in to Console") else copy("同意并继续", "Approve and continue"),
+                onClick = onConfirm,
+                enabled = !isBusy && remaining > 0 && currentUser != null,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(onClick = onCancel, enabled = !isBusy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(AppRadius.R12)) {
+                Text(if (remaining == 0L || pending.type == QrConfirmationType.APPROVE_CONSOLE_LOGIN) copy("关闭", "Close") else copy("拒绝授权", "Deny authorization"))
             }
-            SectionCard(Modifier.fillMaxWidth()) {
-                Text(copy("授权范围", "Permissions requested"), fontWeight = FontWeight.SemiBold)
-                if (scopes.isEmpty()) Text(copy("仅确认本次登录请求", "Confirm this sign-in request only"))
-                scopes.forEach { scope ->
-                    Text(scopeTitle(scope), style = MaterialTheme.typography.bodyLarge)
-                    Text(scope, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Text(copy("你的密码不会提供给该应用。", "Your password is never shared with this application."), style = MaterialTheme.typography.bodySmall)
+        },
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            val logo = context?.logoUrl?.takeIf { it.isNotBlank() } ?: preview?.targetLogoUrl
+            ApplicationLogo(appName, logo, size = 64.dp, modifier = Modifier)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(appName, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text(when {
+                    console -> copy("管理中心登录", "Console sign-in")
+                    official -> copy("官方应用", "Official application")
+                    else -> context?.subjectName?.takeIf { it.isNotBlank() } ?: copy("开发者信息未提供", "Developer information unavailable")
+                }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            SectionCard(Modifier.fillMaxWidth()) {
-                Text(copy("使用账号", "Account"), fontWeight = FontWeight.SemiBold)
-                Text(currentUser?.username.orEmpty())
-                Text(currentUser?.email.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        SectionCard(Modifier.fillMaxWidth()) {
+            Text(copy("应用信息", "Application details"), style = MaterialTheme.typography.titleMedium)
+            if (!official && !console) {
+                Detail(copy("开发者", "Developer"), context?.subjectName ?: copy("未提供", "Not provided"))
+                context?.subjectVerificationType?.let { Detail(copy("认证类型", "Verification"), when (it) {
+                    "personal" -> copy("个人认证", "Individual")
+                    "enterprise" -> copy("企业认证", "Enterprise")
+                    "admin" -> copy("管理员", "Administrator")
+                    else -> it
+                }) }
+                Detail(copy("联系方式", "Contact"), context?.contactInfo?.takeIf { it.isNotBlank() } ?: copy("未提供", "Not provided"))
             }
-            if (context != null && !official) {
-                SectionCard(Modifier.fillMaxWidth()) {
-                    Text(copy("授权有效期", "Authorization duration"), fontWeight = FontWeight.SemiBold)
+            Detail(copy("返回网站", "Return website"), context?.redirectUri?.let { MobileAuthorizationLinks.origin(it) } ?: preview?.targetOrigin ?: copy("未提供", "Not provided"))
+            if (console) Text(copy("仅超级管理员可登录管理中心，权限由服务器校验。", "Only super administrators can sign in to Console. The server checks your access."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (official && !console) Text(copy("官方应用授权 · 可在已授权应用中撤销", "Official application · Revoke access in Authorized applications"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        SectionCard(Modifier.fillMaxWidth()) {
+            Text(copy("使用账号", "Account"), style = MaterialTheme.typography.titleMedium)
+            Text(currentUser?.username?.takeIf { it.isNotBlank() } ?: copy("需要先登录 App", "Sign in to the app first"), style = MaterialTheme.typography.bodyLarge)
+            currentUser?.email?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        SectionCard(Modifier.fillMaxWidth()) {
+            Text(copy("授权范围", "Permissions requested"), style = MaterialTheme.typography.titleMedium)
+            if (scopes.isEmpty()) Text(copy("仅确认本次登录请求", "Confirm this sign-in request only"))
+            scopes.forEach { scope -> Detail(scopeTitle(scope), scope) }
+            Text(copy("你的密码不会提供给该应用。", "Your password is never shared with this application."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (context != null && !official) {
+            SectionCard(Modifier.fillMaxWidth()) {
+                Text(copy("授权有效期", "Authorization duration"), style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.selectableGroup()) {
                     AuthorizationGrantMode.entries.forEach { mode ->
-                        FilterChip(selected = pending.grantMode == mode, enabled = !isBusy, onClick = {
-                            onOptionsChanged(mode, pending.grantTtlSeconds, pending.loginWeb)
-                        }, label = { Text(when (mode) {
-                            AuthorizationGrantMode.PERSISTENT -> copy("长期，直到撤销", "Persistent, until revoked")
-                            AuthorizationGrantMode.ONE_TIME -> copy("一次性，仅本次有效", "One time, for this request")
-                            AuthorizationGrantMode.TIME_LIMITED -> copy("限时", "Time limited")
-                        }) })
+                        Row(
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
+                                selected = pending.grantMode == mode,
+                                enabled = !isBusy,
+                                role = Role.RadioButton,
+                                onClick = { onOptionsChanged(mode, pending.grantTtlSeconds, pending.loginWeb) },
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            RadioButton(selected = pending.grantMode == mode, enabled = !isBusy, onClick = null)
+                            Text(when (mode) {
+                                AuthorizationGrantMode.PERSISTENT -> copy("长期，直到撤销", "Persistent, until revoked")
+                                AuthorizationGrantMode.ONE_TIME -> copy("一次性，仅本次有效", "One time, for this request")
+                                AuthorizationGrantMode.TIME_LIMITED -> copy("限时", "Time limited")
+                            })
+                        }
                     }
-                    if (pending.grantMode == AuthorizationGrantMode.TIME_LIMITED) {
+                }
+                if (pending.grantMode == AuthorizationGrantMode.TIME_LIMITED) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(300 to copy("5 分钟", "5 minutes"), 3600 to copy("1 小时", "1 hour"),
                             86400 to copy("24 小时", "24 hours"), 604800 to copy("7 天", "7 days")).forEach { (seconds, label) ->
                             FilterChip(selected = pending.grantTtlSeconds == seconds, enabled = !isBusy,
@@ -128,27 +173,66 @@ internal fun ApplicationConsentScreen(
                     }
                 }
             }
-            if (context?.qr == true) {
-                SectionCard(Modifier.fillMaxWidth()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(copy("同时登录通行证网页端", "Also sign in to Passport in the browser"), modifier = Modifier.weight(1f))
-                        Switch(checked = pending.loginWeb, enabled = !isBusy, onCheckedChange = {
-                            onOptionsChanged(pending.grantMode, pending.grantTtlSeconds, it)
-                        })
-                    }
-                    context.webOrigin?.let { Detail(copy("网页登录网站", "Browser website"), it) }
-                    Text(copy("默认仅授权此应用。开启后，发起请求的浏览器也会登录当前账号。", "By default, only the application is authorized. Enabling this also signs the requesting browser in to your account."), style = MaterialTheme.typography.bodySmall)
+        }
+        if (context?.qr == true) {
+            SectionCard(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(copy("同时登录通行证网页端", "Also sign in to Passport in the browser"), modifier = Modifier.weight(1f))
+                    Switch(checked = pending.loginWeb, enabled = !isBusy, onCheckedChange = {
+                        onOptionsChanged(pending.grantMode, pending.grantTtlSeconds, it)
+                    })
+                }
+                context.webOrigin?.let { Detail(copy("网页登录网站", "Browser website"), it) }
+                Text(copy("默认仅授权此应用。开启后，发起请求的浏览器也会登录当前账号。", "By default, only the application is authorized. Enabling this also signs the requesting browser in to your account."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Text(if (context?.qr != false) copy("完成后请返回发起扫码请求的设备", "After confirming, return to the device that displayed the code") else copy("完成后将返回浏览器", "You will return to the browser when finished"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Shared layout keeps request information scrollable and confirmation actions reachable. */
+@Composable
+internal fun ConfirmationScreenLayout(
+    title: String,
+    isBusy: Boolean,
+    onCancel: () -> Unit,
+    actions: @Composable ColumnScope.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(
+                modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                IconButton(onClick = onCancel, enabled = !isBusy) {
+                    Icon(Icons.Outlined.Close, contentDescription = L10n.text("关闭"))
+                }
+                Text(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            }
+            Column(
+                modifier = Modifier.weight(1f).widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+                content = content,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+                Box(contentAlignment = Alignment.TopCenter) {
+                    Column(
+                        modifier = Modifier.widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        content = actions,
+                    )
                 }
             }
-            Text(if (remaining > 0) copy("请求将在 $remaining 秒后过期", "Request expires in $remaining seconds") else copy("请求已过期，请重新发起", "Request expired. Start again."), color = if (remaining == 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onConfirm, enabled = !isBusy && remaining > 0 && currentUser != null, modifier = Modifier.fillMaxWidth()) {
-                Text(if (isBusy) copy("正在提交…", "Submitting…") else if (console) copy("确认登录管理中心", "Sign in to Console") else copy("同意并继续", "Approve and continue"))
-            }
-            OutlinedButton(onClick = onCancel, enabled = !isBusy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (remaining == 0L || pending.type == QrConfirmationType.APPROVE_CONSOLE_LOGIN) copy("关闭", "Close") else copy("拒绝授权", "Deny authorization"))
-            }
-            Text(if (context?.qr != false) copy("完成后请返回发起扫码请求的设备", "After confirming, return to the device that displayed the code") else copy("完成后将返回浏览器", "You will return to the browser when finished"), style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.padding(4.dp))
         }
     }
 }

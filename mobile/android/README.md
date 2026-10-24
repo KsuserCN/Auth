@@ -17,13 +17,17 @@ npm run test:android-release
 
 项目显式保留 Debug/Release 两种单元测试组件，以支持发布 CI；参见 [AGP 测试默认行为](https://developer.android.com/build/releases/agp-9-0-0-release-notes#behavior_changes)。
 
+正式发布使用 `npm run release:android`：版本只改 `app/build.gradle.kts` 的 `versionName` 和 `versionCode`，命令会提示签名密码，测试并生成 `build/release.apk` 和配套网站目录，详见 [日常发布操作](RELEASE.md#日常发布改两行运行一个命令)。
+
 设备或模拟器连接后，可在 `mobile/android` 执行 `./gradlew :app:connectedDebugAndroidTest`。当前界面测试使用本地合成状态，不操作生产账号；它们不代表全部真实接口流程已完成设备验收。
+
+界面采用统一的原生分组样式，保留五栏导航并支持深浅色、中英文及大字体。右上角操作与 iOS 一致，扫码在左、纯齿轮设置在最右。品牌名称显示为中文 `Ksuser安全`、英文 `Ksuser Auth`。
 
 `.env.development` / `.env.production` 可配置 `API_BASE_URL`、`PASSKEY_RP_ID`、`PASSKEY_ORIGIN_HINT`、`UPDATE_MANIFEST_URL`、`QQ_MOBILE_APP_ID`、`APP_ENV`、`ENABLE_HTTP_LOGGING`；缺省连接 `https://api.ksuser.cn` 与 `https://auth.ksuser.cn`。不要把服务器密钥放入客户端。发布签名与安装包准备见 [RELEASE.md](RELEASE.md)；未配置签名时 Release 构建只产出 unsigned APK。
 
 ## 已接入功能
 
-- 密码、邮箱验证码、QQ、系统 Passkey，以及设备支持的 USB/NFC 安全密钥；五步注册、MFA、第三方账号关联与登录后继续原请求。
+- 密码、邮箱验证码、QQ，以及统一的 Passkey 登录入口；Passkey 入口支持选择设备/密码管理器或 USB/NFC 安全密钥。快捷登录使用上下排列的 QQ、Passkey 宽按钮。登录页需主动勾选协议后才能登录、发送验证码或启动快捷登录；五步注册、MFA、第三方账号关联与登录后继续原请求。
 - 登录、MFA、敏感操作、恢复授权、会话转移、Console、OAuth 及官方应用扫码；相机和相册识别；应用身份及权限展示、长期/一次性/限时授权、明确拒绝。
 - HTTPS 或 `ksuserauth` scheme 唤起 App。网页登录和非扫码应用授权按服务端结果返回受信任浏览器地址；扫码应用授权完成留在 App，默认只授权应用，网页登录需另行主动选择。
 - 第三方/官方已授权应用列表、详情、刷新和确认撤销；QQ 绑定/解绑；已有 Apple 状态和解绑、无密码及无邮箱账号兼容。Apple 登录、新绑定和重新认证不在本轮范围。

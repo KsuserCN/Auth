@@ -1,6 +1,13 @@
 package cn.ksuser.auth.ui.theme
 
 import android.os.Build
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -9,6 +16,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import cn.ksuser.auth.ui.settings.LocalAppPreferences
@@ -93,6 +101,18 @@ fun KsuserAuthAndroidTheme(
         else -> LightColorScheme
     }
 
+    val view = LocalView.current
+    val activity = remember(view) { view.context.themeActivity() }
+    if (!view.isInEditMode && activity != null) {
+        SideEffect {
+            val lightBars = colorScheme.background.luminance() > 0.5f
+            WindowCompat.getInsetsController(activity.window, view).apply {
+                isAppearanceLightStatusBars = lightBars
+                isAppearanceLightNavigationBars = lightBars
+            }
+        }
+    }
+
     MaterialTheme(
         colorScheme = colorScheme,
         typography = AppTypography,
@@ -104,25 +124,13 @@ fun KsuserAuthAndroidTheme(
 @Composable
 fun rememberAppBackgroundBrush(): Brush {
     val colorScheme = MaterialTheme.colorScheme
-    val darkTheme = when (LocalAppPreferences.current.theme) {
-        "light" -> false
-        "dark" -> true
-        else -> isSystemInDarkTheme()
+    return remember(colorScheme.background) {
+        SolidColor(colorScheme.background)
     }
-    return remember(colorScheme, darkTheme) {
-        val colors = if (darkTheme) {
-            listOf(
-                colorScheme.surfaceDim,
-                colorScheme.background,
-                colorScheme.surfaceContainerLow,
-            )
-        } else {
-            listOf(
-                colorScheme.surfaceBright,
-                colorScheme.background,
-                colorScheme.surfaceContainerLow,
-            )
-        }
-        Brush.verticalGradient(colors)
-    }
+}
+
+private tailrec fun Context.themeActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.takeIf { it !== this }?.themeActivity()
+    else -> null
 }

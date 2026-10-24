@@ -1,27 +1,19 @@
 package cn.ksuser.auth.ui
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.AlternateEmail
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DesktopWindows
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Password
@@ -29,9 +21,7 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SyncAlt
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -43,7 +33,6 @@ import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -51,14 +40,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cn.ksuser.auth.data.model.QrScanPreview
 import cn.ksuser.auth.data.model.UserProfile
-import cn.ksuser.auth.ui.components.AppPagePadding
 import cn.ksuser.auth.ui.components.AppRadius
-import cn.ksuser.auth.ui.components.AppSpacing
 import cn.ksuser.auth.ui.components.GradientPrimaryButton
 import cn.ksuser.auth.ui.components.SectionCard
-import cn.ksuser.auth.ui.theme.BrandButtonGradientEnd
-import cn.ksuser.auth.ui.theme.BrandButtonGradientStart
-import cn.ksuser.auth.ui.theme.rememberAppBackgroundBrush
 
 @Composable
 internal fun QrLoginConfirmScreen(
@@ -76,192 +60,62 @@ internal fun QrLoginConfirmScreen(
     BackHandler { if (!isBusy) onCancel() }
     val remaining = requestSecondsRemaining(pending.expiresAtMillis)
     val visual = rememberConfirmationVisual(pending, currentUser)
-    val backgroundBrush = rememberAppBackgroundBrush()
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundBrush)
-            .safeDrawingPadding(),
+    ConfirmationScreenLayout(
+        title = visual.pageTitle,
+        isBusy = isBusy,
+        onCancel = onCancel,
+        actions = {
+            Text(
+                if (remaining > 0) L10n.text("有效期") + ": ${remaining}s" else L10n.text("请求已过期，请重新发起"),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (remaining > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            )
+            GradientPrimaryButton(
+                text = if (isBusy) visual.loadingLabel else visual.confirmLabel,
+                onClick = onConfirm,
+                enabled = !isBusy && remaining > 0,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(
+                onClick = onCancel,
+                enabled = !isBusy,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = RoundedCornerShape(AppRadius.R12),
+            ) { Text(visual.cancelLabel) }
+        },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = AppPagePadding, vertical = AppSpacing.S12),
-            verticalArrangement = Arrangement.spacedBy(AppSpacing.S16),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onCancel) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = L10n.text("关闭"),
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        text = L10n.text("扫码确认"),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = visual.pageTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(48.dp))
+        ConfirmationHero(visual)
+        currentUser?.let { user ->
+            SectionCard(Modifier.fillMaxWidth()) {
+                Text(L10n.text("使用账号"), style = MaterialTheme.typography.titleMedium)
+                Text(user.username, style = MaterialTheme.typography.bodyLarge)
+                Text(user.email ?: L10n.text("未绑定邮箱"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(30.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                tonalElevation = 4.dp,
-                shadowElevation = 10.dp,
-                border = CardDefaults.outlinedCardBorder().copy(
-                    brush = Brush.linearGradient(
-                        listOf(
-                            BrandButtonGradientStart.copy(alpha = 0.45f),
-                            BrandButtonGradientEnd.copy(alpha = 0.20f),
-                        ),
-                    ),
-                ),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(AppSpacing.S16),
-                ) {
-                    ConfirmationHero(visual = visual)
-
-                    pending.preview?.let { preview ->
-                        PreviewDetailsCard(preview = preview)
-                    }
-                    currentUser?.let { user ->
-                        SectionCard(modifier = Modifier.fillMaxWidth()) {
-                            Text(L10n.text("使用账号"), fontWeight = FontWeight.SemiBold)
-                            Text(user.username)
-                            Text(user.email ?: L10n.text("未绑定邮箱"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Text(if (remaining > 0) L10n.text("有效期") + ": ${remaining}s" else L10n.text("请求已过期，请重新发起"))
-
-                    SectionCard(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = L10n.text("安全提醒"),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = visual.securityHint,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                        GradientPrimaryButton(
-                            text = if (isBusy) visual.loadingLabel else visual.confirmLabel,
-                            onClick = onConfirm,
-                            enabled = !isBusy && remaining > 0,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-
-                        OutlinedButton(
-                            onClick = onCancel,
-                            enabled = !isBusy,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(AppRadius.R12),
-                        ) {
-                            Text(visual.cancelLabel)
-                        }
-                    }
-                }
-            }
+        }
+        pending.preview?.let { PreviewDetailsCard(it) }
+        SectionCard(Modifier.fillMaxWidth()) {
+            Text(L10n.text("安全提醒"), style = MaterialTheme.typography.titleMedium)
+            Text(visual.securityHint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
 @Composable
-private fun ConfirmationHero(
-    visual: QrConfirmationVisual,
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = Color.Transparent,
+private fun ConfirmationHero(visual: QrConfirmationVisual) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            visual.accentSoft,
-                            MaterialTheme.colorScheme.surface,
-                        ),
-                    ),
-                    shape = RoundedCornerShape(24.dp),
-                )
-                .padding(horizontal = 18.dp, vertical = 20.dp),
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-            ) {
-                Surface(
-                    modifier = Modifier.size(68.dp),
-                    shape = CircleShape,
-                    color = visual.accent.copy(alpha = 0.14f),
-                    border = BorderStroke(1.dp, visual.accent.copy(alpha = 0.18f)),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = visual.icon,
-                            contentDescription = null,
-                            tint = visual.accent,
-                            modifier = Modifier.size(32.dp),
-                        )
-                    }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Surface(shape = RoundedCornerShape(16.dp), color = visual.accentSoft, modifier = Modifier.size(56.dp)) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(visual.icon, contentDescription = null, tint = visual.accent, modifier = Modifier.size(28.dp))
                 }
-
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = visual.accent.copy(alpha = 0.12f),
-                ) {
-                    Text(
-                        text = visual.operationLabel,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = visual.accent,
-                    )
-                }
-
-                Text(
-                    text = visual.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                )
-
-                Text(
-                    text = visual.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
             }
+            Text(visual.operationLabel, style = MaterialTheme.typography.titleMedium, color = visual.accent)
         }
+        Text(visual.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(visual.subtitle, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

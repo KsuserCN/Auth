@@ -21,6 +21,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,6 +59,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Close
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -179,32 +184,18 @@ internal fun QrScannerDialog(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 32.dp, start = 16.dp, end = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Row(
+                modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = L10n.text("扫描网页二维码"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = L10n.text("请将二维码对准屏幕中央"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                )
-            }
-
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp),
-            ) {
-                Text("关闭")
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(L10n.text("扫描网页二维码"), style = MaterialTheme.typography.titleLarge, color = Color.White)
+                    Text(L10n.text("请将二维码对准屏幕中央"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.85f))
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Outlined.Close, contentDescription = L10n.text("关闭"), tint = Color.White)
+                }
             }
 
             FloatingActionButton(
@@ -241,10 +232,10 @@ internal fun QrScannerDialog(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
                     },
-                ) { Text("选择图片") }
+                ) { Text(L10n.text("选择图片")) }
             },
             dismissButton = {
-                TextButton(onClick = { showGalleryReason = false }) { Text("取消") }
+                TextButton(onClick = { showGalleryReason = false }) { Text(L10n.text("取消")) }
             },
         )
     }
@@ -309,7 +300,7 @@ private fun ScannerOverlay(
                 .align(Alignment.Center)
                 .fillMaxWidth(0.72f)
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(Color.Black.copy(alpha = 0.18f)),
         ) {
             Box(

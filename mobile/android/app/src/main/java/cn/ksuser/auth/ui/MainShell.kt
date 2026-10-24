@@ -6,30 +6,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.outlined.QrCodeScanner
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,8 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -70,7 +51,6 @@ internal fun MainShell(
     val navController = rememberNavController()
     val currentBackStack by navController.currentBackStackEntryAsState()
     val currentDestination = currentBackStack?.destination
-    val destinations = MainDestination.entries
     val context = LocalContext.current
     var showQrScanner by rememberSaveable { mutableStateOf(false) }
     var showLogoutAllConfirmation by rememberSaveable { mutableStateOf(false) }
@@ -109,90 +89,19 @@ internal fun MainShell(
         container.consumeNavigation()
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            val route = currentDestination?.route.orEmpty()
-            val canNavigateBack = route.startsWith("profile/edit") || route == ABOUT_ROUTE || route == AUTHORIZED_APPS_ROUTE
-            TopAppBar(
-                title = {
-                    val title = when {
-                        route.startsWith("profile/edit") -> L10n.text("编辑资料")
-                        route == ABOUT_ROUTE -> L10n.text("关于")
-                        route == AUTHORIZED_APPS_ROUTE -> L10n.text("已授权应用")
-                        else -> destinations.firstOrNull { it.route == route }?.label ?: "Ksuser"
-                    }
-                    Text(
-                        L10n.text(title),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    actionIconContentColor = MaterialTheme.colorScheme.primary,
-                ),
-                navigationIcon = {
-                    if (canNavigateBack) {
-                        IconButton(onClick = { navController.popBackStack() }) {
-                            Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = L10n.text("返回"))
-                        }
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = ::openQrScanner,
-                    ) {
-                        Icon(Icons.Outlined.QrCodeScanner, contentDescription = L10n.text("扫码授权"))
-                    }
-                    IconButton(onClick = { viewModel.refreshCurrentUser() }) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = L10n.text("刷新用户信息"))
-                    }
-                    IconButton(onClick = { viewModel.logout() }) {
-                        Icon(Icons.AutoMirrored.Outlined.Logout, contentDescription = L10n.text("退出登录"))
-                    }
-                },
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
-            ) {
-                destinations.forEach { destination ->
-                    val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(destination.icon, contentDescription = L10n.text(destination.label)) },
-                        label = { Text(L10n.text(destination.label)) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.68f),
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                    )
-                }
-            }
-        },
+    MainNavigationFrame(
+        currentRoute = currentDestination?.route.orEmpty(),
+        snackbarHostState = snackbarHostState,
+        onBack = { navController.popBackStack() },
+        onScan = ::openQrScanner,
+        onNavigate = { destination -> navigateToMainDestination(navController, destination) },
+        onOpenSettings = { navController.navigate(ABOUT_ROUTE) { launchSingleTop = true } },
     ) { innerPadding ->
         Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.TopCenter) {
         NavHost(
             navController = navController,
             startDestination = MainDestination.HOME.route,
-            modifier = Modifier.widthIn(max = 900.dp).fillMaxSize(),
+            modifier = Modifier.widthIn(max = 720.dp).fillMaxSize(),
         ) {
             composable(MainDestination.HOME.route) {
                 HomeScreen(
@@ -201,6 +110,7 @@ internal fun MainShell(
                     onOpenProfile = { navController.navigate(MainDestination.PROFILE.route) },
                     onOpenSecurity = { navController.navigate(MainDestination.SECURITY.route) },
                     onOpenSessions = { navController.navigate(MainDestination.SESSIONS.route) },
+                    onOpenSettings = { navController.navigate(ABOUT_ROUTE) { launchSingleTop = true } },
                 )
             }
             composable(MainDestination.PROFILE.route) {
@@ -209,6 +119,8 @@ internal fun MainShell(
                     onNavigateToEdit = { fieldKey -> navController.navigate(profileEditRoute(fieldKey)) },
                     onNavigateToAbout = { navController.navigate(ABOUT_ROUTE) },
                     onNavigateToAuthorizedApps = { navController.navigate(AUTHORIZED_APPS_ROUTE) },
+                    onRefresh = { viewModel.refreshCurrentUser() },
+                    onLogout = { viewModel.logout() },
                 )
             }
             composable(

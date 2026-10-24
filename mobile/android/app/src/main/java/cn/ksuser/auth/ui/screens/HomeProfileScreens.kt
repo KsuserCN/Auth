@@ -8,10 +8,21 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.automirrored.outlined.Logout
+import cn.ksuser.auth.ui.components.AppSettingsRow
+import cn.ksuser.auth.ui.components.AppSectionTitle
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,13 +37,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Devices
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +67,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
@@ -66,7 +88,6 @@ import cn.ksuser.auth.ui.components.AppOutlinedField
 import cn.ksuser.auth.ui.components.AppPagePadding
 import cn.ksuser.auth.ui.components.AppRadius
 import cn.ksuser.auth.ui.components.AppSpacing
-import cn.ksuser.auth.ui.components.BrandHeroCard
 import cn.ksuser.auth.ui.components.GradientPrimaryButton
 import cn.ksuser.auth.ui.components.LoadingButton
 import cn.ksuser.auth.ui.components.LoadingOutlinedButton
@@ -83,224 +104,123 @@ internal fun HomeScreen(
     onOpenProfile: () -> Unit,
     onOpenSecurity: () -> Unit,
     onOpenSessions: () -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
-    val displayRealName = user?.realName.takeMeaningfulProfileText()
-    val displayUsername = user?.username.takeMeaningfulProfileText()
-    val displayRegion = user?.region.takeMeaningfulProfileText()
-    val displayBio = user?.bio.takeMeaningfulProfileText()
-    val hasAvatar = !user?.avatarUrl.isNullOrBlank()
-    val completionItems = listOf(
-        displayUsername != null,
-        displayRealName != null,
-        displayRegion != null,
-        displayBio != null,
-        hasAvatar,
-    )
-    val completedCount = completionItems.count { it }
-    val completionPercent = if (completionItems.isEmpty()) 0 else completedCount * 100 / completionItems.size
-    val securitySummary = when {
-        user?.settings?.mfaEnabled == true && user.settings.detectUnusualLogin -> L10n.text("账号保护较完整")
-        user?.settings?.mfaEnabled == true -> L10n.text("双重验证已开启")
-        else -> L10n.text("建议继续完善安全设置")
-    }
-    val greetingName = displayUsername
-        ?: displayRealName
-        ?: L10n.text("你好")
-
+    val completedCount = listOf(
+        user?.username.takeMeaningfulProfileText() != null,
+        user?.realName.takeMeaningfulProfileText() != null,
+        user?.region.takeMeaningfulProfileText() != null,
+        user?.bio.takeMeaningfulProfileText() != null,
+        !user?.avatarUrl.isNullOrBlank(),
+    ).count { it }
+    val name = user?.username.takeMeaningfulProfileText() ?: user?.realName.takeMeaningfulProfileText() ?: L10n.text("你好")
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(AppPagePadding),
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(AppPagePadding),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.S24),
     ) {
-        AccountHeroCard(
-            user = user,
-            greetingName = greetingName,
-            securitySummary = securitySummary,
-            onRefresh = onRefresh,
-            onOpenProfile = onOpenProfile,
-        )
-        SecurityOverviewCard(
-            user = user,
-            onOpenSecurity = onOpenSecurity,
-        )
-        QuickActionsCard(
-            onOpenProfile = onOpenProfile,
-            onOpenSecurity = onOpenSecurity,
-            onOpenSessions = onOpenSessions,
-        )
-        ProfileCompletionCard(
-            user = user,
-            completionPercent = completionPercent,
-            completedCount = completedCount,
-            totalCount = completionItems.size,
-            onOpenProfile = onOpenProfile,
-        )
-    }
-}
-
-@Composable
-private fun AccountHeroCard(
-    user: UserProfile?,
-    greetingName: String,
-    securitySummary: String,
-    onRefresh: () -> Unit,
-    onOpenProfile: () -> Unit,
-) {
-    BrandHeroCard(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S12)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AvatarBadge(
-                    avatarUrl = user?.avatarUrl,
-                    label = greetingName.take(1),
-                )
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(L10n.format("欢迎回来，{0}", greetingName), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text(
-                        user?.email.orEmpty().ifBlank { L10n.text("当前账号未绑定邮箱") },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        securitySummary,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(L10n.text("欢迎回来"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(name, style = MaterialTheme.typography.headlineLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(user?.email ?: L10n.text("当前账号未绑定邮箱"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Surface(onClick = onOpenProfile, modifier = Modifier.semantics { contentDescription = L10n.text("编辑资料") }, shape = RoundedCornerShape(AppRadius.R20), color = MaterialTheme.colorScheme.surface) {
+                AvatarBadge(user?.avatarUrl, name.take(1))
+            }
+        }
+        HomeSecurityCard(user, onRefresh, onOpenSecurity)
+        Column {
+            AppSectionTitle(L10n.text("常用功能"))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeQuickAction(Icons.Outlined.Settings, L10n.text("设置"), L10n.text("语言、外观与更新"), onOpenSettings, Modifier.weight(1f).testTag("home_settings"))
+                    HomeQuickAction(Icons.Outlined.Devices, L10n.text("设备会话"), L10n.text("管理登录设备"), onOpenSessions, Modifier.weight(1f))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HomeQuickAction(Icons.Outlined.AdminPanelSettings, L10n.text("安全设置"), L10n.text("验证与账号保护"), onOpenSecurity, Modifier.weight(1f))
+                    HomeQuickAction(Icons.Outlined.Person, L10n.text("编辑资料"), L10n.text("个人信息与头像"), onOpenProfile, Modifier.weight(1f))
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-            ) {
-                Button(
-                    onClick = onOpenProfile,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(AppRadius.R12),
-                ) {
-                    Text(L10n.text("查看资料"))
+        }
+        Surface(onClick = onOpenProfile, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(AppRadius.R20), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(L10n.text("资料完善度"), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    Text("${completedCount * 20}%", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                OutlinedButton(
-                    onClick = onRefresh,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(AppRadius.R12),
-                ) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = null)
-                    Spacer(modifier = Modifier.width(AppSpacing.S8))
-                    Text(L10n.text("刷新状态"))
-                }
+                LinearProgressIndicator(progress = { completedCount / 5f }, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.primaryContainer)
+                Text(L10n.format("已完成 {0}/{1} 项", completedCount, 5), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
 @Composable
-private fun SecurityOverviewCard(
-    user: UserProfile?,
-    onOpenSecurity: () -> Unit,
-) {
+private fun HomeSecurityCard(user: UserProfile?, onRefresh: () -> Unit, onOpenSecurity: () -> Unit) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val ink = if (dark) MaterialTheme.colorScheme.surfaceContainerHigh else Color(0xFF26342E)
+    val foreground = Color(0xFFF7F6F0)
+    val accent = cn.ksuser.auth.ui.theme.BrandGold
     val settings = user?.settings
-    val mfaStatus = if (settings?.mfaEnabled == true) L10n.text("已开启") else L10n.text("未开启")
-    val unusualLoginStatus = if (settings?.detectUnusualLogin == true) L10n.text("已开启") else L10n.text("未开启")
-    val notifyStatus = if (settings?.notifySensitiveActionEmail == true) L10n.text("已开启") else L10n.text("未开启")
-
-    SectionCard(modifier = Modifier.fillMaxWidth()) {
-        Text(L10n.text("账号安全"), style = MaterialTheme.typography.titleLarge)
-        Text(
-            if (settings?.mfaEnabled == true) {
-                L10n.text("你的账号已启用额外验证，安全性更高。")
-            } else {
-                L10n.text("建议开启双重验证，避免密码泄露后被直接登录。")
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-            StatusChip(title = L10n.text("双重验证"), value = mfaStatus, modifier = Modifier.weight(1f))
-            StatusChip(title = L10n.text("异常登录提醒"), value = unusualLoginStatus, modifier = Modifier.weight(1f))
-        }
-        StatusChip(title = L10n.text("敏感操作邮件提醒"), value = notifyStatus, modifier = Modifier.fillMaxWidth())
-        OutlinedButton(
-            onClick = onOpenSecurity,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(AppRadius.R12),
-        ) {
-            Icon(Icons.Outlined.AdminPanelSettings, contentDescription = null)
-            Spacer(modifier = Modifier.width(AppSpacing.S8))
-            Text(L10n.text("前往安全设置"))
+    Surface(shape = RoundedCornerShape(AppRadius.R24), color = ink, contentColor = foreground) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(accent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Outlined.AdminPanelSettings, null, Modifier.size(21.dp), tint = accent)
+                }
+                Text(L10n.text("账号安全"), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = foreground.copy(alpha = 0.8f))
+                IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Outlined.Refresh, L10n.text("刷新状态"), Modifier.size(20.dp), tint = foreground.copy(alpha = 0.8f))
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(when {
+                    settings == null -> L10n.text("正在加载安全状态")
+                    settings.mfaEnabled -> L10n.text("双重验证已开启")
+                    else -> L10n.text("建议继续完善安全设置")
+                }, style = MaterialTheme.typography.headlineSmall, color = foreground)
+                Text(L10n.text("管理验证方式与登录保护"), style = MaterialTheme.typography.bodyMedium, color = foreground.copy(alpha = 0.65f))
+            }
+            if (settings != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    HomeSecurityStatus(L10n.text("双重验证"), settings.mfaEnabled, foreground, accent)
+                    HomeSecurityStatus(L10n.text("异常登录提醒"), settings.detectUnusualLogin, foreground, accent)
+                    HomeSecurityStatus(L10n.text("敏感操作邮件提醒"), settings.notifySensitiveActionEmail, foreground, accent)
+                }
+            }
+            Button(onClick = onOpenSecurity, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = cn.ksuser.auth.ui.theme.BrandOnGold)) {
+                Text(L10n.text("前往安全设置"), Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, Modifier.size(18.dp))
+            }
         }
     }
 }
 
 @Composable
-private fun QuickActionsCard(
-    onOpenProfile: () -> Unit,
-    onOpenSecurity: () -> Unit,
-    onOpenSessions: () -> Unit,
-) {
-    SectionCard(modifier = Modifier.fillMaxWidth()) {
-        Text(L10n.text("常用功能"), style = MaterialTheme.typography.titleLarge)
-        Text(L10n.text("这些入口用于处理资料完善、账号保护和设备管理。"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        QuickActionRow(
-            icon = Icons.Outlined.Person,
-            title = L10n.text("编辑资料"),
-            subtitle = L10n.text("修改头像、昵称、地区和简介"),
-            onClick = onOpenProfile,
-        )
-        QuickActionRow(
-            icon = Icons.Outlined.AdminPanelSettings,
-            title = L10n.text("安全设置"),
-            subtitle = L10n.text("管理双重验证和敏感操作保护"),
-            onClick = onOpenSecurity,
-        )
-        QuickActionRow(
-            icon = Icons.Outlined.Devices,
-            title = L10n.text("设备会话"),
-            subtitle = L10n.text("查看当前登录设备并处理异常登录"),
-            onClick = onOpenSessions,
-        )
+private fun HomeSecurityStatus(title: String, enabled: Boolean, foreground: Color, accent: Color) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(if (enabled) Icons.Outlined.CheckCircle else Icons.Outlined.Info, null, Modifier.size(15.dp), tint = if (enabled) accent else foreground.copy(alpha = 0.55f))
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = foreground.copy(alpha = 0.8f))
+        Text(L10n.text(if (enabled) "已开启" else "未开启"), style = MaterialTheme.typography.labelSmall, color = if (enabled) accent else foreground.copy(alpha = 0.65f))
     }
 }
 
 @Composable
-private fun ProfileCompletionCard(
-    user: UserProfile?,
-    completionPercent: Int,
-    completedCount: Int,
-    totalCount: Int,
-    onOpenProfile: () -> Unit,
-) {
-    val displayUsername = user?.username.takeMeaningfulProfileText()
-    val displayRealName = user?.realName.takeMeaningfulProfileText()
-    val displayRegion = user?.region.takeMeaningfulProfileText()
-    val displayBio = user?.bio.takeMeaningfulProfileText()
-    val hasAvatar = !user?.avatarUrl.isNullOrBlank()
-
-    SectionCard(modifier = Modifier.fillMaxWidth()) {
-        Text(L10n.text("资料完善度"), style = MaterialTheme.typography.titleLarge)
-        Text(
-            L10n.format("已完成 {0}/{1} 项，当前完善度 {2}%。资料越完整，账号展示越清晰。", completedCount, totalCount, completionPercent),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        CompletionItem(label = L10n.text("用户名"), done = displayUsername != null)
-        CompletionItem(label = L10n.text("头像"), done = hasAvatar)
-        CompletionItem(label = L10n.text("真实姓名"), done = displayRealName != null)
-        CompletionItem(label = L10n.text("地区"), done = displayRegion != null)
-        CompletionItem(label = L10n.text("个人简介"), done = displayBio != null)
-        OutlinedButton(
-            onClick = onOpenProfile,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(AppRadius.R12),
-        ) {
-            Text(L10n.text("继续完善资料"))
+private fun HomeQuickAction(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(AppRadius.R20), color = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().heightIn(min = 112.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)), contentAlignment = Alignment.Center) {
+                    Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.outline)
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
@@ -329,6 +249,7 @@ private fun AvatarBadge(
             AsyncImage(
                 model = avatarUrl,
                 contentDescription = L10n.text("头像"),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
@@ -339,82 +260,6 @@ private fun AvatarBadge(
                 fontWeight = FontWeight.Bold,
             )
         }
-    }
-}
-
-@Composable
-private fun StatusChip(
-    title: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(AppRadius.R12),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Column(
-            modifier = Modifier.padding(AppSpacing.S12),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleMedium)
-        }
-    }
-}
-
-@Composable
-private fun QuickActionRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(AppRadius.R12))
-            .clickable(onClick = onClick)
-            .padding(vertical = AppSpacing.S8),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(AppRadius.R12))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-        }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Text(L10n.text("进入"), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-    }
-}
-
-@Composable
-private fun CompletionItem(
-    label: String,
-    done: Boolean,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-        Text(
-            if (done) L10n.text("已完成") else L10n.text("待完善"),
-            style = MaterialTheme.typography.labelMedium,
-            color = if (done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
@@ -442,60 +287,49 @@ internal fun ProfileScreen(
     onNavigateToEdit: (String) -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToAuthorizedApps: () -> Unit,
+    onRefresh: () -> Unit = {},
+    onLogout: () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(AppPagePadding),
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(AppPagePadding),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.S24),
     ) {
-        ProfileHeaderCard(
-            avatarUrl = currentUser?.avatarUrl,
-            username = currentUser?.username.orEmpty().ifBlank { L10n.text("未设置") },
-            onAvatarClick = { onNavigateToEdit("avatar") },
-            onUsernameClick = { onNavigateToEdit("username") },
-        )
-        ProfileInfoCard(
-            title = L10n.text("真实姓名"),
-            value = currentUser?.realName.orEmpty().ifBlank { L10n.text("未设置") },
-            onClick = { onNavigateToEdit("realName") },
-        )
-        ProfileInfoCard(
-            title = L10n.text("性别"),
-            value = genderLabel(currentUser?.gender),
-            onClick = { onNavigateToEdit("gender") },
-        )
-        ProfileInfoCard(
-            title = L10n.text("生日"),
-            value = currentUser?.birthDate.orEmpty().ifBlank { L10n.text("未设置") },
-            onClick = { onNavigateToEdit("birthDate") },
-        )
-        ProfileInfoCard(
-            title = L10n.text("已授权应用"),
-            value = L10n.text("查看和撤销第三方及官方应用授权"),
-            onClick = onNavigateToAuthorizedApps,
-        )
-        ProfileInfoCard(
-            title = L10n.text("地区"),
-            value = currentUser?.region.orEmpty().ifBlank { L10n.text("未设置") },
-            onClick = { onNavigateToEdit("region") },
-        )
-        ProfileInfoCard(
-            title = L10n.text("个人简介"),
-            value = currentUser?.bio.orEmpty().ifBlank { L10n.text("未设置") },
-            onClick = { onNavigateToEdit("bio") },
-        )
-        OverviewCard(
-            title = L10n.text("账号标识"),
-            subtitle = currentUser?.email ?: L10n.text("暂无邮箱"),
-            body = "UUID: ${currentUser?.uuid.orEmpty()}",
-        )
-        ProfileInfoCard(
-            title = L10n.text("关于应用"),
-            value = L10n.text("查看软件名称、版本、备案号与协议文档"),
-            onClick = onNavigateToAbout,
-        )
+        ProfileHeaderCard(currentUser?.avatarUrl, currentUser?.username.orEmpty().ifBlank { L10n.text("未设置") },
+            onAvatarClick = { onNavigateToEdit("avatar") }, onUsernameClick = { onNavigateToEdit("username") }, onRefresh = onRefresh)
+        SectionCard(Modifier.fillMaxWidth(), contentPadding = PaddingValues(0.dp), contentSpacing = 0.dp) {
+            AppSettingsRow(L10n.text("设置"), value = L10n.text("语言、外观与更新"), icon = Icons.Outlined.Settings, onClick = onNavigateToAbout)
+            HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            AppSettingsRow(L10n.text("已授权应用"), value = L10n.text("查看和撤销第三方及官方应用授权"), icon = Icons.Outlined.Apps, onClick = onNavigateToAuthorizedApps)
+        }
+        Column {
+            AppSectionTitle(L10n.text("个人资料"))
+            SectionCard(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), contentSpacing = 0.dp) {
+                val fields = listOf(
+                    Triple("realName", L10n.text("真实姓名"), currentUser?.realName),
+                    Triple("gender", L10n.text("性别"), genderLabel(currentUser?.gender)),
+                    Triple("birthDate", L10n.text("生日"), currentUser?.birthDate),
+                    Triple("region", L10n.text("地区"), currentUser?.region),
+                    Triple("bio", L10n.text("个人简介"), currentUser?.bio),
+                )
+                fields.forEachIndexed { index, (key, title, value) ->
+                    if (index > 0) HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                    AppSettingsRow(title, value = value?.takeMeaningfulProfileText() ?: L10n.text("未设置"), onClick = { onNavigateToEdit(key) })
+                }
+            }
+        }
+        Column {
+            AppSectionTitle(L10n.text("账号与授权"))
+            SectionCard(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp), contentSpacing = 0.dp) {
+                AppSettingsRow(L10n.text("邮箱"), value = currentUser?.email ?: L10n.text("暂无邮箱"))
+                HorizontalDivider(Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                AppSettingsRow(L10n.text("账号标识"), value = currentUser?.uuid.orEmpty())
+            }
+        }
+        TextButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+            Icon(Icons.AutoMirrored.Outlined.Logout, null)
+            Spacer(Modifier.width(8.dp))
+            Text(L10n.text("退出登录"))
+        }
     }
 }
 
@@ -505,23 +339,28 @@ internal fun AboutScreen(container: AppContainer) {
     val appIdentity = remember(context) { AppIdentityProvider.current(context) }
     val passkeyAvailabilityMessage = remember(container) { container.passkeyManager.availabilityMessage() }
     var updateInfo by remember { mutableStateOf<AppUpdateInfo?>(null) }
-    var updateMessage by remember { mutableStateOf(L10n.text("正在检查更新...")) }
+    var updateState by remember { mutableStateOf("checking") }
+    var updateFailure by remember { mutableStateOf<String?>(null) }
+    val updateMessage = when (updateState) {
+        "available" -> updateInfo?.let { L10n.format("发现新版 {0} ({1})", it.latestVersionName, it.latestVersionCode) }.orEmpty()
+        "latest" -> L10n.text("当前已是最新版本")
+        "downloaded" -> L10n.text("下载完成后返回应用继续安装")
+        "failed" -> L10n.text(updateFailure ?: "检查更新失败，请稍后再试")
+        else -> L10n.text("正在检查更新...")
+    }
 
     suspend fun checkForUpdate(showFreshMessage: Boolean = false) {
         if (showFreshMessage) {
-            updateMessage = L10n.text("正在检查更新...")
+            updateState = "checking"
         }
         runCatching { container.appUpdateRepository.checkForUpdate() }
             .onSuccess { info ->
                 updateInfo = info
-                updateMessage = if (info.isUpdateAvailable) {
-                    L10n.format("发现新版 {0} ({1})", info.latestVersionName, info.latestVersionCode)
-                } else {
-                    L10n.text("当前已是最新版本")
-                }
+                updateState = if (info.isUpdateAvailable) "available" else "latest"
             }
             .onFailure { throwable ->
-                updateMessage = throwable.message ?: L10n.text("检查更新失败，请稍后再试")
+                updateState = "failed"
+                updateFailure = throwable.message ?: "检查更新失败，请稍后再试"
             }
     }
 
@@ -534,7 +373,7 @@ internal fun AboutScreen(container: AppContainer) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(AppPagePadding),
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.S24),
     ) {
         DeviceSettingsCard(container)
         SectionCard(modifier = Modifier.fillMaxWidth()) {
@@ -556,7 +395,7 @@ internal fun AboutScreen(container: AppContainer) {
                     )
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("Ksuser Auth Android", style = MaterialTheme.typography.titleLarge)
+                    Text(L10n.text("Ksuser安全"), style = MaterialTheme.typography.titleLarge)
                     Text(
                         L10n.format("版本 {0}", appIdentity.versionName),
                         style = MaterialTheme.typography.bodyMedium,
@@ -566,7 +405,7 @@ internal fun AboutScreen(container: AppContainer) {
             }
         }
         SectionCard(modifier = Modifier.fillMaxWidth()) {
-            AboutInfoRow(title = L10n.text("软件名称"), value = "Ksuser Auth Android")
+            AboutInfoRow(title = L10n.text("软件名称"), value = L10n.text("Ksuser安全"))
             AboutInfoRow(title = L10n.text("版本号"), value = "${appIdentity.versionName} (${appIdentity.versionCode})")
             AboutInfoRow(title = L10n.text("备案号"), value = L10n.text("沪ICP备2025144703号-3A"))
         }
@@ -588,8 +427,8 @@ internal fun AboutScreen(container: AppContainer) {
                     text = if (info.forceUpdate) L10n.text("下载必要更新") else L10n.text("下载新版安装包"),
                     onClick = {
                         runCatching { container.appUpdateRepository.enqueueDownload(info) }
-                            .onSuccess { updateMessage = L10n.text("下载完成后返回应用继续安装") }
-                            .onFailure { updateMessage = it.message ?: L10n.text("下载失败，请重试") }
+                            .onSuccess { updateState = "downloaded" }
+                            .onFailure { updateState = "failed"; updateFailure = it.message ?: "下载失败，请重试" }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -716,9 +555,10 @@ internal fun ProfileEditScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(AppPagePadding),
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.S24),
     ) {
         SectionCard(modifier = Modifier.fillMaxWidth()) {
             Text(title, style = MaterialTheme.typography.titleLarge)
@@ -735,10 +575,11 @@ internal fun ProfileEditScreen(
                 OutlinedButton(
                     onClick = { showAvatarPickerReason = true },
                     enabled = !isBusy,
+                    modifier = Modifier.heightIn(min = 52.dp),
                 ) { Text(L10n.text("选择并上传头像")) }
             } else {
                 when (fieldKey) {
-                    "gender" -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    "gender" -> androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("male", "female", "secret").forEach { option ->
                             FilterChip(selected = value == option, onClick = { value = option }, label = { Text(genderLabel(option)) })
                         }
@@ -820,88 +661,16 @@ private fun ProfileHeaderCard(
     username: String,
     onAvatarClick: () -> Unit,
     onUsernameClick: () -> Unit,
+    onRefresh: () -> Unit,
 ) {
-    SectionCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(AppRadius.R20))
-                    .clickable(onClick = onAvatarClick),
-            ) {
-                if (!avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = avatarUrl,
-                        contentDescription = L10n.text("头像"),
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(AppRadius.R20))
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            L10n.text("头像"),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+    Surface(shape = RoundedCornerShape(AppRadius.R24), color = MaterialTheme.colorScheme.surface) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClickLabel = L10n.text("修改头像"), onClick = onAvatarClick)) { AvatarBadge(avatarUrl, username.take(1)) }
+            Column(Modifier.weight(1f).heightIn(min = 64.dp).clickable(onClick = onUsernameClick), verticalArrangement = Arrangement.Center) {
+                Text(username, style = MaterialTheme.typography.headlineMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(L10n.text("编辑用户名"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             }
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(onClick = onUsernameClick),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text(L10n.text("用户名"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(username, style = MaterialTheme.typography.titleMedium)
-                Text(L10n.text("点击头像修改头像"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Text(
-                L10n.text("编辑"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(onClick = onUsernameClick),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileInfoCard(
-    title: String,
-    value: String,
-    onClick: () -> Unit,
-) {
-    SectionCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    value,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Text(
-                L10n.text("编辑"),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            IconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) { Icon(Icons.Outlined.Refresh, L10n.text("刷新用户信息")) }
         }
     }
 }

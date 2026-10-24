@@ -2,6 +2,10 @@ package cn.ksuser.auth.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import cn.ksuser.auth.ui.components.appPrimaryButtonColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -252,7 +256,7 @@ fun KsuserAuthApp(
 }
 
 @Composable
-private fun StartupUpdateDialog(
+internal fun StartupUpdateDialog(
     updateInfo: AppUpdateInfo,
     downloadStarted: Boolean,
     onDownload: () -> Unit,
@@ -275,13 +279,13 @@ private fun StartupUpdateDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = 360.dp),
-            shape = RoundedCornerShape(24.dp),
+            shape = RoundedCornerShape(AppRadius.R16),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
-            shadowElevation = 16.dp,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(AppSpacing.S16),
             ) {
                 Row(
@@ -304,7 +308,7 @@ private fun StartupUpdateDialog(
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text = L10n.text(if (updateInfo.forceUpdate) "需要更新" else "发现新版本"),
                             style = MaterialTheme.typography.titleLarge,
@@ -319,12 +323,12 @@ private fun StartupUpdateDialog(
                 }
 
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(AppRadius.R16),
+                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                    shape = RoundedCornerShape(AppRadius.R12),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
                 ) {
                     Column(
-                        modifier = Modifier.padding(AppSpacing.S12),
+                        modifier = Modifier.verticalScroll(rememberScrollState()).padding(AppSpacing.S16),
                         verticalArrangement = Arrangement.spacedBy(AppSpacing.S8),
                     ) {
                         Text(
@@ -353,8 +357,9 @@ private fun StartupUpdateDialog(
                     onClick = onDownload,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp),
-                    shape = RoundedCornerShape(AppRadius.R16),
+                        .heightIn(min = 52.dp),
+                    colors = appPrimaryButtonColors(),
+                    shape = RoundedCornerShape(AppRadius.R12),
                 ) {
                     Text(L10n.text(if (downloadStarted) "重新下载最新版" else "下载最新版"))
                 }
@@ -364,7 +369,7 @@ private fun StartupUpdateDialog(
                         onClick = onExitApp,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp),
+                            .heightIn(min = 52.dp),
                         shape = RoundedCornerShape(AppRadius.R16),
                     ) {
                         Text(L10n.text("关闭应用"))

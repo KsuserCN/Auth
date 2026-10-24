@@ -76,16 +76,41 @@ class ParityUiTest {
         compose.onNode(isToggleable()).performScrollTo().assertIsOff()
         assertFalse(selected)
         compose.onNode(isToggleable()).performClick().assertIsOn()
-        compose.onNodeWithText("同意并继续").performScrollTo().performClick()
+        compose.onNodeWithText("同意并继续").assertIsDisplayed().performClick()
         compose.runOnIdle { assertTrue(selected); assertTrue(confirmed) }
     }
 
     @Test fun expiredApplicationConsentCannotBeApproved() {
+        var cancelled = 0
         compose.setContent { KsuserAuthAndroidTheme {
             ApplicationConsentScreen(request().copy(expiresAtMillis = 0), UserProfile("test-user", "Test", null), false,
-                onConfirm = { fail("Expired consent must be disabled") }, onCancel = {}, onOptionsChanged = { _, _, _ -> })
+                onConfirm = { fail("Expired consent must be disabled") }, onCancel = { cancelled++ }, onOptionsChanged = { _, _, _ -> })
         } }
-        compose.onNodeWithText("同意并继续").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("同意并继续").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("关闭").assertIsDisplayed().assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, cancelled) }
+    }
+
+    @Test fun submittingApplicationConsentDisablesActionsAndBrowserOption() {
+        compose.setContent { KsuserAuthAndroidTheme {
+            ApplicationConsentScreen(request(), UserProfile("test-user", "Test", null), true,
+                onConfirm = { fail("A submitting request cannot be submitted again") },
+                onCancel = { fail("A submitting request cannot be cancelled") },
+                onOptionsChanged = { _, _, _ -> fail("Submitting options cannot change") })
+        } }
+        compose.onNodeWithText("正在提交…").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("拒绝授权").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithContentDescription("关闭").assertIsNotEnabled()
+        compose.onNode(isToggleable()).assertIsOff().assertIsNotEnabled()
+    }
+
+    @Test fun applicationConsentRequiresSignedInAccount() {
+        compose.setContent { KsuserAuthAndroidTheme {
+            ApplicationConsentScreen(request(), null, false,
+                onConfirm = { fail("An anonymous request cannot be approved") }, onCancel = {}, onOptionsChanged = { _, _, _ -> })
+        } }
+        compose.onNodeWithText("同意并继续").assertIsDisplayed().assertIsNotEnabled()
+        compose.onNodeWithText("拒绝授权").assertIsEnabled()
     }
 
     private fun request() = PendingQrConfirmation(

@@ -1,6 +1,8 @@
 package cn.ksuser.auth.ui
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,7 +39,7 @@ internal fun AvatarCropDialog(bitmap: Bitmap, onDismiss: () -> Unit, onSave: sus
         onDismissRequest = onDismiss,
         title = { Text(L10n.text("裁剪头像")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Image(crop.asImageBitmap(), L10n.text("头像裁剪预览"), Modifier.size(220.dp))
                 Text(L10n.text("缩放")); Slider(zoom, { zoom = it }, valueRange = 1f..3f, modifier = Modifier.fillMaxWidth())
                 Text(L10n.text("水平位置")); Slider(horizontal, { horizontal = it })

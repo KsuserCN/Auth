@@ -2,7 +2,6 @@ package cn.ksuser.auth.data.repository
 
 import cn.ksuser.auth.core.network.AccountApiService
 import cn.ksuser.auth.core.network.ApiEnvelope
-import cn.ksuser.auth.core.network.LogsDetailApiService
 import cn.ksuser.auth.core.network.KsuserApiService
 import cn.ksuser.auth.data.model.AccountLinkStatus
 import cn.ksuser.auth.data.model.AuthorizedApplication

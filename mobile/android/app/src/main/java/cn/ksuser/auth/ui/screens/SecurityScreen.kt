@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,21 +26,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Password
 import androidx.compose.material.icons.outlined.QrCodeScanner
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
@@ -55,6 +55,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -72,7 +73,6 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import cn.ksuser.auth.core.env.EnvironmentProvider
 import cn.ksuser.auth.core.network.runCatchingCancellable
 import cn.ksuser.auth.data.repository.SecurityDashboardLoader
@@ -99,11 +99,6 @@ import cn.ksuser.auth.ui.components.LoadingButton
 import cn.ksuser.auth.ui.components.LoadingOutlinedButton
 import cn.ksuser.auth.ui.components.LoadingTextButton
 import cn.ksuser.auth.ui.components.SectionCard
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.OffsetDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
@@ -163,6 +158,7 @@ internal fun SecurityScreen(
     var loadErrors by remember { mutableStateOf<List<Pair<String, Throwable>>>(emptyList()) }
     var loadGeneration by remember { mutableStateOf(0) }
     var passkeysLoaded by remember { mutableStateOf(false) }
+    var riskDetailsExpanded by rememberSaveable(user?.uuid) { mutableStateOf(false) }
 
     suspend fun issueAccountRecoveryTicket(showCreatedMessage: Boolean = true) {
         val hadExistingTicket = accountRecoveryTicket != null
@@ -375,8 +371,20 @@ internal fun SecurityScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(AppPagePadding),
-        verticalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        verticalArrangement = Arrangement.spacedBy(AppSpacing.S24),
     ) {
+        SectionCard(modifier = Modifier.fillMaxWidth()) {
+            AdaptiveSecurityStatusContent(
+                status = adaptiveAuthStatus,
+                loading = busy,
+                detailsExpanded = riskDetailsExpanded,
+                onToggleDetails = { riskDetailsExpanded = !riskDetailsExpanded },
+                onVerify = { showSensitiveDialog = true },
+                onRelogin = onLogoutCurrent,
+                onRefresh = { scope.launch { reloadAll() } },
+            )
+        }
+
         if (loadErrors.isNotEmpty()) SectionCard(Modifier.fillMaxWidth()) {
             Text(L10n.text("部分安全信息加载失败"), color = MaterialTheme.colorScheme.error)
             loadErrors.forEach { (section, failure) ->
@@ -384,7 +392,150 @@ internal fun SecurityScreen(
             }
             LoadingOutlinedButton(L10n.text("重试"), onClick = { reloadAll() }, enabled = !busy)
         }
-        SectionCard {
+
+        SectionCard(modifier = Modifier.fillMaxWidth()) {
+            SectionHeader(
+                title = L10n.text("TOTP 验证器"),
+                subtitle = if (totpStatus?.enabled == true) {
+                    L10n.format("已启用，剩余恢复码 {0} 个", totpStatus?.recoveryCodesCount ?: 0)
+                } else {
+                    L10n.text("尚未启用，可作为常用多因素验证方式")
+                },
+            )
+            SecurityActionCard(
+                icon = Icons.Outlined.Security,
+                title = if (totpStatus?.enabled == true) L10n.text("TOTP 验证器") else L10n.text("启用 TOTP"),
+                subtitle = if (totpStatus?.enabled == true) {
+                    L10n.text("使用验证器 App 与恢复码保护账号")
+                } else {
+                    L10n.text("生成密钥与二维码，在验证器 App 中绑定后启用")
+                },
+                statusIcon = if (totpStatus?.enabled == true) Icons.Outlined.CheckCircle else null,
+                statusAccent = totpStatus?.enabled == true,
+                onClick = {
+                    if (totpStatus?.enabled != true) {
+                        requireSensitiveVerification(PendingSecurityAction.SetupTotp)
+                    }
+                },
+                actionLabel = if (totpStatus?.enabled == true) L10n.text("已启用") else L10n.text("启用"),
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                if (totpStatus?.enabled == true) {
+                    CompactSecurityButton(
+                        text = L10n.text("禁用"),
+                        onClick = { requireSensitiveVerification(PendingSecurityAction.DisableTotp) },
+                        destructive = true,
+                    )
+                }
+                CompactSecurityButton(
+                    text = L10n.text("查看恢复码"),
+                    onClick = { requireSensitiveVerification(PendingSecurityAction.ViewRecoveryCodes) },
+                )
+                CompactSecurityButton(
+                    text = L10n.text("重新生成"),
+                    onClick = { requireSensitiveVerification(PendingSecurityAction.RegenerateRecoveryCodes) },
+                )
+            }
+            if (recoveryCodes.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Text(L10n.text("恢复码"), style = MaterialTheme.typography.titleSmall)
+                TextButton(onClick = { clipboardManager.setText(AnnotatedString(recoveryCodes.joinToString("\n"))); onMessage(L10n.text("恢复码已复制")) }) {
+                    Text(L10n.text("复制恢复码"))
+                }
+                Text(
+                    recoveryCodes.joinToString("  "),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        SectionCard(modifier = Modifier.fillMaxWidth()) {
+            SectionHeader(
+                title = "Passkey",
+                subtitle = passkeyAvailabilityMessage,
+                actionText = if ((passkeyAvailability == PasskeyAvailability.Available || securityKeyAvailable) && activity != null) L10n.text("新增") else null,
+                onAction = { requireSensitiveVerification(PendingSecurityAction.AddPasskey) },
+            )
+            if (passkeyAvailability != PasskeyAvailability.Available && !securityKeyAvailable) {
+                Text(L10n.text("当前环境不满足原生 Passkey 要求，已阻止继续创建。"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(L10n.text("USB / NFC 安全密钥"), style = MaterialTheme.typography.titleSmall)
+            Text(L10n.text(if (securityKeyAvailable) "支持硬件安全密钥，可在新增时选择" else "当前设备没有可用的硬件安全密钥提供方"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            passkeys.forEach { passkey ->
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                PasskeyCard(
+                    passkey = passkey,
+                    onDetails = { detailTarget = passkey },
+                    onRename = { requireSensitiveVerification(PendingSecurityAction.RenamePasskey(passkey)) },
+                    onDelete = { requireSensitiveVerification(PendingSecurityAction.DeletePasskey(passkey)) },
+                )
+            }
+            if (passkeys.isEmpty() && passkeysLoaded) {
+                Text(L10n.text("还没有添加 Passkey，可用于更快捷的无密码登录。"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        SectionCard(modifier = Modifier.fillMaxWidth(), contentSpacing = 0.dp) {
+            SectionHeader(
+                title = L10n.text("账号信息"),
+                subtitle = if (sensitiveStatus?.verified == true) {
+                    L10n.format("当前已通过验证，剩余 {0} 秒", sensitiveStatus?.remainingSeconds ?: 0)
+                } else {
+                    L10n.text("在执行修改邮箱、修改密码、删除账号等操作前，会自动要求验证身份")
+                },
+            )
+            SecurityActionCard(
+                icon = Icons.Outlined.Badge,
+                title = if (user?.email.isNullOrBlank()) L10n.text("绑定邮箱") else L10n.text("修改邮箱"),
+                subtitle = user?.email.orEmpty().ifBlank { L10n.text("当前未绑定邮箱") },
+                onClick = { requireSensitiveVerification(PendingSecurityAction.ChangeEmail) },
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SecurityActionCard(
+                icon = Icons.Outlined.Password,
+                title = if (user?.hasPassword == false) L10n.text("设置密码") else L10n.text("修改密码"),
+                subtitle = L10n.text("更新当前账号密码"),
+                onClick = { requireSensitiveVerification(PendingSecurityAction.ChangePassword) },
+            )
+        }
+
+        SectionCard(modifier = Modifier.fillMaxWidth(), contentSpacing = 0.dp) {
+            SectionHeader(L10n.text("第三方账号"), L10n.text("管理 QQ 和 Apple 绑定"))
+            SecurityActionCard(Icons.Outlined.Badge, "QQ", when (qqBound) { true -> L10n.text("已绑定"); false -> L10n.text("未绑定"); else -> L10n.text("正在读取状态") },
+                onClick = {
+                    if (qqBound == true) confirmUnbindProvider = "qq"
+                    else if (qqBound == false && activity != null && container.qqLoginManager.isConfigured) requireSensitiveVerification(PendingSecurityAction.BindQq)
+                    else onMessage(L10n.text("QQ 绑定暂不可用，请检查配置并刷新状态"))
+                }, actionLabel = if (qqBound == true) L10n.text("解绑") else L10n.text("绑定"))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SecurityActionCard(Icons.Outlined.Badge, "Apple", when (appleBound) { true -> L10n.text("已绑定"); false -> L10n.text("未绑定"); else -> L10n.text("正在读取状态") },
+                onClick = { if (appleBound == true) confirmUnbindProvider = "apple" }, actionLabel = if (appleBound == true) L10n.text("解绑") else L10n.text("在 iOS 上绑定"))
+        }
+
+        SectionCard(modifier = Modifier.fillMaxWidth(), contentSpacing = 0.dp) {
+            SectionHeader(
+                title = L10n.text("账号恢复"),
+                subtitle = L10n.text("手机端既可以直接生成恢复背书，也可以扫码为忘记密码页完成背书"),
+            )
+            SecurityActionCard(
+                icon = Icons.Outlined.Security,
+                title = L10n.text("发起恢复背书"),
+                subtitle = L10n.text("生成 5 分钟有效的一次性恢复二维码和恢复码"),
+                onClick = { requireSensitiveVerification(PendingSecurityAction.IssueAccountRecovery) },
+                actionLabel = L10n.text("生成"),
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            SecurityActionCard(
+                icon = Icons.Outlined.QrCodeScanner,
+                title = L10n.text("扫码背书"),
+                subtitle = L10n.text("扫描忘记密码页二维码，为当前恢复请求完成背书"),
+                onClick = { requireSensitiveVerification(PendingSecurityAction.ScanRecoveryEndorse) },
+                actionLabel = L10n.text("扫码"),
+            )
+        }
+
+        SectionCard(modifier = Modifier.fillMaxWidth()) {
             val preferencesEnabled = !busy && pendingAction == null && !showSensitiveDialog && settings != null
             Text(L10n.text("安全偏好"), style = MaterialTheme.typography.titleMedium)
             SettingSwitchRow(L10n.text("启用 MFA"), settings?.mfaEnabled == true, enabled = preferencesEnabled) { checked ->
@@ -399,6 +550,7 @@ internal fun SecurityScreen(
             SettingSwitchRow(L10n.text("订阅动态邮件"), settings?.subscribeNewsEmail == true, enabled = preferencesEnabled) { checked ->
                 requireSensitiveVerification(PendingSecurityAction.UpdateBooleanSetting("subscribeNewsEmail", checked))
             }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             PreferenceDropdown(
                 title = L10n.text("首选 MFA"),
                 options = buildList {
@@ -421,305 +573,8 @@ internal fun SecurityScreen(
             ) { choice -> requireSensitiveVerification(PendingSecurityAction.UpdateStringSetting("preferredSensitiveMethod", choice)) }
         }
 
-        SectionCard {
-            SectionHeader(
-                title = L10n.text("自适应连续认证"),
-                subtitle = L10n.text("根据当前会话环境、风险信号与最近验证状态动态判断是否需要补做验证"),
-                actionText = L10n.text("刷新"),
-                onAction = { scope.launch { reloadAll() } },
-            )
-            val status = adaptiveAuthStatus
-            if (status == null) {
-                if (busy) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Text(L10n.text("暂时无法读取会话风险状态"), color = MaterialTheme.colorScheme.error)
-            } else {
-                val tone = adaptiveRiskColor(status.riskLevel)
-                val decision = status.policyDecision.uppercase()
-                val decisionLabel = adaptivePolicyLabel(decision)
-                val title = when (decision) {
-                    "FREEZE" -> L10n.text("高风险会话已冻结")
-                    "STEP_UP" -> L10n.text("建议立即补做验证")
-                    else -> L10n.text("当前会话可信度稳定")
-                }
-                val subtitle = when (decision) {
-                    "FREEZE" -> L10n.text("检测到高风险信号，当前会话已冻结，请重新登录并完成验证")
-                    "STEP_UP" -> status.recommendedAction.ifBlank { L10n.text("当前会话风险中等，需完成 step-up 验证后继续敏感操作") }
-                    else -> status.recommendedAction.ifBlank { L10n.text("当前会话风险较低，可继续使用") }
-                }
-                SecurityActionCard(
-                    icon = when (decision) {
-                        "FREEZE" -> Icons.Outlined.Shield
-                        "STEP_UP" -> Icons.Outlined.Security
-                        else -> Icons.Outlined.CheckCircle
-                    },
-                    title = title,
-                    subtitle = subtitle,
-                    statusIcon = when (decision) {
-                        "FREEZE" -> Icons.Outlined.Shield
-                        "STEP_UP" -> Icons.Outlined.Security
-                        else -> Icons.Outlined.CheckCircle
-                    },
-                    statusAccent = decision == "ALLOW" && status.trusted,
-                    actionLabel = L10n.text("查看"),
-                    onClick = {
-                        if (!status.sensitiveVerified && !status.sessionFrozen) {
-                            showSensitiveDialog = true
-                        }
-                    },
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-                ) {
-                    RiskMetaChip(
-                        label = L10n.text("风险等级"),
-                        value = L10n.format("{0}风险", adaptiveRiskLabel(status.riskLevel)),
-                        modifier = Modifier.weight(1f),
-                    )
-                    RiskMetaChip(
-                        label = L10n.text("策略决策"),
-                        value = decisionLabel,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-                ) {
-                    RiskMetaChip(
-                        label = L10n.text("风险分"),
-                        value = status.riskScore.toString(),
-                        modifier = Modifier.weight(1f),
-                    )
-                    RiskMetaChip(
-                        label = L10n.text("策略版本"),
-                        value = status.policyVersion.ifBlank { "2.0.0" },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-                ) {
-                    RiskMetaChip(
-                        label = L10n.text("敏感验证"),
-                        value = if (status.sensitiveVerified) L10n.format("有效 {0} 秒", status.sensitiveVerificationRemainingSeconds) else L10n.text("未验证"),
-                        modifier = Modifier.weight(1f),
-                    )
-                    RiskMetaChip(
-                        label = L10n.text("会话年龄"),
-                        value = formatDurationSeconds(status.authAgeSeconds),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8),
-                ) {
-                    RiskMetaChip(
-                        label = L10n.text("空闲时长"),
-                        value = formatDurationSeconds(status.idleSeconds),
-                        modifier = Modifier.weight(1f),
-                    )
-                    RiskMetaChip(
-                        label = L10n.text("当前环境"),
-                        value = listOfNotNull(status.currentLocation, status.deviceType).joinToString(" / ").ifBlank { L10n.text("未知环境") },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (status.multiEndpointAlert) {
-                    val alertTone = adaptiveAlertColor(status.alertLevel)
-                    SectionCard(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
-                            verticalAlignment = Alignment.Top,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(32.dp)
-                                    .background(alertTone.copy(alpha = 0.14f), CircleShape),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = if ((status.alertLevel ?: "").equals("high", ignoreCase = true)) {
-                                        Icons.Outlined.Shield
-                                    } else {
-                                        Icons.Outlined.Info
-                                    },
-                                    contentDescription = null,
-                                    tint = alertTone,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                            }
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
-                                Text(
-                                    status.alertTitle?.ifBlank { L10n.text("风险告警") } ?: L10n.text("风险告警"),
-                                    style = MaterialTheme.typography.titleSmall,
-                                )
-                                Text(
-                                    status.alertMessage?.ifBlank { L10n.text("检测到风险信号，请尽快处理") } ?: L10n.text("检测到风险信号，请尽快处理"),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                if (status.alertRemainingSeconds > 0) {
-                                    Text(
-                                        L10n.format("告警剩余有效期 {0} 秒", status.alertRemainingSeconds),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                if (status.reasons.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                        Text(L10n.text("风险信号"), style = MaterialTheme.typography.titleSmall)
-                        status.reasons.forEach { reason ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8), verticalAlignment = Alignment.Top) {
-                                Box(
-                                    modifier = Modifier
-                                        .padding(top = 6.dp)
-                                        .size(8.dp)
-                                        .background(tone, CircleShape),
-                                )
-                                Text(reason, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-                if (!status.sensitiveVerified && !status.sessionFrozen) {
-                    OutlinedButton(onClick = { showSensitiveDialog = true }) {
-                        Text(L10n.text("立即验证"))
-                    }
-                }
-                if (status.sessionFrozen) {
-                    OutlinedButton(onClick = onLogoutCurrent) { Text(L10n.text("重新登录")) }
-                    Text(
-                        L10n.text("当前会话已被冻结，请重新登录后继续操作"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-        }
-
-        SectionCard {
-            SectionHeader(
-                title = L10n.text("TOTP 验证器"),
-                subtitle = if (totpStatus?.enabled == true) {
-                    L10n.format("已启用，剩余恢复码 {0} 个", totpStatus?.recoveryCodesCount ?: 0)
-                } else {
-                    L10n.text("尚未启用，可作为常用多因素验证方式")
-                },
-                actionText = if (busy) null else L10n.text("刷新"),
-                onAction = { scope.launch { reloadAll() } },
-            )
-            SecurityActionCard(
-                icon = Icons.Outlined.Security,
-                title = if (totpStatus?.enabled == true) L10n.text("TOTP 验证器") else L10n.text("启用 TOTP"),
-                subtitle = if (totpStatus?.enabled == true) {
-                    L10n.text("使用验证器 App 与恢复码保护账号")
-                } else {
-                    L10n.text("生成密钥与二维码，在验证器 App 中绑定后启用")
-                },
-                statusIcon = if (totpStatus?.enabled == true) Icons.Outlined.CheckCircle else null,
-                statusAccent = totpStatus?.enabled == true,
-                onClick = {
-                    if (totpStatus?.enabled != true) {
-                        requireSensitiveVerification(PendingSecurityAction.SetupTotp)
-                    }
-                },
-                actionLabel = if (totpStatus?.enabled == true) L10n.text("已启用") else L10n.text("启用"),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
-                if (totpStatus?.enabled == true) {
-                    CompactSecurityButton(
-                        text = L10n.text("禁用"),
-                        onClick = { requireSensitiveVerification(PendingSecurityAction.DisableTotp) },
-                        destructive = true,
-                    )
-                }
-                CompactSecurityButton(
-                    text = L10n.text("查看恢复码"),
-                    onClick = { requireSensitiveVerification(PendingSecurityAction.ViewRecoveryCodes) },
-                )
-                CompactSecurityButton(
-                    text = L10n.text("重新生成"),
-                    onClick = { requireSensitiveVerification(PendingSecurityAction.RegenerateRecoveryCodes) },
-                )
-            }
-            if (recoveryCodes.isNotEmpty()) {
-                SectionCard(modifier = Modifier.fillMaxWidth()) {
-                    Text(L10n.text("恢复码"), style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = { clipboardManager.setText(AnnotatedString(recoveryCodes.joinToString("\n"))); onMessage(L10n.text("恢复码已复制")) }) { Text(L10n.text("复制恢复码")) }
-                    Text(
-                        recoveryCodes.joinToString("  "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        SectionCard {
-            SectionHeader(
-                title = "Passkey",
-                subtitle = passkeyAvailabilityMessage,
-                actionText = if ((passkeyAvailability == PasskeyAvailability.Available || securityKeyAvailable) && activity != null) L10n.text("新增") else null,
-                onAction = { requireSensitiveVerification(PendingSecurityAction.AddPasskey) },
-            )
-            if (passkeyAvailability != PasskeyAvailability.Available && !securityKeyAvailable) {
-                Text(L10n.text("当前环境不满足原生 Passkey 要求，已阻止继续创建。"), color = MaterialTheme.colorScheme.error)
-            }
-            Text(L10n.text("USB / NFC 安全密钥"), style = MaterialTheme.typography.titleSmall)
-            Text(L10n.text(if (securityKeyAvailable) "支持硬件安全密钥，可在新增时选择" else "当前设备没有可用的硬件安全密钥提供方"), style = MaterialTheme.typography.bodySmall)
-            passkeys.forEach { passkey ->
-                PasskeyCard(
-                    passkey = passkey,
-                    onDetails = { detailTarget = passkey },
-                    onRename = { requireSensitiveVerification(PendingSecurityAction.RenamePasskey(passkey)) },
-                    onDelete = { requireSensitiveVerification(PendingSecurityAction.DeletePasskey(passkey)) },
-                )
-            }
-            if (passkeys.isEmpty() && passkeysLoaded) {
-                Text(L10n.text("还没有添加 Passkey，可用于更快捷的无密码登录。"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        SectionCard {
-            SectionHeader(L10n.text("第三方账号"), L10n.text("管理 QQ 和 Apple 绑定"), actionText = L10n.text("刷新"), onAction = { scope.launch { reloadAll() } })
-            SecurityActionCard(Icons.Outlined.Badge, "QQ", when (qqBound) { true -> L10n.text("已绑定"); false -> L10n.text("未绑定"); else -> L10n.text("正在读取状态") },
-                onClick = {
-                    if (qqBound == true) confirmUnbindProvider = "qq"
-                    else if (qqBound == false && activity != null && container.qqLoginManager.isConfigured) requireSensitiveVerification(PendingSecurityAction.BindQq)
-                    else onMessage(L10n.text("QQ 绑定暂不可用，请检查配置并刷新状态"))
-                }, actionLabel = if (qqBound == true) L10n.text("解绑") else L10n.text("绑定"))
-            SecurityActionCard(Icons.Outlined.Badge, "Apple", when (appleBound) { true -> L10n.text("已绑定"); false -> L10n.text("未绑定"); else -> L10n.text("正在读取状态") },
-                onClick = { if (appleBound == true) confirmUnbindProvider = "apple" }, actionLabel = if (appleBound == true) L10n.text("解绑") else L10n.text("在 iOS 上绑定"))
-        }
-
-        SectionCard {
-            SectionHeader(
-                title = L10n.text("敏感操作"),
-                subtitle = if (sensitiveStatus?.verified == true) {
-                    L10n.format("当前已通过验证，剩余 {0} 秒", sensitiveStatus?.remainingSeconds ?: 0)
-                } else {
-                    L10n.text("在执行修改邮箱、修改密码、删除账号等操作前，会自动要求验证身份")
-                },
-            )
-            SecurityActionCard(
-                icon = Icons.Outlined.Badge,
-                title = if (user?.email.isNullOrBlank()) L10n.text("绑定邮箱") else L10n.text("修改邮箱"),
-                subtitle = user?.email.orEmpty().ifBlank { L10n.text("当前未绑定邮箱") },
-                onClick = { requireSensitiveVerification(PendingSecurityAction.ChangeEmail) },
-            )
-            SecurityActionCard(
-                icon = Icons.Outlined.Password,
-                title = if (user?.hasPassword == false) L10n.text("设置密码") else L10n.text("修改密码"),
-                subtitle = L10n.text("更新当前账号密码"),
-                onClick = { requireSensitiveVerification(PendingSecurityAction.ChangePassword) },
-            )
+        SectionCard(modifier = Modifier.fillMaxWidth()) {
+            Text(L10n.text("危险操作"), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
             SecurityActionCard(
                 icon = Icons.Outlined.Shield,
                 title = L10n.text("删除账号"),
@@ -727,28 +582,8 @@ internal fun SecurityScreen(
                 destructive = true,
                 onClick = { requireSensitiveVerification(PendingSecurityAction.DeleteAccount) },
             )
-            LoadingOutlinedButton(text = L10n.text("退出全部设备"), onClick = { onLogoutAll() })
-        }
-
-        SectionCard {
-            SectionHeader(
-                title = L10n.text("账号恢复"),
-                subtitle = L10n.text("手机端既可以直接生成恢复背书，也可以扫码为忘记密码页完成背书"),
-            )
-            SecurityActionCard(
-                icon = Icons.Outlined.Security,
-                title = L10n.text("发起恢复背书"),
-                subtitle = L10n.text("生成 5 分钟有效的一次性恢复二维码和恢复码"),
-                onClick = { requireSensitiveVerification(PendingSecurityAction.IssueAccountRecovery) },
-                actionLabel = L10n.text("生成"),
-            )
-            SecurityActionCard(
-                icon = Icons.Outlined.QrCodeScanner,
-                title = L10n.text("扫码背书"),
-                subtitle = L10n.text("扫描忘记密码页二维码，为当前恢复请求完成背书"),
-                onClick = { requireSensitiveVerification(PendingSecurityAction.ScanRecoveryEndorse) },
-                actionLabel = L10n.text("扫码"),
-            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            LoadingOutlinedButton(text = L10n.text("退出全部设备"), onClick = { onLogoutAll() }, modifier = Modifier.fillMaxWidth())
         }
     }
 
@@ -757,9 +592,9 @@ internal fun SecurityScreen(
             onDismissRequest = { pendingTotpSetup = null; totpCode = "" },
             title = { Text(L10n.text("TOTP 注册")) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                     Text("secret: ${pendingTotpSetup?.secret}")
-                    Row {
+                    FlowRow {
                         TextButton(onClick = { clipboardManager.setText(AnnotatedString(pendingTotpSetup?.secret.orEmpty())); onMessage(L10n.text("密钥已复制")) }) { Text(L10n.text("复制密钥")) }
                         TextButton(onClick = {
                             val uri = pendingTotpSetup?.qrCodeUrl.orEmpty()
@@ -807,7 +642,7 @@ internal fun SecurityScreen(
             onDismissRequest = { showAddPasskeyDialog = false },
             title = { Text(L10n.text("新增 Passkey")) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                     Text(L10n.text("Passkey 需要 Android 原生凭据提供器与匹配的 RP 域配置。"))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = newPasskeyUseHardware, enabled = securityKeyAvailable, onCheckedChange = { newPasskeyUseHardware = it })
@@ -878,7 +713,7 @@ internal fun SecurityScreen(
             onDismissRequest = { detailTarget = null },
             title = { Text(L10n.text("Passkey 详情")) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                     Text(L10n.format("名称：{0}", passkey.name), style = MaterialTheme.typography.bodyMedium)
                     Text(L10n.format("创建于：{0}", formatSecurityTime(passkey.createdAt)), style = MaterialTheme.typography.bodySmall)
                     Text(L10n.format("最后使用：{0}", formatSecurityTime(passkey.lastUsedAt)), style = MaterialTheme.typography.bodySmall)
@@ -995,6 +830,166 @@ internal fun SecurityScreen(
     }
 }
 
+/** Presentation only: security decisions and sensitive action dispatch remain in [SecurityScreen]. */
+@Composable
+internal fun AdaptiveSecurityStatusContent(
+    status: AdaptiveAuthStatus?,
+    loading: Boolean,
+    detailsExpanded: Boolean,
+    onToggleDetails: () -> Unit,
+    onVerify: () -> Unit,
+    onRelogin: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    SectionHeader(
+        title = L10n.text("会话安全"),
+        subtitle = L10n.text("自适应连续认证"),
+        actionText = L10n.text("刷新"),
+        onAction = onRefresh,
+    )
+    if (loading && status != null) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+    if (status == null) {
+        if (loading) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12)) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                Text(L10n.text("正在读取状态"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else {
+            Text(L10n.text("暂时无法读取会话风险状态"), color = MaterialTheme.colorScheme.error)
+        }
+        return
+    }
+
+    val tone = adaptiveRiskColor(status.riskLevel)
+    val decision = status.policyDecision.uppercase()
+    val title = when (decision) {
+        "FREEZE" -> L10n.text("高风险会话已冻结")
+        "STEP_UP" -> L10n.text("建议立即补做验证")
+        else -> L10n.text("当前会话可信度稳定")
+    }
+    val recommendedAction = if (status.recommendedActionCode.isNullOrBlank()) "" else status.recommendedAction
+    val subtitle = when (decision) {
+        "FREEZE" -> L10n.text("检测到高风险信号，当前会话已冻结，请重新登录并完成验证")
+        "STEP_UP" -> recommendedAction.ifBlank { L10n.text("当前会话风险中等，需完成 step-up 验证后继续敏感操作") }
+        else -> recommendedAction.ifBlank { L10n.text("当前会话风险较低，可继续使用") }
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = AppSpacing.S8),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).background(tone.copy(alpha = 0.12f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (decision == "ALLOW") Icons.Outlined.CheckCircle else Icons.Outlined.Shield,
+                contentDescription = null,
+                tint = tone,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(
+                L10n.format("{0}风险", adaptiveRiskLabel(status.riskLevel)) + " · " + adaptivePolicyLabel(decision),
+                style = MaterialTheme.typography.labelLarge,
+                color = tone,
+            )
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (decision == "FREEZE" && recommendedAction.isNotBlank() && recommendedAction != subtitle) {
+                Text(recommendedAction, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+
+    if (status.multiEndpointAlert) {
+        val alertTone = adaptiveAlertColor(status.alertLevel)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = alertTone.copy(alpha = 0.10f),
+        ) {
+            Column(modifier = Modifier.padding(AppSpacing.S16), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Info, contentDescription = null, tint = alertTone, modifier = Modifier.size(20.dp))
+                    Text(status.alertTitle?.ifBlank { L10n.text("风险告警") } ?: L10n.text("风险告警"), style = MaterialTheme.typography.titleSmall)
+                }
+                Text(
+                    status.alertMessage?.ifBlank { L10n.text("检测到风险信号，请尽快处理") } ?: L10n.text("检测到风险信号，请尽快处理"),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (status.alertRemainingSeconds > 0) {
+                    Text(
+                        L10n.format("告警剩余有效期 {0} 秒", status.alertRemainingSeconds),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+    if (!status.sensitiveVerified && !status.sessionFrozen) {
+        Button(onClick = onVerify, colors = cn.ksuser.auth.ui.components.appPrimaryButtonColors(), modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(L10n.text("立即验证"))
+        }
+    }
+    if (status.sessionFrozen) {
+        Button(onClick = onRelogin, colors = cn.ksuser.auth.ui.components.appPrimaryButtonColors(), modifier = Modifier.heightIn(min = 48.dp)) {
+            Text(L10n.text("重新登录"))
+        }
+        Text(
+            L10n.text("当前会话已被冻结，请重新登录后继续操作"),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+
+    TextButton(onClick = onToggleDetails, modifier = Modifier.heightIn(min = 48.dp)) {
+        Text(L10n.text(if (detailsExpanded) "收起风险详情" else "查看风险详情"))
+        Icon(
+            imageVector = if (detailsExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+            contentDescription = null,
+            modifier = Modifier.padding(start = AppSpacing.S8).size(20.dp),
+        )
+    }
+    if (detailsExpanded) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        RiskDetailRow(L10n.text("风险分"), status.riskScore.toString())
+        RiskDetailRow(L10n.text("策略版本"), status.policyVersion.ifBlank { "2.0.0" })
+        RiskDetailRow(
+            L10n.text("敏感验证"),
+            if (status.sensitiveVerified) L10n.format("有效 {0} 秒", status.sensitiveVerificationRemainingSeconds) else L10n.text("未验证"),
+        )
+        RiskDetailRow(L10n.text("会话年龄"), formatDurationSeconds(status.authAgeSeconds))
+        RiskDetailRow(L10n.text("空闲时长"), formatDurationSeconds(status.idleSeconds))
+        RiskDetailRow(
+            L10n.text("当前环境"),
+            listOfNotNull(status.currentLocation, status.deviceType).joinToString(" / ").ifBlank { L10n.text("未知环境") },
+        )
+        if (status.reasons.isNotEmpty()) {
+            Text(L10n.text("风险信号"), style = MaterialTheme.typography.titleSmall)
+            status.reasons.forEach { reason ->
+                Text("• $reason", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RiskDetailRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.S16),
+    ) {
+        Text(label, modifier = Modifier.weight(0.4f), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, modifier = Modifier.weight(0.6f), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 @Composable
 private fun SettingSwitchRow(
     label: String,
@@ -1003,9 +998,9 @@ private fun SettingSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.S16),
     ) {
         Text(label, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
@@ -1072,7 +1067,7 @@ private fun SectionHeader(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(title, style = MaterialTheme.typography.titleMedium)
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -1096,17 +1091,58 @@ private fun SecurityActionCard(
     onClick: () -> Unit,
     actionLabel: String = L10n.text("前往"),
 ) {
-    val iconBg = if (destructive) {
-        MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-    } else {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f)
-    }
     val iconTint = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-    SectionCard(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .heightIn(min = 72.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = AppSpacing.S8),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            modifier = Modifier.size(40.dp).background(
+                if (destructive) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                CircleShape,
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f, fill = false))
+                if (statusIcon != null) {
+                    Icon(
+                        imageVector = statusIcon,
+                        contentDescription = null,
+                        tint = if (statusAccent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                actionLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun PasskeyCard(
+    passkey: PasskeyListItem,
+    onDetails: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1119,86 +1155,7 @@ private fun SecurityActionCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
-                        .background(iconBg, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(18.dp))
-                }
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8), verticalAlignment = Alignment.CenterVertically) {
-                        Text(title, style = MaterialTheme.typography.titleSmall)
-                        if (statusIcon != null) {
-                            Icon(
-                                imageVector = statusIcon,
-                                contentDescription = null,
-                                tint = if (statusAccent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        }
-                    }
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    actionLabel,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                )
-                Icon(
-                    Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = if (statusAccent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun RiskMetaChip(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier,
-) {
-    SectionCard(modifier = modifier) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun PasskeyCard(
-    passkey: PasskeyListItem,
-    onDetails: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    SectionCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Top,
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacing.S12),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
+                        .size(40.dp)
                         .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.75f), CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -1214,13 +1171,12 @@ private fun PasskeyCard(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onDetails, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Outlined.Info, contentDescription = L10n.text("详情"), modifier = Modifier.size(16.dp))
+                IconButton(onClick = onDetails, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Outlined.Info, contentDescription = L10n.text("详情"), modifier = Modifier.size(22.dp))
                 }
             }
         }
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f))
-        Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
             CompactSecurityButton(text = L10n.text("重命名"), onClick = onRename)
             CompactSecurityButton(text = L10n.text("删除"), onClick = onDelete, destructive = true)
         }
@@ -1237,7 +1193,7 @@ private fun CompactSecurityButton(
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier,
+        modifier = Modifier.heightIn(min = 48.dp),
         shape = RoundedCornerShape(12.dp),
     ) {
         if (destructive) {
@@ -1245,7 +1201,7 @@ private fun CompactSecurityButton(
         }
         Text(
             text,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelLarge,
             color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
         )
     }
@@ -1295,7 +1251,7 @@ private fun AccountRecoveryDialog(
         onDismissRequest = onDismiss,
         title = { Text(L10n.text("账号恢复授权")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S12)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S12)) {
                 Text(
                     L10n.text("为另一台设备生成一次性恢复二维码与恢复码。恢复成功后，旧会话会被自动撤销。"),
                     style = MaterialTheme.typography.bodySmall,
@@ -1343,7 +1299,7 @@ private fun AccountRecoveryDialog(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                         CompactSecurityButton(text = L10n.text("复制恢复码"), onClick = onCopyRecoveryCode, enabled = remainingSeconds > 0)
                         CompactSecurityButton(text = L10n.text("打开恢复页"), onClick = onOpenRecoveryPage, enabled = remainingSeconds > 0)
                     }
@@ -1462,7 +1418,7 @@ internal fun SensitiveVerificationDialog(
         onDismissRequest = onDismiss,
         title = { Text(L10n.text("敏感操作验证")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                 Text(L10n.format("可用方式: {0}", status?.methods?.joinToString().orEmpty()))
                 if (status != null && status?.methods.isNullOrEmpty()) Text(L10n.text("当前设备没有可用的验证方式，请在其他设备配置密码、邮箱或 TOTP"), color = MaterialTheme.colorScheme.error)
                 PreferenceDropdown(
@@ -1565,7 +1521,7 @@ private fun ChangeEmailDialog(
         onDismissRequest = onDismiss,
         title = { Text(L10n.text("修改邮箱")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                 AppOutlinedField(value = email, onValueChange = { email = it }, label = { Text(L10n.text("新邮箱")) })
                 Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.S8), verticalAlignment = Alignment.CenterVertically) {
                     AppOutlinedField(
@@ -1620,7 +1576,7 @@ private fun ChangePasswordDialog(
     AlertDialog(onDismissRequest = onDismiss,
         title = { Text(L10n.text(if (settingInitialPassword) "设置密码" else "修改密码")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 policy?.let { Text(it.requirementMessage) }
                 policyError?.let { Text(it, color = MaterialTheme.colorScheme.error); LoadingOutlinedButton(L10n.text("重试获取密码要求"), onClick = { loadPolicy() }) }
                 AppOutlinedField(password, { password = it }, label = { Text(L10n.text("新密码")) },
@@ -1722,7 +1678,7 @@ private fun DeleteAccountDialog(
         onDismissRequest = onDismiss,
         title = { Text(L10n.text("删除账号")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                 Text(L10n.text("此操作不可撤销，请谨慎处理"))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = useTextConfirmation || !hasMotionSensor,

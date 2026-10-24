@@ -1,6 +1,5 @@
 package cn.ksuser.auth.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +30,8 @@ import cn.ksuser.auth.core.network.runCatchingCancellable
 import cn.ksuser.auth.core.session.AccountRequestGuard
 import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.data.AppContainer
+import cn.ksuser.auth.ui.components.ApplicationLogo
+import cn.ksuser.auth.ui.components.AppSettingsRow
 import cn.ksuser.auth.ui.components.AppPagePadding
 import cn.ksuser.auth.ui.components.LoadingOutlinedButton
 import cn.ksuser.auth.ui.components.LoadingTextButton
@@ -41,7 +42,7 @@ private data class AppGrant(
     val id: String, val name: String, val official: Boolean, val scopes: List<String>,
     val authorizedAt: String?, val lastAuthorizedAt: String?, val grantMode: String,
     val expiresAt: String? = null, val creator: String? = null, val verification: String? = null,
-    val contact: String? = null, val redirect: String? = null,
+    val contact: String? = null, val redirect: String? = null, val logoUrl: String? = null,
 )
 
 @Composable
@@ -70,10 +71,10 @@ private fun AuthorizedAppsContent(container: AppContainer, accountId: String, on
         runCatchingCancellable { container.accountRepository.authorizedApps() }.onSuccess { snapshot ->
             if (!refreshGuard.isCurrent(request)) return@onSuccess
             grants = snapshot.official.map {
-                AppGrant(it.clientId, it.clientName, true, it.scopes, it.authorizedAt, it.lastAuthorizedAt, "OFFICIAL")
+                AppGrant(it.clientId, it.clientName, true, it.scopes, it.authorizedAt, it.lastAuthorizedAt, "OFFICIAL", logoUrl = it.logoUrl)
             } + snapshot.thirdParty.map {
                 AppGrant(it.appId, it.appName, false, it.scopes, it.authorizedAt, it.lastAuthorizedAt,
-                    it.grantMode, it.expiresAt, it.creatorName, it.creatorVerificationType, it.contactInfo, it.redirectUri)
+                    it.grantMode, it.expiresAt, it.creatorName, it.creatorVerificationType, it.contactInfo, it.redirectUri, it.logoUrl)
             }
             selected = selected?.let { old -> grants.firstOrNull { it.id == old.id && it.official == old.official } }
             revoke = revoke?.let { old -> grants.firstOrNull { it.id == old.id && it.official == old.official } }
@@ -85,13 +86,15 @@ private fun AuthorizedAppsContent(container: AppContainer, accountId: String, on
         item { LoadingOutlinedButton(L10n.text("刷新"), onClick = { reload() }, Modifier.fillMaxWidth(), enabled = !loading) }
         if (loading && grants.isEmpty()) item { CircularProgressIndicator() }
         error?.let { failure -> item { SectionCard { Text(failure.message ?: L10n.text("加载失败"), color = MaterialTheme.colorScheme.error); TextButton(enabled = !loading, onClick = { scope.launch { reload() } }) { Text(L10n.text("重试")) } } } }
-        if (!loading && error == null && grants.isEmpty()) item { Text(L10n.text("暂无已授权应用")) }
+        if (!loading && error == null && grants.isEmpty()) item { SectionCard(Modifier.fillMaxWidth()) { Text(L10n.text("暂无已授权应用"), style = MaterialTheme.typography.titleMedium) } }
         items(grants, key = { "${it.official}:${it.id}" }) { grant ->
-            SectionCard(Modifier.fillMaxWidth().clickable { selected = grant }) {
-                Text(grant.name, style = MaterialTheme.typography.titleMedium)
-                Text(L10n.text(if (grant.official) "官方应用" else "第三方应用"))
-                Text("${L10n.text("最近授权")}：${DisplayTime.format(grant.lastAuthorizedAt)}")
-                Text(grantModeLabel(grant.grantMode), color = MaterialTheme.colorScheme.primary)
+            SectionCard(Modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                AppSettingsRow(
+                    grant.name,
+                    value = "${L10n.text(if (grant.official) "官方应用" else "第三方应用")} · ${grantModeLabel(grant.grantMode)}\n${L10n.text("最近授权")}：${DisplayTime.format(grant.lastAuthorizedAt)}",
+                    leadingContent = { ApplicationLogo(grant.name, grant.logoUrl) },
+                    onClick = { selected = grant },
+                )
             }
         }
     }
