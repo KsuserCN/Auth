@@ -92,6 +92,7 @@
           </el-menu>
 
           <div class="side-footer">
+            <router-link class="download-app-link" to="/downloads">{{ t('ui.downloads.entry') }} <Download /></router-link>
             <MobileBridgeQrSidebarAction />
             <el-button
               class="logout-btn"
@@ -138,6 +139,7 @@
       </el-menu>
 
       <div class="side-footer mobile-side-footer">
+        <router-link class="download-app-link" to="/downloads">{{ t('ui.downloads.entry') }} <Download /></router-link>
         <MobileBridgeQrSidebarAction />
         <el-button
           class="logout-btn"
@@ -167,6 +169,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   Connection,
   DataLine,
+  Download,
   HomeFilled,
   Key,
   Lock,
@@ -516,6 +519,18 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
 }
+
+.download-app-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  text-decoration: none;
+}
+.download-app-link:hover { color: var(--el-text-color-primary); }
+.download-app-link svg { width: 16px; height: 16px; }
 
 .mobile-side-title {
   padding: 4px 8px 8px;

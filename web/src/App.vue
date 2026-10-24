@@ -16,7 +16,9 @@ const bannerMessage = computed(() => t('ui.app.message001'))
 
 const route = useRoute()
 const elementLocale = computed(() => (effectiveLocale.value === 'zh-Hans' ? zhCn : en))
-const showPublicLanguageSelector = computed(() => !route.path.startsWith('/home'))
+const showPublicLanguageSelector = computed(
+  () => !route.path.startsWith('/home') && route.name !== 'downloads',
+)
 
 const bannerDismissed = useStorage('global-beta-banner-dismissed:v1', false)
 const bannerVisible = computed(() => !bannerDismissed.value)
@@ -35,7 +37,11 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div class="app-shell" :style="{ '--global-banner-height': bannerHeight }">
+  <div
+    class="app-shell"
+    :class="{ 'app-shell--downloads': route.name === 'downloads' }"
+    :style="{ '--global-banner-height': bannerHeight }"
+  >
     <GlobalAnnouncementBanner v-if="bannerVisible" :message="bannerMessage" @close="closeBanner" />
     <div class="app-content">
       <el-config-provider :message="messageConfig" :locale="elementLocale">
@@ -55,6 +61,10 @@ watchEffect(() => {
   width: 100%;
   height: 100vh;
   height: 100dvh;
+}
+
+.app-shell--downloads {
+  display: flow-root;
 }
 
 .public-language-selector {

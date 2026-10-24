@@ -699,6 +699,11 @@
             </div>
           </template>
         </el-skeleton>
+        <router-link to="/downloads" class="login-download-app">
+          <i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i>
+          {{ t('ui.downloads.entry') }}
+          <ArrowRight />
+        </router-link>
       </div>
     </div>
   </div>
@@ -2451,6 +2456,19 @@ onBeforeUnmount(() => {
   justify-content: flex-start;
   margin-bottom: 32px;
 }
+
+.login-download-app {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 26px;
+  color: var(--el-text-color-secondary);
+  text-decoration: none;
+  font-size: 13px;
+}
+.login-download-app:hover { color: var(--el-text-color-primary); }
+.login-download-app svg { width: 14px; height: 14px; }
 
 .logo-icon {
   width: 56px;
