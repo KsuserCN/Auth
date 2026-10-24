@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Transactional
 class SensitiveLogQueryTest {
     @Autowired UserSensitiveLogRepository repository;
+    @Autowired SensitiveLogService service;
 
     private UserSensitiveLog save(String operation, String action) {
         var log = new UserSensitiveLog();
@@ -40,5 +41,15 @@ class SensitiveLogQueryTest {
     @Test void passivePolicyEventsCannotReplaceLatestUserActivityForRiskScoring() {
         var login = save("LOGIN", "ALLOW"); save("ADAPTIVE_POLICY", "FREEZE");
         assertEquals(login.getId(), repository.findTopByUserIdAndOperationTypeNotOrderByCreatedAtDesc(987654L, "ADAPTIVE_POLICY").orElseThrow().getId());
+    }
+
+    @Test void notificationDetailIsIndependentOfPaginationAndScopedToItsOwner() {
+        var target = save("LOGIN", "ALLOW");
+        for (int i = 0; i < 25; i++) { save("CHANGE_PASSWORD", "ALLOW"); }
+
+        assertEquals(target.getId(), service.findLog(987654L, target.getId()).orElseThrow().getId());
+        assertTrue(service.findLog(123456L, target.getId()).isEmpty());
+        assertTrue(service.findLog(987654L, Long.MAX_VALUE).isEmpty());
+        assertTrue(service.findLog(987654L, 0L).isEmpty());
     }
 }

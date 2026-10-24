@@ -394,8 +394,10 @@ import XCTest
         XCTAssertTrue(app.staticTexts["当前设备"].exists)
         XCTAssertFalse(app.buttons["撤销设备"].exists)
         navigate(app, to: "日志")
-        let log = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "登录，成功")).firstMatch
+        let log = app.buttons["logRow-1"]
         XCTAssertTrue(log.waitForExistence(timeout: 5))
+        XCTAssertTrue(log.label.contains("登录账号"))
+        XCTAssertTrue(log.label.contains("成功"))
         log.tap()
         XCTAssertTrue(app.staticTexts["日志详情"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["192.0.2.1"].exists)
@@ -406,8 +408,11 @@ import XCTest
         navigate(app, to: "日志")
         XCTAssertTrue(app.staticTexts["安全活动"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["1 条记录 · 最近的账号操作"].exists)
-        XCTAssertTrue(app.staticTexts["2026-10-04"].exists)
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "登录，成功")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["2026年10月4日"].exists)
+        let log = app.buttons["logRow-1"]
+        XCTAssertTrue(log.exists)
+        XCTAssertTrue(log.label.contains("登录账号"))
+        XCTAssertTrue(log.label.contains("成功"))
         attach(app, name: "Logs list")
 
         app.buttons["logFilterButton"].tap()
@@ -423,16 +428,16 @@ import XCTest
         let typePicker = app.buttons["操作类型"]
         XCTAssertTrue(typePicker.exists)
         typePicker.tap()
-        let policy = app.buttons["风控策略"]
+        let policy = app.buttons["系统安全检查"]
         XCTAssertTrue(policy.waitForExistence(timeout: 5))
         policy.tap()
         app.buttons["查看记录"].tap()
-        XCTAssertTrue(app.staticTexts["操作类型：风控策略"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["操作类型：系统安全检查"].waitForExistence(timeout: 5))
 
         app.buttons["logFilterButton"].tap()
         app.buttons["重置"].tap()
         app.buttons["查看记录"].tap()
-        XCTAssertFalse(app.staticTexts["操作类型：风控策略"].exists)
+        XCTAssertFalse(app.staticTexts["操作类型：系统安全检查"].exists)
         XCTAssertTrue(app.staticTexts["安全活动"].exists)
         app.buttons["aboutButton"].tap()
         app.buttons["theme-dark"].tap()

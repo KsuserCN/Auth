@@ -153,11 +153,11 @@ struct LogsView: View {
     private var dayGroups: [LogDayGroup] {
         var groups: [LogDayGroup] = []
         for log in model.logs {
-            let day = String(displayDate(log.createdAt).prefix(10))
-            if let index = groups.firstIndex(where: { $0.id == day }) {
+            let date = DatePresentation(log.createdAt)
+            if let index = groups.firstIndex(where: { $0.id == date.dayKey }) {
                 groups[index].logs.append(log)
             } else {
-                groups.append(LogDayGroup(id: day, logs: [log]))
+                groups.append(LogDayGroup(id: date.dayKey, title: date.dateText, logs: [log]))
             }
         }
         return groups
@@ -210,7 +210,7 @@ struct LogsView: View {
             }
             ForEach(dayGroups) { group in
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(group.id).font(.subheadline.weight(.semibold))
+                    Text(group.title).font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary).padding(.horizontal, 4)
                     VStack(spacing: 0) {
                         ForEach(group.logs.indices, id: \.self) { index in
@@ -218,6 +218,7 @@ struct LogsView: View {
                             if index > 0 { Divider().padding(.leading, 64) }
                             Button { detail = log } label: { LogListRow(log: log) }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("logRow-\(log.id)")
                                 .accessibilityLabel(L10n.format("log.accessibilitySummary", [String(describing: SecurityLogPresentation.title(log)), String(describing: log.result.uppercased() == "SUCCESS" ? (log.operationType.uppercased() == "ADAPTIVE_POLICY" ? SecurityLogPresentation.text("ui.executed") : L10n.text("成功")) : L10n.text("失败")), String(describing: displayDate(log.createdAt))]))
                         }
                     }
@@ -233,13 +234,14 @@ struct LogsView: View {
                     Button(L10n.text("下一页")) { Task { await load(page: model.logsPage + 1) } }.disabled(model.logsPage >= model.totalPages || model.isBusy).frame(minHeight: 44)
                 }.padding(.horizontal)
             }
-        }.refreshable { await reload() }.task(id: requestedLogID) {
-            if let requestedLogID {
-                await openLog(id: requestedLogID)
-            } else {
-                await reload()
-            }
+        }.refreshable { await reload() }.task(id: model.user?.uuid) {
+            // Notification details are fetched independently; their errors survive list loading.
+            await load(page: 1, reportError: requestedLogID == nil)
+        }.task(id: requestedLogID) {
+            guard let requestedLogID else { return }
+            await openLog(id: requestedLogID)
         }
+            .onChange(of: model.user?.uuid) { _, _ in detail = nil; showingFilters = false }
             .sheet(item: $detail) { log in AppNavigationStack { LogDetailView(log: log) } }
             .sheet(isPresented: $showingFilters) {
                 AppNavigationStack {
@@ -269,14 +271,19 @@ struct LogsView: View {
         .accessibilityAddTraits(result == value ? .isSelected : [])
     }
     private func reload() async { await load(page: 1) }
-    private func load(page: Int) async { await model.loadLogs(page: page, operationType: operation.isEmpty ? nil : operation, result: result.isEmpty ? nil : result) }
+    private func load(page: Int, reportError: Bool = true) async {
+        await model.loadLogs(page: page, operationType: operation.isEmpty ? nil : operation, result: result.isEmpty ? nil : result, reportError: reportError)
+    }
 
     private func openLog(id: Int64) async {
-        await load(page: 1)
-        guard !Task.isCancelled else { return }
-        if let matchingLog = model.logs.first(where: { $0.id == id }) {
+        let accountID = model.user?.uuid
+        showingFilters = false
+        detail = nil
+        let matchingLog = await model.fetchLog(id: id)
+        guard !Task.isCancelled, requestedLogID == id, accountID == model.user?.uuid else { return }
+        if let matchingLog {
             detail = matchingLog
-        } else {
+        } else if model.errorMessage == nil {
             // The tapped alert may be stale or its log may have been removed; leave the user on the log list.
             model.noticeMessage = "未找到这条安全操作记录，请刷新日志列表"
         }
@@ -286,6 +293,7 @@ struct LogsView: View {
 
 private struct LogDayGroup: Identifiable {
     let id: String
+    let title: String
     var logs: [SensitiveLogItem]
 }
 
@@ -308,10 +316,7 @@ private struct LogListRow: View {
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
     }
-    private var time: String {
-        let date = displayDate(log.createdAt)
-        return date.count >= 16 ? String(date.dropFirst(11).prefix(5)) : date
-    }
+    private var time: String { DatePresentation(log.createdAt).timeText }
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {

@@ -177,42 +177,6 @@ struct StatusMessageBanner: View {
     }
 }
 
-struct ServiceUnavailableOverlay: View {
-    @Environment(\.locale) private var localizationLocale
-    var body: some View {
-        ZStack {
-            Color(uiColor: .systemBackground).ignoresSafeArea()
-            VStack(spacing: 18) {
-                Image(systemName: "wifi.slash")
-                    .font(.system(size: 48, weight: .regular))
-                    .foregroundStyle(Brand.danger)
-                    .accessibilityHidden(true)
-                Text(L10n.text("当前服务不可用"))
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                Text(L10n.text("这可能是您的网络或我们的服务出现问题"))
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(L10n.text("正在自动重试…"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 4)
-            }
-            .padding(32)
-            .frame(maxWidth: 440)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(uiColor: .systemBackground))
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isModal)
-        .accessibilityIdentifier("serviceUnavailableOverlay")
-    }
-}
-
 struct AppCard<Content: View>: View {
     @Environment(\.locale) private var localizationLocale
     private let content: Content
@@ -487,40 +451,70 @@ struct LocalQRView: View {
     }
 }
 
-func displayDate(_ value: String?) -> String {
-    guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return L10n.text("暂无记录") }
-    let output = DateFormatter()
-    output.locale = L10n.locale
-    output.dateStyle = .medium
-    output.timeStyle = .medium
-    // A LocalDate/LocalDateTime is a floating wall clock, not an instant in the device's zone.
-    let localPattern = #"^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?)?$"#
-    let expression = try! NSRegularExpression(pattern: localPattern)
-    if let match = expression.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) {
-        func number(_ index: Int) -> Int? {
-            guard let range = Range(match.range(at: index), in: value) else { return nil }
-            return Int(value[range])
+struct DatePresentation {
+    private static let localExpression = try! NSRegularExpression(pattern: #"^(\d{4})-(\d{2})-(\d{2})(?:[Tt ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?)?$"#)
+    private let rawValue: String
+    private let locale: Locale
+    private var timeZone: TimeZone
+    private var date: Date?
+    private var floatingCalendar: Calendar?
+    private var dateOnly = false
+
+    init(_ value: String?, locale: Locale = L10n.locale, timeZone: TimeZone = .current) {
+        rawValue = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.locale = locale
+        self.timeZone = timeZone
+        guard !rawValue.isEmpty else { return }
+        let value = rawValue
+        // A LocalDate/LocalDateTime keeps its wall clock and calendar day in every device zone.
+        if let match = Self.localExpression.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)) {
+            func number(_ index: Int) -> Int? {
+                guard let range = Range(match.range(at: index), in: value) else { return nil }
+                return Int(value[range])
+            }
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+            let components = DateComponents(year: number(1), month: number(2), day: number(3), hour: number(4) ?? 0, minute: number(5) ?? 0, second: number(6) ?? 0)
+            guard let year = components.year, year > 0, let parsed = calendar.date(from: components) else { return }
+            let checked = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: parsed)
+            guard checked.year == components.year, checked.month == components.month, checked.day == components.day,
+                  checked.hour == components.hour, checked.minute == components.minute, checked.second == components.second else { return }
+            date = parsed
+            floatingCalendar = calendar
+            self.timeZone = calendar.timeZone
+            dateOnly = number(4) == nil
+        } else {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
         }
+    }
+
+    var fullText: String { formatted(dateStyle: .medium, timeStyle: dateOnly ? .none : .medium) }
+    var dateText: String { formatted(dateStyle: .medium, timeStyle: .none) }
+    var timeText: String { dateOnly ? dateText : formatted(dateStyle: .none, timeStyle: .short) }
+
+    var dayKey: String {
+        guard let date else { return "unparsed:" + rawValue }
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        let components = DateComponents(year: number(1), month: number(2), day: number(3), hour: number(4) ?? 0, minute: number(5) ?? 0, second: number(6) ?? 0)
-        guard let year = components.year, year > 0, let date = calendar.date(from: components) else { return value }
-        let checked = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
-        guard checked.year == components.year, checked.month == components.month, checked.day == components.day,
-              checked.hour == components.hour, checked.minute == components.minute, checked.second == components.second else { return value }
-        output.calendar = calendar
-        output.timeZone = calendar.timeZone
-        if number(4) == nil { output.timeStyle = .none }
+        calendar.timeZone = timeZone
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", components.year!, components.month!, components.day!)
+    }
+
+    private func formatted(dateStyle: DateFormatter.Style, timeStyle: DateFormatter.Style) -> String {
+        guard let date else { return rawValue.isEmpty ? L10n.text("暂无记录") : rawValue }
+        let output = DateFormatter()
+        output.locale = locale
+        if let floatingCalendar { output.calendar = floatingCalendar }
+        output.timeZone = timeZone
+        output.dateStyle = dateStyle
+        output.timeStyle = timeStyle
         return output.string(from: date)
     }
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
-    if let date {
-        return output.string(from: date)
-    }
-    return value
 }
+
+func displayDate(_ value: String?) -> String { DatePresentation(value).fullText }
 
 func methodLabel(_ value: String) -> String {
     switch value { case "password": L10n.text("密码"); case "email-code", "email_code": L10n.text("邮箱验证码"); case "passkey": "Passkey"; case "totp": L10n.text("验证器 / 恢复码"); case "apple": "Apple"; case "qq": "QQ"; default: value }

@@ -19,6 +19,7 @@ import cn.ksuser.api.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -244,6 +245,11 @@ public class SensitiveLogService {
     /**
      * 查询用户的敏感操作日志
      */
+    public Optional<SensitiveLogResponse> findLog(Long userId, Long id) {
+        if (id == null || id <= 0) { return Optional.empty(); }
+        return logRepository.findByIdAndUserId(id, userId).map(SensitiveLogResponse::new);
+    }
+
     public PageResponse<SensitiveLogResponse> queryLogs(Long userId, SensitiveLogQueryRequest request) {
         // 参数验证
         int page = request.getPage() != null && request.getPage() > 0 ? request.getPage() : 1;

@@ -133,6 +133,14 @@ extension KsuserRepositoryProviding {
         if let startDate { query["startDate"] = startDate }; if let endDate { query["endDate"] = endDate }
         return try await client.request("/auth/sensitive-logs", query: query)
     }
+    func log(id: Int64) async throws -> SensitiveLogItem? {
+        guard id > 0 else { return nil }
+        do {
+            return try await client.request("/auth/sensitive-logs/\(id)")
+        } catch APIError.server(404, _) {
+            return nil
+        }
+    }
     func totpStatus() async throws -> TotpStatus { try await client.request("/auth/totp/status") }
     func startTOTP() async throws -> TotpRegistrationOptions { try await client.request("/auth/totp/registration-options", method: "POST", body: [:]) }
     func confirmTOTP(code: String, recoveryCodes: [String]) async throws {

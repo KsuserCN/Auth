@@ -27,7 +27,6 @@ struct ContentView: View {
 
     private var challenge: Binding<ChallengeSheet?> {
         Binding(get: {
-            if model.serviceAvailability.isUnavailable { return nil }
             if let x = model.mfaChallenge { return .mfa(x) }
             if let x = model.qrConfirmation { return .qr(x) }
             if let x = model.bridgeConfirmation, model.isAuthenticated { return .bridge(x) }
@@ -39,8 +38,7 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if model.serviceAvailability.isUnavailable { ServiceUnavailableOverlay() }
-            else if model.isAuthenticated { shell }
+            if model.isAuthenticated { shell }
             else { AppNavigationStack { AuthenticationView() } }
         }
         .tint(Brand.gold)
@@ -79,16 +77,15 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: AppDelegate.pushOpenedNotification)) { _ in openPendingPush() }
         .onChange(of: model.user?.uuid) { _, _ in openPendingPush() }
         .task(id: model.user?.uuid) { await model.loadMobileAuthorization() }
-        .onChange(of: model.serviceAvailability.isUnavailable) { _, unavailable in
-            guard unavailable else { return }
-            showScanner = false
-            showAbout = false
-        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             if let type = AppDelegate.takePendingShortcutType() { performShortcut(type) }
             openPendingPush()
-            Task { await model.validateAppleCredential(); await model.synchronizePushNotifications(requestPermission: false) }
+            Task {
+                await model.probeServiceAvailability()
+                await model.validateAppleCredential()
+                await model.synchronizePushNotifications(requestPermission: false)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: ASAuthorizationAppleIDProvider.credentialRevokedNotification)) { _ in Task { await model.handleAppleCredentialRevocation() } }
         .task {
@@ -97,13 +94,18 @@ struct ContentView: View {
             openPendingPush()
             if let type = AppDelegate.takePendingShortcutType() { performShortcut(type) }
         }
-        .disabled(model.serviceAvailability.isUnavailable)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if model.serviceAvailability.isUnavailable {
+                ServiceAvailabilityBanner { await model.probeServiceAvailability() }
+            }
+        }
         .task(id: model.serviceAvailability.isUnavailable) {
             guard model.serviceAvailability.isUnavailable else { return }
             while !Task.isCancelled && model.serviceAvailability.isUnavailable {
                 do { try await Task.sleep(for: .seconds(15)) }
                 catch { return }
                 guard !Task.isCancelled else { return }
+                guard scenePhase == .active else { continue }
                 await model.probeServiceAvailability()
             }
         }

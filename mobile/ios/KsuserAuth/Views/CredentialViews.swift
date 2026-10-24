@@ -118,6 +118,11 @@ struct TOTPView: View {
                         if model.errorMessage == nil { dismiss() }
                     }
                 }
+            } else if !model.totpStatusLoaded {
+                AppCard {
+                    CardHeader(title: L10n.text("验证器"), subtitle: model.isBusy ? L10n.text("正在加载…") : L10n.text("请求失败，请重试"), icon: "number.square")
+                    AsyncActionButton(title: L10n.text("重试"), isBusy: model.isBusy) { await model.refreshSecurity() }
+                }
             } else {
                 AppCard {
                     CardHeader(title: model.totpStatus.enabled ? L10n.text("验证器已启用") : L10n.text("启用验证器"), subtitle: L10n.text("使用支持 TOTP 的验证器应用，每次生成一个短期有效的验证码。"), icon: "number.square")

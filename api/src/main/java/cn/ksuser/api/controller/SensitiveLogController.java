@@ -12,6 +12,7 @@ import cn.ksuser.api.service.UserService;
 import cn.ksuser.api.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +28,35 @@ public class SensitiveLogController {
 
     @Autowired
     private UserService userService;
+
+    /** Notification targets are fetched independently of list pagination and filters. */
+    @GetMapping("/sensitive-logs/{id}")
+    public ResponseEntity<ApiResponse<SensitiveLogResponse>> getSensitiveLog(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Long id
+    ) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(401, ApiResultCode.REQUEST_003));
+        }
+        String uuid = jwtUtil.getUuidFromToken(authHeader.substring(7));
+        if (uuid == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(401, ApiResultCode.REQUEST_004));
+        }
+        User user = userService.findByUuid(uuid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
+        }
+        // A missing record and a record belonging to another account have the same response.
+        return sensitiveLogService.findLog(user.getId(), id)
+                .map(log -> ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                        .body(new ApiResponse<>(200, ApiResultCode.REQUEST_007, log)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .cacheControl(CacheControl.noStore())
+                        .body(new ApiResponse<>(404, ApiResultCode.NOT_FOUND)));
+    }
 
     /**
      * 查询用户的敏感操作日志

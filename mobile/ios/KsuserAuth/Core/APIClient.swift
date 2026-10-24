@@ -141,10 +141,11 @@ actor APIClient {
         let startedGeneration = generation
         let bytes: Data
         let response: HTTPURLResponse
+        // Connectivity failures belong to the current operation. They do not prove a server outage.
         do {
             (bytes, response) = try await transport.data(for: request)
         } catch {
-            if shouldCountAsServiceFailure(error) { await availabilityMonitor?.recordServiceFailure() }
+            guard startedGeneration == generation else { throw APIError.cancelled }
             throw error
         }
         guard startedGeneration == generation else { throw APIError.cancelled }
@@ -174,12 +175,6 @@ actor APIClient {
         if status >= 400 { throw APIError.server(status, LocalizedMessage(errorCode: result?.errorCode, params: result?.params, statusCode: status)) }
         guard let parsed else { throw APIError.invalidResponse }
         return parsed
-    }
-    private func shouldCountAsServiceFailure(_ error: Error) -> Bool {
-        if error is CancellationError { return false }
-        if let error = error as? APIError, error == .cancelled { return false }
-        if let error = error as? URLError, error.code == .cancelled { return false }
-        return true
     }
     private func receiveCookies(_ response: HTTPURLResponse, url: URL) throws {
         var headers: [String: String] = [:]

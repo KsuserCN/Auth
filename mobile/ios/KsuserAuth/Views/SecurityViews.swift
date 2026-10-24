@@ -21,8 +21,11 @@ struct SecurityView: View {
             SecuritySection(title: L10n.text("验证方式"), icon: "key.fill") {
                 ActionRow(title: "Passkey", icon: "person.badge.key.fill", subtitle: L10n.format("{0} 个通行密钥", [String(describing: model.passkeys.count)])) { sheet = .passkeys }
                 sectionDivider
-                ActionRow(title: L10n.text("验证器"), icon: "number.square", subtitle: model.totpStatus.enabled ? L10n.text("已启用") : L10n.text("未启用")) { protected(.totp) }
-                if model.totpStatus.enabled {
+                ActionRow(title: L10n.text("验证器"), icon: "number.square", subtitle: model.totpStatusLoaded ? (model.totpStatus.enabled ? L10n.text("已启用") : L10n.text("未启用")) : (model.isBusy ? L10n.text("正在加载…") : L10n.text("请求失败，请重试"))) {
+                    if model.totpStatusLoaded { protected(.totp) }
+                    else { Task { await model.refreshSecurity() } }
+                }
+                if model.totpStatusLoaded && model.totpStatus.enabled {
                     sectionDivider
                     ActionRow(title: L10n.text("TOTP 恢复码"), icon: "key.horizontal", subtitle: L10n.format("剩余 {0} 个", [String(describing: model.totpStatus.recoveryCodesCount)])) {
                         Task { await model.requireSensitive(title: "查看恢复码") { await model.showRecoveryCodes(); if model.errorMessage == nil { present(.recoveryCodes) } } }
@@ -90,7 +93,7 @@ struct SecurityView: View {
                 ActionRow(title: L10n.text("删除账号"), icon: "person.crop.circle.badge.xmark", subtitle: L10n.text("永久删除账号及相关数据"), destructive: true) { sheet = .deleteAccount }
                     .accessibilityIdentifier("deleteAccountRow")
             }
-        }.refreshable { await model.refreshSecurity() }.task { await model.refreshSecurity() }
+        }.refreshable { await model.refreshSecurity() }.task { await model.refreshSecurity(forceRefresh: false) }
             .sheet(item: $sheet) { page in
                 AppNavigationStack {
                     switch page {

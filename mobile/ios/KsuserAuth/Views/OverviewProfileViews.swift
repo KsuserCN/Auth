@@ -63,7 +63,7 @@ struct OverviewView: View {
                     ActionRow(title: L10n.text("完善个人资料"), icon: "pencil") { onNavigate(.profile) }
                 }
             } else { ProgressView(L10n.text("正在读取账号…")).frame(maxWidth: .infinity).padding(40) }
-        }.refreshable { await model.loadDashboard() }.task { await model.loadDashboard() }
+        }.refreshable { await model.loadDashboard() }.task { await model.loadDashboard(forceRefresh: false) }
     }
     private func securityLine(_ title: String, enabled: Bool) -> some View {
         HStack { Text(title).font(.subheadline); Spacer(); Label(enabled ? L10n.text("已开启") : L10n.text("未开启"), systemImage: enabled ? "checkmark.circle.fill" : "circle").font(.caption).foregroundStyle(enabled ? Brand.success : Color.secondary) }.accessibilityElement(children: .combine)
@@ -138,7 +138,7 @@ struct ProfileView: View {
                 }
             }
         }.refreshable { await model.refreshProfile() }
-            .task { await model.refreshProfile() }
+            .task { await model.refreshProfile(forceRefresh: false) }
             .onAppear {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--ui-testing"),

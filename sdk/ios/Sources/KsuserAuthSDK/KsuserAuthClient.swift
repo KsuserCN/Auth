@@ -89,9 +89,15 @@ import AuthenticationServices
         guard AuthorizationLease.claim(leaseID) else { return }
         let cancellationLease = leaseID
         defer { AuthorizationLease.release(cancellationLease) }
+        let hasActiveOperation = starting || continuation != nil
         do { pending = try PendingAuthorizationRecovery.load(from: storage, configuration: configuration) }
-        catch { return }
+        catch {
+            // A temporarily unavailable Keychain must not prevent local cancellation.
+            // An idle client cannot assume that an unreadable transaction belongs to it.
+            guard hasActiveOperation else { return }
+        }
         generation += 1
+        starting = false
         let transaction = pending
         finish(.failure(KsuserAuthError.cancelled))
         if let transaction { try? await http.cancel(transaction) }

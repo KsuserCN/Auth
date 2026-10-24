@@ -14,6 +14,12 @@ private enum ApplicationAuthorizationKind {
     case official
 }
 
+private struct AccountRefreshTask {
+    let id = UUID()
+    let generation: Int
+    let task: Task<Void, Error>
+}
+
 @MainActor @Observable final class AppModel {
     let environment: AppEnvironment
     let pushNotifications: PushNotificationManager
@@ -39,6 +45,7 @@ private enum ApplicationAuthorizationKind {
     var sensitiveRequest: SensitiveRequest?
     var passkeys: [PasskeyListItem] = []
     var totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0)
+    private(set) var totpStatusLoaded = false
     var totpSetup: TotpRegistrationOptions?
     var recoveryCodes: [String] = []
     var sessions: [SessionItem] = []
@@ -73,6 +80,12 @@ private enum ApplicationAuthorizationKind {
     @ObservationIgnored private var logOperationType: String?
     @ObservationIgnored private var logResult: String?
     @ObservationIgnored private var authGeneration = 0
+    @ObservationIgnored private var profileRefresh: AccountRefreshTask?
+    @ObservationIgnored private var securityRefresh: AccountRefreshTask?
+    @ObservationIgnored private var profileRefreshGeneration: Int?
+    @ObservationIgnored private var securityRefreshGeneration: Int?
+    @ObservationIgnored private var profileRefreshedAt: Date?
+    @ObservationIgnored private var securityRefreshedAt: Date?
     @ObservationIgnored private var bindingAfterAuthentication = false
     @ObservationIgnored private var pendingRawQRCode: String?
     @ObservationIgnored private let isUITesting: Bool
@@ -106,6 +119,7 @@ private enum ApplicationAuthorizationKind {
 
     func probeServiceAvailability() async {
         guard serviceAvailability.isUnavailable else { return }
+        if isUITesting { serviceAvailability.recordServiceResponse(); return }
         _ = try? await repository.passwordRequirement()
     }
 
@@ -115,10 +129,8 @@ private enum ApplicationAuthorizationKind {
         user = snapshot.profile
         guard await repository.client.hasSession() else { user = nil; return }
         await run(message: "正在恢复登录状态…") {
-            if snapshot.accessToken == nil { _ = try await self.repository.client.restoreAccessToken() }
-            let profile = try await self.repository.currentUser()
-            try await self.repository.client.cacheUser(profile); self.user = profile
-            await self.refreshSecurity()
+            try await self.refreshProfileData(forceRefresh: false)
+            try await self.refreshSecurityData(forceRefresh: false)
         }
         schedulePushSynchronization()
     }
@@ -152,7 +164,13 @@ private enum ApplicationAuthorizationKind {
         return valid
     }
     func checkUsername(_ username: String) async -> Bool {
-        if isUITesting { return username.count >= 3 }
+        if isUITesting {
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-service-failure") {
+                serviceAvailability.recordServiceFailure()
+                return false
+            }
+            return username.count >= 3
+        }
         var available = false
         await run {
             available = try await self.repository.usernameAvailable(username)
@@ -212,7 +230,7 @@ private enum ApplicationAuthorizationKind {
             try await self.finishAuthentication(token: token, staged: staged, expectedGeneration: generation, source: challenge.source)
         }
     }
-    func cancelMFA() { authGeneration += 1; mfaChallenge = nil; authenticationRepository = nil; bindingAfterAuthentication = false; pendingRawQRCode = nil }
+    func cancelMFA() { authGeneration += 1; invalidateAccountRefreshes(); mfaChallenge = nil; authenticationRepository = nil; bindingAfterAuthentication = false; pendingRawQRCode = nil }
     func cancelPendingOAuth() { pendingOAuth = nil; bindingAfterAuthentication = false; pendingRawQRCode = nil }
     func createPendingAccount() async {
         guard let pending = pendingOAuth, pending.provider == "apple", pending.canRegister else { errorMessage = "请登录已有账号后完成关联"; return }
@@ -276,32 +294,63 @@ private enum ApplicationAuthorizationKind {
         }
     }
 
-    func loadDashboard() async {
-        guard isAuthenticated else { return }
-        await refreshProfile()
-        await refreshSecurity()
-        schedulePushSynchronization()
-    }
-    func refreshProfile() async {
-        await run { try await self.setProfile(self.repository.currentUser()) }
-    }
-    func updateProfile(key: String, value: String) async {
-        await run { try await self.setProfile(self.repository.updateProfile(key: key, value: value)); self.noticeMessage = "资料已保存" }
-    }
-    func uploadAvatar(data: Data, mimeType: String = "image/jpeg") async {
-        await run { try await self.setProfile(self.repository.uploadAvatar(data: data, mimeType: mimeType)); self.noticeMessage = "头像已更新" }
-    }
-    func refreshSecurity() async {
+    func loadDashboard(forceRefresh: Bool = true) async {
         guard isAuthenticated else { return }
         await run {
+            try await self.refreshProfileData(forceRefresh: forceRefresh)
+            try await self.refreshSecurityData(forceRefresh: forceRefresh)
+        }
+        if forceRefresh { schedulePushSynchronization() }
+    }
+    func refreshProfile(forceRefresh: Bool = true) async {
+        await run { try await self.refreshProfileData(forceRefresh: forceRefresh) }
+    }
+    private func refreshProfileData(forceRefresh: Bool) async throws {
+        let generation = authGeneration
+        if let refresh = profileRefresh, refresh.generation == generation { return try await refresh.task.value }
+        if !forceRefresh, profileRefreshGeneration == generation, isFresh(profileRefreshedAt) { return }
+        let accountID = user?.uuid
+        let refresh = AccountRefreshTask(generation: generation, task: Task {
+            let profile = try await self.accountResult(generation: generation, accountID: accountID) {
+                let snapshot = await self.repository.client.snapshot()
+                if snapshot.accessToken == nil { _ = try await self.repository.client.restoreAccessToken() }
+                return try await self.repository.currentUser()
+            }
+            try await self.setProfile(profile, generation: generation, accountID: accountID)
+            self.profileRefreshGeneration = generation
+            self.profileRefreshedAt = Date()
+        })
+        profileRefresh = refresh
+        defer { if profileRefresh?.id == refresh.id { profileRefresh = nil } }
+        try await refresh.task.value
+    }
+    func updateProfile(key: String, value: String) async {
+        let generation = authGeneration, accountID = user?.uuid
+        await run { try await self.setProfile(self.repository.updateProfile(key: key, value: value), generation: generation, accountID: accountID); self.noticeMessage = "资料已保存" }
+    }
+    func uploadAvatar(data: Data, mimeType: String = "image/jpeg") async {
+        let generation = authGeneration, accountID = user?.uuid
+        await run { try await self.setProfile(self.repository.uploadAvatar(data: data, mimeType: mimeType), generation: generation, accountID: accountID); self.noticeMessage = "头像已更新" }
+    }
+    func refreshSecurity(forceRefresh: Bool = true) async {
+        guard isAuthenticated else { return }
+        await run { try await self.refreshSecurityData(forceRefresh: forceRefresh) }
+    }
+    private func refreshSecurityData(forceRefresh: Bool) async throws {
+        let generation = authGeneration
+        if let refresh = securityRefresh, refresh.generation == generation { return try await refresh.task.value }
+        if !forceRefresh, securityRefreshGeneration == generation, isFresh(securityRefreshedAt) { return }
+        guard let accountID = user?.uuid else { throw APIError.cancelled }
+        let refresh = AccountRefreshTask(generation: generation, task: Task {
             async let keys = capture { try await self.repository.passkeys() }
             async let totp = capture { try await self.repository.totpStatus() }
             async let adaptive = capture { try await self.repository.adaptiveStatus() }
             async let apple = capture { try await self.repository.appleStatus() }
             async let qq = capture { try await self.repository.qqStatus() }
             let results = await (keys, totp, adaptive, apple, qq)
+            try self.checkAccount(generation: generation, accountID: accountID)
             if case .success(let value) = results.0 { self.passkeys = value }
-            if case .success(let value) = results.1 { self.totpStatus = value }
+            if case .success(let value) = results.1 { self.totpStatus = value; self.totpStatusLoaded = true }
             if case .success(let value) = results.2 { self.adaptiveStatus = value }
             if case .success(let value) = results.3 { self.appleBound = value }
             if case .success(let value) = results.4 { self.qqBound = value }
@@ -310,7 +359,12 @@ private enum ApplicationAuthorizationKind {
             }
             // Existing deployments do not expose Apple status until the matching API release.
             if case .failure(let error) = results.3, let apiError = error as? APIError, apiError.isUnauthorized { throw error }
-        }
+            self.securityRefreshGeneration = generation
+            self.securityRefreshedAt = Date()
+        })
+        securityRefresh = refresh
+        defer { if securityRefresh?.id == refresh.id { securityRefresh = nil } }
+        try await refresh.task.value
     }
     func updateSetting(field: String, value: Bool) async {
         await requireSensitive(title: "更改安全设置") {
@@ -378,12 +432,12 @@ private enum ApplicationAuthorizationKind {
         guard let setup = totpSetup else { return }
         await run {
             try await self.repository.confirmTOTP(code: code, recoveryCodes: setup.recoveryCodes)
-            self.recoveryCodes = setup.recoveryCodes; self.totpSetup = nil; self.totpStatus = try await self.repository.totpStatus(); self.noticeMessage = "验证器已启用，请妥善保存恢复码"
+            self.recoveryCodes = setup.recoveryCodes; self.totpSetup = nil; self.totpStatus = try await self.repository.totpStatus(); self.totpStatusLoaded = true; self.noticeMessage = "验证器已启用，请妥善保存恢复码"
         }
     }
     func disableTOTP() async {
         await requireSensitive(title: "关闭验证器") {
-            try await self.repository.disableTOTP(); self.totpStatus = try await self.repository.totpStatus(); self.recoveryCodes = []; self.totpSetup = nil; self.noticeMessage = "验证器已关闭"
+            try await self.repository.disableTOTP(); self.totpStatus = try await self.repository.totpStatus(); self.totpStatusLoaded = true; self.recoveryCodes = []; self.totpSetup = nil; self.noticeMessage = "验证器已关闭"
         }
     }
     func showRecoveryCodes() async {
@@ -391,11 +445,12 @@ private enum ApplicationAuthorizationKind {
     }
     func regenerateRecoveryCodes() async {
         await requireSensitive(title: "重新生成恢复码") {
-            self.recoveryCodes = try await self.repository.recoveryCodes(regenerate: true); self.totpStatus = try await self.repository.totpStatus(); self.noticeMessage = "恢复码已更新，之前的恢复码立即失效"
+            self.recoveryCodes = try await self.repository.recoveryCodes(regenerate: true); self.totpStatus = try await self.repository.totpStatus(); self.totpStatusLoaded = true; self.noticeMessage = "恢复码已更新，之前的恢复码立即失效"
         }
     }
     func changeEmail(newEmail: String, code: String) async {
-        await requireSensitive(title: "修改邮箱") { try await self.setProfile(self.repository.changeEmail(newEmail, code: code)); self.noticeMessage = "邮箱已更新" }
+        let generation = authGeneration, accountID = user?.uuid
+        await requireSensitive(title: "修改邮箱") { try await self.setProfile(self.repository.changeEmail(newEmail, code: code), generation: generation, accountID: accountID); self.noticeMessage = "邮箱已更新" }
     }
     func changePassword(newPassword: String) async {
         await requireSensitive(title: "修改密码") {
@@ -427,7 +482,13 @@ private enum ApplicationAuthorizationKind {
             }
         }
     }
-    func refreshSessions() async { await run { self.sessions = try await self.repository.sessions() } }
+    func refreshSessions() async {
+        let generation = authGeneration, accountID = user?.uuid
+        await run {
+            let sessions = try await self.accountResult(generation: generation, accountID: accountID) { try await self.repository.sessions() }
+            self.sessions = sessions
+        }
+    }
     func authorizedApps() async throws -> AuthorizedAppsSnapshot {
         #if DEBUG
         if isUITesting {
@@ -475,12 +536,25 @@ private enum ApplicationAuthorizationKind {
     func revokeSession(id: Int64) async {
         await requireSensitive(title: "撤销设备登录") { try await self.repository.revokeSession(id); self.sessions = try await self.repository.sessions(); self.noticeMessage = "设备会话已撤销" }
     }
-    func loadLogs(page: Int = 1, operationType: String? = nil, result: String? = nil) async {
-        await run {
-            let logs = try await self.repository.logs(page: page, operationType: operationType, result: result)
+    func loadLogs(page: Int = 1, operationType: String? = nil, result: String? = nil, reportError: Bool = true) async {
+        let generation = authGeneration, accountID = user?.uuid
+        await run(reportError: reportError) {
+            let logs = try await self.accountResult(generation: generation, accountID: accountID) { try await self.repository.logs(page: page, operationType: operationType, result: result) }
             self.logs = logs.data; self.logsPage = logs.page; self.totalPages = logs.totalPages; self.logsTotal = logs.total
             self.logOperationType = operationType; self.logResult = result
         }
+    }
+    func fetchLog(id: Int64) async -> SensitiveLogItem? {
+        guard let accountID = user?.uuid else { return nil }
+        #if DEBUG
+        if isUITesting { return logs.first { $0.id == id } }
+        #endif
+        let generation = authGeneration
+        var log: SensitiveLogItem?
+        await run {
+            log = try await self.accountResult(generation: generation, accountID: accountID) { try await self.repository.log(id: id) }
+        }
+        return log
     }
     func generateRecoveryTicket() async {
         await requireSensitive(title: "生成恢复授权") {
@@ -636,6 +710,7 @@ private enum ApplicationAuthorizationKind {
         authenticationInProgress = true
         defer { authenticationInProgress = false }
         authGeneration += 1
+        invalidateAccountRefreshes()
         let generation = authGeneration
         await run(message: message) {
             let staged = KsuserRepository(client: await self.repository.client.stagedClient())
@@ -650,18 +725,24 @@ private enum ApplicationAuthorizationKind {
         }
     }
     private func finishAuthentication(token: String, staged: KsuserRepository, expectedGeneration: Int? = nil, source: String? = nil) async throws {
+        let generation = expectedGeneration ?? authGeneration
         try await staged.client.setAccessToken(token, source: source)
         let profile = try await staged.currentUser()
         try await staged.client.cacheUser(profile)
         let previousSnapshot = await repository.client.snapshot()
-        if let expectedGeneration, expectedGeneration != authGeneration { throw APIError.cancelled }
+        guard generation == authGeneration else { throw APIError.cancelled }
         let previousUUID = user?.uuid ?? previousSnapshot.profile?.uuid
         try await repository.client.replaceSession(staged.client.snapshot())
+        guard generation == authGeneration else { throw APIError.cancelled }
+        invalidateAccountRefreshes()
+        profileRefreshGeneration = generation
+        profileRefreshedAt = Date()
         user = profile; mfaChallenge = nil; authenticationRepository = nil
         if source != "apple", previousUUID != profile.uuid { try native.clearAppleCredential() }
         if source == "apple" { try native.acceptAppleCredential() }
         // Erase previous-account data only after the replacement profile and credentials are complete.
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = source == "apple"; qqBound = source == "qq"
+        totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0); totpStatusLoaded = false
         recoveryCodes = []; totpSetup = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
         if let pending = pendingOAuth, bindingAfterAuthentication {
             bindingAfterAuthentication = false
@@ -671,14 +752,42 @@ private enum ApplicationAuthorizationKind {
                 await bindApple()
             }
         } else { pendingOAuth = nil }
-        await refreshSecurity()
+        await refreshSecurity(forceRefresh: false)
         schedulePushSynchronization()
         if let raw = pendingRawQRCode {
             pendingRawQRCode = nil
             await previewQRCode(raw)
         }
     }
-    private func setProfile(_ profile: UserProfile) async throws { try await repository.client.cacheUser(profile); user = profile }
+    private func setProfile(_ profile: UserProfile, generation: Int, accountID: String?) async throws {
+        try checkAccount(generation: generation, accountID: accountID)
+        if let accountID, profile.uuid != accountID { throw APIError.invalidResponse }
+        try await repository.client.cacheUser(profile)
+        try checkAccount(generation: generation, accountID: accountID)
+        user = profile
+    }
+    private func checkAccount(generation: Int, accountID: String?) throws {
+        try Task.checkCancellation()
+        guard generation == authGeneration, user?.uuid == accountID else { throw APIError.cancelled }
+    }
+    private func accountResult<Value: Sendable>(generation: Int, accountID: String?, operation: () async throws -> Value) async throws -> Value {
+        do {
+            let value = try await operation()
+            try checkAccount(generation: generation, accountID: accountID)
+            return value
+        } catch {
+            try checkAccount(generation: generation, accountID: accountID)
+            throw error
+        }
+    }
+    private func invalidateAccountRefreshes() {
+        profileRefresh?.task.cancel(); profileRefresh = nil; profileRefreshGeneration = nil
+        securityRefresh?.task.cancel(); securityRefresh = nil; securityRefreshGeneration = nil
+        profileRefreshedAt = nil; securityRefreshedAt = nil
+    }
+    private func isFresh(_ refreshedAt: Date?) -> Bool {
+        refreshedAt.map { Date().timeIntervalSince($0) < 30 } ?? false
+    }
     private func clearSessionAndUser() async throws {
         var cleanupError: Error?
         do { try await repository.client.clearSession() } catch { cleanupError = error }
@@ -691,9 +800,10 @@ private enum ApplicationAuthorizationKind {
         pushNotifications.signOut()
         mobileAuthorization = nil; mobileAuthorizationExpiresAt = nil; completedNativeAuthorizationURL = nil
         authGeneration += 1; user = nil; mfaChallenge = nil; authenticationRepository = nil; pendingOAuth = nil
+        invalidateAccountRefreshes()
         sensitiveRequest = nil; sensitiveContinuation = nil; bindingAfterAuthentication = false
         passkeys = []; sessions = []; logs = []; adaptiveStatus = nil; appleBound = false; qqBound = false; totpSetup = nil
-        totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0); recoveryCodes = []; qrConfirmation = nil; pendingRawQRCode = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
+        totpStatus = TotpStatus(enabled: false, recoveryCodesCount: 0); totpStatusLoaded = false; recoveryCodes = []; qrConfirmation = nil; pendingRawQRCode = nil; recoveryTicket = nil; recoveryTicketExpiresAt = nil
     }
     private func run(message: LocalizedMessage? = nil, reportError: Bool = true, operation: @MainActor () async throws -> Void) async {
         #if DEBUG
@@ -744,6 +854,7 @@ private enum ApplicationAuthorizationKind {
         appleBound = true
         passkeys = [PasskeyListItem(id: 1, name: "iPhone", transports: "internal", lastUsedAt: "2026-10-04T10:00:00", createdAt: "2026-10-01T10:00:00")]
         totpStatus = TotpStatus(enabled: true, recoveryCodesCount: 8)
+        totpStatusLoaded = true
         sessions = [SessionItem(id: 1, ipAddress: "192.0.2.1", ipLocation: "中国 · 上海", userAgent: "KsuserAuthMobile/1.0 (iOS 17.0)", browser: "Ksuser iOS", deviceType: "iPhone", createdAt: "2026-10-01T10:00:00", lastSeenAt: "2026-10-04T10:00:00", expiresAt: "2026-11-01T10:00:00", revokedAt: nil, online: true, current: true)]
         logs = [SensitiveLogItem(id: 1, operationType: "LOGIN", loginMethod: "passkey", loginMethods: ["passkey"], ipAddress: "192.0.2.1", ipLocation: "中国 · 上海", browser: "Ksuser iOS", deviceType: "iPhone", result: "success", failureReason: nil, riskScore: 10, actionTaken: "ALLOW", triggeredMultiErrorLock: false, triggeredRateLimitLock: false, durationMs: 80, createdAt: "2026-10-04T10:00:00")]
         logsTotal = logs.count

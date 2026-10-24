@@ -5,45 +5,34 @@ import Vision
 struct ScannerSheet: View {
     @Environment(\.locale) private var localizationLocale
     @Environment(\.dismiss) private var dismiss
-    let onDetected: (String) -> Void
+    let onDetected: @MainActor @Sendable (String) -> Void
     @State private var photo: PhotosPickerItem?
-    @State private var error: LocalizedMessage?
-    @State private var processing = false
-    @State private var delivered = false
+    @State private var scan = QRScanState()
     var body: some View {
+        let processing = scan.processing
         AppNavigationStack {
             VStack(spacing: 18) {
-                QRScannerView(onDetected: deliver, onError: { error = $0 })
+                QRScannerView(onDetected: { scan.deliver($0, onDetected: onDetected) }, onError: { scan.report($0) })
                     .overlay { ScanLineOverlay().allowsHitTesting(false) }
                     .clipShape(RoundedRectangle(cornerRadius: 24)).padding(.horizontal, 20)
                     .accessibilityLabel(L10n.text("二维码取景器"))
                 Text(L10n.text("将二维码对准屏幕中央")).font(.headline)
                 Text(L10n.text("确认授权前，你可以查看设备、位置和请求类型。")).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal)
-                if let error { Label(error.rendered, systemImage: "exclamationmark.circle").foregroundStyle(Brand.danger).font(.subheadline).padding(.horizontal).fixedSize(horizontal: false, vertical: true) }
+                if let error = scan.error { Label(error.rendered, systemImage: "exclamationmark.circle").foregroundStyle(Brand.danger).font(.subheadline).padding(.horizontal).fixedSize(horizontal: false, vertical: true) }
                 PhotosPicker(selection: $photo, matching: .images) { Label(processing ? L10n.text("识别中…") : L10n.text("从相册选择二维码"), systemImage: "photo").frame(maxWidth: .infinity, minHeight: 50) }
                     .buttonStyle(.bordered).tint(Brand.gold).padding(.horizontal, 20).disabled(processing)
                     .accessibilityIdentifier("qrPhotoPicker")
             }.padding(.bottom, 24).background(Brand.background).navigationTitle(L10n.text("扫码授权")).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { dismiss() } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L10n.text("取消")) { scan.deactivate(); dismiss() } } }
                 .onChange(of: photo) { _, selected in
                     guard let selected else { return }
-                    Task {
-                        processing = true
-                        defer { processing = false; photo = nil }
-                        do {
-                            guard let data = try await selected.loadTransferable(type: Data.self) else { throw ScanError.noCode }
-                            let codes = try await Task.detached(priority: .userInitiated) {
-                                try QRImageDecoder.decode(data)
-                            }.value
-                            guard let result = codes.first else { throw ScanError.noCode }
-                            deliver(result)
-                        } catch { self.error = LocalizedMessage(error: error) }
-                    }
+                    scan.readPhoto(load: { try await selected.loadTransferable(type: Data.self) }, onDetected: { value in onDetected(value) })
+                    photo = nil
                 }
         }
+        .onAppear { scan.activate() }
+        .onDisappear { scan.deactivate() }
     }
-    private func deliver(_ value: String) { guard !delivered else { return }; delivered = true; onDetected(value) }
-    private enum ScanError: LocalizedError { case noCode; var errorDescription: String? { L10n.text("没有找到可识别的二维码，请选择另一张图片。") } }
 }
 
 private struct ScanLineOverlay: View {

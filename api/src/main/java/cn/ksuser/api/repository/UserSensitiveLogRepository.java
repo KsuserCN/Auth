@@ -19,6 +19,8 @@ public interface UserSensitiveLogRepository extends JpaRepository<UserSensitiveL
 
     int countByUserId(Long userId);
 
+    Optional<UserSensitiveLog> findByIdAndUserId(Long id, Long userId);
+
     Page<UserSensitiveLog> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
     @Query("SELECT l FROM UserSensitiveLog l WHERE l.userId = :userId " +
