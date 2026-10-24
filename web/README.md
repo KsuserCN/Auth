@@ -42,6 +42,78 @@ OAuth 和官方应用授权页默认使用网页登录，电脑端提供「使�
 
 Console 在 `console.ksuser.cn` 内完成身份验证。为继续使用注册在 `auth.ksuser.cn` RP ID 下的现有 Passkey，部署时需要将 `public/.well-known/webauthn` 发布到 `https://auth.ksuser.cn/.well-known/webauthn`，并确保响应 `Content-Type` 为 `application/json`。Nginx 部署可将 [`deploy/nginx-webauthn-location.conf`](./deploy/nginx-webauthn-location.conf) 包含在 `auth.ksuser.cn` 的 HTTPS server 块中。API 端的 WebAuthn origin allowlist 也已包含 Console origin。
 
+## Android 版本清单与安装包
+
+公开的移动 App 介绍与下载页面为 `/downloads`，无需登录；登录页和已登录页面的侧栏均有入口。页面包含 Android 官网下载、按语言选择地区的 iOS App Store 链接、下载页二维码、功能介绍和安装问答。页面沿用 Web 的 Element Plus 明暗主题；Android 设备展示 Android App 的真实界面截图，其他设备统一展示 iOS 截图，并随站点主题切换截图。截图位于 `public/images/app-preview/`，来自各平台 App 的测试账号界面；后续更新界面时可替换同名的 `android-light.png`、`android-dark.png`、`ios-light.png`、`ios-dark.png`。Android 版本、构建号、更新说明及文件 SHA-256 实时读取 `/downloads/latest/android.json`，清单异常时提供重试入口，iOS 入口仍可使用。
+
+日常发布推荐在仓库根目录执行 `npm run release:android`：先修改 `mobile/android/app/build.gradle.kts` 中的 `versionName` / `versionCode`，命令会提示输入签名密码，自动构建并验证正式 APK、生成网站清单、构建 Web，最终得到 `build/release.apk` 和 `build/web/`。网站清单的版本与 SHA-256 从最终 APK 提取；无需修改 Web 的 `package.json` 版本。操作步骤见 [Android 一键发布说明](../mobile/android/RELEASE.md#日常发布改两行运行一个命令)。下方保留从已有签名 APK 生成静态文件的手动命令。
+
+Web 静态目录中的 `public/downloads/latest/android.json` 随构建复制到 `dist/downloads/latest/android.json`，根目录运行 `npm run build:web` 后也会出现在 `build/web/downloads/latest/android.json`。部署后的固定地址为：
+
+```text
+https://auth.ksuser.cn/downloads/latest/android.json
+https://auth.ksuser.cn/downloads/latest/android.apk
+```
+
+在仓库根目录，从最终签名 APK 生成配套清单与安装包，再构建 Web：
+
+```sh
+npm run prepare:mobile:android:web -- \
+  --apk mobile/android/app/build/outputs/apk/release/app-release.apk \
+  --certificate-sha256 RELEASE_CERTIFICATE_SHA256
+npm run build:web
+```
+
+将 `--apk` 换成实际的正式签名 APK 路径，`RELEASE_CERTIFICATE_SHA256` 换成签名证书 SHA-256。生成器会验证签名和网站域关联指纹，从 APK 提取版本并计算文件 SHA-256；不要只改 JSON 中的版本号。可添加 `--release-notes-file notes.txt` 和 `--force-update`。APK 是被 Git 忽略的本地产物，在其他机器或 CI 发布前需要重新生成；完整上传同一次构建的 `build/web/`，并原子切换站点目录，保证清单与安装包配套。
+
+在 `auth.ksuser.cn` 现有的 HTTPS `server` 块中加入 [`deploy/nginx-android-downloads-location.conf`](./deploy/nginx-android-downloads-location.conf) 的内容。`root` 应放在 `server` 层级并指向部署后的 `build/web/` 内容所在目录。例如：
+
+```nginx
+# 以下内容放入现有 HTTPS server，保留已有监听、证书和其他配置。
+root /var/www/auth;
+
+location = /downloads {
+    try_files /index.html =404;
+    expires -1;
+}
+
+location = /downloads/ {
+    return 301 /downloads$is_args$args;
+}
+
+location ^~ /downloads/ {
+    try_files $uri =404;
+    types {
+        application/json json;
+        application/vnd.android.package-archive apk;
+    }
+    default_type application/octet-stream;
+    expires -1;
+}
+
+# 已有此 location 时修改原块，不要重复添加。
+location / {
+    try_files $uri $uri/ /index.html;
+}
+```
+
+将示例 `/var/www/auth` 换成实际站点目录。`^~` 防止其他静态扩展名正则规则接管下载请求；`expires -1` 自动设置 `Cache-Control: no-cache`，使固定的 latest 地址重新验证缓存。清单以 `application/json` 返回，APK 以 `application/vnd.android.package-archive` 返回，文件不存在时返回 404。若现有配置在 `server` 层使用 `error_page 404 /index.html` 或 `error_page 404 =200 /index.html`，移除该 SPA 回退规则，改用上面的 `location /` 内 `try_files`，避免下载失败被改写为 HTML。[Nginx location / try_files 文档](https://nginx.org/en/docs/http/ngx_http_core_module.html#location)、[expires 文档](https://nginx.org/en/docs/http/ngx_http_headers_module.html#expires)。
+
+`/downloads` 的精确匹配用于提供 Vue 下载页面，`/downloads/` 规范化到该页面；这两条规则需要与下载文件目录规则一起更新。由于构建产物中确实存在 `downloads/` 目录，只有通用的 `$uri/` 规则可能把页面访问重定向到静态目录并返回 403。精确页面规则避免该问题，同时保留 `/downloads/latest/*.json`、`*.apk` 的静态下载行为。
+
+在服务器检查配置并重载，然后验证实际响应：
+
+```sh
+sudo nginx -t
+sudo systemctl reload nginx
+curl --fail --head https://auth.ksuser.cn/downloads
+curl --fail --silent --show-error https://auth.ksuser.cn/downloads/latest/android.json | python3 -m json.tool
+curl --fail --head https://auth.ksuser.cn/downloads/latest/android.apk
+curl --silent --output /dev/null --write-out '%{http_code}\n' https://auth.ksuser.cn/downloads/latest/not-found.json
+```
+
+最后一条应输出 `404`。Android 默认检查地址已经是该 JSON URL；升级判断比较整数 `versionCode`，下载后的文件散列、包名、版本与签名仍由 App 验证。完整发布流程见 [`mobile/android/RELEASE.md`](../mobile/android/RELEASE.md)。
+
 ## Project Setup
 
 ```sh

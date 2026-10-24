@@ -4,7 +4,7 @@
   "private": true,
   "description": "Root task runner for auth multi-project repository",
   "scripts": {
-    "help": "node -e \"console.log(['Available scripts:','  npm run dev:web','  npm run dev:console','  npm run dev:api','  npm run dev:desktop:macos','  npm run dev:mobile:android','  npm run dev:mobile:ios','  npm run build:web','  npm run build:console','  npm run test:console','  npm run build:api','  npm run build:desktop:macos','  npm run build:mobile:android:release','  npm run test:mobile:android','  npm run prepare:mobile:android:release','  npm run test:android-release','  npm run build:mobile:ios','  npm run test:mobile:ios','  npm run test:sdk:ios','  npm run build:sdk:ios','  npm run build:demo:ios','  npm run dev:demo:ios','  npm run archive:mobile:ios','  npm run dev:demo:oauth','  npm run dev:demo:oidc','  npm run dev:demo:sspu','  npm run dev:core','  npm run build:core'].join('\\n'))\"",
+    "help": "node -e \"console.log(['Available scripts:','  npm run dev:web','  npm run dev:console','  npm run dev:api','  npm run dev:desktop:macos','  npm run dev:mobile:android','  npm run dev:mobile:ios','  npm run build:web','  npm run build:console','  npm run test:console','  npm run build:api','  npm run build:desktop:macos','  npm run build:mobile:android:release','  npm run release:android','  npm run test:mobile:android','  npm run prepare:mobile:android:release','  npm run prepare:mobile:android:web','  npm run test:android-release','  npm run build:mobile:ios','  npm run test:mobile:ios','  npm run test:sdk:ios','  npm run build:sdk:ios','  npm run build:demo:ios','  npm run dev:demo:ios','  npm run archive:mobile:ios','  npm run dev:demo:oauth','  npm run dev:demo:oidc','  npm run dev:demo:sspu','  npm run dev:core','  npm run build:core'].join('\\n'))\"",
     "dev": "npm run dev:core",
     "build": "npm run build:core",
     "dev:core": "node -e \"const {spawn}=require('node:child_process'); const ps=[]; const start=(name,cmd,args,opts={})=>{const p=spawn(cmd,args,{stdio:'inherit',shell:true,...opts}); p.on('exit',(code,signal)=>{if(signal||code){for(const x of ps){if(x!==p&&!x.killed)x.kill('SIGTERM');} process.exitCode=code||1;}}); ps.push(p);}; start('api','./gradlew',['bootRun'],{cwd:'api',env:{...process.env,KSUSER_ENV:'development'}}); start('web','npm',['--prefix','web','run','dev']); start('console','npm',['--prefix','console','run','dev']); ['SIGINT','SIGTERM'].forEach(s=>process.on(s,()=>{for(const p of ps){if(!p.killed)p.kill('SIGTERM');} process.exit(130);}));\"",
@@ -57,6 +57,8 @@
     "check:security-logs": "node scripts/generate-security-log-catalog.mjs --check",
     "test:mobile:android": "cd mobile/android && ./gradlew :app:testDebugUnitTest",
     "prepare:mobile:android:release": "node scripts/generate-android-release.mjs",
-    "test:android-release": "node --test scripts/generate-android-release.test.mjs"
+    "prepare:mobile:android:web": "node scripts/generate-android-release.mjs --output web/public --base-url https://auth.ksuser.cn",
+    "test:android-release": "node --test scripts/generate-android-release.test.mjs scripts/release-android.test.mjs",
+    "release:android": "node scripts/release-android.mjs"
   }
 }

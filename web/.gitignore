@@ -38,6 +38,10 @@ __screenshots__/
 test-results/
 playwright-report/
 
+# Generated Android release binary; regenerate alongside the tracked manifest before publishing.
+/public/downloads/latest/android.apk
+/public/downloads/latest/.android.*.tmp
+
 
 api.md
 AGENTS.md

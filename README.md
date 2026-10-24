@@ -121,6 +121,7 @@ npm run dev:web
 | `npm run build:desktop:windows` | 构建 Windows 桌面端 |
 | `npm run dev:mobile:android` | 构建 Android Debug 包 |
 | `npm run build:mobile:android:release` | 构建 Android Release 包 |
+| `npm run release:android` | 提示签名密码，测试并生成 `build/release.apk` 和配套 `build/web/`，见 [发布操作](./mobile/android/RELEASE.md#日常发布改两行运行一个命令) |
 | `npm run dev:demo:oauth` | 启动 OAuth localhost Demo |
 | `npm run dev:demo:oidc` | 启动 OIDC localhost Demo |
 | `npm run dev:demo:sspu` | 启动 SSPU OAuth Demo |
