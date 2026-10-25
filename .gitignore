@@ -63,6 +63,9 @@ miniprogram
 # iOS developer-only environment overrides
 mobile/ios/Config/Local.xcconfig
 
+# HarmonyOS DevEco Studio machine-local SDK configuration
+mobile/harmonyos/local.properties
+
 docs/
 # Keep the generated API result-code reference with the shared catalog.
 !api/docs/

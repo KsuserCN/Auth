@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "Ksuser 账号与安全中心"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "Ksuser 账号与安全中心"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "Ksuser 安全"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#F6F7F9"
+    },
+    {
+      "name": "page_background",
+      "value": "#F6F7F9"
+    },
+    {
+      "name": "card_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "text_primary",
+      "value": "#20232B"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#737985"
+    },
+    {
+      "name": "text_tertiary",
+      "value": "#A2A7AF"
+    },
+    {
+      "name": "brand",
+      "value": "#946A22"
+    },
+    {
+      "name": "brand_soft",
+      "value": "#F4EBD9"
+    },
+    {
+      "name": "hero_background",
+      "value": "#F5EDDD"
+    },
+    {
+      "name": "success",
+      "value": "#32825B"
+    },
+    {
+      "name": "success_soft",
+      "value": "#EAF5EF"
+    },
+    {
+      "name": "danger",
+      "value": "#C4534C"
+    },
+    {
+      "name": "danger_soft",
+      "value": "#FAECEA"
+    },
+    {
+      "name": "divider",
+      "value": "#EFF0F3"
+    },
+    {
+      "name": "input_background",
+      "value": "#F4F5F7"
+    },
+    {
+      "name": "tab_background",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "on_brand",
+      "value": "#FFFFFF"
+    }
+  ]
+}
