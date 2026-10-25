@@ -7,10 +7,14 @@ on:
       - main
     paths:
       - 'mobile/android/**'
+      - 'sdk/android/**'
+      - 'demos/android-auth-demo/**'
       - '.github/workflows/build-mobile-android.yml'
   pull_request:
     paths:
       - 'mobile/android/**'
+      - 'sdk/android/**'
+      - 'demos/android-auth-demo/**'
       - '.github/workflows/build-mobile-android.yml'
 
 permissions:
@@ -22,7 +26,7 @@ defaults:
 
 jobs:
   build:
-    name: Android Debug Build
+    name: Android App, SDK and Demo
     runs-on: ubuntu-latest
 
     steps:
@@ -40,10 +44,21 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+        run: sdkmanager "platform-tools" "platforms;android-36.1" "build-tools;36.0.0"
 
       - name: Make Gradle executable
-        run: chmod +x gradlew
+        run: chmod +x gradlew ../../sdk/android/gradlew ../../demos/android-auth-demo/gradlew
+
+      - name: Test app
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Test and package SDK
+        working-directory: sdk/android
+        run: ./gradlew :sdk:testDebugUnitTest :sdk:assembleRelease :sdk:publishReleasePublicationToLocalRepository --no-daemon
+
+      - name: Build demo
+        working-directory: demos/android-auth-demo
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:generateDebugAssetLinks -PKSUSER_SDK_REPOSITORY=../../sdk/android/build/maven --no-daemon
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon
@@ -54,3 +69,68 @@ jobs:
           name: mobile-android-debug-apk
           path: mobile/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Upload SDK and local Maven repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: ksuser-auth-android-sdk
+          path: |
+            sdk/android/sdk/build/outputs/aar/*release.aar
+            sdk/android/build/maven/
+          if-no-files-found: error
+
+      - name: Upload demo
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-auth-demo-apk
+          path: |
+            demos/android-auth-demo/app/build/outputs/apk/debug/*.apk
+            demos/android-auth-demo/build/association/debug/assetlinks.json
+          if-no-files-found: error
+
+  device-tests:
+    name: Android API ${{ matrix.api }} device tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [24, 36]
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: oracle
+          java-version: '21'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install compile SDK
+        run: sdkmanager "platforms;android-36.1" "build-tools;36.0.0"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Keystore and approval UI checks
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            bash sdk/android/gradlew -p sdk/android :sdk:connectedDebugAndroidTest --no-daemon
+            bash mobile/android/gradlew -p mobile/android :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=cn.ksuser.auth.ParityUiTest --no-daemon
+      - name: Upload device test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-device-tests-api-${{ matrix.api }}
+          path: |
+            sdk/android/sdk/build/reports/androidTests/
+            sdk/android/sdk/build/outputs/androidTest-results/
+            mobile/android/app/build/reports/androidTests/
+            mobile/android/app/build/outputs/androidTest-results/

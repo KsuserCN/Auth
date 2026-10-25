@@ -60,6 +60,7 @@ data class MobileAuthorizationContext(
     val webOrigin: String? = null,
     val subjectName: String? = null,
     val subjectVerificationType: String? = null,
+    val nativeAuthorization: Boolean = false,
 )
 
 enum class AuthorizationGrantMode { PERSISTENT, ONE_TIME, TIME_LIMITED }
@@ -86,7 +87,7 @@ class MobileAuthorizationRepository(private val api: MobileAuthorizationApi, pri
         val response = executeEnvelope(gson) { api.context(ticket) }
         requireCode(response, 200)
         return requireNotNull(response.data) { "应用授权数据缺失" }.also {
-            require(it.ticket == ticket && it.appName.isNotBlank() && it.expiresInSeconds > 0) { "授权已过期或数据无效" }
+            require(!it.nativeAuthorization && it.ticket == ticket && it.appName.isNotBlank() && it.expiresInSeconds > 0) { "授权已过期或数据无效" }
         }
     }
 

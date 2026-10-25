@@ -242,6 +242,12 @@ public class Oauth2PlatformService {
     }
 
     public Oauth2AuthorizeApproveResponse approveAuthorization(User user, Oauth2AuthorizeRequest request) {
+        return approveAuthorization(user, request, null, null);
+    }
+
+    /** Native callers bind issuance to the exact platform/revision frozen when their ticket was created. */
+    Oauth2AuthorizeApproveResponse approveAuthorization(User user, Oauth2AuthorizeRequest request,
+                                                      String nativePlatform, String nativeRevision) {
         Oauth2AuthorizeContextResponse context = buildAuthorizeContext(
             user,
             request == null ? null : request.getClientId(),
@@ -254,6 +260,21 @@ public class Oauth2PlatformService {
         );
 
         Oauth2Application application = findActiveApplication(context.getClientId(), HttpStatus.BAD_REQUEST);
+        Map<String, String> platformRevisions = null;
+        if ("mobile".equals(application.getApplicationType())) {
+            if (nativePlatform != null || nativeRevision != null) {
+                validateNativeClient(application.getAppId());
+                String current = mobilePlatforms.nativeRevision(application.getAppId(), nativePlatform, context.getRedirectUri());
+                if (nativeRevision == null || !nativeRevision.equals(current)) {
+                    throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_request", ApiResultCode.NATIVE_AUTHORIZATION_INVALID);
+                }
+                platformRevisions = Map.of(nativePlatform, nativeRevision);
+            } else {
+                platformRevisions = mobilePlatforms.matchingRevisions(application.getAppId(), context.getRedirectUri());
+            }
+        } else if (nativePlatform != null || nativeRevision != null) {
+            throw invalidApplicationType();
+        }
         String grantMode = AuthorizationGrantPolicy.normalizeGrantMode(request == null ? null : request.getGrantMode());
         Integer grantTtlSeconds = AuthorizationGrantPolicy.resolveTtlSeconds(
             grantMode,
@@ -273,8 +294,8 @@ public class Oauth2PlatformService {
             authorization.getId(),
             request.getCodeChallenge(),
             request.getCodeChallengeMethod(),
-            "mobile".equals(application.getApplicationType())
-                ? mobilePlatforms.nativeRevision(application.getAppId(), "ios", context.getRedirectUri()) : null
+            platformRevisions == null ? null : platformRevisions.get("ios"),
+            platformRevisions
         );
         storeAuthorizationCode(code, payload);
 
@@ -329,8 +350,9 @@ public class Oauth2PlatformService {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_017);
         }
         validateTokenProof(application, payload, codeVerifier);
-        if ("mobile".equals(application.getApplicationType()) && (payload.mobileRevision() == null
-            || !payload.mobileRevision().equals(mobilePlatforms.nativeRevision(application.getAppId(), "ios", normalizedRedirectUri)))) {
+        if ("mobile".equals(application.getApplicationType()) && !mobilePlatforms.matchesAnyRevision(application.getAppId(), normalizedRedirectUri,
+            payload.mobilePlatformRevisions() != null ? payload.mobilePlatformRevisions()
+                : payload.mobileRevision() == null ? Map.of() : Map.of("ios", payload.mobileRevision()))) {
             throw new Oauth2Exception(HttpStatus.BAD_REQUEST, "invalid_grant", ApiResultCode.OAUTH2_017);
         }
 
@@ -817,6 +839,7 @@ public class Oauth2PlatformService {
                                             Long authorizationId,
                                             String codeChallenge,
                                             String codeChallengeMethod,
-                                            String mobileRevision) {
+                                            String mobileRevision,
+                                            Map<String, String> mobilePlatformRevisions) {
     }
 }

@@ -44,6 +44,7 @@ class Oauth2PublicClientTest {
     private final MobileAppPlatformService platforms = mock(MobileAppPlatformService.class);
     private final Oauth2TokenService tokens = mock(Oauth2TokenService.class);
     private final Map<String, String> memory = new HashMap<>();
+    private final Map<String, String> currentRevisions = new HashMap<>();
     private final Oauth2Application app = new Oauth2Application();
     private final User user = new User();
     private Oauth2PlatformService service;
@@ -53,7 +54,18 @@ class Oauth2PublicClientTest {
         service.setMobileAppPlatformService(platforms);
         when(platforms.normalize(any())).thenAnswer(inv -> inv.getArgument(0));
         when(platforms.redirectUris(any())).thenReturn(REDIRECT);
-        when(platforms.nativeRevision(anyString(), eq("ios"), anyString())).thenReturn("revision-one");
+        currentRevisions.put("ios", "revision-one");
+        when(platforms.nativeRevision(anyString(), anyString(), anyString())).thenAnswer(inv -> {
+            String revision = currentRevisions.get(inv.getArgument(1));
+            if (revision == null) throw new Oauth2Exception(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "invalid_request", cn.ksuser.api.result.ApiResultCode.NATIVE_AUTHORIZATION_INVALID);
+            return revision;
+        });
+        when(platforms.matchingRevisions(anyString(), anyString())).thenAnswer(inv -> Map.copyOf(currentRevisions));
+        when(platforms.matchesAnyRevision(anyString(), anyString(), anyMap())).thenAnswer(inv -> {
+            Map<String, String> frozen = inv.getArgument(2);
+            return frozen.entrySet().stream().anyMatch(entry -> entry.getValue().equals(currentRevisions.get(entry.getKey())));
+        });
         ReflectionTestUtils.setField(service, "maxAppsPerUser", 5);
         ReflectionTestUtils.setField(service, "authorizationCodeExpirationSeconds", 300L);
         ReflectionTestUtils.setField(service, "jwtSecret", "ksuser-very-secret-key-2026-public-client-test");
@@ -86,7 +98,15 @@ class Oauth2PublicClientTest {
     }
 
     private String approve(Oauth2AuthorizeRequest request) {
-        String query = URI.create(service.approveAuthorization(user, request).getRedirectUrl()).getRawQuery();
+        return code(service.approveAuthorization(user, request).getRedirectUrl());
+    }
+
+    private String approveNative(String platform) {
+        return code(service.approveAuthorization(user, request(), platform, currentRevisions.get(platform)).getRedirectUrl());
+    }
+
+    private String code(String redirectUrl) {
+        String query = URI.create(redirectUrl).getRawQuery();
         return java.util.Arrays.stream(query.split("&")).filter(part -> part.startsWith("code="))
             .findFirst().orElseThrow().substring(5);
     }
@@ -253,9 +273,70 @@ class Oauth2PublicClientTest {
 
     @Test void changingPlatformRegistrationInvalidatesPreviouslyIssuedCodes() {
         String code = approve(request());
-        when(platforms.nativeRevision("native-client", "ios", REDIRECT)).thenReturn("new-revision");
+        currentRevisions.put("ios", "new-revision");
         assertThrows(Oauth2Exception.class, () -> service.exchangeAuthorizationCode("authorization_code", code, "native-client", null, REDIRECT, VERIFIER));
         verify(tokens, never()).generateAccessToken(anyString(), anyLong(), anyLong(), anyString(), anyString(), anyString(), nullable(String.class), anyLong());
+    }
+
+    @Test void androidOnlyNativeAndBrowserRequestsExchangeWithoutAnIosPlatform() {
+        currentRevisions.clear(); currentRevisions.put("android", "android-one");
+        String nativeCode = approveNative("android");
+        assertTrue(memory.get("oauth2:auth-code:" + nativeCode).contains("\"mobilePlatformRevisions\":{\"android\":\"android-one\"}"));
+        assertEquals("oauth-access-token", service.exchangeAuthorizationCode("authorization_code", nativeCode,
+            "native-client", null, REDIRECT, VERIFIER).get("access_token"));
+        String browserCode = approve(request());
+        assertEquals("oauth-access-token", service.exchangeAuthorizationCode("authorization_code", browserCode,
+            "native-client", null, REDIRECT, VERIFIER).get("access_token"));
+        verify(platforms, never()).nativeRevision("native-client", "ios", REDIRECT);
+    }
+
+    @Test void nativeAndroidCodeCannotBeRescuedBySharedIosCallbackAfterAndroidChanges() {
+        currentRevisions.put("android", "android-one");
+        String code = approveNative("android");
+        currentRevisions.put("android", "android-two");
+        assertThrows(Oauth2Exception.class, () -> service.exchangeAuthorizationCode("authorization_code", code,
+            "native-client", null, REDIRECT, VERIFIER));
+        verify(tokens, never()).generateAccessToken(anyString(), anyLong(), anyLong(), anyString(), anyString(), anyString(), nullable(String.class), anyLong());
+    }
+
+    @Test void changingIosDoesNotInvalidateAnAndroidNativeCode() {
+        currentRevisions.put("android", "android-one");
+        String code = approveNative("android");
+        currentRevisions.put("ios", "ios-two");
+        assertEquals("oauth-access-token", service.exchangeAuthorizationCode("authorization_code", code,
+            "native-client", null, REDIRECT, VERIFIER).get("access_token"));
+    }
+
+    @Test void browserCodeUsesOnlyThePlatformsVerifiedAtIssuance() {
+        String iosOnly = approve(request());
+        currentRevisions.put("android", "android-one"); currentRevisions.put("ios", "ios-two");
+        assertThrows(Oauth2Exception.class, () -> service.exchangeAuthorizationCode("authorization_code", iosOnly,
+            "native-client", null, REDIRECT, VERIFIER));
+        String shared = approve(request());
+        currentRevisions.put("ios", "ios-three");
+        assertEquals("oauth-access-token", service.exchangeAuthorizationCode("authorization_code", shared,
+            "native-client", null, REDIRECT, VERIFIER).get("access_token"));
+    }
+
+    @Test void nativeIssuanceChecksTheFrozenRevisionBeforeRecordingAGrant() {
+        currentRevisions.put("android", "android-new");
+        assertThrows(Oauth2Exception.class, () -> service.approveAuthorization(user, request(), "android", "android-old"));
+        verify(grants, never()).save(any()); assertTrue(memory.isEmpty());
+    }
+
+    @Test void oldIosCodeWithoutPlatformSnapshotKeepsItsOriginalIosBinding() throws Exception {
+        String code = approveNative("ios");
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        var json = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(memory.get("oauth2:auth-code:" + code));
+        json.remove("mobilePlatformRevisions"); memory.put("oauth2:auth-code:" + code, mapper.writeValueAsString(json));
+        assertEquals("oauth-access-token", service.exchangeAuthorizationCode("authorization_code", code,
+            "native-client", null, REDIRECT, VERIFIER).get("access_token"));
+        String obsolete = approveNative("ios");
+        json = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(memory.get("oauth2:auth-code:" + obsolete));
+        json.remove("mobilePlatformRevisions"); memory.put("oauth2:auth-code:" + obsolete, mapper.writeValueAsString(json));
+        currentRevisions.remove("ios"); currentRevisions.put("android", "revision-one");
+        assertThrows(Oauth2Exception.class, () -> service.exchangeAuthorizationCode("authorization_code", obsolete,
+            "native-client", null, REDIRECT, VERIFIER));
     }
 
     @Test void nativeRegistrationRequiresActivePublicClient() {

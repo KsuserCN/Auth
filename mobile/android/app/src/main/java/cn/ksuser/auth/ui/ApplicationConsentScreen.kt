@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
 import cn.ksuser.auth.data.authorization.MobileAuthorizationLinks
+import cn.ksuser.auth.data.authorization.PendingNativeAuthorization
 import cn.ksuser.auth.data.model.UserProfile
 import cn.ksuser.auth.ui.components.AppRadius
 import cn.ksuser.auth.ui.components.GradientPrimaryButton
@@ -70,6 +71,7 @@ internal fun ApplicationConsentScreen(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onOptionsChanged: (AuthorizationGrantMode, Int, Boolean) -> Unit,
+    errorMessage: String? = null,
 ) {
     val context = pending.authorization
     val preview = pending.authorizationPreview
@@ -100,6 +102,7 @@ internal fun ApplicationConsentScreen(
             }
         },
     ) {
+        errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             val logo = context?.logoUrl?.takeIf { it.isNotBlank() } ?: preview?.targetLogoUrl
             ApplicationLogo(appName, logo, size = 64.dp, modifier = Modifier)
@@ -124,7 +127,8 @@ internal fun ApplicationConsentScreen(
                 }) }
                 Detail(copy("联系方式", "Contact"), context?.contactInfo?.takeIf { it.isNotBlank() } ?: copy("未提供", "Not provided"))
             }
-            Detail(copy("返回网站", "Return website"), context?.redirectUri?.let { MobileAuthorizationLinks.origin(it) } ?: preview?.targetOrigin ?: copy("未提供", "Not provided"))
+            Detail(if (context?.nativeAuthorization == true) copy("应用回调", "Application callback") else copy("返回网站", "Return website"),
+                context?.redirectUri?.let { if (context.nativeAuthorization) it else MobileAuthorizationLinks.origin(it) } ?: preview?.targetOrigin ?: copy("未提供", "Not provided"))
             if (console) Text(copy("仅超级管理员可登录管理中心，权限由服务器校验。", "Only super administrators can sign in to Console. The server checks your access."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (official && !console) Text(copy("官方应用授权 · 可在已授权应用中撤销", "Official application · Revoke access in Authorized applications"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -186,7 +190,42 @@ internal fun ApplicationConsentScreen(
                 Text(copy("默认仅授权此应用。开启后，发起请求的浏览器也会登录当前账号。", "By default, only the application is authorized. Enabling this also signs the requesting browser in to your account."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        Text(if (context?.qr != false) copy("完成后请返回发起扫码请求的设备", "After confirming, return to the device that displayed the code") else copy("完成后将返回浏览器", "You will return to the browser when finished"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(when {
+            context?.nativeAuthorization == true -> copy("完成后将返回调用应用", "You will return to the requesting application when finished")
+            context?.qr != false -> copy("完成后请返回发起扫码请求的设备", "After confirming, return to the device that displayed the code")
+            else -> copy("完成后将返回浏览器", "You will return to the browser when finished")
+        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun NativeAuthorizationReturnScreen(
+    result: PendingNativeAuthorization,
+    onReturn: () -> Unit,
+    onClose: () -> Unit,
+    errorMessage: String? = null,
+) {
+    val remaining = requestSecondsRemaining(result.expiresAtMillis)
+    BackHandler(onBack = onClose)
+    ConfirmationScreenLayout(
+        title = copy("返回应用", "Return to application"),
+        isBusy = false,
+        onCancel = onClose,
+        actions = {
+            GradientPrimaryButton(text = copy("返回应用继续", "Return to application"), onClick = onReturn,
+                enabled = remaining > 0, modifier = Modifier.fillMaxWidth())
+            OutlinedButton(onClick = onClose, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                Text(copy("关闭", "Close"))
+            }
+        },
+    ) {
+        errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Text(if (result.approved == true) copy("应用授权已完成", "Application authorization completed")
+            else copy("已拒绝应用授权", "Application authorization denied"), style = MaterialTheme.typography.headlineSmall)
+        Text(result.appName.orEmpty(), style = MaterialTheme.typography.titleLarge)
+        Text(if (remaining > 0) copy("如果没有自动返回，请点击下方按钮。重试只会返回应用，不会再次授权。",
+            "If you did not return automatically, use the button below. Retrying only returns to the app and does not authorize again.")
+            else copy("返回链接已过期，请在调用应用重新发起授权。", "The return link expired. Start a new authorization in the requesting app."))
     }
 }
 

@@ -8,6 +8,7 @@ object MobileAuthorizationLinks {
     sealed interface Request {
         data class Bridge(val challengeId: String) : Request
         data class Application(val ticket: String) : Request
+        data class Native(val ticket: String) : Request
         data class Approval(val code: String) : Request
         data class Transfer(val code: String) : Request
     }
@@ -16,6 +17,7 @@ object MobileAuthorizationLinks {
     private fun isCode(value: String) = Regex("^[A-Za-z0-9_-]{16,512}$").matches(value)
 
     fun deepLink(value: String, webOrigin: String): Request? = runCatching {
+        NativeAuthorizationLinks.ticket(value, webOrigin)?.let { return Request.Native(it) }
         val uri = URI(value)
         val web = URI(webOrigin)
         if (uri.rawUserInfo != null || uri.rawFragment != null) return null

@@ -87,7 +87,7 @@ class NativeAuthorizationServiceTest {
                 List.of("profile", "email"), false, "PERSISTENT", null));
         when(official.buildAuthorizeContext(any(), any())).thenReturn(new OfficialAuthorizationService.AuthorizeContext(
             "official", "Official", null, List.of("openid", "profile"), List.of(), true, false, false));
-        when(oauth.approveAuthorization(any(), any())).thenReturn(new Oauth2AuthorizeApproveResponse(CALLBACK + "?code=kscode_test&state=" + STATE));
+        when(oauth.approveAuthorization(any(), any(), anyString(), anyString())).thenReturn(new Oauth2AuthorizeApproveResponse(CALLBACK + "?code=kscode_test&state=" + STATE));
         when(official.approveAuthorization(any(), any())).thenReturn(Map.of("redirectUrl", CALLBACK + "?code=ofc_test&state=" + STATE));
     }
 
@@ -98,7 +98,8 @@ class NativeAuthorizationServiceTest {
         return a;
     }
     private NativeAuthorizationService.Created create() { return create("oauth", authorization()); }
-    private NativeAuthorizationService.Created create(String mode, MobileAuthorizeRequest a) { return service.create(new NativeAuthorizationService.CreateRequest(mode, "ios", a), "192.0.2.8"); }
+    private NativeAuthorizationService.Created create(String mode, MobileAuthorizeRequest a) { return create(mode, "ios", a); }
+    private NativeAuthorizationService.Created create(String mode, String platform, MobileAuthorizeRequest a) { return service.create(new NativeAuthorizationService.CreateRequest(mode, platform, a), "192.0.2.8"); }
     private NativeAuthorizationService.Decision approve(String ticket) { return new NativeAuthorizationService.Decision(ticket, true, "PERSISTENT", null); }
 
     @Test void onlyPublicMetadataAndCancelCapabilityLeaveCreate() throws Exception {
@@ -122,7 +123,7 @@ class NativeAuthorizationServiceTest {
         var result = service.decide(new NativeAuthorizationService.Decision(created.ticket(), true, "TIME_LIMITED", 3600), user);
         assertTrue(result.completed()); assertEquals(CALLBACK + "?code=kscode_test&state=" + STATE, result.returnUrl());
         var captor = ArgumentCaptor.forClass(Oauth2AuthorizeRequest.class);
-        verify(oauth).approveAuthorization(eq(user), captor.capture());
+        verify(oauth).approveAuthorization(eq(user), captor.capture(), eq("ios"), eq("revision-1"));
         assertEquals(CALLBACK, captor.getValue().getRedirectUri()); assertEquals("profile email", captor.getValue().getScope());
         assertEquals("c".repeat(43), captor.getValue().getCodeChallenge()); assertEquals("S256", captor.getValue().getCodeChallengeMethod());
         assertEquals("TIME_LIMITED", captor.getValue().getGrantMode()); assertEquals(3600, captor.getValue().getGrantTtlSeconds());
@@ -136,14 +137,14 @@ class NativeAuthorizationServiceTest {
         verify(official, atLeastOnce()).validateNativeClient("official");
         verify(official).approveAuthorization(eq(user), argThat(request -> STATE.equals(request.state())
             && "n".repeat(43).equals(request.nonce()) && "c".repeat(43).equals(request.codeChallenge())));
-        verify(oauth, never()).approveAuthorization(any(), any());
+        verify(oauth, never()).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void denialReturnsOnlyRegisteredErrorAndState() {
         var created = create();
         String callback = service.decide(new NativeAuthorizationService.Decision(created.ticket(), false, null, null), user).returnUrl();
         assertEquals(CALLBACK + "?error=access_denied&state=" + STATE, callback);
-        verify(oauth, never()).approveAuthorization(any(), any());
+        verify(oauth, never()).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void denialPreservesAlreadyEncodedRegisteredPath() {
@@ -156,7 +157,7 @@ class NativeAuthorizationServiceTest {
     @Test void identicalDecisionRetryDoesNotIssueAnotherCode() {
         var created = create(); var decision = approve(created.ticket());
         assertEquals(service.decide(decision, user), service.decide(decision, user));
-        verify(oauth, times(1)).approveAuthorization(any(), any());
+        verify(oauth, times(1)).approveAuthorization(any(), any(), anyString(), anyString());
         User other = new User(); other.setId(8L); other.setUuid("other-user");
         assertEquals(HttpStatus.CONFLICT, assertThrows(Oauth2Exception.class, () -> service.decide(decision, other)).getStatus());
         assertThrows(Oauth2Exception.class, () -> service.decide(new NativeAuthorizationService.Decision(created.ticket(), false, null, null), user));
@@ -168,7 +169,7 @@ class NativeAuthorizationServiceTest {
         assertEquals("cancelled", service.cancel(request).status()); assertEquals("cancelled", service.cancel(request).status());
         assertThrows(Oauth2Exception.class, () -> service.preview(created.ticket(), user));
         assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
-        verify(oauth, never()).approveAuthorization(any(), any());
+        verify(oauth, never()).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void wrongCancelSecretFailsAndCompletedCancelNeverLeaksCallback() throws Exception {
@@ -183,35 +184,35 @@ class NativeAuthorizationServiceTest {
 
     @Test void cancellationCannotDeleteAnInFlightDecision() {
         var created = create();
-        when(oauth.approveAuthorization(any(), any())).thenAnswer(inv -> {
+        when(oauth.approveAuthorization(any(), any(), anyString(), anyString())).thenAnswer(inv -> {
             assertEquals("decided", service.cancel(new NativeAuthorizationService.CancelRequest(created.ticket(), created.cancelSecret())).status());
             assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
             return new Oauth2AuthorizeApproveResponse(CALLBACK + "?code=kscode_test&state=" + STATE);
         });
         assertTrue(service.decide(approve(created.ticket()), user).completed());
-        verify(oauth, times(1)).approveAuthorization(any(), any());
+        verify(oauth, times(1)).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void failedIssuanceRetainsExclusiveClaimAndCannotIssueAgain() {
         var created = create();
-        when(oauth.approveAuthorization(any(), any())).thenThrow(new IllegalStateException("simulated outage"));
+        when(oauth.approveAuthorization(any(), any(), anyString(), anyString())).thenThrow(new IllegalStateException("simulated outage"));
         assertThrows(IllegalStateException.class, () -> service.decide(approve(created.ticket()), user));
         assertEquals("NATIVE_AUTHORIZATION_FAILED", assertThrows(Oauth2Exception.class,
             () -> service.decide(approve(created.ticket()), user)).getResult().errorCode().name());
-        verify(oauth, times(1)).approveAuthorization(any(), any());
+        verify(oauth, times(1)).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void rejectsUnexpectedIssuerCallbackAndDoesNotPublishIt() {
         var created = create();
-        when(oauth.approveAuthorization(any(), any())).thenReturn(new Oauth2AuthorizeApproveResponse("https://evil.example/callback?code=stolen&state=" + STATE));
+        when(oauth.approveAuthorization(any(), any(), anyString(), anyString())).thenReturn(new Oauth2AuthorizeApproveResponse("https://evil.example/callback?code=stolen&state=" + STATE));
         assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
         assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
-        verify(oauth, times(1)).approveAuthorization(any(), any());
+        verify(oauth, times(1)).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void expiresWithoutDeliveringIssuedCodeWhenRequestDisappears() {
         var created = create();
-        when(oauth.approveAuthorization(any(), any())).thenAnswer(inv -> {
+        when(oauth.approveAuthorization(any(), any(), anyString(), anyString())).thenAnswer(inv -> {
             memory.remove("native:authorization:" + created.ticket());
             return new Oauth2AuthorizeApproveResponse(CALLBACK + "?code=kscode_test&state=" + STATE);
         });
@@ -253,10 +254,49 @@ class NativeAuthorizationServiceTest {
         a.setCodeChallengeMethod("S256"); a.setCodeChallenge(null); assertThrows(Oauth2Exception.class, () -> create("oauth", a));
     }
 
-    @Test void platformIsMandatoryAndAndroidNativeIsNotReleased() {
+    @Test void platformIsMandatoryAndUnknownPlatformIsRejected() {
         assertThrows(Oauth2Exception.class, () -> service.create(new NativeAuthorizationService.CreateRequest("oauth", null, authorization()), "192.0.2.8"));
-        assertThrows(Oauth2Exception.class, () -> service.create(new NativeAuthorizationService.CreateRequest("oauth", "android", authorization()), "192.0.2.8"));
-        assertThrows(Oauth2Exception.class, () -> service.create(new NativeAuthorizationService.CreateRequest("official", "android", authorization()), "192.0.2.8"));
+        assertThrows(Oauth2Exception.class, () -> service.create(new NativeAuthorizationService.CreateRequest("oauth", "windows", authorization()), "192.0.2.8"));
+        assertThrows(Oauth2Exception.class, () -> service.create(new NativeAuthorizationService.CreateRequest("official", "ANDROID", authorization()), "192.0.2.8"));
+    }
+
+    @Test void androidFreezesItsOwnPlatformAndRevisionThroughApproval() {
+        var created = create("oauth", "android", authorization());
+        assertFalse(service.preview(created.ticket(), user).officialApplication());
+        assertTrue(service.decide(approve(created.ticket()), user).completed());
+        verify(oauth).approveAuthorization(eq(user), any(), eq("android"), eq("revision-1"));
+        verify(oauth, atLeastOnce()).validateNativeClient("client", "android", CALLBACK);
+        verify(platforms, never()).nativeRevision("client", "ios", CALLBACK);
+    }
+
+    @Test void androidOfficialUsesIndependentOfficialRegistration() {
+        var a = authorization(); a.setClientId("official"); a.setScope("openid profile");
+        var created = create("official", "android", a);
+        assertTrue(service.preview(created.ticket(), user).officialApplication());
+        assertTrue(service.decide(approve(created.ticket()), user).returnUrl().contains("code=ofc_test"));
+        verify(official, atLeastOnce()).validateNativeClient("official");
+        verifyNoInteractions(platforms);
+    }
+
+    @Test void androidRevisionChangeInvalidatesTicketButIosChangeDoesNot() {
+        var created = create("oauth", "android", authorization());
+        when(platforms.nativeRevision("client", "ios", CALLBACK)).thenReturn("changed-ios");
+        assertNotNull(service.preview(created.ticket(), user));
+        when(platforms.nativeRevision("client", "android", CALLBACK)).thenReturn("changed-android");
+        assertThrows(Oauth2Exception.class, () -> service.preview(created.ticket(), user));
+        assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
+        verify(oauth, never()).approveAuthorization(any(), any(), anyString(), anyString());
+    }
+
+    @Test void platformChangeDuringIssuanceNeverPublishesTheCallback() {
+        var created = create("oauth", "android", authorization());
+        when(oauth.approveAuthorization(any(), any(), anyString(), anyString())).thenAnswer(inv -> {
+            when(platforms.nativeRevision("client", "android", CALLBACK)).thenReturn("changed-during-issue");
+            return new Oauth2AuthorizeApproveResponse(CALLBACK + "?code=kscode_test&state=" + STATE);
+        });
+        assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
+        assertFalse(memory.containsKey("native:authorization:" + created.ticket() + ":result")
+            && memory.get("native:authorization:" + created.ticket() + ":result").contains("kscode_test"));
     }
 
     @Test void platformConfigurationChangeInvalidatesFrozenTicketEvenAfterReverification() {
@@ -265,7 +305,7 @@ class NativeAuthorizationServiceTest {
         assertThrows(Oauth2Exception.class, () -> service.preview(created.ticket(), user));
         assertThrows(Oauth2Exception.class, () -> service.decide(approve(created.ticket()), user));
         assertThrows(Oauth2Exception.class, () -> service.decide(new NativeAuthorizationService.Decision(created.ticket(), false, null, null), user));
-        verify(oauth, never()).approveAuthorization(any(), any());
+        verify(oauth, never()).approveAuthorization(any(), any(), anyString(), anyString());
     }
 
     @Test void removedPlatformVerificationInvalidatesTicket() {

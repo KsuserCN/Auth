@@ -178,6 +178,12 @@ npm run dev:web
 
 小型原生示例位于 [demos/ios-auth-demo](./demos/ios-auth-demo/README.md)，运行 `npm run dev:demo:ios` 打开 Xcode 工程，`npm run build:demo:ios` 验证模拟器构建。
 
+### Android 授权 SDK
+
+其他 Android 7.0+ App 可通过独立的 [Android SDK](./sdk/android/README.md) 接入第三方 OAuth 或官方 OIDC。SDK 使用 public client、PKCE 和精确 HTTPS App Link 回调，支持 App 间授权、同一 ticket 网页继续、取消与冷启动恢复。
+
+运行 `npm run test:sdk:android` 验证 SDK，`npm run build:sdk:android` 生成 Release AAR、源码包及本地 Maven 仓库，`npm run build:demo:android` 构建 [独立 Demo](./demos/android-auth-demo/README.md)。远程 Maven 版本尚未发布。上线前须完成 API、Web、新版 Ksuser Android App 和实际签名域关联部署，再使用现有开关与 client allowlist 放行。
+
 ## 子项目文档
 
 - [API 文档](./api/README.md)
@@ -187,6 +193,7 @@ npm run dev:web
 - [Android 文档](./mobile/android/README.md)、[验收记录](./mobile/android/ACCEPTANCE.md)、[发布流程](./mobile/android/RELEASE.md)
 - [iOS 文档](./docs/ios/README.md)
 - [iOS 授权 SDK](./sdk/ios/README.md)
+- [Android 授权 SDK](./sdk/android/README.md)
 - [Demo 索引](./demos/README.md)
 
 ## CI / 构建工作流

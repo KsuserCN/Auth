@@ -12,7 +12,7 @@ npm run dev:demo:ios
 
 也可以用 Xcode 打开本目录的 `NativeLoginDemo.xcodeproj`，选择共享 scheme `NativeLoginDemo`。工程通过 `../..` 引用仓库根 `Package.swift` 中的 SDK，不需要重新添加依赖。
 
-1. 在开放平台“移动应用”创建应用，将 [DemoConfiguration.swift](DemoConfiguration.swift) 的 `oauthClientID` 替换为 AppID。移动应用固定 public＋PKCE，没有 AppSecret；网站类目不能用于这个 Demo 的原生授权。同一 AppID 可同时登记 iOS、Android，本次使用 iOS；Android 登记与域名验证已纳入模型，授权入口和 SDK 后续提供。要测试官方模式，再填写 Console 独立注册的 public `officialClientID`。两种 ID 不能混用，不要添加 `client_secret`。
+1. 在开放平台“移动应用”创建应用，将 [DemoConfiguration.swift](DemoConfiguration.swift) 的 `oauthClientID` 替换为 AppID。移动应用固定 public＋PKCE，没有 AppSecret；网站类目不能用于这个 Demo 的原生授权。同一 AppID 可同时登记 iOS、Android，本目录使用 iOS；对应 [Android Demo](../android-auth-demo/README.md) 共用默认 AppID 与回调，Android 包名、签名和 App Link 需单独登记验证。要测试官方模式，再填写 Console 独立注册的 public `officialClientID`。两种 ID 不能混用，不要添加 `client_secret`。
 2. 将 `redirectURI` 改为自己控制、已经在相应客户端登记的精确 HTTPS 地址，例如 `https://login.your-domain.example/ksuser/callback`。回调无 query、fragment，端口省略或为 443，回调域名不能与 Ksuser 授权入口域名相同。两个模式可以登记同一 Demo 回调。
 3. `apiBaseURL`、`webBaseURL` 和 `officialIssuer` 默认指向生产环境。联调自部署服务时一并修改为对应 HTTPS 地址；SDK 不接受 HTTP 环境。`scopes(for:)` 默认第三方使用 `profile`，官方使用 `openid profile`。
 4. 在 Xcode 的 Signing & Capabilities 中选择自己的 Team。Demo 的 Bundle ID 固定为 `cn.ksuser.demo.oauth`；开放平台登记时使用相同值。工程使用 Automatic Signing，最低系统保持 iOS 17.4。

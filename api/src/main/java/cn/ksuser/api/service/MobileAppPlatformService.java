@@ -134,27 +134,53 @@ public class MobileAppPlatformService {
     }
 
     public void validateNative(String appId, String platform, String redirectUri) {
-        if (!"ios".equals(platform)) throw invalid(); // Android SDK is not released yet.
-        validateMobileRedirect(appId, redirectUri);
+        validatedPlatform(appId, platform, redirectUri);
     }
 
     public String nativeRevision(String appId, String platform, String redirectUri) {
-        if (!"ios".equals(platform)) throw invalid();
-        return validatedIos(appId, redirectUri).getConfigRevision();
+        return validatedPlatform(appId, platform, redirectUri).getConfigRevision();
     }
 
     /** Also guards browser and QR OAuth routes, so they cannot bypass native platform registration. */
     public void validateMobileRedirect(String appId, String redirectUri) {
-        validatedIos(appId, redirectUri);
+        matchingRevisions(appId, redirectUri);
     }
 
-    private Oauth2AppPlatform validatedIos(String appId, String redirectUri) {
-        var row = repository.findByAppIdAndPlatform(appId, "ios").orElseThrow(MobileAppPlatformService::invalid);
-        if (!row.isConfigured()) throw invalid();
-        var ios = decode(row.getConfigJson(), MobileAppPlatforms.Ios.class);
-        if (!"verified".equals(row.getVerificationStatus()) || !ios.universalLink().equals(redirectUri)) throw invalid();
+    /** Browser/QR requests have no explicit platform and may use a callback shared by both platforms. */
+    public Map<String, String> matchingRevisions(String appId, String redirectUri) {
+        Map<String, String> revisions = new LinkedHashMap<>();
+        for (var row : repository.findAllByAppId(appId)) {
+            if (matches(row, redirectUri)) revisions.put(row.getPlatform(), row.getConfigRevision());
+        }
+        if (revisions.isEmpty()) throw invalid();
+        return Map.copyOf(revisions);
+    }
+
+    /** Only the revisions frozen into a code can validate it; newly registered platforms cannot rescue it. */
+    public boolean matchesAnyRevision(String appId, String redirectUri, Map<String, String> revisions) {
+        if (revisions == null || revisions.isEmpty() || revisions.size() > 2
+            || revisions.entrySet().stream().anyMatch(entry -> !supported(entry.getKey()) || entry.getValue() == null || entry.getValue().isBlank())) return false;
+        return repository.findAllByAppId(appId).stream().anyMatch(row -> matches(row, redirectUri)
+            && row.getConfigRevision().equals(revisions.get(row.getPlatform())));
+    }
+
+    private Oauth2AppPlatform validatedPlatform(String appId, String platform, String redirectUri) {
+        if (!supported(platform)) throw invalid();
+        var row = repository.findByAppIdAndPlatform(appId, platform).orElseThrow(MobileAppPlatformService::invalid);
+        if (!matches(row, redirectUri)) throw invalid();
         return row;
     }
+
+    private boolean matches(Oauth2AppPlatform row, String redirectUri) {
+        if (!supported(row.getPlatform()) || !row.isConfigured() || !"verified".equals(row.getVerificationStatus())
+            || row.getConfigRevision() == null || row.getConfigRevision().isBlank()) return false;
+        String callback = "ios".equals(row.getPlatform())
+            ? decode(row.getConfigJson(), MobileAppPlatforms.Ios.class).universalLink()
+            : decode(row.getConfigJson(), MobileAppPlatforms.Android.class).appLink();
+        return callback.equals(redirectUri);
+    }
+
+    private static boolean supported(String platform) { return "ios".equals(platform) || "android".equals(platform); }
 
     static String callback(String input) {
         String value = optional(input, 500);

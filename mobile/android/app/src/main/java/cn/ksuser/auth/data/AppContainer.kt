@@ -13,6 +13,9 @@ import cn.ksuser.auth.core.settings.AppPreferences
 import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.data.authorization.MobileAuthorizationApi
 import cn.ksuser.auth.data.authorization.MobileAuthorizationRepository
+import cn.ksuser.auth.data.authorization.NativeAuthorizationApi
+import cn.ksuser.auth.data.authorization.NativeAuthorizationRepository
+import cn.ksuser.auth.data.authorization.NativeAuthorizationStateStore
 import cn.ksuser.auth.data.repository.*
 import com.google.gson.Gson
 import okhttp3.Cookie
@@ -87,6 +90,11 @@ class AppContainer(context: Context) {
     val logsRepository by lazy { LogsRepository(mainApi, gson) }
     val accountRepository by lazy { AccountRepository(createService(AccountApiService::class.java), gson) }
     val mobileAuthorizationRepository by lazy { MobileAuthorizationRepository(createService(MobileAuthorizationApi::class.java), gson) }
+    val nativeAuthorizationRepository by lazy { NativeAuthorizationRepository(createService(NativeAuthorizationApi::class.java), gson) }
+    val nativeAuthorizationStateStore by lazy { NativeAuthorizationStateStore(
+        readValue = { sessionStorage.preferences.getString("native_authorization", null) },
+        writeValue = { value -> check(sessionStorage.preferences.edit().putString("native_authorization", value).commit()) { "Unable to save authorization" } },
+    ) }
     val appUpdateRepository by lazy {
         // Public metadata and APK traffic must never carry API credentials, cookies or CSRF state.
         AppUpdateRepository(appContext, environment, OkHttpClient.Builder()

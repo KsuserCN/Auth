@@ -15,6 +15,7 @@ import cn.ksuser.auth.core.settings.AppPreferences
 import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
 import cn.ksuser.auth.data.authorization.MobileAuthorizationContext
+import cn.ksuser.auth.data.authorization.PendingNativeAuthorization
 import cn.ksuser.auth.data.model.UserProfile
 import cn.ksuser.auth.ui.*
 import cn.ksuser.auth.ui.settings.ProvideAppPreferences
@@ -111,6 +112,33 @@ class ParityUiTest {
         } }
         compose.onNodeWithText("同意并继续").assertIsDisplayed().assertIsNotEnabled()
         compose.onNodeWithText("拒绝授权").assertIsEnabled()
+    }
+
+    @Test fun nativeConsentShowsAppReturnAndNeverOffersBrowserSignIn() {
+        compose.setContent { KsuserAuthAndroidTheme {
+            val pending = request().let { it.copy(authorization = it.authorization!!.copy(qr = false, nativeAuthorization = true)) }
+            ApplicationConsentScreen(pending, UserProfile("test-user", "Test", null), false,
+                onConfirm = {}, onCancel = {}, onOptionsChanged = { _, _, _ -> })
+        } }
+        compose.onNodeWithText("应用回调").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("https://example.test/callback").assertIsDisplayed()
+        compose.onNodeWithText("完成后将返回调用应用").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("同时登录通行证网页端").assertDoesNotExist()
+        compose.onNode(isToggleable()).assertDoesNotExist()
+    }
+
+    @Test fun completedNativeConsentOnlyOffersReturnRetry() {
+        var returns = 0
+        compose.setContent { KsuserAuthAndroidTheme {
+            NativeAuthorizationReturnScreen(PendingNativeAuthorization("a".repeat(32), System.currentTimeMillis() + 60_000,
+                "test-user", "Local test app", "https://example.test/callback",
+                "https://example.test/callback?code=once&state=${"s".repeat(32)}", true),
+                onReturn = { returns++ }, onClose = {}, errorMessage = "App Link unavailable")
+        } }
+        compose.onNodeWithText("App Link unavailable").assertIsDisplayed()
+        compose.onNodeWithText("同意并继续").assertDoesNotExist()
+        compose.onNodeWithText("返回应用继续").performClick().performClick()
+        compose.runOnIdle { assertEquals(2, returns) }
     }
 
     private fun request() = PendingQrConfirmation(

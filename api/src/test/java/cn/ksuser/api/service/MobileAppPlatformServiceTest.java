@@ -65,7 +65,7 @@ class MobileAppPlatformServiceTest {
         assertNotEquals(revision, rows.get("ios").getConfigRevision()); assertEquals("unverified", service.getPlatforms(APP).ios().verificationStatus());
         assertNull(service.getPlatforms(APP).android()); assertNull(service.getPlatforms(APP).ios().verifiedAt());
     }
-    @Test void nativeOnlyAllowsExactVerifiedIosAndReturnsRevision() {
+    @Test void nativeOnlyAllowsItsExactVerifiedPlatformAndReturnsRevision() {
         service.savePlatforms(APP, both());
         assertThrows(Oauth2Exception.class, () -> service.validateNative(APP, "ios", CALLBACK));
         rows.get("ios").setVerificationStatus("verified");
@@ -80,10 +80,62 @@ class MobileAppPlatformServiceTest {
         assertEquals("verified", result.ios().verificationStatus()); assertNotNull(result.ios().verifiedAt());
         verify(verifier).verifyIos(any());
     }
-    @Test void androidCanBeVerifiedWhileNativeAuthorizationRemainsUnavailable() {
+    @Test void androidVerificationEnablesNativeAndBrowserAuthorization() {
         service.savePlatforms(APP, both());
         assertEquals("verified", service.verifyPlatform(APP, "android").android().verificationStatus());
-        assertThrows(Oauth2Exception.class, () -> service.validateNative(APP, "android", android().appLink()));
+        assertDoesNotThrow(() -> service.validateNative(APP, "android", android().appLink()));
+        assertDoesNotThrow(() -> service.validateMobileRedirect(APP, android().appLink()));
+        assertEquals(Map.of("android", rows.get("android").getConfigRevision()), service.matchingRevisions(APP, android().appLink()));
+        assertThrows(Oauth2Exception.class, () -> service.validateNative(APP, "ios", android().appLink()));
+    }
+
+    @Test void sharedCallbackSnapshotsAllVerifiedPlatformsAndOnlyOriginalRevisionsCanValidate() {
+        var android = android();
+        var shared = new MobileAppPlatforms.Android(android.packageName(), android.sha256CertFingerprints(), CALLBACK, null, null, null, null);
+        service.savePlatforms(APP, new MobileAppPlatforms(ios(CALLBACK), shared));
+        rows.values().forEach(row -> row.setVerificationStatus("verified"));
+        Map<String, String> original = service.matchingRevisions(APP, CALLBACK);
+        assertEquals(2, original.size());
+        assertTrue(service.matchesAnyRevision(APP, CALLBACK, original));
+        Map<String, String> androidOnly = Map.of("android", original.get("android"));
+        rows.get("ios").setConfigRevision("changed-ios");
+        assertTrue(service.matchesAnyRevision(APP, CALLBACK, androidOnly));
+        rows.get("android").setConfigRevision("changed-android");
+        assertFalse(service.matchesAnyRevision(APP, CALLBACK, androidOnly));
+        assertFalse(service.matchesAnyRevision(APP, CALLBACK, original));
+        rows.get("ios").setConfigRevision(original.get("ios"));
+        assertTrue(service.matchesAnyRevision(APP, CALLBACK, original));
+        assertFalse(service.matchesAnyRevision(APP, CALLBACK, androidOnly));
+    }
+
+    @Test void anUnverifiedAndroidPlatformCannotBorrowIosVerificationForASharedCallback() {
+        var a = android();
+        service.savePlatforms(APP, new MobileAppPlatforms(ios(CALLBACK), new MobileAppPlatforms.Android(
+            a.packageName(), a.sha256CertFingerprints(), CALLBACK, null, null, null, null)));
+        service.verifyPlatform(APP, "ios");
+        assertDoesNotThrow(() -> service.validateMobileRedirect(APP, CALLBACK));
+        assertThrows(Oauth2Exception.class, () -> service.validateNative(APP, "android", CALLBACK));
+        assertEquals(Map.of("ios", rows.get("ios").getConfigRevision()), service.matchingRevisions(APP, CALLBACK));
+        service.verifyPlatform(APP, "android");
+        assertDoesNotThrow(() -> service.validateNative(APP, "android", CALLBACK));
+    }
+
+    @Test void removedOrReconfiguredAndroidCannotRecoverAnOldRevision() {
+        service.savePlatforms(APP, both()); service.verifyPlatform(APP, "android");
+        Map<String, String> old = service.matchingRevisions(APP, android().appLink());
+        service.savePlatforms(APP, new MobileAppPlatforms(ios(CALLBACK), null));
+        assertFalse(service.matchesAnyRevision(APP, android().appLink(), old));
+        service.savePlatforms(APP, both()); service.verifyPlatform(APP, "android");
+        assertFalse(service.matchesAnyRevision(APP, android().appLink(), old));
+        assertNotEquals(old.get("android"), service.nativeRevision(APP, "android", android().appLink()));
+    }
+
+    @Test void rejectsUnknownAndEmptyPlatformSnapshots() {
+        service.savePlatforms(APP, both()); service.verifyPlatform(APP, "android");
+        assertThrows(Oauth2Exception.class, () -> service.nativeRevision(APP, null, android().appLink()));
+        assertThrows(Oauth2Exception.class, () -> service.nativeRevision(APP, "windows", android().appLink()));
+        assertFalse(service.matchesAnyRevision(APP, android().appLink(), Map.of()));
+        assertFalse(service.matchesAnyRevision(APP, android().appLink(), Map.of("windows", "revision")));
     }
     @Test void verificationFailureReturnsSafeStatusAndRevokesPreviousVerification() {
         service.savePlatforms(APP, both()); rows.get("ios").setVerificationStatus("verified");

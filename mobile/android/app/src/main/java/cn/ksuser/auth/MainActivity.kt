@@ -33,7 +33,12 @@ class MainActivity : ComponentActivity() {
               KsuserAuthAndroidTheme {
                 KsuserAuthApp(
                     incomingDeepLink = pendingDeepLink,
-                    onDeepLinkConsumed = { pendingDeepLink = null },
+                    onDeepLinkConsumed = {
+                        // Native requests have encrypted recovery state. Do not resurrect a completed
+                        // authorization from the task's original Intent after a later process restart.
+                        if (pendingDeepLink?.path == "/app/sdk-authorize" && intent.data == pendingDeepLink) intent.data = null
+                        pendingDeepLink = null
+                    },
                     onExitApp = { finishAffinity() },
                     onRegisterActivityResultHandler = { handler ->
                         qqActivityResultHandler = handler

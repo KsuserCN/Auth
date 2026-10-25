@@ -134,7 +134,8 @@ fun KsuserAuthApp(
         }
     }
 
-    LaunchedEffect(state.message, state.localizedError, L10n.language) {
+    LaunchedEffect(state.message, state.localizedError, state.pendingQrConfirmation, state.nativeAuthorizationReturn, L10n.language) {
+        if (state.nativeAuthorizationReturn != null || state.pendingQrConfirmation?.authorization != null) return@LaunchedEffect
         state.message?.let {
             snackbarHostState.showSnackbar(L10n.text(it))
             viewModel.clearTransientMessages()
@@ -159,9 +160,24 @@ fun KsuserAuthApp(
         viewModel.consumeMobileBridgeReturnUrl()
     }
 
+    LaunchedEffect(state.nativeReturnOpenRequested, state.nativeAuthorizationReturn?.returnUrl) {
+        val returnUrl = state.nativeAuthorizationReturn?.returnUrl ?: return@LaunchedEffect
+        if (!state.nativeReturnOpenRequested) return@LaunchedEffect
+        val opened = runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(returnUrl)).addCategory(Intent.CATEGORY_BROWSABLE))
+        }.isSuccess
+        viewModel.nativeReturnAttempted(opened)
+    }
+
     Surface(modifier = Modifier.fillMaxSize()) {
         when {
             state.isBootstrapping -> LoadingScreen()
+            state.nativeAuthorizationReturn != null -> NativeAuthorizationReturnScreen(
+                result = state.nativeAuthorizationReturn!!,
+                onReturn = viewModel::requestNativeReturn,
+                onClose = viewModel::closeNativeReturn,
+                errorMessage = state.localizedError,
+            )
             pendingMobileBridgeConfirmation != null -> MobileBridgeConfirmScreen(
                 pending = pendingMobileBridgeConfirmation,
                 currentUser = state.currentUser,
@@ -177,6 +193,7 @@ fun KsuserAuthApp(
                 onConfirm = { viewModel.confirmQrAction() },
                 onCancel = { viewModel.cancelQrAction() },
                 onAuthorizationOptionsChanged = viewModel::updateAuthorizationOptions,
+                errorMessage = state.localizedError,
             )
             state.pendingMfa != null || !state.isAuthenticated -> AuthFlowScreen(
                 state = state,

@@ -58,7 +58,7 @@ App 图标名称、相机权限等系统界面的资源位于 `zh-Hans.lproj/Inf
 
 # iOS App-to-App SDK 授权
 
-新版通过独立 HTTPS `/app/sdk-authorize?ticket=…` 接收原生 public client 请求，登录后复用应用授权页。SDK 对第三方 OAuth 和官方模式都在创建请求顶层发送 `platform: "ios"`。第三方必须在开放平台的“移动应用”登记 iOS Bundle ID、App ID 前缀和 HTTPS Universal Link 回调，并通过 AASA 的 `applinks`、`webcredentials` 验证；修改关联资料后需要重新验证。“网站”类目不开放原生授权。同一个移动应用 AppID 可以登记 iOS、Android，本次只开放 iOS；Android 提供登记与 App Link 验证，授权入口和 SDK 后续提供。官方应用仍在独立体系注册 public client。
+新版通过独立 HTTPS `/app/sdk-authorize?ticket=…` 接收原生 public client 请求，登录后复用应用授权页。SDK 对第三方 OAuth 和官方模式都在创建请求顶层发送 `platform: "ios"`。第三方必须在开放平台的“移动应用”登记 iOS Bundle ID、App ID 前缀和 HTTPS Universal Link 回调，并通过 AASA 的 `applinks`、`webcredentials` 验证；修改关联资料后需要重新验证。“网站”类目不开放原生授权。同一个移动应用 AppID 可以登记 iOS、Android；Android 接入见 [Android SDK](../../sdk/android/README.md)，两端均须验证所选平台自己的回调关联。官方应用仍在独立体系注册 public client。
 
 App 从 `/auth/native-authorization/context` 读取登记的应用、完整范围及回调地址，审批使用 `/auth/native-authorization/decide`，仅打开精确匹配登记 URI 的 HTTPS code/state 或 error/state 回调。平台参数不作为调用方身份凭据。原有网页收据回跳、扫码流程保持独立；回跳失败的重试复用同一已签发结果。
 

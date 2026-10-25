@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.KsuserAuthDemo" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/demo_accent</item>
+        <item name="android:windowBackground">@color/demo_background</item>
+        <item name="android:statusBarColor">@color/demo_background</item>
+        <item name="android:navigationBarColor">@color/demo_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

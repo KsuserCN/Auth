@@ -52,9 +52,10 @@ internal fun QrLoginConfirmScreen(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     onAuthorizationOptionsChanged: (AuthorizationGrantMode, Int, Boolean) -> Unit = { _, _, _ -> },
+    errorMessage: String? = null,
 ) {
     if (pending.type in setOf(QrConfirmationType.APPROVE_APPLICATION, QrConfirmationType.APPROVE_OFFICIAL, QrConfirmationType.APPROVE_CONSOLE_LOGIN)) {
-        ApplicationConsentScreen(pending, currentUser, isBusy, onConfirm, onCancel, onAuthorizationOptionsChanged)
+        ApplicationConsentScreen(pending, currentUser, isBusy, onConfirm, onCancel, onAuthorizationOptionsChanged, errorMessage)
         return
     }
     BackHandler { if (!isBusy) onCancel() }

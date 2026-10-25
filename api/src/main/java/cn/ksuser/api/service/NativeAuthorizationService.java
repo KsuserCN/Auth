@@ -106,7 +106,7 @@ public class NativeAuthorizationService {
     record Outcome(String returnUrl, boolean failed) { }
 
     public Created create(CreateRequest input, String ip) {
-        if (input == null || input.authorization() == null || !"ios".equals(input.platform()) || !List.of("oauth", "official").contains(input.mode() == null ? "" : input.mode())) throw invalid();
+        if (input == null || input.authorization() == null || !supportedPlatform(input.platform()) || !List.of("oauth", "official").contains(input.mode() == null ? "" : input.mode())) throw invalid();
         var a = input.authorization();
         checkEnabled(a.getClientId());
         String origin = appLinkOrigin();
@@ -171,7 +171,7 @@ public class NativeAuthorizationService {
                 request.setResponseType(a.getResponseType()); request.setScope(a.getScope()); request.setState(a.getState());
                 request.setCodeChallenge(a.getCodeChallenge()); request.setCodeChallengeMethod(a.getCodeChallengeMethod());
                 request.setGrantMode(mode); request.setGrantTtlSeconds(ttl);
-                redirect = oauth.approveAuthorization(user, request).getRedirectUrl();
+                redirect = oauth.approveAuthorization(user, request, stored.platform(), stored.platformRevision()).getRedirectUrl();
             }
             validateCallback(redirect, stored.authorization(), decision.approve());
             // Issuance crosses Redis/database boundaries; do not publish a callback if its platform
@@ -206,7 +206,7 @@ public class NativeAuthorizationService {
 
     private Context context(String ticket, Stored stored, User user, int seconds) {
         var a = stored.authorization();
-        if (!"ios".equals(stored.platform())) throw invalid();
+        if (!supportedPlatform(stored.platform())) throw invalid();
         if ("official".equals(stored.mode())) {
             official.validateNativeClient(a.getClientId());
             var c = official.buildAuthorizeContext(user, officialRequest(a, null));
@@ -248,6 +248,7 @@ public class NativeAuthorizationService {
         } catch (IllegalArgumentException | NullPointerException ex) { throw invalid(); }
     }
     private static long countField(List<String> query, String name) { return query.stream().filter(part -> part.startsWith(name + "=")).count(); }
+    private static boolean supportedPlatform(String platform) { return "ios".equals(platform) || "android".equals(platform); }
     private static String fieldValue(List<String> query, String name) {
         return URLDecoder.decode(query.stream().filter(part -> part.startsWith(name + "=")).findFirst().orElseThrow().substring(name.length() + 1), StandardCharsets.UTF_8);
     }

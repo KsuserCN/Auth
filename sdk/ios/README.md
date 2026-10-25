@@ -24,7 +24,7 @@ Xcode → File → Add Package Dependencies，添加 `https://github.com/KsuserC
 }
 ```
 
-4. 在平台信息点击“验证”。服务端必须验证 AASA 中的应用标识、回调路径和 `webcredentials` 后，移动应用才能创建原生授权请求；修改关联资料后需要重新验证。Android 可同时登记包名、签名证书 SHA-256 指纹和 HTTPS App Link 并验证，Android 授权入口和 SDK 后续提供。
+4. 在平台信息点击“验证”。服务端必须验证 AASA 中的应用标识、回调路径和 `webcredentials` 后，移动应用才能创建原生授权请求；修改关联资料后需要重新验证。Android 可在同一 AppID 下登记包名、签名证书 SHA-256 指纹和 HTTPS App Link 并验证，接入见 [Android SDK](../android/README.md)。
 
 `applinks` 用于 Ksuser App 回跳，`webcredentials` 用于 iOS 17.4+ 的 ASWebAuthenticationSession HTTPS callback。SDK 在两种模式的 `/auth/native-authorization/create` 请求中固定发送顶层 `platform: "ios"`。平台字段、声称的 Bundle ID 或 sourceApplication 都不是调用方身份凭据；服务端应用登记、HTTPS 关联、精确 redirect URI、PKCE 和 state 共同约束授权。关联域名和签名要求参见 [Apple Associated Domains 文档](https://developer.apple.com/documentation/xcode/supporting-associated-domains)。
 

@@ -13,6 +13,7 @@ import cn.ksuser.auth.data.authorization.AuthorizationGrantMode
 import cn.ksuser.auth.data.authorization.AuthorizationQrPreview
 import cn.ksuser.auth.data.authorization.MobileAuthorizationContext
 import cn.ksuser.auth.data.authorization.MobileAuthorizationLinks
+import cn.ksuser.auth.data.authorization.PendingNativeAuthorization
 import cn.ksuser.auth.data.AppContainer
 import cn.ksuser.auth.data.model.AuthResult
 import cn.ksuser.auth.data.model.AuthSource
@@ -39,6 +40,8 @@ data class AppUiState(
     val pendingMobileBridgeConfirmation: PendingMobileBridgeConfirmation? = null,
     val mobileBridgeReturnUrl: String? = null,
     val pendingQrConfirmation: PendingQrConfirmation? = null,
+    val nativeAuthorizationReturn: PendingNativeAuthorization? = null,
+    val nativeReturnOpenRequested: Boolean = false,
     val message: String? = null,
     val error: String? = null,
     val errorDescriptor: ApiException? = null,
@@ -112,12 +115,14 @@ class AppViewModel(
                     else container.sessionRepository.cachedUser().takeIf { container.sessionRepository.hasCredentials() }
                 _uiState.update { it.copy(isBootstrapping = false, isAuthenticated = user != null,
                     currentUser = user, passwordRequirement = requirement ?: it.passwordRequirement) }
+                restoreNativeAuthorization(user)
                 if (user != null) resumePendingRequest()
             }.onFailure { throwable ->
                 val cached = container.sessionRepository.cachedUser().takeIf { container.sessionRepository.hasCredentials() }
                 _uiState.update { it.copy(isBootstrapping = false, isAuthenticated = cached != null,
                     currentUser = cached, passwordRequirement = requirement ?: it.passwordRequirement,
                     errorDescriptor = throwable as? ApiException, error = throwable.toReadableMessage()) }
+                restoreNativeAuthorization(cached)
             }
         }
     }
@@ -129,9 +134,14 @@ class AppViewModel(
     fun synchronizeStoredSession() {
         if (!_uiState.value.isAuthenticated || container.sessionRepository.hasCredentials()) return
         authenticationFlow.cancel()
-        pendingLoginRequest = null
+        // Session expiry requires sign-in again, while the undecided native ticket remains valid.
+        // Explicit logout clears the saved request before invalidating the session.
+        val native = container.nativeAuthorizationStateStore.read()?.takeIf { it.returnUrl == null }
+        pendingLoginRequest = native?.let { MobileAuthorizationLinks.Request.Native(it.ticket) }
+        if (native == null) container.nativeAuthorizationStateStore.clear()
         requestGeneration++
-        _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement) }
+        _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement,
+            message = if (native != null) L10n.text("请先登录，登录后将继续确认原请求") else null) }
     }
 
     fun consumeMobileBridgeReturnUrl() {
@@ -166,7 +176,12 @@ class AppViewModel(
 
     private fun dispatchIncomingRequest(request: MobileAuthorizationLinks.Request, continuingAfterLogin: Boolean = false) {
         val visible = _uiState.value
-        if (decisionInFlight || (authenticationFlow.isRunning && !continuingAfterLogin) || visible.isBusy || visible.pendingMfa != null || visible.pendingQrConfirmation != null || visible.pendingMobileBridgeConfirmation != null) {
+        if (request is MobileAuthorizationLinks.Request.Native &&
+            ((!continuingAfterLogin && pendingLoginRequest == request)
+                || visible.isBusy && container.nativeAuthorizationStateStore.read()?.ticket == request.ticket
+                || visible.pendingQrConfirmation?.authorization?.let { it.nativeAuthorization && it.ticket == request.ticket } == true
+                || visible.nativeAuthorizationReturn?.ticket == request.ticket)) return
+        if (decisionInFlight || (authenticationFlow.isRunning && !continuingAfterLogin) || visible.isBusy || visible.pendingMfa != null || visible.pendingQrConfirmation != null || visible.pendingMobileBridgeConfirmation != null || visible.nativeAuthorizationReturn != null) {
             _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("请先完成当前请求")) }
             return
         }
@@ -179,6 +194,9 @@ class AppViewModel(
             is MobileAuthorizationLinks.Request.Application -> {
                 if (!visible.isAuthenticated) deferUntilLogin(request) else previewApplication(request.ticket)
             }
+            is MobileAuthorizationLinks.Request.Native -> {
+                if (!visible.isAuthenticated) deferUntilLogin(request) else previewNativeApplication(request.ticket)
+            }
             is MobileAuthorizationLinks.Request.Approval -> {
                 if (!visible.isAuthenticated) deferUntilLogin(request) else previewApproveQr(request.code)
             }
@@ -187,6 +205,9 @@ class AppViewModel(
     }
 
     private fun deferUntilLogin(request: MobileAuthorizationLinks.Request) {
+        if (request is MobileAuthorizationLinks.Request.Native && container.nativeAuthorizationStateStore.read()?.ticket != request.ticket) {
+            container.nativeAuthorizationStateStore.save(PendingNativeAuthorization(request.ticket, System.currentTimeMillis() + 300_000))
+        }
         pendingLoginRequest = request
         _uiState.update { it.copy(message = L10n.text("请先登录，登录后将继续确认原请求")) }
     }
@@ -197,6 +218,40 @@ class AppViewModel(
         if (state.isBusy || state.pendingMfa != null || state.pendingQrConfirmation != null || state.pendingMobileBridgeConfirmation != null) return
         pendingLoginRequest = null
         dispatchIncomingRequest(request, continuingAfterLogin = true)
+    }
+
+    private fun restoreNativeAuthorization(user: UserProfile?) {
+        if (_uiState.value.pendingQrConfirmation != null || _uiState.value.nativeAuthorizationReturn != null) return
+        val saved = container.nativeAuthorizationStateStore.read() ?: return
+        if (saved.returnUrl != null) {
+            // A decided callback belongs to the account which approved it, including after process recreation.
+            if (pendingLoginRequest is MobileAuthorizationLinks.Request.Native) pendingLoginRequest = null
+            if (saved.accountUuid == user?.uuid) _uiState.update { it.copy(nativeAuthorizationReturn = saved) }
+            else container.nativeAuthorizationStateStore.clear()
+        } else if (pendingLoginRequest == null) {
+            pendingLoginRequest = MobileAuthorizationLinks.Request.Native(saved.ticket)
+            if (user == null) _uiState.update { it.copy(message = L10n.text("请先登录，登录后将继续确认原请求")) }
+        }
+    }
+
+    fun requestNativeReturn() {
+        val saved = _uiState.value.nativeAuthorizationReturn ?: return
+        if (saved.expiresAtMillis <= System.currentTimeMillis()) {
+            closeNativeReturn()
+            _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("应用授权返回已过期，请重新发起")) }
+            return
+        }
+        _uiState.update { it.copy(nativeReturnOpenRequested = true, errorDescriptor = null, error = null) }
+    }
+
+    fun nativeReturnAttempted(opened: Boolean) {
+        _uiState.update { it.copy(nativeReturnOpenRequested = false,
+            error = if (opened) null else L10n.text("无法返回调用应用，请检查链接关联后重试"), errorDescriptor = null) }
+    }
+
+    fun closeNativeReturn() {
+        container.nativeAuthorizationStateStore.clear()
+        _uiState.update { it.copy(nativeAuthorizationReturn = null, nativeReturnOpenRequested = false, error = null, errorDescriptor = null) }
     }
 
     private fun previewMobileBridge(challengeId: String) {
@@ -433,6 +488,7 @@ class AppViewModel(
         if (_uiState.value.isBusy) return
         _uiState.update { it.copy(isBusy = true) }
         pendingLoginRequest = null
+        container.nativeAuthorizationStateStore.clear()
         requestGeneration++
         viewModelScope.launch {
             runCatching { container.authRepository.logout() }
@@ -452,6 +508,7 @@ class AppViewModel(
             runCatching { container.authRepository.logoutAll() }
                 .onSuccess {
                     pendingLoginRequest = null
+                    container.nativeAuthorizationStateStore.clear()
                     requestGeneration++
                     _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement, message = L10n.text("已从所有设备退出")) }
                 }
@@ -462,6 +519,7 @@ class AppViewModel(
     fun cancelAuthentication() {
         authenticationFlow.cancel()
         pendingLoginRequest = null
+        container.nativeAuthorizationStateStore.clear()
         _uiState.update { it.copy(pendingMfa = null, pendingOAuthBind = null, isBusy = false, message = null, errorDescriptor = null, error = null) }
     }
 
@@ -469,6 +527,7 @@ class AppViewModel(
         authenticationFlow.cancel()
         container.sessionRepository.clearSession()
         pendingLoginRequest = null
+        container.nativeAuthorizationStateStore.clear()
         requestGeneration++
         _uiState.update { AppUiState(isBootstrapping = false, passwordRequirement = it.passwordRequirement,
             message = L10n.text("账号已注销")) }
@@ -518,6 +577,7 @@ class AppViewModel(
             }
         }
         _uiState.update { it.copy(pendingQrConfirmation = null) }
+        if (pending.authorization?.nativeAuthorization == true) container.nativeAuthorizationStateStore.clear()
     }
 
     private fun previewApproveQr(approveCode: String) {
@@ -569,6 +629,29 @@ class AppViewModel(
         }
     }
 
+    private fun previewNativeApplication(ticket: String) {
+        val generation = ++requestGeneration
+        _uiState.update { it.copy(isBusy = true, message = null, errorDescriptor = null, error = null) }
+        viewModelScope.launch {
+            runCatching {
+                val old = container.nativeAuthorizationStateStore.read()
+                // Save before network access so process death can continue this same request.
+                if (old?.ticket != ticket) container.nativeAuthorizationStateStore.save(
+                    PendingNativeAuthorization(ticket, System.currentTimeMillis() + 300_000))
+                val context = container.nativeAuthorizationRepository.context(ticket)
+                val expiresAt = minOf(container.nativeAuthorizationStateStore.read()?.expiresAtMillis ?: Long.MAX_VALUE,
+                    System.currentTimeMillis() + context.expiresInSeconds * 1000)
+                container.nativeAuthorizationStateStore.save(PendingNativeAuthorization(ticket, expiresAt))
+                PendingQrConfirmation(QrConfirmationType.APPROVE_APPLICATION, ticket,
+                    authorization = context.forConsent(), expiresAtMillis = expiresAt)
+            }.onSuccess { pending ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = pending) }
+            }.onFailure { error ->
+                if (generation == requestGeneration) _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) }
+            }
+        }
+    }
+
     private fun previewTransferQr(transferCode: String) {
         val generation = ++requestGeneration
         _uiState.update { it.copy(isBusy = true, message = null, errorDescriptor = null, error = null) }
@@ -589,6 +672,7 @@ class AppViewModel(
 
     private fun decideApplication(pending: PendingQrConfirmation, approve: Boolean) {
         val context = pending.authorization ?: return
+        if (context.nativeAuthorization) { decideNativeApplication(pending, approve); return }
         decisionInFlight = true
         _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
         viewModelScope.launch {
@@ -598,6 +682,25 @@ class AppViewModel(
             }.onSuccess { returnUrl ->
                 _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = null, mobileBridgeReturnUrl = returnUrl,
                     message = if (approve) L10n.text("应用授权已完成") else L10n.text("已拒绝应用授权")) }
+            }.onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
+            decisionInFlight = false
+        }
+    }
+
+    private fun decideNativeApplication(pending: PendingQrConfirmation, approve: Boolean) {
+        val context = pending.authorization ?: return
+        val accountUuid = _uiState.value.currentUser?.uuid ?: return
+        decisionInFlight = true
+        _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
+        viewModelScope.launch {
+            runCatching {
+                val returnUrl = container.nativeAuthorizationRepository.decide(context, approve, pending.grantMode, pending.grantTtlSeconds)
+                require(_uiState.value.currentUser?.uuid == accountUuid) { L10n.text("登录账号已变化，请重新发起授权") }
+                PendingNativeAuthorization(context.ticket, pending.expiresAtMillis, accountUuid,
+                    context.appName, context.redirectUri, returnUrl, approve).also(container.nativeAuthorizationStateStore::save)
+            }.onSuccess { result ->
+                _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = null,
+                    nativeAuthorizationReturn = result, nativeReturnOpenRequested = true) }
             }.onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
             decisionInFlight = false
         }

@@ -15,7 +15,7 @@
 
 客户端认证仅支持 `none`（public）和 `client_secret_post`（confidential）。任何 `Authorization` 请求头都会返回 `invalid_client`，包括 Basic、Bearer、空值及同时使用表单密钥的混合认证；不能把通行证登录 token 当作应用凭据。token 接口不需要 CSRF。
 
-历史 confidential 客户端及已签发的无 PKCE 授权码继续使用原有表单密钥流程。原生 App 应新建“移动应用”（固定 public）并验证 iOS 平台回调，不在安装包中保存 secret。`/oauth2` 仅支持 profile/email，不提供 ID Token、refresh token 或 OIDC Discovery；官方应用的 OIDC 接口与密钥策略见 [官方应用接入](official-app-integration.md)。
+历史 confidential 客户端及已签发的无 PKCE 授权码继续使用原有表单密钥流程。原生 App 应新建“移动应用”（固定 public）并验证实际使用的 iOS 或 Android 平台回调，不在安装包中保存 secret。`/oauth2` 仅支持 profile/email，不提供 ID Token、refresh token 或 OIDC Discovery；官方应用的 OIDC 接口与密钥策略见 [官方应用接入](official-app-integration.md)。
 
 ## public 成功示例
 

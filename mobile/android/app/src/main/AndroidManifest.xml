@@ -88,6 +88,12 @@
                 <data android:scheme="ksuserauth" android:host="authorize" />
                 <data android:scheme="ksuserauth" android:host="bridge-login" />
             </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="auth.ksuser.cn" android:path="/app/sdk-authorize" />
+            </intent-filter>
         </activity>
         <activity
             android:name="com.tencent.tauth.AuthActivity"

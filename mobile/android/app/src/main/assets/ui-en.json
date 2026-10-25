@@ -1025,7 +1025,7 @@
   "二维码授权类型不匹配": "QR authorization type does not match",
   "请扫描原授权二维码继续": "Scan the original authorization QR code to continue",
   "登录二维码类型无效或已过期": "Invalid or expired sign-in QR code",
-  "应用授权返回地址无效": "Invalid application authorization return address",
+  "应用授权返回地址无效": "Invalid application authorization return address.",
   "应用授权已完成": "Application authorized",
   "已拒绝应用授权": "Application authorization denied",
   "官方应用授权成功": "Official application authorized",
@@ -1181,5 +1181,14 @@
   "Ksuser安全": "Ksuser Auth",
   "Passkey 登录": "Passkey Login",
   "设备或密码管理器": "Device or password manager",
-  "我已阅读并同意 {0} 和 {1}，以及 {2}。": "I have read and agree to the {0}, {1}, and {2}."
+  "我已阅读并同意 {0} 和 {1}，以及 {2}。": "I have read and agree to the {0}, {1}, and {2}.",
+  "应用授权返回已过期，请重新发起": "The application return expired. Start authorization again.",
+  "无法返回调用应用，请检查链接关联后重试": "Unable to return to the requesting app. Check its App Links association and retry.",
+  "原生授权类型不匹配": "The native authorization type does not match.",
+  "登录账号已变化，请重新发起授权": "The signed-in account changed. Start authorization again.",
+  "授权票据无效": "Invalid authorization ticket.",
+  "应用授权数据缺失": "Missing application authorization data.",
+  "授权已过期或数据无效": "The authorization expired or its data is invalid.",
+  "授权响应缺失": "Missing authorization response.",
+  "授权尚未完成": "Authorization has not completed."
 }

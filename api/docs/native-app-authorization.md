@@ -1,24 +1,24 @@
 # 原生应用 App-to-App 授权 API
 
-调用应用通过此协议唤起 Ksuser iOS App，由用户核对账号、应用和资料范围并明确同意或拒绝。已安装的 App 使用 Universal Link；网页备用入口复用同一请求。Ksuser 只向登记的调用应用回调交付授权码，不把通行证会话或用户密码交给调用应用。
+调用应用通过此协议唤起 Ksuser iOS 或 Android App，由用户核对账号、应用和资料范围并明确同意或拒绝。已安装的 App 使用 HTTPS Universal Link / App Link；网页备用入口复用同一请求。Ksuser 只向登记的调用应用回调交付授权码，不把通行证会话或用户密码交给调用应用。
 
 ## 接入前提和协议选择
 
 | mode | 注册位置 | 客户端 | 兑换和身份 |
 | --- | --- | --- | --- |
-| `oauth` | 通行证开放平台 → 移动应用 | `public`＋已验证 iOS 平台 | `/oauth2/token`、`/oauth2/userinfo`；scope 仅 profile/email；返回应用专属 openid；UnionID 经管理员开通后返回同开发者范围 unionid，不返回 ID Token/真实 UUID |
+| `oauth` | 通行证开放平台 → 移动应用 | `public`＋已验证的对应 iOS / Android 平台 | `/oauth2/token`、`/oauth2/userinfo`；scope 仅 profile/email；返回应用专属 openid；UnionID 经管理员开通后返回同开发者范围 unionid，不返回 ID Token/真实 UUID |
 | `official` | Console 官方应用 | `public` | `/official/token`、`/official/userinfo`；OIDC；按 scope 返回官方身份资料，必须验证 ID Token |
 
 两套 client_id 和登记表彼此独立，不能混用。原生协议不接受 confidential，不支持在 App 中嵌入 client_secret。第三方应用与官方应用的身份隔离保持不变。
 
-调用应用必须拥有回调 HTTPS 域名，并配置 Associated Domains 和该域名的 `apple-app-site-association`（AASA），使完整回调落到自己的 App。API 校验已登记地址；域名与 App 的关联由 iOS Universal Links 和域名 AASA 完成。回调须满足以下要求：
+调用应用必须拥有回调 HTTPS 域名。iOS 配置 Associated Domains 和该域名的 `apple-app-site-association`（AASA）；Android 配置带 `autoVerify` 的 App Link Intent filter，并在回调域名部署 `/.well-known/assetlinks.json`，声明实际包名和全部登记的签名证书 SHA-256 指纹。API 校验已登记地址；回调路由还依赖操作系统验证域名与实际安装包的关联。回调须满足以下要求：
 
 - 与所选注册表中的某个完整 redirect_uri 精确匹配。
 - 使用 `https`，端口省略或明确为 443，包含以 `/` 开头的规范路径。
 - 不含 URI userinfo、query、fragment，不含需 `normalize()` 消除的相对路径段。
 - hostname 不能等于 `APP_MOBILE_BRIDGE_APP_LINK_ORIGIN` 的 hostname（默认 `auth.ksuser.cn`），避免回到通行证授权入口形成循环。
 
-第三方须先完成[移动应用登记与平台验证](open-platform-applications.md)。`platform` 本版仅接受 `ios`；Android 可登记并验证资料，SDK 与原生授权入口后续提供。平台配置修订绑定 ticket 和授权码；修改后旧请求失效，即使重新验证成功也不能恢复旧请求。官方 public 应用仍走独立注册表，不要求第三方平台登记。
+第三方须先完成[移动应用登记与平台验证](open-platform-applications.md)。`platform` 必须为 `ios` 或 `android`，校验该平台自己的验证状态、精确回调和配置修订；不能借另一个平台的验证结果发起授权。平台配置修订绑定 ticket 和授权码；修改后旧请求失效，即使重新验证成功也不能恢复旧请求。官方 public 应用仍走独立注册表，不要求第三方平台登记。
 
 ## 1. 创建请求
 
@@ -40,6 +40,8 @@
 }
 ```
 
+Android SDK 使用相同请求结构，将顶层 `platform` 改为 `"android"`；不能省略平台。两平台可在同一 AppID 登记相同 HTTPS 回调，native 请求仍只绑定所选平台。
+
 state 必须为 22–128 位 `[A-Za-z0-9_-]`。challenge 为 verifier 的 SHA-256 结果做无填充 Base64URL，恰好 43 位；method 固定 S256。verifier 为 43–128 位 `[A-Za-z0-9._~-]`。official 的 `authorization` 增加非空 `nonce`（最多 512 字符），并使用包含 openid 且已为应用开放的 scope；第三方 OAuth 不使用 nonce/openid scope。
 
 成功返回统一业务响应，`data` 为：
@@ -54,9 +56,9 @@ state 必须为 22–128 位 `[A-Za-z0-9_-]`。challenge 为 verifier 的 SHA-25
 }
 ```
 
-ticket 和 cancelSecret 实际均为 32 位随机 Base64URL 字符串，以上值仅示意。App Link 仅携带 ticket，由 AASA 路径匹配交给 Ksuser App，不依赖该路径存在网页路由。调用应用保留 cancelSecret 用于取消，不放进唤起链接或第三方网页。打开 appLink 交由系统唤起 Ksuser；需要网页备用方式时使用返回的 webAuthorizationUrl，不重复创建同一次请求。
+ticket 和 cancelSecret 实际均为 32 位随机 Base64URL 字符串，以上值仅示意。App Link 仅携带 ticket，通过 iOS AASA 或 Android Intent filter 的精确路径匹配交给 Ksuser App，不依赖该路径存在网页路由。调用应用保留 cancelSecret 用于取消，不放进唤起链接或第三方网页。打开 appLink 交由系统唤起 Ksuser；需要网页备用方式时使用返回的 webAuthorizationUrl，不重复创建同一次请求。
 
-服务端在创建时冻结请求，并验证应用启用状态、移动应用类别、public 类型、已验证的 iOS 平台、登记回调、资料范围和 PKCE；不会信任链接携带的应用名称或改写后的授权字段。
+服务端在创建时冻结请求，并验证应用启用状态、移动应用类别、public 类型、已验证的所选平台、登记回调、资料范围和 PKCE；不会信任链接携带的应用名称或改写后的授权字段。
 
 ## 2. 查看与批准
 
@@ -131,4 +133,10 @@ OAuth 的 grantMode 支持 PERSISTENT（默认）、ONE_TIME、TIME_LIMITED。�
 
 create/cancel 的 CSRF 豁免仅作用于这两个无会话授权能力的入口。context/decide 继续受身份认证保护，decide 保留 CSRF；不为任意第三方网页开放额外 CORS。功能关闭后仍允许持正确 cancelSecret 的调用方清理请求。
 
-建议发布顺序：先备份数据库并执行 `sql/migrations/20261019_oauth_public_pkce.sql`，再在总开关关闭时发布 API；部署 Web 备用入口及 AASA，并发布包含对应 Associated Domains 和批准逻辑的 iOS App。随后为第三方调用应用新建“移动应用”，登记 iOS 平台资料和精确 HTTPS 回调，发布 AASA 并点击验证；只将试点 client_id 加入 allowed-client-ids 并开启总开关。验证 App 唤起、网页备用、拒绝、取消、过期、重复回调和两套身份结果，再扩大放行范围。回退时关闭总开关；已有网页登录、扫码和 confidential 接入继续使用原协议。
+已有移动平台注册表的环境增加 Android 授权无需新数据库迁移；尚未部署移动应用分类的环境先备份并执行 `sql/migrations/20261019_oauth_public_pkce.sql`。
+
+先在总开关关闭时完成全部 API 节点升级，再部署 Web 备用入口、提供方 AASA / assetlinks，并发布包含对应链接入口和批准逻辑的 App。新授权码增加平台修订快照，旧 API 节点不能读取其 JSON；使用蓝绿整体切流或维护窗口完成 API 升级，不能让新旧 API 同时处理发码和兑码，也不能仅依赖 native 总开关阻止普通网页发出新格式授权码。新 API 可在原授权码有效期（默认 300 秒）内继续读取旧格式：只有 `mobileRevision` 的旧移动授权码严格按 iOS 修订验证，绝不回退尝试 Android。
+
+随后为调用应用登记所用平台资料和精确 HTTPS 回调，发布关联文件并验证；只将试点 client_id 加入 allowed-client-ids 并开启总开关。验证 App 唤起、网页备用、拒绝、取消、过期、重复回调和两套身份结果，再扩大放行范围。回退时关闭总开关；已有网页登录、扫码和 confidential 接入继续使用原协议。
+
+原生授权码只冻结指定平台；普通网页和扫码移动授权冻结发码时所有已验证且匹配回调的平台修订，兑码须至少有一个原修订仍有效。新登记的平台不能恢复旧授权码，另一平台仍有效也不能恢复已失效的原生平台授权码。

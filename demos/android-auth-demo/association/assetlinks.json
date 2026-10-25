@@ -1,0 +1,14 @@
+[
+    {
+        "relation": [
+            "delegate_permission/common.handle_all_urls"
+        ],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "cn.ksuser.demo.auth",
+            "sha256_cert_fingerprints": [
+                "92:16:0A:B5:3A:CA:F2:B6:A1:BA:F8:95:53:07:49:BB:3C:7D:C3:D3:59:47:3E:4E:0A:5A:7D:4B:19:51:81:ED"
+            ]
+        }
+    }
+]

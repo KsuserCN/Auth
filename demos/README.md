@@ -2,6 +2,7 @@
 
 仓库内测试 demo 目录如下：
 
+- [android-auth-demo](android-auth-demo/README.md)：Android 7.0+ 独立调用 App，支持第三方 OAuth、官方 OIDC、App 唤起、网页继续、恢复与取消。运行 `npm run build:demo:android` 构建，详见示例中的域关联与真实 client 配置。
 - [ios-auth-demo](ios-auth-demo/README.md)：iOS 17.4+ SwiftUI 授权示例，支持第三方 OAuth 与官方应用授权、Ksuser App 唤起、网页继续、恢复和取消。运行 `npm run dev:demo:ios` 打开 Xcode 工程，`npm run build:demo:ios` 构建模拟器版本。
 - `oauth-local-demo`
   - 原目录：`/Users/ksuserkqy/work/docs/test`

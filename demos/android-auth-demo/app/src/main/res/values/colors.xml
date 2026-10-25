@@ -1,0 +1,10 @@
+<resources>
+    <color name="demo_background">#F2F4F7</color>
+    <color name="demo_card">#FFFFFF</color>
+    <color name="demo_text">#182230</color>
+    <color name="demo_secondary">#526071</color>
+    <color name="demo_accent">#2563EB</color>
+    <color name="demo_on_accent">#FFFFFF</color>
+    <color name="demo_disabled">#E3E8EF</color>
+    <color name="demo_error">#B42318</color>
+</resources>
