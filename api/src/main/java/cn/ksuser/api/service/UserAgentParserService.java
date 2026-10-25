@@ -94,6 +94,9 @@ public class UserAgentParserService {
         if (ua.contains("bot") || ua.contains("spider") || ua.contains("crawler")) {
             return "Bot";
         }
+        if (ua.contains("harmonyos")) {
+            return "HarmonyOS";
+        }
         if (ua.contains("iphone") || ua.contains("ipad") || ua.contains("ios")) {
             return "iOS";
         }

@@ -10,3 +10,9 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+# Debug-only service overrides and local signing material
+/entry/src/main/resources/rawfile/environment.local.json
+*.p12
+*.p7b
+*.cer
+*.csr

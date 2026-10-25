@@ -9,6 +9,22 @@ class UserAgentParserServiceTest {
     private final UserAgentParserService service = new UserAgentParserService();
 
     @Test
+    void shouldRecognizeHarmonyNativeClientAndPreserveMobileDescription() {
+        var info = service.parse("KsuserAuthMobile/1.0.0 (HarmonyOS 6.1.1; HUAWEI Mate 70)");
+        assertEquals("Ksuser Auth Mobile 1.0.0", info.getBrowser());
+        assertEquals("HarmonyOS", info.getDeviceType());
+        assertEquals("Ksuser 移动版（HarmonyOS）", service.describeClientSource(info));
+        org.junit.jupiter.api.Assertions.assertFalse(UserAgentParserService.isNativeIosClient(
+                "KsuserAuthMobile/1.0.0 (HarmonyOS 6.1.1; HUAWEI Mate 70)"));
+    }
+
+    @Test
+    void harmonyMarkerTakesPrecedenceOverCompatibilityAndroidToken() {
+        assertEquals("HarmonyOS", service.parse("Mozilla/5.0 (Linux; Android 12; HarmonyOS 6.1.1)").getDeviceType());
+        assertEquals("Android", service.parse("KsuserAuthMobile/1.0.0 (Android 14; API 34)").getDeviceType());
+    }
+
+    @Test
     void shouldRecognizeDesktopClientAndMacOs() {
         UserAgentParserService.UserAgentInfo info = service.parse(
                 "KsuserAuthDesktop/1.0.0 (macOS; Flutter Desktop)"

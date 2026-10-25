@@ -7,12 +7,60 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Set;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
 class PasskeyServiceTest {
+    @Test
+    @SuppressWarnings("unchecked")
+    void effectiveOriginsMergeOnlyExplicitHarmonyOriginsAndPreserveExistingClients() {
+        AppProperties properties = new AppProperties();
+        properties.getPasskey().setOrigin("https://auth.ksuser.cn");
+        properties.getPasskey().setAndroidOrigins(java.util.List.of("android:apk-key-hash:existing-client"));
+        // A test fixture, not a claim about the origin format returned by HarmonyOS.
+        properties.getPasskey().setHarmonyOrigins(Arrays.asList(
+                " https://signed-harmony.example ", "https://signed-harmony.example", "", null));
+        PasskeyService service = new PasskeyService(mock(UserPasskeyRepository.class),
+                mock(StringRedisTemplate.class), properties);
+
+        Set<Object> origins = (Set<Object>) ReflectionTestUtils.invokeMethod(service, "getEffectiveOrigins");
+        Set<String> values = origins.stream().map(Object::toString).collect(Collectors.toSet());
+
+        assertTrue(values.contains("https://signed-harmony.example"));
+        assertTrue(values.contains("https://auth.ksuser.cn"));
+        assertTrue(values.contains("android:apk-key-hash:existing-client"));
+        assertFalse(values.contains("https://other-harmony.example"));
+        assertTrue(origins.size() == 4); // Web, Console, Android and the explicit HarmonyOS origin.
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void emptyHarmonyConfigurationDoesNotInferAnOrigin() {
+        AppProperties properties = new AppProperties();
+        properties.getPasskey().setOrigin("https://auth.ksuser.cn");
+        PasskeyService service = new PasskeyService(mock(UserPasskeyRepository.class),
+                mock(StringRedisTemplate.class), properties);
+
+        Set<Object> origins = (Set<Object>) ReflectionTestUtils.invokeMethod(service, "getEffectiveOrigins");
+        assertTrue(origins.size() == 2);
+    }
+
+    @Test
+    void wildcardHarmonyConfigurationIsRejected() {
+        AppProperties properties = new AppProperties();
+        properties.getPasskey().setHarmonyOrigins(java.util.List.of("https://*.example.com"));
+        PasskeyService service = new PasskeyService(mock(UserPasskeyRepository.class),
+                mock(StringRedisTemplate.class), properties);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ReflectionTestUtils.invokeMethod(service, "getEffectiveOrigins"));
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void androidOriginsIncludeInstalledApkKeyHashFromFingerprint() {

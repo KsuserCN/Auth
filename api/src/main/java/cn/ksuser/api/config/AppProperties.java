@@ -365,6 +365,7 @@ public class AppProperties {
         private String rpId = "localhost";
         private String origin = "http://localhost:5173";
         private java.util.List<String> androidOrigins = new java.util.ArrayList<>();
+        private java.util.List<String> harmonyOrigins = new java.util.ArrayList<>();
         private java.util.List<String> androidCertSha256Fingerprints = new java.util.ArrayList<>();
         private String attestation = "none";
         private String userVerification = "preferred";
@@ -401,6 +402,14 @@ public class AppProperties {
 
         public void setAndroidOrigins(java.util.List<String> androidOrigins) {
             this.androidOrigins = androidOrigins;
+        }
+
+        public java.util.List<String> getHarmonyOrigins() {
+            return harmonyOrigins;
+        }
+
+        public void setHarmonyOrigins(java.util.List<String> harmonyOrigins) {
+            this.harmonyOrigins = harmonyOrigins;
         }
 
         public java.util.List<String> getAndroidCertSha256Fingerprints() {

@@ -138,11 +138,109 @@ export struct SettingsRow {
 }
 
 @Component
-export struct DemoNote {
-  @Prop text: string = '当前为界面预览，所有内容均为示范数据';
+export struct ActionButton {
+  @Prop title: string = '';
+  @Prop busy: boolean = false;
+  @Prop disabled: boolean = false;
+  @Prop secondary: boolean = false;
+  @Prop destructive: boolean = false;
+  onTap: () => void = () => {};
 
   build() {
-    Text(this.text).fontSize(11).fontColor($r('app.color.text_tertiary'))
-      .textAlign(TextAlign.Center).lineHeight(18).width('100%').padding({ top: 6, bottom: 16 })
+    Button({ type: ButtonType.Capsule }) {
+      Row({ space: 10 }) {
+        if (this.busy) {
+          LoadingProgress().width(20).height(20)
+            .color(this.secondary ? $r('app.color.brand') : $r('app.color.on_brand'))
+        }
+        Text(this.title).fontSize(15).fontWeight(FontWeight.Medium)
+          .fontColor(this.destructive ? $r('app.color.danger') :
+            this.secondary ? $r('app.color.brand') : $r('app.color.on_brand'))
+      }.width('100%').justifyContent(FlexAlign.Center)
+    }.width('100%').height(48)
+      .backgroundColor(this.destructive ? $r('app.color.danger_soft') :
+        this.secondary ? $r('app.color.brand_soft') : $r('app.color.brand'))
+      .enabled(!this.busy && !this.disabled).onClick(() => this.onTap())
+  }
+}
+
+@Component
+export struct EmptyState {
+  @Prop title: string = '暂无内容';
+  @Prop subtitle: string = '';
+  @Prop icon: string = 'info';
+  @Prop busy: boolean = false;
+  onRetry: () => void = () => {};
+
+  build() {
+    Column({ space: 14 }) {
+      if (this.busy) { LoadingProgress().width(36).height(36).color($r('app.color.brand')) }
+      else { IconTile({ name: this.icon, tileSize: 56 }) }
+      Text(this.busy ? '正在读取…' : this.title).fontSize(16).fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+      if (this.subtitle.length > 0) {
+        Text(this.subtitle).fontSize(13).fontColor($r('app.color.text_secondary'))
+          .lineHeight(21).textAlign(TextAlign.Center)
+      }
+      Button('刷新').fontSize(13).fontColor($r('app.color.brand'))
+        .backgroundColor($r('app.color.brand_soft')).enabled(!this.busy).onClick(() => this.onRetry())
+    }.padding(28).width('100%').borderRadius(24).backgroundColor($r('app.color.card_background'))
+  }
+}
+
+@Component
+export struct InfoLine {
+  @Prop title: string = '';
+  @Prop value: string = '';
+
+  build() {
+    Row({ space: 16 }) {
+      Text(this.title).fontSize(13).fontColor($r('app.color.text_secondary'))
+      Text(this.value || '—').fontSize(14).fontColor($r('app.color.text_primary'))
+        .lineHeight(22).layoutWeight(1).textAlign(TextAlign.End).copyOption(CopyOptions.LocalDevice)
+    }.width('100%').padding({ top: 10, bottom: 10 })
+  }
+}
+
+@Component
+export struct UserAvatar {
+  @Prop url: string = '';
+  @Prop name: string = '';
+  @Prop avatarSize: number = 68;
+
+  build() {
+    if (this.url.length > 0) {
+      Image(this.url).width(this.avatarSize).height(this.avatarSize).objectFit(ImageFit.Cover)
+        .borderRadius(this.avatarSize / 2).alt($r('app.media.brand_logo'))
+    } else {
+      Text((this.name || 'K').substring(0, 1)).fontSize(this.avatarSize * 0.42).fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.brand')).width(this.avatarSize).height(this.avatarSize)
+        .textAlign(TextAlign.Center).borderRadius(this.avatarSize / 2).backgroundColor($r('app.color.brand_soft'))
+    }
+  }
+}
+
+export function readableDate(value: string | undefined): string {
+  if (!value) { return '—'; }
+  return value.replace('T', ' ').replace(/\.\d+Z?$/, '').replace(/Z$/, '').substring(0, 19);
+}
+
+export function methodTitle(value: string): string {
+  switch (value) {
+    case 'password': return '密码';
+    case 'email-code': return '邮箱验证码';
+    case 'totp': return '验证器';
+    case 'passkey': return '通行密钥';
+    default: return value;
+  }
+}
+
+export function scopeTitle(value: string): string {
+  switch (value) {
+    case 'openid': return '账号标识';
+    case 'profile': return '基本资料';
+    case 'email': return '邮箱地址';
+    case 'offline_access': return '离线访问';
+    default: return value;
   }
 }

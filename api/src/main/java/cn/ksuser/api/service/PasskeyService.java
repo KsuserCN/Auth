@@ -608,7 +608,7 @@ public class PasskeyService {
     }
 
     /**
-     * 获取有效 Origin 集合（Web + Android）
+     * 获取有效 Origin 集合（Web + Android + explicitly configured HarmonyOS clients）
      */
     private Set<Origin> getEffectiveOrigins() {
         Set<Origin> origins = new LinkedHashSet<>();
@@ -635,6 +635,22 @@ public class PasskeyService {
                     continue;
                 }
                 origins.add(Origin.create(origin.trim()));
+            }
+        }
+
+        // Native HarmonyOS origins must come from the signed app's clientDataJSON.
+        // Do not infer a format from bundle names or certificates or trust wildcards.
+        List<String> configuredHarmonyOrigins = appProperties.getPasskey().getHarmonyOrigins();
+        if (configuredHarmonyOrigins != null) {
+            for (String origin : configuredHarmonyOrigins) {
+                if (origin == null || origin.isBlank()) {
+                    continue;
+                }
+                String exactOrigin = origin.trim();
+                if (exactOrigin.contains("*")) {
+                    throw new IllegalArgumentException("HarmonyOS Passkey origins must be exact origins");
+                }
+                origins.add(Origin.create(exactOrigin));
             }
         }
 
