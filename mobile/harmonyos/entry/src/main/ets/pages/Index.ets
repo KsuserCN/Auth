@@ -13,11 +13,12 @@ import { ChallengeSheet } from '../views/ChallengeSheet';
 @Entry
 @Component
 struct Index {
-  @State model: AppModel = new AppModel();
+  @State @Watch('accountChanged') model: AppModel = new AppModel();
   @State selectedTab: number = 0;
   private paths: NavPathStack = new NavPathStack();
   private loginPaths: NavPathStack = new NavPathStack();
   private tabsController: TabsController = new TabsController();
+  private account: string = '';
   private titles: string[] = ['概览', '资料', '安全', '会话', '日志'];
   private subtitles: string[] = ['与你有关的安全，都在这里', '每一个细节，都是你', '为账号多一份安心', '随时了解账号的登录情况', '每一次操作，都有迹可循'];
 
@@ -27,7 +28,21 @@ struct Index {
     this.model.initialize(context);
   }
   private switchTab(index: number): void { this.selectedTab = index; this.tabsController.changeIndex(index); }
-  private open(destination: string): void { this.paths.pushPath({ name: destination }); }
+  private accountChanged(): void {
+    const account = this.model.profile?.uuid || '';
+    if (account !== this.account) {
+      this.account = account; this.paths.clear(); this.loginPaths.clear(); this.selectedTab = 0; this.tabsController.changeIndex(0);
+    }
+  }
+  private open(destination: string): void { this.openRoute(destination); }
+  private async openRoute(destination: string): Promise<void> {
+    const account = this.model.profile?.uuid;
+    if (['email', 'password', 'totp', 'recovery', 'recovery-codes'].includes(destination)) {
+      const result = await this.model.requireSensitive('确认身份：' + accountTitle(destination));
+      if (result.status !== 'success' || account !== this.model.profile?.uuid) { return; }
+    }
+    this.paths.pushPath({ name: destination });
+  }
 
   @Builder
   private destination(name: string) {
@@ -35,7 +50,7 @@ struct Index {
       Column() {
         if (this.model.authenticated || name === 'settings') {
           Column() { FeedbackBanner({ model: this.model }) }.padding({ left: 20, right: 20 })
-          AccountPage({ model: this.model, destination: name }).layoutWeight(1)
+          AccountPage({ model: this.model, destination: name, onComplete: () => { this.paths.pop(); } }).layoutWeight(1)
         }
       }.width('100%').height('100%')
     }.title(accountTitle(name)).backgroundColor($r('app.color.page_background'))
@@ -133,7 +148,9 @@ struct Index {
     }.width('100%').height('100%').backgroundColor($r('app.color.page_background'))
       .bindSheet($$this.model.challengeVisible, this.challenge(), {
         height: SheetSize.LARGE, showClose: true, dragBar: true, backgroundColor: $r('app.color.card_background'),
-        onWillDismiss: (action: DismissSheetAction) => { if (!this.model.busy) { this.model.cancelChallenge(); action.dismiss(); } }
+        onWillDismiss: (action: DismissSheetAction) => {
+          if (!this.model.busy) { if (this.model.challengeKind) { this.model.cancelChallenge(); } action.dismiss(); }
+        }
       })
   }
 }

@@ -1,15 +1,16 @@
 import { UserFacingError } from '../core/Models';
 import { common } from '@kit.AbilityKit';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { fido2 } from '@kit.OnlineAuthenticationKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { image } from '@kit.ImageKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { AppEnvironment } from '../core/Environment';
-import { AvatarUpload, PasskeyAssertion, PasskeyAuthenticationOptions, PasskeyRegistration,
+import { AvatarUpload, AvatarSource, AvatarCropRegion, PasskeyAssertion, PasskeyAuthenticationOptions, PasskeyRegistration,
   PasskeyRegistrationOptions, RpEntity, UserEntity, CredentialDescriptor, CredentialParameter, AuthenticatorSelection } from '../core/Models';
 import { decodeBase64Url, decodeUtf8, encodeBase64Url } from './NativeEncoding';
+import { clampCrop } from '../core/AvatarGeometry';
 
 interface ClientDataOrigin { origin: string; }
 
@@ -19,7 +20,7 @@ export function nativeError(error: BusinessError, operation: string): Error {
   }
   if (error.code === 1021300005) { return new UserFacingError('通行密钥操作已超时，请重试'); }
   if (error.code === 1021310006) { return new UserFacingError('未找到适用于此账号的通行密钥，请使用其他方式登录'); }
-  if ([801, 1021300001].includes(error.code)) { return new UserFacingError('当前设备暂不支持通行密钥，请使用其他验证方式'); }
+  if ([801, 1021300001].includes(error.code)) { return new UserFacingError('当前环境暂不支持此通行密钥操作，请使用其他验证方式'); }
   return new UserFacingError(typeof error.code === 'number' ? operation + '失败，请稍后重试（' + error.code + '）' :
     operation + '失败，请稍后重试');
 }
@@ -196,8 +197,17 @@ export class NativeServices {
     }
   }
 
-  /** System picker grants URI access; images are decoded cropped before scaling to bound memory. */
-  async pickAvatar(): Promise<AvatarUpload> {
+  async copyText(text: string): Promise<void> {
+    try {
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, text);
+      const property = data.getProperty(); property.shareOption = pasteboard.ShareOption.LOCALDEVICE;
+      data.setProperty(property);
+      await pasteboard.getSystemPasteboard().setData(data);
+    } catch (_) { throw new UserFacingError('暂时无法复制到剪贴板，请重试'); }
+  }
+
+  /** Normalize metadata before preview so gesture coordinates and the encoded crop share one image. */
+  async selectAvatar(): Promise<AvatarSource> {
     let file: fileIo.File | undefined;
     let source: image.ImageSource | undefined;
     let pixels: image.PixelMap | undefined;
@@ -205,21 +215,29 @@ export class NativeServices {
     try {
       const picker = new photoAccessHelper.PhotoViewPicker();
       const picked = await picker.select({ MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE,
-        maxSelectNumber: 1, isEditSupported: true });
+        maxSelectNumber: 1 });
       if (picked.photoUris.length === 0) { throw new UserFacingError('操作已取消'); }
       file = await fileIo.open(picked.photoUris[0], fileIo.OpenMode.READ_ONLY);
       source = image.createImageSource(file.fd);
       const information = await source.getImageInfo();
-      const side = Math.min(information.size.width, information.size.height);
-      if (side < 1) { throw new UserFacingError('无法读取所选图片'); }
+      const width = information.size.width; const height = information.size.height;
+      if (width < 1 || height < 1) { throw new UserFacingError('无法读取所选图片'); }
+      const ratio = Math.min(1, 2048 / Math.max(width, height));
       pixels = await source.createPixelMap({ editable: true,
-        desiredRegion: { x: Math.floor((information.size.width - side) / 2),
-          y: Math.floor((information.size.height - side) / 2), size: { width: side, height: side } },
-        desiredSize: { width: Math.min(side, 512), height: Math.min(side, 512) },
-        cropAndScaleStrategy: image.CropAndScaleStrategy.CROP_FIRST });
+        desiredSize: { width: Math.max(1, Math.round(width * ratio)), height: Math.max(1, Math.round(height * ratio)) } });
+      let orientation = '';
+      try { orientation = (await source.getImageProperty(image.PropertyKey.ORIENTATION)).trim().toLowerCase(); } catch (_) {}
+      if (['2', 'top-right'].includes(orientation)) { await pixels.flip(true, false); }
+      else if (['3', 'bottom-right'].includes(orientation)) { await pixels.rotate(180); }
+      else if (['4', 'bottom-left'].includes(orientation)) { await pixels.flip(false, true); }
+      else if (['5', 'left-top'].includes(orientation)) { await pixels.flip(true, false); await pixels.rotate(270); }
+      else if (['6', 'right-top'].includes(orientation)) { await pixels.rotate(90); }
+      else if (['7', 'right-bottom'].includes(orientation)) { await pixels.flip(false, true); await pixels.rotate(90); }
+      else if (['8', 'left-bottom'].includes(orientation)) { await pixels.rotate(270); }
+      const normalized = await pixels.getImageInfo();
       packer = image.createImagePacker();
-      const bytes = await packer.packToData(pixels, { format: 'image/jpeg', quality: 88 });
-      return { data: bytes, mimeType: 'image/jpeg' };
+      const bytes = await packer.packToData(pixels, { format: 'image/jpeg', quality: 95 });
+      return { data: bytes, width: normalized.size.width, height: normalized.size.height };
     } catch (error) {
       if ((error as Error).message === '操作已取消') { throw new UserFacingError('操作已取消'); }
       throw new UserFacingError('无法读取所选图片，请尝试其他图片');
@@ -230,5 +248,30 @@ export class NativeServices {
       try { if (source) { await source.release(); } } catch (_) {}
       try { if (file) { await fileIo.close(file); } } catch (_) {}
     }
+  }
+
+  async cropAvatar(source: AvatarSource, region: AvatarCropRegion): Promise<AvatarUpload> {
+    const crop = clampCrop(source.width, source.height, region);
+    const decoder = image.createImageSource(source.data);
+    let pixels: image.PixelMap | undefined;
+    let packer: image.ImagePacker | undefined;
+    try {
+      // Crop in the normalized source coordinates used by the preview, then scale the selected square.
+      pixels = await decoder.createPixelMap({ editable: true });
+      await pixels.crop({ x: crop.x, y: crop.y, size: { width: crop.size, height: crop.size } });
+      await pixels.scale(512 / crop.size, 512 / crop.size);
+      packer = image.createImagePacker();
+      return { data: await packer.packToData(pixels, { format: 'image/jpeg', quality: 88 }), mimeType: 'image/jpeg' };
+    } finally {
+      try { await packer?.release(); } catch (_) {}
+      try { await pixels?.release(); } catch (_) {}
+      try { await decoder.release(); } catch (_) {}
+    }
+  }
+
+  async pickAvatar(): Promise<AvatarUpload> {
+    const source = await this.selectAvatar();
+    const side = Math.min(source.width, source.height);
+    return this.cropAvatar(source, { x: (source.width - side) / 2, y: (source.height - side) / 2, size: side });
   }
 }

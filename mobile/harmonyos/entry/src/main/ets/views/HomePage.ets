@@ -1,4 +1,6 @@
 import { AppModel } from '../core/AppModel';
+import { displayName, profileCompleteness } from '../core/Models';
+import { ResourceFeedback } from '../components/AccountComponents';
 import { ActionButton, AppIcon, EmptyState, IconTile, SectionHeader, SettingsRow, StatusBadge, UserAvatar } from '../components/AppComponents';
 
 @Component
@@ -7,12 +9,11 @@ export struct HomePage {
   onNavigate: (index: number) => void = () => {};
   onOpen: (destination: string) => void = () => {};
 
-  private displayName(): string { return this.model.profile?.realName || this.model.profile?.username || ''; }
-  private complete(): number {
-    const p = this.model.profile;
-    if (!p) { return 0; }
-    return [p.username, p.realName, p.avatarUrl, p.region, p.bio].filter((value: string | undefined) => !!value).length * 20;
+  @State private refreshing: boolean = false;
+  private async refresh(): Promise<void> {
+    try { await this.model.refreshAll(); } finally { this.refreshing = false; }
   }
+
   private protectionEnabled(kind: number): boolean {
     const settings = this.model.profile?.settings;
     return kind === 0 ? settings?.mfaEnabled === true : kind === 1 ? settings?.detectUnusualLogin === true : settings?.notifySensitiveActionEmail === true;
@@ -46,17 +47,19 @@ export struct HomePage {
   }
 
   build() {
+    Refresh({ refreshing: $$this.refreshing }) {
     Scroll() {
       Column({ space: 16 }) {
+        ResourceFeedback({ state: this.model.profileState, label: '概览资料', onRetry: () => this.model.refreshAll() })
         if (this.model.profile !== null) {
           Column({ space: 20 }) {
             Row({ space: 16 }) {
-              UserAvatar({ url: this.model.profile?.avatarUrl || '', name: this.displayName() })
+              UserAvatar({ url: this.model.profile?.avatarUrl || '', name: displayName(this.model.profile) })
               Column({ space: 7 }) {
                 Text('欢迎回来').fontSize(13).fontColor($r('app.color.text_secondary'))
-                Text(this.displayName()).fontSize(26).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
+                Text(displayName(this.model.profile)).fontSize(26).fontWeight(FontWeight.Bold).fontColor($r('app.color.text_primary'))
                   .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-                Text(this.model.profile?.email || '').fontSize(12).fontColor($r('app.color.text_secondary'))
+                Text(this.model.profile?.email || '未绑定邮箱').fontSize(12).fontColor($r('app.color.text_secondary'))
               }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             }.width('100%')
             Row() {
@@ -88,19 +91,19 @@ export struct HomePage {
           Column({ space: 14 }) {
             Row() {
               SectionHeader({ title: '让大家更好地认识你', subtitle: '补充关于你的个人资料' }).layoutWeight(1)
-              Text(this.complete() + '%').fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.brand'))
+              Text(profileCompleteness(this.model.profile) + '%').fontSize(24).fontWeight(FontWeight.Bold).fontColor($r('app.color.brand'))
             }.width('100%')
-            Progress({ value: this.complete(), total: 100, type: ProgressType.Linear }).width('100%')
+            Progress({ value: profileCompleteness(this.model.profile), total: 100, type: ProgressType.Linear }).width('100%')
               .color($r('app.color.brand')).backgroundColor($r('app.color.brand_soft'))
             SettingsRow({ title: '完善个人资料', icon: 'edit', last: true, onTap: () => this.onNavigate(1) })
           }.width('100%').padding(20).borderRadius(24).backgroundColor($r('app.color.card_background'))
           SettingsRow({ title: '查看最近安全活动', subtitle: '了解登录和账号变更记录', icon: 'logs', last: true,
             onTap: () => this.onNavigate(4) }).padding(20).backgroundColor($r('app.color.card_background')).borderRadius(24)
-          ActionButton({ title: '刷新概览', secondary: true, busy: this.model.busy, onTap: () => this.model.refreshAll() })
         } else {
           EmptyState({ title: '暂时无法读取资料', busy: this.model.busy, onRetry: () => this.model.refreshAll() })
         }
       }.width('100%').constraintSize({ maxWidth: 680 }).padding({ left: 20, right: 20, top: 8, bottom: 24 })
-    }.width('100%').height('100%').scrollBar(BarState.Off).backgroundColor($r('app.color.page_background'))
+    }.width('100%').height('100%').scrollBar(BarState.Off).align(Alignment.TopStart)
+    }.onRefreshing(() => this.refresh()).width('100%').height('100%').backgroundColor($r('app.color.page_background'))
   }
 }

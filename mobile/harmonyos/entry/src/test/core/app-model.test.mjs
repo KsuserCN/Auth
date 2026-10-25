@@ -319,10 +319,12 @@ test('protected email code countdown state changes only after the deferred send 
     async verifySensitive() {},
     async sendCode(email, type) { assert.equal(email, ' New@Example.com '); assert.equal(type, 'change-email'); sent++ }
   }
-  await h.model.sendCode(' New@Example.com ', 'change-email')
+  const sending = h.model.sendCode(' New@Example.com ', 'change-email')
+  await until(() => h.model.challengeVisible)
   assert.equal(h.model.challengeKind, 'sensitive')
   assert.equal(h.model.codeSentAt, 0); assert.equal(sent, 0)
   await h.model.verifySensitive('password', 'secret')
+  assert.equal((await sending).status, 'success')
   assert.equal(sent, 1)
   assert.equal(h.model.codeSentType, 'change-email')
   assert.equal(h.model.codeSentEmail, 'new@example.com')
@@ -370,4 +372,108 @@ test('legal links point to the official documentation agreements', async () => {
   const h = await fixture()
   await h.model.openLegal('privacy'); await h.model.openLegal('terms')
   assert.deepEqual(h.state.openedURLs, ['https://docs.ksuser.cn/agreement/privacy', 'https://docs.ksuser.cn/agreement/user'])
+})
+
+test('a protected write resolves only after actual completion while verification stays usable', async () => {
+  const h = await fixture(); const write = deferred(); let writes = 0; let settled = false
+  h.model.repositoryValue = {
+    async sensitiveStatus() { return { verified: false, methods: ['password'], remainingSeconds: 0 } },
+    async verifySensitive() {}, async updateSetting() { writes++; await write.promise },
+    async currentUser() { return { ...oldProfile, settings: { mfaEnabled: true } } }
+  }
+  const saving = h.model.updateSetting('mfaEnabled', true).then(result => { settled = true; return result })
+  await until(() => h.model.challengeVisible && !h.model.busy)
+  assert.equal(settled, false); assert.equal(writes, 0)
+  const verifying = h.model.verifySensitive('password', 'fixture-secret')
+  await until(() => writes === 1)
+  assert.equal(settled, false)
+  write.resolve(); await verifying
+  assert.equal((await saving).status, 'success'); assert.equal(h.model.profile.settings.mfaEnabled, true)
+})
+
+test('cancelling verification settles the originating form without modifying or clearing its data', async () => {
+  const h = await fixture(); let writes = 0
+  h.model.recoveryCodes = ['FICTIONAL_OLD_CODE']
+  h.model.repositoryValue = {
+    async sensitiveStatus() { return { verified: false, methods: ['password'], remainingSeconds: 0 } },
+    async changePassword() { writes++ }
+  }
+  const saving = h.model.changePassword('fixture-password')
+  await until(() => h.model.challengeVisible && !h.model.busy)
+  h.model.cancelChallenge()
+  assert.equal((await saving).status, 'cancelled'); assert.equal(writes, 0)
+  assert.deepEqual(h.model.recoveryCodes, ['FICTIONAL_OLD_CODE'])
+})
+
+test('a failed protected mutation reports failure to its form after successful identity verification', async () => {
+  const h = await fixture()
+  h.model.repositoryValue = {
+    async sensitiveStatus() { return { verified: false, methods: ['password'], remainingSeconds: 0 } },
+    async verifySensitive() {}, async revokeApplication() { throw new Error('private backend exception') }
+  }
+  const revoke = h.model.revokeApplication('fixture', false)
+  await until(() => h.model.challengeVisible && !h.model.busy)
+  await h.model.verifySensitive('password', 'fixture-secret')
+  const result = await revoke
+  assert.equal(result.status, 'failure'); assert.ok(result.error); assert.doesNotMatch(result.error, /private backend/)
+  assert.equal(h.model.challengeVisible, false)
+})
+
+test('account changes cancel an awaiting sensitive operation and clear all page states', async () => {
+  const h = await fixture()
+  h.model.repositoryValue = { async sensitiveStatus() { return { verified: false, methods: ['password'], remainingSeconds: 0 } } }
+  h.model.appsState = { status: 'loaded', error: '', hasData: true }
+  const saving = h.model.requireSensitive('fixture')
+  await until(() => h.model.challengeVisible && !h.model.busy)
+  h.model.clearAccountData()
+  assert.equal((await saving).status, 'cancelled')
+  assert.deepEqual(h.model.appsState, { status: 'idle', error: '', hasData: false })
+})
+
+test('independent credential reads do not present a failed TOTP lookup as disabled', async () => {
+  const h = await fixture()
+  h.model.repositoryValue = {
+    async passkeys() { return [] }, async totpStatus() { throw new Error('fixture failure') },
+    async adaptiveStatus() { return { riskLevel: 'low', riskScore: 0 } }
+  }
+  await h.model.loadSecurity()
+  assert.equal(h.model.passkeysState.status, 'loaded'); assert.equal(h.model.passkeysState.hasData, true)
+  assert.equal(h.model.totpState.status, 'error'); assert.equal(h.model.totpState.hasData, false)
+  assert.equal(h.model.riskState.status, 'loaded'); assert.equal(h.model.busy, false)
+})
+
+test('an application refresh failure preserves its previous complete snapshot', async () => {
+  const h = await fixture()
+  h.model.officialApps = [{ clientId: 'old', clientName: 'old', scopes: [] }]
+  h.model.thirdPartyApps = [{ appId: 'old-third-party', appName: 'old', scopes: [] }]
+  h.model.appsState = { status: 'loaded', error: '', hasData: true }
+  h.model.repositoryValue = {
+    async officialApps() { return [{ clientId: 'new', clientName: 'new', scopes: [] }] },
+    async thirdPartyApps() { throw new Error('fixture unavailable') }
+  }
+  await h.model.loadApps()
+  assert.equal(h.model.appsState.status, 'error'); assert.equal(h.model.appsState.hasData, true)
+  assert.equal(h.model.officialApps[0].clientId, 'old'); assert.equal(h.model.thirdPartyApps[0].appId, 'old-third-party')
+})
+
+test('issued recovery URLs encode the ticket and disappear exactly at expiry', async () => {
+  const h = await fixture()
+  h.model.repositoryValue = {
+    async sensitiveStatus() { return { verified: true } },
+    async issueRecovery() { return { recoveryCode: 'FICTIONAL code+/=', expiresInSeconds: 60 } }
+  }
+  assert.equal((await h.model.issueRecoveryTicket()).status, 'success')
+  const url = new URL(h.model.recoveryUrl())
+  assert.equal(url.origin, 'https://auth.ksuser.cn'); assert.equal(url.searchParams.get('recoveryCode'), 'FICTIONAL code+/=')
+  h.model.recoveryExpiresAt = Date.now()
+  assert.equal(h.model.recoveryUrl(), '')
+})
+
+test('registration uses server password validation before sending the registration request', async () => {
+  const h = await fixture(); let registerCalls = 0
+  h.model.passwordPolicy = { minLength: 6, maxLength: 66, requireDigits: false }
+  h.model.newStaged = () => ({ async checkUsername() { return { exists: false } },
+    async validatePassword() { throw new Error('weak fixture password') }, async register() { registerCalls++ } })
+  const result = await h.model.register('username', 'fixture@example.invalid', 'password', '123456')
+  assert.equal(result.status, 'failure'); assert.equal(registerCalls, 0); assert.deepEqual(h.model.profile, oldProfile)
 })

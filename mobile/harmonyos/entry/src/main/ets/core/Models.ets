@@ -1,4 +1,7 @@
 export class UserFacingError extends Error { constructor(message: string) { super(message); } }
+export interface ActionResult { status: 'success' | 'cancelled' | 'failure'; error?: string; }
+export interface ResourceState { status: 'idle' | 'loading' | 'loaded' | 'error'; error: string; hasData: boolean; }
+export function emptyResourceState(): ResourceState { return { status: 'idle', error: '', hasData: false }; }
 export interface ApiEnvelope<T> { code: number; errorCode?: string; params?: Object; data?: T; }
 export interface QueryParam { name: string; value: string; }
 export interface StoredCookie { name: string; value: string; domain: string; path: string; secure: boolean; hostOnly: boolean; expiresAt?: number; }
@@ -44,6 +47,8 @@ export interface AdaptiveAuthStatus {
   sessionId?: number; riskScore: number; riskLevel: string; policyDecision?: string; trusted: boolean;
   requiresStepUp: boolean; sessionFrozen: boolean; sensitiveVerified: boolean; sensitiveVerificationRemainingSeconds: number;
   currentIp?: string; currentLocation?: string; sessionLocation?: string; multiEndpointAlert: boolean;
+  authAgeSeconds?: number; idleSeconds?: number; browser?: string; deviceType?: string;
+  sessionIp?: string; alertLevel?: string; alertRemainingSeconds?: number; policyVersion?: string;
   alertTitleCode?: string; alertMessageCode?: string; recommendedActionCode?: string; reasonCodes?: ApiResult[];
 }
 export interface ApiResult { errorCode?: string; params?: Object; }
@@ -55,11 +60,13 @@ export interface SensitiveLog {
   id: number; operationType: string; loginMethod?: string; loginMethods?: string[]; ipAddress: string;
   ipLocation?: string; browser?: string; deviceType?: string; result: string; failureReason?: string;
   riskScore: number; actionTaken?: string; durationMs?: number; createdAt: string;
+  triggeredMultiErrorLock?: boolean; triggeredRateLimitLock?: boolean;
 }
 export interface PaginatedLogs { data: SensitiveLog[]; page: number; pageSize: number; total: number; totalPages: number; }
 export interface OfficialApp { clientId: string; clientName: string; logoUrl?: string; scopes: string[]; authorizedAt?: string; lastAuthorizedAt?: string; }
 export interface ThirdPartyApp {
   appId: string; appName: string; logoUrl?: string; creatorName?: string; contactInfo?: string; redirectUri?: string;
+  creatorVerificationType?: string;
   scopes: string[]; authorizedAt?: string; lastAuthorizedAt?: string; grantMode: string; expiresAt?: string;
 }
 export interface QrPreview {
@@ -81,6 +88,8 @@ export interface RecoveryTicket {
   sponsorClientName?: string; sponsorBrowser?: string; sponsorSystem?: string; sponsorIpLocation?: string;
 }
 export interface AvatarUpload { data: ArrayBuffer; mimeType: string; }
+export interface AvatarSource { data: ArrayBuffer; width: number; height: number; }
+export interface AvatarCropRegion { x: number; y: number; size: number; }
 export interface BooleanResult { success?: boolean; exists?: boolean; }
 export interface ApiBody {
   email?: string; password?: string; newPassword?: string; newEmail?: string; username?: string; code?: string;
@@ -95,17 +104,50 @@ export interface ApiBody {
 export function emptySettings(): UserSettings {
   return { mfaEnabled: false, detectUnusualLogin: true, notifySensitiveActionEmail: true, subscribeNewsEmail: false };
 }
-export function displayName(user: UserProfile | null): string {
+export function profileRealName(user: UserProfile | null): string {
   if (!user) { return ''; }
   const name = (user.realName ?? '').trim();
-  return name && !['无', '未设置', '暂无', 'null', '-'].includes(name.toLowerCase()) ? name : user.username;
+  return name && !['无', '未设置', '暂无', 'null', '-'].includes(name.toLowerCase()) ? name : '';
+}
+export function displayName(user: UserProfile | null): string {
+  return user ? profileRealName(user) || user.username : '';
 }
 export function profileCompleteness(user: UserProfile | null): number {
   if (!user) { return 0; }
-  return [user.username, user.avatarUrl ?? '', user.realName ?? '', user.region ?? '', user.bio ?? '']
+  return [user.username, user.avatarUrl ?? '', profileRealName(user), user.region ?? '', user.bio ?? '']
     .filter((value: string) => value.trim().length > 0).length * 20;
 }
-export function dateText(value: string | undefined): string { return value ? value.replace('T', ' ').slice(0, 19) : '—'; }
+function pad(value: number): string { return value.toString().padStart(2, '0'); }
+export function dateGroup(value: string | undefined): string {
+  if (!value) { return '未知日期'; }
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) { return '未知日期'; }
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+  }
+  return /^\d{4}-\d{2}-\d{2}(?:$|[T ])/.test(value) ? value.slice(0, 10) : '未知日期';
+}
+export function dateText(value: string | undefined): string {
+  if (!value) { return '—'; }
+  if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) { return '—'; }
+    return dateGroup(value) + ' ' + pad(date.getHours()) + ':' + pad(date.getMinutes()) + ':' + pad(date.getSeconds());
+  }
+  return /^\d{4}-\d{2}-\d{2}(?:$|[T ])/.test(value) ? value.replace('T', ' ').slice(0, 19) : '—';
+}
+export function validEmail(value: string): boolean { return /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(value.trim()); }
+export function validUsername(value: string): boolean { return /^[A-Za-z0-9_\-\u4E00-\u9FFF]{3,20}$/.test(value.trim()); }
+export function passwordRequirementText(policy: PasswordRequirement | null): string {
+  if (!policy) { return '正在获取密码要求…'; }
+  const rules: string[] = ['长度 ' + policy.minLength + '–' + policy.maxLength + ' 位'];
+  if (policy.requireUppercase) { rules.push('大写字母'); }
+  if (policy.requireLowercase) { rules.push('小写字母'); }
+  if (policy.requireDigits) { rules.push('数字'); }
+  if (policy.requireSpecialChars) { rules.push('特殊字符 @$!%*?&'); }
+  if (policy.rejectCommonWeakPasswords) { rules.push('避免常见弱密码'); }
+  return rules.join('；');
+}
 export function passwordError(value: string, policy: PasswordRequirement | null): string {
   if (!policy) { return '密码规则尚未加载，请重试'; }
   if (value.length < policy.minLength || value.length > policy.maxLength) { return '密码需要 ' + policy.minLength + '–' + policy.maxLength + ' 个字符'; }

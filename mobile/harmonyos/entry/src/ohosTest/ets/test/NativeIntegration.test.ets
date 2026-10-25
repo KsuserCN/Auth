@@ -5,6 +5,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { fido2 } from '@kit.OnlineAuthenticationKit';
 import { http } from '@kit.NetworkKit';
+import { image } from '@kit.ImageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { describe, it, expect } from '@ohos/hypium';
 import { SecureSessionStore, SessionStorageError } from '../../../main/ets/native/SecureSessionStore';
@@ -13,6 +14,7 @@ import { ApiClient, MemorySessionStore } from '../../../main/ets/core/ApiClient'
 import { AppEnvironment } from '../../../main/ets/core/Environment';
 import { NativeHttpTransport, HttpTransport, TransportRequest, TransportResponse } from '../../../main/ets/core/HttpTransport';
 import { PasswordRequirement, SessionSnapshot, StoredCookie } from '../../../main/ets/core/Models';
+import { NativeServices } from '../../../main/ets/native/NativeServices';
 
 const DOMAIN = 0x0000;
 const TAG = 'HarmonyNativeIntegration';
@@ -203,6 +205,47 @@ export default function nativeIntegrationTest(): void {
           String(JSON.stringify(response.header).toLowerCase().includes('set-cookie')));
         expect(response.responseCode).assertEqual(200);
       } finally { connection.destroy(); }
+    });
+
+    it('realAvatarCropUsesSelectedRegionAndEncodes512Jpeg', 0, async () => {
+      const colors = new Uint8Array(64 * 32 * 4);
+      for (let y = 0; y < 32; y++) {
+        for (let x = 0; x < 64; x++) {
+          const offset = (y * 64 + x) * 4;
+          colors[offset] = x < 32 ? 255 : 0; colors[offset + 1] = 0;
+          colors[offset + 2] = x >= 32 ? 255 : 0; colors[offset + 3] = 255;
+        }
+      }
+      const pixels = await image.createPixelMap(colors.buffer as ArrayBuffer, {
+        size: { width: 64, height: 32 }, srcPixelFormat: image.PixelMapFormat.RGBA_8888,
+        pixelFormat: image.PixelMapFormat.RGBA_8888, alphaType: image.AlphaType.OPAQUE });
+      const packer = image.createImagePacker();
+      let decoder: image.ImageSource | undefined;
+      let output: image.PixelMap | undefined;
+      try {
+        const bytes = await packer.packToData(pixels, { format: 'image/jpeg', quality: 95 });
+        const service = new NativeServices(await foregroundContext(), new AppEnvironment());
+        // The right half is blue. The encoded output must follow the selected crop, not a center crop.
+        const result = await service.cropAvatar({ data: bytes, width: 64, height: 32 }, { x: 32, y: 0, size: 32 });
+        expect(result.mimeType).assertEqual('image/jpeg');
+        decoder = image.createImageSource(result.data);
+        const info = await decoder.getImageInfo();
+        expect(info.size.width).assertEqual(512); expect(info.size.height).assertEqual(512);
+        output = await decoder.createPixelMap({ desiredPixelFormat: image.PixelMapFormat.RGBA_8888 });
+        const rendered = new ArrayBuffer(512 * 512 * 4);
+        await output.readPixelsToBuffer(rendered);
+        const sample = new Uint8Array(rendered);
+        // A center crop or full-image scale would include red at the left sample.
+        for (const x of [64, 256, 448]) {
+          const offset = (256 * 512 + x) * 4;
+          expect(sample[offset] < 40).assertTrue(); expect(sample[offset + 2] > 200).assertTrue();
+        }
+        hilog.info(DOMAIN, TAG, 'AVATAR_SELECTED_REGION_512_JPEG_OK fixture-only');
+      } finally {
+        try { await output?.release(); } catch (_) {}
+        try { await decoder?.release(); } catch (_) {}
+        await packer.release(); await pixels.release();
+      }
     });
 
     it('fidoCapabilitiesNonInteractiveDiagnostic', 0, async () => {

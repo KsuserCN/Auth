@@ -8,9 +8,12 @@ import { SecureSessionStore, SessionStorageError } from '../native/SecureSession
 import { NativeServices } from '../native/NativeServices';
 import { parseQr, qrFlow } from './QrParser';
 import { resultMessage } from './Presentation';
-import { AdaptiveAuthStatus, ApiEnvelope, AuthPayload, AvatarUpload, MfaChallenge, MobileAuthorizationContext,
+import { ActionResult, ResourceState, emptyResourceState, AvatarSource, AvatarCropRegion,
+  AdaptiveAuthStatus, ApiEnvelope, AuthPayload, AvatarUpload, MfaChallenge, MobileAuthorizationContext,
   OfficialApp, PasskeyItem, PasswordRequirement, QrConfirmation, RecoveryTicket, SensitiveLog, SensitiveStatus,
-  SessionItem, ThirdPartyApp, TotpSetup, TotpStatus, UserProfile, passwordError } from './Models';
+  SessionItem, ThirdPartyApp, TotpSetup, TotpStatus, UserProfile, passwordError, validEmail, validUsername } from './Models';
+
+type ResourceName = 'profile' | 'passkeys' | 'totp' | 'risk' | 'sessions' | 'logs' | 'apps' | 'passwordPolicy';
 
 /** One account owns all visible state. Replacing snapshots keeps ArkUI's observed updates predictable. */
 @Observed
@@ -27,6 +30,14 @@ export class AppModel {
   storageIssue: string = '';
   profile: UserProfile | null = null;
   passwordPolicy: PasswordRequirement | null = null;
+  profileState: ResourceState = emptyResourceState();
+  passkeysState: ResourceState = emptyResourceState();
+  totpState: ResourceState = emptyResourceState();
+  riskState: ResourceState = emptyResourceState();
+  sessionsState: ResourceState = emptyResourceState();
+  logsState: ResourceState = emptyResourceState();
+  appsState: ResourceState = emptyResourceState();
+  passwordPolicyState: ResourceState = emptyResourceState();
   passkeys: PasskeyItem[] = [];
   totp: TotpStatus = { enabled: false, recoveryCodesCount: 0 };
   totpSetup: TotpSetup | null = null;
@@ -40,8 +51,11 @@ export class AppModel {
   officialApps: OfficialApp[] = [];
   thirdPartyApps: ThirdPartyApp[] = [];
   recoveryTicket: RecoveryTicket | null = null;
+  recoveryExpiresAt: number = 0;
+  avatarSource: AvatarSource | null = null;
   avatarPreview: AvatarUpload | null = null;
   challengeVisible: boolean = false;
+  challengeRevision: number = 0;
   challengeKind: string = '';
   mfa: MfaChallenge | null = null;
   sensitive: SensitiveStatus | null = null;
@@ -51,6 +65,7 @@ export class AppModel {
   debug: boolean = false;
   passkeyOrigin: string = '';
   apiBaseURL: string = '';
+  filingNumber: string = '';
 
   private environment: AppEnvironment = new AppEnvironment();
   private context: common.UIAbilityContext | null = null;
@@ -62,6 +77,7 @@ export class AppModel {
   private authGeneration: number = 0;
   private accountGeneration: number = 0;
   private pendingSensitive: (() => Promise<void>) | null = null;
+  private pendingSensitiveResult: ((result: ActionResult) => void) | null = null;
   private pendingSensitiveGeneration: number = 0;
   consentExpiresAt: number = 0;
   private pendingRawQr: string = '';
@@ -90,12 +106,55 @@ export class AppModel {
     this.error = error instanceof ApiError || error instanceof SessionStorageError || error instanceof UserFacingError ?
       error.message : resultMessage('REQUEST_FAILED');
   }
-  private async run(operation: () => Promise<void>): Promise<void> {
-    if (this.busy) { return; }
+  private async run(operation: () => Promise<void>): Promise<ActionResult> {
+    if (this.busy) { return { status: 'cancelled' }; }
     this.busy = true; this.clearFeedback();
-    try { await operation(); }
-    catch (error) { this.failure(error as Error); }
+    try { await operation(); return { status: 'success' }; }
+    catch (error) {
+      this.failure(error as Error);
+      return { status: error instanceof RequestCancelled || error instanceof UserFacingError &&
+        error.message === '操作已取消' ? 'cancelled' : 'failure', error: this.error };
+    }
     finally { this.finishBusy(); }
+  }
+  private resourceState(name: ResourceName): ResourceState {
+    switch (name) {
+      case 'profile': return this.profileState;
+      case 'passkeys': return this.passkeysState;
+      case 'totp': return this.totpState;
+      case 'risk': return this.riskState;
+      case 'sessions': return this.sessionsState;
+      case 'logs': return this.logsState;
+      case 'apps': return this.appsState;
+      default: return this.passwordPolicyState;
+    }
+  }
+  private setResourceState(name: ResourceName, state: ResourceState): void {
+    switch (name) {
+      case 'profile': this.profileState = state; break;
+      case 'passkeys': this.passkeysState = state; break;
+      case 'totp': this.totpState = state; break;
+      case 'risk': this.riskState = state; break;
+      case 'sessions': this.sessionsState = state; break;
+      case 'logs': this.logsState = state; break;
+      case 'apps': this.appsState = state; break;
+      default: this.passwordPolicyState = state;
+    }
+  }
+  private async resource(name: ResourceName, operation: () => Promise<void>): Promise<void> {
+    const version = this.accountGeneration;
+    const previous = this.resourceState(name);
+    this.setResourceState(name, { status: 'loading', error: '', hasData: previous.hasData });
+    try {
+      await operation(); this.checkAccount(version);
+      this.setResourceState(name, { status: 'loaded', error: '', hasData: true });
+    } catch (error) {
+      if (version === this.accountGeneration && !(error instanceof RequestCancelled)) {
+        this.failure(error as Error);
+        this.setResourceState(name, { status: 'error', error: this.error, hasData: previous.hasData });
+      }
+      throw error as Error;
+    }
   }
   private finishBusy(): void {
     this.busy = false;
@@ -108,17 +167,21 @@ export class AppModel {
     if (version !== this.accountGeneration) { return; }
     await this.run(operation);
   }
-  private showChallenge(kind: string): void { this.challengeKind = kind; this.challengeVisible = true; }
+  private showChallenge(kind: string): void { this.challengeKind = kind; this.challengeRevision++; this.challengeVisible = true; }
   private closeChallenge(): void { this.challengeVisible = false; this.challengeKind = ''; }
   private clearAccountData(): void {
     this.accountGeneration++; this.logGeneration++;
     this.authenticated = false; this.profile = null; this.passkeys = []; this.sessions = []; this.logs = [];
     this.logsPage = 1; this.logsTotal = 0; this.logsTotalPages = 1; this.risk = null;
     this.totp = { enabled: false, recoveryCodesCount: 0 }; this.totpSetup = null; this.recoveryCodes = [];
-    this.officialApps = []; this.thirdPartyApps = []; this.recoveryTicket = null; this.avatarPreview = null;
+    this.officialApps = []; this.thirdPartyApps = []; this.recoveryTicket = null; this.recoveryExpiresAt = 0;
+    this.avatarPreview = null; this.avatarSource = null;
+    this.profileState = emptyResourceState(); this.passkeysState = emptyResourceState();
+    this.totpState = emptyResourceState(); this.riskState = emptyResourceState();
+    this.sessionsState = emptyResourceState(); this.logsState = emptyResourceState(); this.appsState = emptyResourceState();
     this.mfa = null; this.sensitive = null; this.qr = null; this.consent = null;
     this.codeSentAt = 0; this.codeSentType = ''; this.codeSentEmail = '';
-    this.pendingSensitive = null; this.staged?.client.invalidate(); this.staged = null; this.pendingRawQr = '';
+    this.cancelPendingSensitive(); this.staged?.client.invalidate(); this.staged = null; this.pendingRawQr = '';
     this.closeChallenge();
   }
   async initialize(context: common.UIAbilityContext): Promise<void> {
@@ -129,6 +192,7 @@ export class AppModel {
         this.context = context;
         this.environment = await AppEnvironment.load(context);
         this.apiBaseURL = this.environment.apiBaseURL; this.debug = this.environment.debug;
+        this.filingNumber = this.environment.filingNumber ?? '';
         this.native = new NativeServices(context, this.environment);
         this.client = new ApiClient(this.environment, new SecureSessionStore(context, this.environment.apiBaseURL), this.transport);
         this.repositoryValue = new Repository(this.client);
@@ -146,11 +210,12 @@ export class AppModel {
       const snapshot = this.client!.snapshot();
       if (snapshot.accessToken) {
         this.profile = snapshot.profile; this.authenticated = snapshot.profile !== null;
+        this.profileState = { status: 'idle', error: '', hasData: snapshot.profile !== null };
         await this.fetchProfile();
       }
       try {
         this.trace('startup: load password policy');
-        this.passwordPolicy = await this.repository().passwordRequirement();
+        await this.fetchPasswordRequirement();
         this.trace('startup: password policy loaded');
       }
       catch (error) { if (!this.authenticated) { this.failure(error as Error); } }
@@ -158,15 +223,15 @@ export class AppModel {
     } catch (error) { this.ready = true; this.failure(error as Error); }
     finally { this.trace('startup: finished'); this.finishBusy(); }
   }
-  async resetLocalSession(): Promise<void> {
-    await this.run(async () => {
+  async resetLocalSession(): Promise<ActionResult> {
+    return await this.run(async () => {
       this.authGeneration++; await this.client?.clear(); this.clearAccountData(); this.storageIssue = ''; this.ready = true;
       this.notice = '本机登录数据已清除，请重新登录';
     });
   }
   private newStaged(): Repository { return new Repository(new ApiClient(this.environment, new MemorySessionStore(), this.transport)); }
-  private async authenticate(operation: (repository: Repository) => Promise<ApiEnvelope<AuthPayload>>): Promise<void> {
-    await this.run(async () => {
+  private async authenticate(operation: (repository: Repository) => Promise<ApiEnvelope<AuthPayload>>): Promise<ActionResult> {
+    return await this.run(async () => {
       const attempt = ++this.authGeneration;
       this.staged?.client.invalidate();
       const staged = this.newStaged(); this.staged = staged;
@@ -201,46 +266,49 @@ export class AppModel {
     const pending = this.pendingRawQr;
     this.clearAccountData(); this.pendingRawQr = pending;
     this.profile = profile; this.authenticated = true; this.storageIssue = ''; this.offline = false;
+    this.profileState = { status: 'loaded', error: '', hasData: true };
     this.notice = '登录成功';
     if (pending) { this.pendingRawQr = ''; await this.previewRawQr(pending); }
   }
-  async login(email: string, password: string): Promise<void> { await this.authenticate((repo: Repository) => repo.login(email, password)); }
-  async loginWithCode(email: string, code: string): Promise<void> { await this.authenticate((repo: Repository) => repo.login(email, code, true)); }
-  async register(username: string, email: string, password: string, code: string): Promise<void> {
-    await this.authenticate(async (repo: Repository) => {
+  async login(email: string, password: string): Promise<ActionResult> { return await this.authenticate((repo: Repository) => repo.login(email, password)); }
+  async loginWithCode(email: string, code: string): Promise<ActionResult> { return await this.authenticate((repo: Repository) => repo.login(email, code, true)); }
+  async register(username: string, email: string, password: string, code: string): Promise<ActionResult> {
+    return await this.authenticate(async (repo: Repository) => {
       if (!this.passwordPolicy) { this.passwordPolicy = await repo.passwordRequirement(); }
       const invalid = passwordError(password, this.passwordPolicy); if (invalid) { throw new UserFacingError(invalid); }
       const availability = await repo.checkUsername(username);
       if (availability.exists) { throw new UserFacingError('这个用户名已被使用，请换一个'); }
+      await repo.validatePassword(password);
       return repo.register(username, email, password, code);
     });
   }
-  async sendCode(email: string, type: string): Promise<void> {
+  async sendCode(email: string, type: string): Promise<ActionResult> {
     const operation = async (): Promise<void> => {
+      if (type !== 'sensitive-verification' && !validEmail(email)) { throw new UserFacingError('请输入有效的邮箱地址'); }
       await this.repository().sendCode(email, type);
       this.codeSentType = type; this.codeSentEmail = email.trim().toLowerCase(); this.codeSentAt = Date.now();
       this.notice = '验证码已发送，请检查邮箱';
     };
-    if (type === 'change-email') { await this.protect('修改绑定邮箱', operation); }
-    else { await this.run(operation); }
+    if (type === 'change-email') { return await this.protect('修改绑定邮箱', operation); }
+    return await this.run(operation);
   }
-  async loginPasskey(): Promise<void> {
-    await this.authenticate(async (repo: Repository) => {
+  async loginPasskey(): Promise<ActionResult> {
+    return await this.authenticate(async (repo: Repository) => {
       const options = await repo.passkeyAuthenticationOptions();
       try { return await repo.loginPasskey(options, await this.services().authenticate(options)); }
       finally { this.passkeyOrigin = this.services().readLastOrigin(); }
     });
   }
-  async verifyMfa(value: string, recovery: boolean = false): Promise<void> {
-    await this.run(async () => {
+  async verifyMfa(value: string, recovery: boolean = false): Promise<ActionResult> {
+    return await this.run(async () => {
       if (!this.mfa || !this.staged) { throw new UserFacingError('登录验证已结束，请重新登录'); }
       const attempt = this.authGeneration; const staged = this.staged;
       const token = await staged.verifyMfa(this.mfa.challengeId, value, recovery);
       await this.finishAuthentication(token.accessToken ?? '', staged, attempt);
     });
   }
-  async verifyMfaPasskey(): Promise<void> {
-    await this.run(async () => {
+  async verifyMfaPasskey(): Promise<ActionResult> {
+    return await this.run(async () => {
       if (!this.mfa || !this.staged || !this.mfa.methods.includes('passkey')) { throw new UserFacingError('当前登录不支持此验证方式'); }
       const attempt = this.authGeneration; const staged = this.staged;
       const options = await staged.passkeyAuthenticationOptions();
@@ -251,14 +319,22 @@ export class AppModel {
     });
   }
   cancelChallenge(): void {
+    this.clearFeedback();
     if (this.challengeKind === 'mfa') {
       this.authGeneration++; this.staged?.client.invalidate(); this.staged = null; this.client?.invalidate(); this.mfa = null; this.pendingRawQr = '';
     }
-    this.pendingSensitive = null; this.sensitive = null; this.qr = null; this.consent = null;
-    this.totpSetup = null; this.recoveryCodes = []; this.closeChallenge();
+    this.cancelPendingSensitive(); this.sensitive = null; this.qr = null; this.consent = null;
+    this.closeChallenge();
   }
-  private async protect(title: string, operation: () => Promise<void>): Promise<void> {
-    await this.run(async () => {
+  private cancelPendingSensitive(): void {
+    const resolve = this.pendingSensitiveResult;
+    this.pendingSensitive = null; this.pendingSensitiveResult = null;
+    if (resolve) { resolve({ status: 'cancelled' }); }
+  }
+  private async protect(title: string, operation: () => Promise<void>): Promise<ActionResult> {
+    if (this.pendingSensitive) { return { status: 'cancelled' }; }
+    let completion: Promise<ActionResult> | null = null;
+    const immediate = await this.run(async () => {
       if (!this.authenticated) { throw new ApiError(401, 'UNAUTHENTICATED'); }
       const version = this.accountGeneration;
       const status = await this.repository().sensitiveStatus(); this.checkAccount(version);
@@ -268,22 +344,35 @@ export class AppModel {
       this.sensitive = { verified: false, remainingSeconds: status.remainingSeconds, methods: methods,
         preferredMethod: methods.includes(status.preferredMethod ?? '') ? status.preferredMethod : methods[0] };
       this.sensitiveTitle = title; this.pendingSensitive = operation; this.pendingSensitiveGeneration = version;
+      completion = new Promise<ActionResult>((resolve) => { this.pendingSensitiveResult = resolve; });
+      if (this.profile) { this.profile = JSON.parse(JSON.stringify(this.profile)) as UserProfile; }
       this.showChallenge('sensitive');
     });
+    // Do not hold busy while waiting for the user: the verification action must be able to run.
+    return completion !== null ? await completion : immediate;
   }
   private async completeSensitive(): Promise<void> {
     this.checkAccount(this.pendingSensitiveGeneration);
-    const operation = this.pendingSensitive; this.pendingSensitive = null; this.sensitive = null; this.closeChallenge();
-    if (operation) { await operation(); }
+    const operation = this.pendingSensitive; const resolve = this.pendingSensitiveResult;
+    this.pendingSensitive = null; this.pendingSensitiveResult = null; this.sensitive = null; this.closeChallenge();
+    try {
+      if (operation) { await operation(); }
+      if (resolve) { resolve({ status: 'success' }); }
+    } catch (error) {
+      this.failure(error as Error);
+      if (resolve) { resolve({ status: error instanceof RequestCancelled ? 'cancelled' : 'failure', error: this.error }); }
+      throw error as Error;
+    }
   }
-  async verifySensitive(method: string, value: string, recovery: boolean = false): Promise<void> {
-    await this.run(async () => {
+  async requireSensitive(title: string): Promise<ActionResult> { return this.protect(title, async () => {}); }
+  async verifySensitive(method: string, value: string, recovery: boolean = false): Promise<ActionResult> {
+    return await this.run(async () => {
       if (!this.sensitive?.methods?.includes(method)) { throw new UserFacingError('当前操作不支持此验证方式'); }
       await this.repository().verifySensitive(method, value, recovery); await this.completeSensitive();
     });
   }
-  async verifySensitivePasskey(): Promise<void> {
-    await this.run(async () => {
+  async verifySensitivePasskey(): Promise<ActionResult> {
+    return await this.run(async () => {
       if (!this.sensitive?.methods?.includes('passkey')) { throw new UserFacingError('当前操作不支持通行密钥'); }
       const options = await this.repository().passkeyAuthenticationOptions(true);
       try {
@@ -293,63 +382,106 @@ export class AppModel {
     });
   }
   private async fetchProfile(): Promise<void> {
-    const version = this.accountGeneration; const user = await this.repository().currentUser(); this.checkAccount(version);
-    if (!user?.uuid) { throw new ApiError(500, 'INVALID_RESPONSE'); }
-    await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.authenticated = true;
+    await this.resource('profile', async () => {
+      const version = this.accountGeneration; const user = await this.repository().currentUser(); this.checkAccount(version);
+      if (!user?.uuid) { throw new ApiError(500, 'INVALID_RESPONSE'); }
+      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.authenticated = true;
+    });
   }
   async loadProfile(): Promise<void> { await this.read(async () => this.fetchProfile()); }
   private async fetchSecurity(): Promise<void> {
     const version = this.accountGeneration;
-    const passkeys = await this.repository().passkeys(); this.checkAccount(version); this.passkeys = passkeys ?? [];
-    const totp = await this.repository().totpStatus(); this.checkAccount(version); this.totp = totp;
-    const risk = await this.repository().adaptiveStatus(); this.checkAccount(version); this.risk = risk;
+    const tasks: Promise<void>[] = [
+      this.resource('passkeys', async () => { const values = await this.repository().passkeys(); this.checkAccount(version); this.passkeys = values ?? []; }),
+      this.resource('totp', async () => { const value = await this.repository().totpStatus(); this.checkAccount(version); this.totp = value; }),
+      this.resource('risk', async () => { const value = await this.repository().adaptiveStatus(); this.checkAccount(version); this.risk = value; })
+    ];
+    // A failed credential query must not hide the independently available risk/TOTP information.
+    await Promise.allSettled(tasks);
   }
   async loadSecurity(): Promise<void> { await this.read(async () => this.fetchSecurity()); }
+  private async fetchPasswordRequirement(): Promise<void> {
+    await this.resource('passwordPolicy', async () => { this.passwordPolicy = await this.repository().passwordRequirement(); });
+  }
+  async loadPasswordRequirement(): Promise<void> { await this.read(async () => this.fetchPasswordRequirement()); }
+  async checkUsernameAvailable(username: string): Promise<boolean> {
+    let available = false;
+    await this.run(async () => {
+      if (!validUsername(username)) { throw new UserFacingError('用户名需为 3–20 个汉字、字母、数字、下划线或连字符'); }
+      const value = await this.repository().checkUsername(username);
+      if (value.exists) { throw new UserFacingError('这个用户名已被使用，请换一个'); }
+      available = true;
+    });
+    return available;
+  }
+  async validateRegistrationPassword(password: string): Promise<boolean> {
+    let valid = false;
+    await this.run(async () => {
+      const invalid = passwordError(password, this.passwordPolicy);
+      if (invalid) { throw new UserFacingError(invalid); }
+      await this.repository().validatePassword(password); valid = true;
+    });
+    return valid;
+  }
   async refreshAll(): Promise<void> {
     await this.read(async () => {
       if (!this.authenticated) {
         if (this.client?.snapshot().accessToken) { await this.fetchProfile(); }
-        else { this.passwordPolicy = await this.repository().passwordRequirement(); return; }
+        else { await this.fetchPasswordRequirement(); return; }
       }
       const tasks: Promise<void>[] = [this.fetchProfile(), this.fetchSecurity(), this.fetchSessions()];
       const results = await Promise.allSettled(tasks);
       for (const result of results) { if (result.status === 'rejected') { throw result.reason as Error; } }
     });
   }
-  async saveProfile(field: string, value: string): Promise<void> {
-    await this.run(async () => {
+  async saveProfile(field: string, value: string): Promise<ActionResult> {
+    return await this.run(async () => {
+      if (field === 'username' && !validUsername(value)) { throw new UserFacingError('用户名需为 3–20 个汉字、字母、数字、下划线或连字符'); }
       const version = this.accountGeneration;
       if (field === 'username' && (await this.repository().checkUsername(value)).exists && value.trim() !== this.profile?.username) { throw new UserFacingError('这个用户名已被使用，请换一个'); }
       const user = await this.repository().updateProfile(field, value); this.checkAccount(version);
-      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.notice = '个人资料已更新';
+      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.profileState = { status: 'loaded', error: '', hasData: true }; this.notice = '个人资料已更新';
     });
   }
-  async prepareAvatar(): Promise<void> {
-    await this.run(async () => { const version = this.accountGeneration; const avatar = await this.services().pickAvatar(); this.checkAccount(version); this.avatarPreview = avatar; });
+  async prepareAvatar(): Promise<ActionResult> {
+    return await this.run(async () => {
+      const version = this.accountGeneration; const avatar = await this.services().selectAvatar(); this.checkAccount(version);
+      this.avatarSource = avatar; this.avatarPreview = null;
+    });
   }
-  cancelAvatar(): void { this.avatarPreview = null; }
-  async confirmAvatar(): Promise<void> {
-    await this.run(async () => {
+  async cropAvatar(region: AvatarCropRegion): Promise<ActionResult> {
+    return await this.run(async () => {
+      if (!this.avatarSource) { throw new UserFacingError('请先选择头像'); }
+      const version = this.accountGeneration;
+      const avatar = await this.services().cropAvatar(this.avatarSource, region); this.checkAccount(version); this.avatarPreview = avatar;
+    });
+  }
+  cancelAvatar(): void { this.avatarPreview = null; this.avatarSource = null; }
+  async confirmAvatar(): Promise<ActionResult> {
+    return await this.run(async () => {
       if (!this.avatarPreview) { return; }
       const version = this.accountGeneration;
       const user = await this.repository().uploadAvatar(this.avatarPreview.data, this.avatarPreview.mimeType); this.checkAccount(version);
-      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.avatarPreview = null; this.notice = '头像已更新';
+      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.profileState = { status: 'loaded', error: '', hasData: true }; this.cancelAvatar(); this.notice = '头像已更新';
     });
   }
-  async updateSetting(field: string, value: boolean | string): Promise<void> {
-    await this.protect('修改账号安全设置', async () => {
+  async updateSetting(field: string, value: boolean | string): Promise<ActionResult> {
+    const result = await this.protect('修改账号安全设置', async () => {
       const version = this.accountGeneration; await this.repository().updateSetting(field, value); this.checkAccount(version);
       await this.fetchProfile(); this.notice = '安全设置已更新';
     });
     // Native controls must reflect committed values after a pending verification or failed write.
     if (this.profile) { this.profile = JSON.parse(JSON.stringify(this.profile)) as UserProfile; }
+    return result;
   }
   private async fetchSessions(): Promise<void> {
-    const version = this.accountGeneration; const items = await this.repository().sessions(); this.checkAccount(version); this.sessions = items ?? [];
+    await this.resource('sessions', async () => {
+      const version = this.accountGeneration; const items = await this.repository().sessions(); this.checkAccount(version); this.sessions = items ?? [];
+    });
   }
   async loadSessions(): Promise<void> { await this.read(async () => this.fetchSessions()); }
-  async revokeSession(id: number): Promise<void> {
-    await this.protect('撤销登录会话', async () => {
+  async revokeSession(id: number): Promise<ActionResult> {
+    return await this.protect('撤销登录会话', async () => {
       const version = this.accountGeneration; const current = this.sessions.find((item: SessionItem) => item.id === id)?.current;
       await this.repository().revokeSession(id); this.checkAccount(version);
       if (current) { this.authGeneration++; await this.client!.clear(); this.clearAccountData(); }
@@ -357,7 +489,7 @@ export class AppModel {
       this.notice = '登录会话已撤销';
     });
   }
-  async logout(all: boolean = false): Promise<void> {
+  async logout(all: boolean = false): Promise<ActionResult> {
     const operation = async (): Promise<void> => {
       this.authGeneration++; this.client?.invalidate();
       let remoteError: Error | null = null;
@@ -366,35 +498,41 @@ export class AppModel {
       await this.client!.clear(); this.clearAccountData(); this.storageIssue = '';
       this.notice = remoteError ? '本机已退出；服务端退出未完成，可在其他设备撤销此会话' : '已退出登录';
     };
-    if (all) { await this.protect('退出所有设备', operation); } else { await this.run(operation); }
+    if (all) { return await this.protect('退出所有设备', operation); }
+    return await this.run(operation);
   }
   async loadLogs(page: number = 1, result: string = '', operation: string = '', startDate: string = '', endDate: string = ''): Promise<void> {
     // Logs have their own sequence so filter changes cannot be overwritten by a late page.
     const request = ++this.logGeneration;
     await this.read(async () => {
-      const version = this.accountGeneration;
-      const response = await this.repository().logs(page, result, operation, startDate, endDate); this.checkAccount(version);
-      if (request !== this.logGeneration) { throw new RequestCancelled(); }
-      this.logs = response.data ?? []; this.logsPage = response.page; this.logsTotal = response.total; this.logsTotalPages = Math.max(1, response.totalPages);
+      await this.resource('logs', async () => {
+        const version = this.accountGeneration;
+        const response = await this.repository().logs(page, result, operation, startDate, endDate); this.checkAccount(version);
+        if (request !== this.logGeneration) { throw new RequestCancelled(); }
+        this.logs = response.data ?? []; this.logsPage = response.page; this.logsTotal = response.total; this.logsTotalPages = Math.max(1, response.totalPages);
+      });
     });
   }
   async loadApps(): Promise<void> {
     await this.read(async () => {
-      const version = this.accountGeneration;
-      const official = await this.repository().officialApps(); this.checkAccount(version); this.officialApps = official ?? [];
-      const thirdParty = await this.repository().thirdPartyApps(); this.checkAccount(version); this.thirdPartyApps = thirdParty ?? [];
+      await this.resource('apps', async () => {
+        const version = this.accountGeneration;
+        const official = await this.repository().officialApps(); this.checkAccount(version);
+        const thirdParty = await this.repository().thirdPartyApps(); this.checkAccount(version);
+        this.officialApps = official ?? []; this.thirdPartyApps = thirdParty ?? [];
+      });
     });
   }
-  async revokeApplication(id: string, official: boolean): Promise<void> {
-    await this.protect('撤销应用授权', async () => {
+  async revokeApplication(id: string, official: boolean): Promise<ActionResult> {
+    return await this.protect('撤销应用授权', async () => {
       const version = this.accountGeneration; await this.repository().revokeApplication(id, official); this.checkAccount(version);
       if (official) { const apps = await this.repository().officialApps(); this.checkAccount(version); this.officialApps = apps ?? []; }
       else { const apps = await this.repository().thirdPartyApps(); this.checkAccount(version); this.thirdPartyApps = apps ?? []; }
       this.notice = '应用授权已撤销';
     });
   }
-  async addPasskey(name: string): Promise<void> {
-    await this.protect('添加通行密钥', async () => {
+  async addPasskey(name: string): Promise<ActionResult> {
+    return await this.protect('添加通行密钥', async () => {
       if (!name.trim()) { throw new UserFacingError('请输入通行密钥名称'); }
       const version = this.accountGeneration; const options = await this.repository().registrationOptions(name); this.checkAccount(version);
       try { const result = await this.services().register(options); this.checkAccount(version); await this.repository().registerPasskey(name, result); }
@@ -402,70 +540,73 @@ export class AppModel {
       this.checkAccount(version); await this.fetchSecurity(); this.notice = '通行密钥已添加';
     });
   }
-  async renamePasskey(id: number, name: string): Promise<void> {
-    await this.run(async () => {
+  async renamePasskey(id: number, name: string): Promise<ActionResult> {
+    return await this.protect('重命名通行密钥', async () => {
       if (!name.trim()) { throw new UserFacingError('请输入通行密钥名称'); }
       const version = this.accountGeneration; await this.repository().renamePasskey(id, name); this.checkAccount(version);
       await this.fetchSecurity(); this.notice = '通行密钥名称已更新';
     });
   }
-  async deletePasskey(id: number): Promise<void> {
-    await this.protect('删除通行密钥', async () => {
+  async deletePasskey(id: number): Promise<ActionResult> {
+    return await this.protect('删除通行密钥', async () => {
       const version = this.accountGeneration; await this.repository().deletePasskey(id); this.checkAccount(version);
       await this.fetchSecurity(); this.notice = '通行密钥已删除';
     });
   }
-  async setupTotp(): Promise<void> {
-    await this.protect('启用身份验证器', async () => {
+  async setupTotp(): Promise<ActionResult> {
+    return await this.protect('启用身份验证器', async () => {
       const version = this.accountGeneration; const setup = await this.repository().setupTotp(); this.checkAccount(version); this.totpSetup = setup;
     });
   }
-  async enableTotp(code: string): Promise<void> {
-    await this.run(async () => {
+  async enableTotp(code: string): Promise<ActionResult> {
+    return await this.protect('启用身份验证器', async () => {
       if (!this.totpSetup) { throw new UserFacingError('请先获取验证器绑定信息'); }
       const version = this.accountGeneration; const recoveryCodes = this.totpSetup.recoveryCodes;
       await this.repository().enableTotp(code, recoveryCodes); this.checkAccount(version);
       this.totpSetup = null; this.recoveryCodes = recoveryCodes; await this.fetchSecurity(); this.notice = '验证器已启用，请妥善保存恢复码';
     });
   }
-  async disableTotp(): Promise<void> {
-    await this.protect('停用身份验证器', async () => {
+  async disableTotp(): Promise<ActionResult> {
+    return await this.protect('停用身份验证器', async () => {
       const version = this.accountGeneration; await this.repository().disableTotp(); this.checkAccount(version);
       this.recoveryCodes = []; this.totpSetup = null; await this.fetchSecurity(); this.notice = '验证器已停用';
     });
   }
-  async loadRecoveryCodes(regenerate: boolean = false): Promise<void> {
-    await this.protect(regenerate ? '重新生成恢复码' : '查看恢复码', async () => {
+  async loadRecoveryCodes(regenerate: boolean = false): Promise<ActionResult> {
+    return await this.protect(regenerate ? '重新生成恢复码' : '查看恢复码', async () => {
       const version = this.accountGeneration; const codes = await this.repository().recoveryCodes(regenerate); this.checkAccount(version);
       this.recoveryCodes = codes; if (regenerate) { this.notice = '恢复码已更新，旧恢复码已失效'; }
     });
   }
-  async changeEmail(email: string, code: string): Promise<void> {
-    await this.protect('修改绑定邮箱', async () => {
+  async changeEmail(email: string, code: string): Promise<ActionResult> {
+    return await this.protect('修改绑定邮箱', async () => {
+      if (!validEmail(email) || !/^\d{6}$/.test(code)) { throw new UserFacingError('请输入有效邮箱和 6 位验证码'); }
       const version = this.accountGeneration; const user = await this.repository().changeEmail(email, code); this.checkAccount(version);
-      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.notice = '绑定邮箱已更新';
+      await this.client!.setProfile(user); this.checkAccount(version); this.profile = user; this.profileState = { status: 'loaded', error: '', hasData: true }; this.notice = '绑定邮箱已更新';
     });
   }
-  async changePassword(password: string): Promise<void> {
-    await this.protect('修改登录密码', async () => {
-      if (!this.passwordPolicy) { this.passwordPolicy = await this.repository().passwordRequirement(); }
+  async changePassword(password: string): Promise<ActionResult> {
+    return await this.protect('修改登录密码', async () => {
+      if (!this.passwordPolicy) { await this.fetchPasswordRequirement(); }
       const invalid = passwordError(password, this.passwordPolicy); if (invalid) { throw new UserFacingError(invalid); }
       const version = this.accountGeneration; await this.repository().changePassword(password); this.checkAccount(version);
       await this.fetchProfile(); this.notice = '密码已更新';
     });
   }
-  async deleteAccount(confirmText: string): Promise<void> {
-    await this.protect('删除账号', async () => {
+  async deleteAccount(confirmText: string): Promise<ActionResult> {
+    return await this.protect('删除账号', async () => {
       const version = this.accountGeneration; await this.repository().deleteAccount(confirmText); this.checkAccount(version);
       this.authGeneration++; await this.client!.clear(); this.clearAccountData(); this.notice = '账号已删除';
     });
   }
-  async issueRecoveryTicket(): Promise<void> {
-    await this.protect('生成账号恢复授权', async () => {
-      const version = this.accountGeneration; const ticket = await this.repository().issueRecovery(); this.checkAccount(version); this.recoveryTicket = ticket;
+  async issueRecoveryTicket(): Promise<ActionResult> {
+    return await this.protect('生成账号恢复授权', async () => {
+      const version = this.accountGeneration; const ticket = await this.repository().issueRecovery(); this.checkAccount(version);
+      if (!ticket.recoveryCode || !Number.isFinite(ticket.expiresInSeconds) || ticket.expiresInSeconds <= 0) { throw new ApiError(500, 'INVALID_RESPONSE'); }
+      this.recoveryTicket = ticket; this.recoveryExpiresAt = Date.now() + ticket.expiresInSeconds * 1000;
     });
   }
-  async scan(): Promise<void> { await this.run(async () => { await this.previewRawQr(await this.services().scan()); }); }
+  async scan(): Promise<ActionResult> { return await this.run(async () => { await this.previewRawQr(await this.services().scan()); }); }
   private async previewRawQr(content: string): Promise<void> {
     const parsed = parseQr(content, this.environment.webOrigin);
     if (!parsed.transfer && !this.authenticated) {
@@ -486,8 +627,8 @@ export class AppModel {
     this.qr = { code: parsed.code, transfer: parsed.transfer, preview: preview, expiresAt: previewExpiresAt };
     this.showChallenge('qr');
   }
-  async confirmQr(): Promise<void> {
-    await this.run(async () => {
+  async confirmQr(): Promise<ActionResult> {
+    return await this.run(async () => {
       const qr = this.qr;
       if (!qr || qr.expiresAt <= Date.now()) { this.cancelChallenge(); throw new UserFacingError('二维码已过期，请重新扫描'); }
       if (qr.transfer) {
@@ -502,8 +643,8 @@ export class AppModel {
       }
     });
   }
-  async rejectQr(): Promise<void> {
-    await this.run(async () => {
+  async rejectQr(): Promise<ActionResult> {
+    return await this.run(async () => {
       const qr = this.qr;
       if (qr && qr.preview.codeType === 'approve_official' && qr.expiresAt > Date.now()) {
         const version = this.accountGeneration; await this.repository().approveQr(qr.code, true, false); this.checkAccount(version);
@@ -511,8 +652,8 @@ export class AppModel {
       this.qr = null; this.closeChallenge(); this.notice = '已取消扫码请求';
     });
   }
-  async decideConsent(approve: boolean, mode: string = 'PERSISTENT', ttl: number = 3600, loginWeb: boolean = false): Promise<void> {
-    await this.run(async () => {
+  async decideConsent(approve: boolean, mode: string = 'PERSISTENT', ttl: number = 3600, loginWeb: boolean = false): Promise<ActionResult> {
+    return await this.run(async () => {
       const context = this.consent;
       if (!context || context.qr !== true || context.nativeAuthorization === true) { throw new UserFacingError('此请求不是网页扫码授权'); }
       if (this.consentExpiresAt <= Date.now()) { this.cancelChallenge(); throw new UserFacingError('授权请求已过期，请重新扫码'); }
@@ -522,23 +663,38 @@ export class AppModel {
       this.consent = null; this.closeChallenge(); this.notice = approve ? '授权已完成，请返回原浏览器继续' : '已拒绝本次网页授权';
     });
   }
-  async openRecovery(code: string = ''): Promise<void> {
-    await this.openWeb('/forgot-password' + (code.trim() ? '?recoveryCode=' + encodeURIComponent(code.trim()) + '&source=mobile' : ''));
+  async openRecovery(code: string = ''): Promise<ActionResult> {
+    return await this.openWeb('/forgot-password' + (code.trim() ? '?recoveryCode=' + encodeURIComponent(code.trim()) + '&source=mobile' : ''));
   }
-  async openLegal(kind: string): Promise<void> {
-    await this.run(async () => {
-      if (!this.context) { throw new UserFacingError('应用尚未初始化'); }
-      await this.context.startAbility({ action: 'ohos.want.action.viewData',
-        uri: 'https://docs.ksuser.cn/agreement/' + (kind === 'privacy' ? 'privacy' : 'user') });
+  recoveryUrl(): string {
+    if (!this.recoveryTicket?.recoveryCode || this.recoveryExpiresAt <= Date.now()) { return ''; }
+    return this.environment.webOrigin + '/forgot-password?recoveryCode=' +
+      encodeURIComponent(this.recoveryTicket.recoveryCode) + '&source=mobile';
+  }
+  async copyText(text: string): Promise<ActionResult> {
+    return await this.run(async () => {
+      if (!text) { throw new UserFacingError('当前内容不可复制'); }
+      await this.services().copyText(text); this.notice = '已复制到本机剪贴板';
     });
   }
-  async verifyIdentity(): Promise<void> {
-    await this.protect('验证当前身份', async () => { await this.fetchSecurity(); this.notice = '身份验证已完成'; });
+  async openFeedback(): Promise<ActionResult> {
+    return await this.openExternal('https://github.com/KsuserCN/Auth/issues');
   }
-  private async openWeb(path: string): Promise<void> {
-    await this.run(async () => {
+  async openFiling(): Promise<ActionResult> { return await this.openExternal('https://beian.miit.gov.cn/'); }
+  async openLegal(kind: string): Promise<ActionResult> {
+    return await this.openExternal('https://docs.ksuser.cn/agreement/' + (kind === 'privacy' ? 'privacy' :
+      kind === 'third-party' || kind === 'sharing' ? 'third-party-information-sharing' : 'user'));
+  }
+  async verifyIdentity(): Promise<ActionResult> {
+    return await this.protect('验证当前身份', async () => { await this.fetchSecurity(); this.notice = '身份验证已完成'; });
+  }
+  private async openWeb(path: string): Promise<ActionResult> {
+    return await this.openExternal(this.environment.webOrigin + path);
+  }
+  private async openExternal(uri: string): Promise<ActionResult> {
+    return await this.run(async () => {
       if (!this.context) { throw new UserFacingError('应用尚未初始化'); }
-      await this.context.startAbility({ action: 'ohos.want.action.viewData', uri: this.environment.webOrigin + path });
+      await this.context.startAbility({ action: 'ohos.want.action.viewData', uri: uri });
     });
   }
 }

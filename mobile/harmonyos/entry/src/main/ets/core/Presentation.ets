@@ -1,6 +1,8 @@
 import { API_RESULT_MESSAGES } from '../generated/GeneratedAPIResultCodes';
 import { SECURITY_LOG_MESSAGES } from '../generated/GeneratedSecurityLogCatalog';
 import { SensitiveLog } from './Models';
+import { parseUrl } from './Cookies';
+export { dateText, dateGroup } from './Models';
 
 function fallback(status: number): string {
   let code = 'REQUEST_FAILED';
@@ -66,6 +68,70 @@ export function scopeTitle(scope: string): string {
     case 'profile': return '基本个人资料';
     case 'email': return '邮箱地址';
     case 'offline_access': return '在授权期限内保持访问';
+    case 'real_name': return '真实姓名';
+    case 'gender': return '性别';
+    case 'birth_date': return '生日';
+    case 'region': return '地区';
+    case 'bio': return '个人简介';
     default: return scope;
   }
+}
+export function scopeDescription(scope: string): string {
+  switch (scope) {
+    case 'openid': return '使用唯一账号标识识别你的身份';
+    case 'profile': return '读取用户名、头像等基本个人资料';
+    case 'email': return '读取你绑定的邮箱地址';
+    case 'offline_access': return '在你不使用应用时，仍可在授权期限内访问已同意的资料';
+    case 'real_name': return '读取你填写的真实姓名';
+    case 'gender': return '读取你填写的性别';
+    case 'birth_date': return '读取你填写的出生日期';
+    case 'region': return '读取你填写的所在地区';
+    case 'bio': return '读取你的个人简介';
+    default: return '该应用请求的其他权限：' + scope;
+  }
+}
+export function riskTitle(level: string | number | undefined): string {
+  if (level === undefined) { return '未知'; }
+  const value = typeof level === 'number' ? level >= 70 ? 'high' : level >= 40 ? 'medium' : 'low' : level.toLowerCase();
+  return value === 'low' ? '低风险' : value === 'medium' ? '中风险' : value === 'high' ? '高风险' : '未知';
+}
+export function logAction(value: string | undefined): string {
+  return value ? SECURITY_LOG_MESSAGES.get('action.' + normalize(value)) ?? '其他安全处理' : '—';
+}
+export function formatDuration(seconds: number | undefined): string {
+  if (seconds === undefined || !Number.isFinite(seconds)) { return '未知'; }
+  const value = Math.max(0, Math.floor(seconds));
+  if (value < 60) { return value + ' 秒'; }
+  if (value < 3600) { return Math.floor(value / 60) + ' 分 ' + (value % 60) + ' 秒'; }
+  if (value < 86400) { return Math.floor(value / 3600) + ' 小时 ' + Math.floor(value % 3600 / 60) + ' 分'; }
+  return Math.floor(value / 86400) + ' 天 ' + Math.floor(value % 86400 / 3600) + ' 小时';
+}
+export function grantModeTitle(mode: string | undefined): string {
+  switch (mode) {
+    case 'PERSISTENT': return '长期授权';
+    case 'ONE_TIME': return '仅本次';
+    case 'TIME_LIMITED': return '限时授权';
+    default: return '授权方式未知';
+  }
+}
+export const LOG_OPERATIONS: string[] = ['', 'LOGIN', 'REGISTER', 'SENSITIVE_VERIFY', 'ADAPTIVE_POLICY',
+  'CHANGE_PASSWORD', 'CHANGE_EMAIL', 'ADD_PASSKEY', 'DELETE_PASSKEY', 'ENABLE_TOTP', 'DISABLE_TOTP',
+  'BIND_OAUTH', 'UNBIND_OAUTH', 'UPDATE_PROFILE', 'DELETE_ACCOUNT'];
+export function operationTitle(value: string): string {
+  return value ? SECURITY_LOG_MESSAGES.get('operation.' + value) ?? '其他操作' : '全部操作';
+}
+export function logResult(log: SensitiveLog): string {
+  return log.result.toUpperCase() === 'SUCCESS' ? log.operationType === 'ADAPTIVE_POLICY' ? '已执行' : '成功' : '失败';
+}
+export function verificationTitle(value: string | undefined): string {
+  switch (value) {
+    case 'personal': return '个人认证';
+    case 'enterprise': return '企业认证';
+    case 'admin': return '管理员';
+    default: return '未认证';
+  }
+}
+export function websiteOrigin(value: string | undefined): string {
+  if (!value) { return '—'; }
+  try { return parseUrl(value).origin; } catch (_) { return '未知网站'; }
 }

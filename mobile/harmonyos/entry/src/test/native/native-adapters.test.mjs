@@ -22,7 +22,7 @@ async function harness() {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'ksuser-harmony-native-'))
   const assets = new Map()
   const handles = new Map()
-  const state = { assetError: 0, cryptoError: 0, finalError: 0, unsupportedCapabilities: new Set(), renameFailure: false, scanError: 0, scanValue: 'KSUSER-AUTH-QR:code', lastAuthentication: null, lastRegistration: null }
+  const state = { assetError: 0, cryptoError: 0, finalError: 0, unsupportedCapabilities: new Set(), renameFailure: false, scanError: 0, scanValue: 'KSUSER-AUTH-QR:code', lastAuthentication: null, lastRegistration: null, clipboard: null }
   const Tag = { ALIAS: 1, SECRET: 2, ACCESSIBILITY: 3, AUTH_TYPE: 4, SYNC_TYPE: 5, RETURN_TYPE: 6 }
   const alias = query => Buffer.from(query.get(Tag.ALIAS)).toString('hex')
   const asset = {
@@ -106,7 +106,12 @@ async function harness() {
     async register(context, options) { state.lastRegistration = options; return { rawId: bytes, response } }
   }
   const mocks = new Map([
-    ['@kit.ArkTS', { util }], ['@kit.AssetStoreKit', { asset }], ['@kit.CryptoArchitectureKit', { cryptoFramework }],
+    ['@kit.BasicServicesKit', { pasteboard: {
+      MIMETYPE_TEXT_PLAIN: 'text/plain', ShareOption: { LOCALDEVICE: 1 },
+      createData(type, text) { let property = { shareOption: 2 }; return { type, text,
+        getProperty() { return property }, setProperty(value) { property = value } } },
+      getSystemPasteboard() { return { async setData(value) { state.clipboard = { text: value.text, shareOption: value.getProperty().shareOption } } } }
+    } }], ['@kit.ArkTS', { util }], ['@kit.AssetStoreKit', { asset }], ['@kit.CryptoArchitectureKit', { cryptoFramework }],
     ['@kit.CoreFileKit', { fileIo }], ['@kit.OnlineAuthenticationKit', { fido2 }],
     ['@kit.ScanKit', { scanCore: { ScanType: { QR_CODE: 1 } }, scanBarcode: { async startScanForResult(context, options) {
       assert.deepEqual(options, { scanTypes: [1], enableMultiMode: false, enableAlbum: true })
@@ -278,5 +283,15 @@ test('API-origin scopes keep session files and ASSET keys isolated', async () =>
     await development.clear()
     assert.equal((await production.load()).accessToken, 'production')
     assert.equal(h.assets.size, 1)
+  } finally { await h.dispose() }
+})
+
+test('explicit secret copying uses the local-device clipboard scope', async () => {
+  const h = await harness()
+  try {
+    const { NativeServices } = await h.load(path.join(sourceRoot, 'NativeServices.ets'))
+    const native = new NativeServices({}, { passkeyRPID: 'auth.ksuser.cn' })
+    await native.copyText('FICTIONAL_RECOVERY_CODE')
+    assert.deepEqual(h.state.clipboard, { text: 'FICTIONAL_RECOVERY_CODE', shareOption: 1 })
   } finally { await h.dispose() }
 })

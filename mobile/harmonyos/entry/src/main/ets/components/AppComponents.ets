@@ -1,4 +1,6 @@
 // Shared native ArkUI primitives. Semantic resources follow the system color mode.
+import { dateText } from '../core/Models';
+import { scopeTitle as presentedScopeTitle } from '../core/Presentation';
 export function iconResource(name: string): Resource {
   switch (name) {
     case 'home': return $r('sys.symbol.square_grid_2x2');
@@ -24,6 +26,8 @@ export function iconResource(name: string): Resource {
     case 'search': return $r('sys.symbol.magnifyingglass');
     case 'globe': return $r('sys.symbol.worldclock');
     case 'document': return $r('sys.symbol.doc_text');
+    case 'sun': return $r('sys.symbol.sun_max_fill');
+    case 'moon': return $r('sys.symbol.moon_fill');
     default: return $r('sys.symbol.chevron_right');
   }
 }
@@ -153,11 +157,11 @@ export struct ActionButton {
           LoadingProgress().width(20).height(20)
             .color(this.secondary ? $r('app.color.brand') : $r('app.color.on_brand'))
         }
-        Text(this.title).fontSize(15).fontWeight(FontWeight.Medium)
+        Text(this.title).fontSize(15).fontWeight(FontWeight.Medium).layoutWeight(1).textAlign(TextAlign.Center)
           .fontColor(this.destructive ? $r('app.color.danger') :
             this.secondary ? $r('app.color.brand') : $r('app.color.on_brand'))
       }.width('100%').justifyContent(FlexAlign.Center)
-    }.width('100%').height(48)
+    }.width('100%').constraintSize({ minHeight: 48 }).padding({ top: 12, bottom: 12 })
       .backgroundColor(this.destructive ? $r('app.color.danger_soft') :
         this.secondary ? $r('app.color.brand_soft') : $r('app.color.brand'))
       .enabled(!this.busy && !this.disabled).onClick(() => this.onTap())
@@ -198,20 +202,22 @@ export struct InfoLine {
       Text(this.title).fontSize(13).fontColor($r('app.color.text_secondary'))
       Text(this.value || '—').fontSize(14).fontColor($r('app.color.text_primary'))
         .lineHeight(22).layoutWeight(1).textAlign(TextAlign.End).copyOption(CopyOptions.LocalDevice)
-    }.width('100%').padding({ top: 10, bottom: 10 })
+    }.width('100%').padding({ top: 10, bottom: 10 }).alignItems(VerticalAlign.Top)
   }
 }
 
 @Component
 export struct UserAvatar {
-  @Prop url: string = '';
+  @Prop @Watch('resetImage') url: string = '';
   @Prop name: string = '';
   @Prop avatarSize: number = 68;
+  @State private failed: boolean = false;
+  private resetImage(): void { this.failed = false; }
 
   build() {
-    if (this.url.length > 0) {
+    if (this.url.length > 0 && !this.failed) {
       Image(this.url).width(this.avatarSize).height(this.avatarSize).objectFit(ImageFit.Cover)
-        .borderRadius(this.avatarSize / 2).alt($r('app.media.brand_logo'))
+        .borderRadius(this.avatarSize / 2).alt($r('app.media.brand_logo')).onError(() => { this.failed = true; })
     } else {
       Text((this.name || 'K').substring(0, 1)).fontSize(this.avatarSize * 0.42).fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.brand')).width(this.avatarSize).height(this.avatarSize)
@@ -220,9 +226,26 @@ export struct UserAvatar {
   }
 }
 
+@Component
+export struct ApplicationIcon {
+  @Prop @Watch('resetImage') url: string = '';
+  @Prop name: string = '';
+  @Prop iconSize: number = 48;
+  @State private failed: boolean = false;
+  private resetImage(): void { this.failed = false; }
+  build() {
+    if (this.url && !this.failed) {
+      Image(this.url).width(this.iconSize).height(this.iconSize).objectFit(ImageFit.Cover).borderRadius(12)
+        .onError(() => { this.failed = true; }).accessibilityText(this.name + '图标')
+    } else {
+      Text((this.name || 'K').slice(0, 1)).width(this.iconSize).height(this.iconSize).fontSize(this.iconSize * 0.42)
+        .fontColor($r('app.color.brand')).backgroundColor($r('app.color.brand_soft')).borderRadius(12).textAlign(TextAlign.Center)
+    }
+  }
+}
+
 export function readableDate(value: string | undefined): string {
-  if (!value) { return '—'; }
-  return value.replace('T', ' ').replace(/\.\d+Z?$/, '').replace(/Z$/, '').substring(0, 19);
+  return dateText(value);
 }
 
 export function methodTitle(value: string): string {
@@ -236,11 +259,5 @@ export function methodTitle(value: string): string {
 }
 
 export function scopeTitle(value: string): string {
-  switch (value) {
-    case 'openid': return '账号标识';
-    case 'profile': return '基本资料';
-    case 'email': return '邮箱地址';
-    case 'offline_access': return '离线访问';
-    default: return value;
-  }
+  return presentedScopeTitle(value);
 }
