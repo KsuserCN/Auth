@@ -23,7 +23,7 @@
         </div>
       </div>
       <el-button
-        v-if="appleBound"
+        v-if="appleBound && !enrollmentMode"
         class="apple-verify-button"
         :loading="appleLoading"
         @click="handleAppleVerify"
@@ -228,6 +228,7 @@ import {
   checkSensitiveVerification,
   getAppleStatus,
   getPasskeySensitiveVerificationOptions,
+  getTotpEnrollmentPasskeyOptions,
   initQrSensitive,
   pollQrStatus,
   sendSensitiveVerificationCode,
@@ -235,6 +236,8 @@ import {
   type QrSensitivePurpose,
   verifyPasskeySensitiveOperation,
   verifySensitiveOperation,
+  verifyTotpEnrollment,
+  verifyTotpEnrollmentPasskey,
 } from '@/api/auth'
 import { prepareAppleSignIn, verifySensitiveWithApple } from '@/utils/appleSignIn'
 import {
@@ -248,16 +251,18 @@ const props = withDefaults(
     modelValue: boolean
     disableQrMethod?: boolean
     purpose?: QrSensitivePurpose
+    enrollmentMode?: boolean
   }>(),
   {
     disableQrMethod: false,
     purpose: 'login-options',
+    enrollmentMode: false,
   },
 )
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
-  (e: 'success'): void
+  (e: 'success', proofId?: string): void
   (e: 'cancel'): void
 }>()
 
@@ -312,6 +317,7 @@ const appleBound = ref(false)
 const appleLoading = ref(false)
 
 const handleAppleVerify = async () => {
+  if (props.enrollmentMode) return
   if (appleLoading.value) return
   appleLoading.value = true
   try {
@@ -389,6 +395,7 @@ const canResendCode = ref(false)
 let codeCountdownTimer: number | null = null
 
 const isMethodSelectable = (method: 'password' | 'email-code' | 'passkey' | 'totp' | 'qr') => {
+  if (props.enrollmentMode && (method === 'qr' || method === 'totp')) return false
   if (props.disableQrMethod && method === 'qr') return false
   if (!availableMethods.value.includes(method)) return false
   if (method === 'passkey' && !passkeySupported.value) return false
@@ -426,11 +433,11 @@ const initDialog = async () => {
 
   try {
     const status = await checkSensitiveVerification(props.purpose)
-    appleBound.value = await getAppleStatus()
+    appleBound.value = !props.enrollmentMode && await getAppleStatus()
       .then((result) => result.enabled)
       .catch(() => false)
     if (appleBound.value) void prepareAppleSignIn().catch(() => {})
-    if (status.verified && status.remainingSeconds > 0) {
+    if (!props.enrollmentMode && status.verified && status.remainingSeconds > 0) {
       emit('success')
       setVisible(false)
       return
@@ -444,6 +451,18 @@ const initDialog = async () => {
     const sanitizedMethods = methods.filter((item): item is (typeof allMethods)[number] =>
       allMethods.includes(item),
     )
+
+    if (props.enrollmentMode) {
+      availableMethods.value = sanitizedMethods.filter((method) =>
+        method === 'password' || method === 'email-code' || method === 'passkey',
+      )
+      const preferred = [status.preferredMethod, ...availableMethods.value].find((method) =>
+        method && isMethodSelectable(method as (typeof allMethods)[number]),
+      ) as (typeof allMethods)[number] | undefined
+      if (preferred) await selectMethod(preferred)
+      else step.value = 'method'
+      return
+    }
 
     const fallbackMethods = props.disableQrMethod
       ? allMethods.filter((item) => item !== 'qr')
@@ -582,9 +601,12 @@ const refreshQrVerification = async () => {
   await startQrVerification()
 }
 
-const verifySuccess = () => {
+const verifySuccess = (proofId?: string) => {
+  if (!props.modelValue) return
+  if (props.enrollmentMode && !proofId) throw new LocalizedError('ui.sensitiveVerificationDialog.message035')
   ElMessage.success(t('ui.sensitiveVerificationDialog.message048'))
-  emit('success')
+  if (proofId) emit('success', proofId)
+  else emit('success')
   setVisible(false)
 }
 
@@ -593,11 +615,15 @@ const handlePasswordVerify = async () => {
   passwordLoading.value = true
   try {
     await passwordFormRef.value?.validate()
-    await verifySensitiveOperation({
+    const input = {
       method: 'password',
       password: passwordInput.value.password,
-    })
-    verifySuccess()
+    } as const
+    if (props.enrollmentMode) verifySuccess((await verifyTotpEnrollment(input)).proofId)
+    else {
+      await verifySensitiveOperation(input)
+      verifySuccess()
+    }
   } catch (error) {
     console.error('Password verify failed:', error)
   } finally {
@@ -632,8 +658,12 @@ const handleCodeVerify = async () => {
   codeLoading.value = true
   try {
     await codeFormRef.value?.validate()
-    await verifySensitiveOperation({ method: 'email-code', code: codeInput.value.code })
-    verifySuccess()
+    const input = { method: 'email-code', code: codeInput.value.code } as const
+    if (props.enrollmentMode) verifySuccess((await verifyTotpEnrollment(input)).proofId)
+    else {
+      await verifySensitiveOperation(input)
+      verifySuccess()
+    }
   } catch (error) {
     console.error('Code verify failed:', error)
   } finally {
@@ -689,7 +719,9 @@ const handlePasskeyVerify = async () => {
 
   try {
     passkeyLoading.value = true
-    const options = await getPasskeySensitiveVerificationOptions()
+    const options = props.enrollmentMode
+      ? await getTotpEnrollmentPasskeyOptions()
+      : await getPasskeySensitiveVerificationOptions()
     const credential = await getPasskeyCredential({
       challenge: options.challenge,
       timeout: options.timeout,
@@ -703,8 +735,12 @@ const handlePasskeyVerify = async () => {
     }
 
     const authData = extractAuthenticationData(credential)
-    await verifyPasskeySensitiveOperation(options.challengeId, authData)
-    verifySuccess()
+    if (props.enrollmentMode) {
+      verifySuccess((await verifyTotpEnrollmentPasskey(options.challengeId, authData)).proofId)
+    } else {
+      await verifyPasskeySensitiveOperation(options.challengeId, authData)
+      verifySuccess()
+    }
   } catch (error) {
     if (error instanceof Error && error.name === 'NotAllowedError') {
       ElMessage.error(t('ui.sensitiveVerificationDialog.message053'))

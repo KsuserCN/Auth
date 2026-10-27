@@ -6,6 +6,7 @@
 -- ===========================
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS totp_enrollments;
 DROP TABLE IF EXISTS oauth2_app_platforms;
 DROP TABLE IF EXISTS oauth2_unionid_applications;
 DROP TABLE IF EXISTS user_official_authorizations;
@@ -449,6 +450,28 @@ CREATE TABLE user_totp (
 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 COMMENT='用户TOTP配置表（密钥加密存储，支持密钥轮换，防重放）';
+
+
+DROP TABLE IF EXISTS totp_enrollments;
+CREATE TABLE totp_enrollments (
+  id VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  user_id BIGINT UNSIGNED NOT NULL,
+  session_id BIGINT UNSIGNED NOT NULL,
+  session_version INT NOT NULL,
+  pending_secret_ciphertext VARBINARY(512) DEFAULT NULL,
+  recovery_codes_ciphertext VARBINARY(512) DEFAULT NULL,
+  created_at DATETIME(6) NOT NULL,
+  expires_at DATETIME(6) NOT NULL,
+  failed_attempts INT NOT NULL DEFAULT 0,
+  completed_at DATETIME(6) DEFAULT NULL,
+  cancelled_at DATETIME(6) DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_totp_enrollment_user (user_id),
+  KEY idx_totp_enrollment_expiry (expires_at),
+  CONSTRAINT fk_totp_enrollment_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_totp_enrollment_session FOREIGN KEY (session_id) REFERENCES user_sessions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 
 
 DROP TABLE IF EXISTS totp_recovery_codes;

@@ -78,19 +78,45 @@ class SecurityRepository(
         return envelope.data ?: error("TOTP 状态为空")
     }
 
-    suspend fun getTotpRegistrationOptions(): TotpRegistrationOptions {
-        val envelope = executeEnvelope(gson) { api.getTotpRegistrationOptions() }
+    suspend fun verifyTotpEnrollment(method: String, password: String? = null, code: String? = null): String {
+        require(method == "password" || method == "email-code") { "不支持的验证方式" }
+        val envelope = executeEnvelope(gson) { api.verifyTotpEnrollment(
+            cn.ksuser.auth.data.model.TotpEnrollmentVerificationRequest(method, password, code)) }
         requireCode(envelope, 200)
-        return envelope.data ?: error("TOTP 注册选项为空")
+        return envelope.data?.proofId?.takeIf { it.isNotBlank() } ?: error("TOTP 绑定验证凭证为空")
+    }
+
+    suspend fun totpEnrollmentPasskeyOptions() = executeEnvelope(gson) {
+        api.totpEnrollmentPasskeyOptions()
+    }.also { requireCode(it, 200) }.data ?: error("TOTP 绑定 Passkey 选项为空")
+
+    suspend fun verifyTotpEnrollmentPasskey(challengeId: String, payload: PasskeyAuthenticationPayload): String {
+        val envelope = executeEnvelope(gson) { api.verifyTotpEnrollmentPasskey(
+            cn.ksuser.auth.data.model.TotpEnrollmentPasskeyRequest(challengeId,
+                cn.ksuser.auth.data.model.PasskeyAuthenticationVerifyRequest(payload.credentialRawId,
+                    payload.clientDataJSON, payload.authenticatorData, payload.signature))) }
+        requireCode(envelope, 200)
+        return envelope.data?.proofId?.takeIf { it.isNotBlank() } ?: error("TOTP 绑定验证凭证为空")
+    }
+
+    suspend fun getTotpRegistrationOptions(proofId: String): TotpRegistrationOptions {
+        require(proofId.isNotBlank()) { "TOTP 绑定验证凭证为空" }
+        val envelope = executeEnvelope(gson) { api.getTotpRegistrationOptions(
+            cn.ksuser.auth.data.model.TotpRegistrationOptionsRequest(proofId)) }
+        requireCode(envelope, 200)
+        return (envelope.data ?: error("TOTP 注册选项为空")).also {
+            check(!it.enrollmentId.isNullOrBlank() && it.expiresInSeconds > 0) { "TOTP 绑定流程无效，请重新验证" }
+        }
     }
 
     suspend fun verifyTotpRegistration(
+        enrollmentId: String,
         code: String,
-        recoveryCodes: List<String>,
     ) {
+        require(enrollmentId.isNotBlank()) { "TOTP 绑定流程无效，请重新验证" }
         val envelope = executeEnvelope(gson) {
             api.verifyTotpRegistration(
-                cn.ksuser.auth.data.model.TotpRegistrationVerifyRequest(code, recoveryCodes),
+                cn.ksuser.auth.data.model.TotpRegistrationVerifyRequest(enrollmentId, code),
             )
         }
         requireCode(envelope, 200)

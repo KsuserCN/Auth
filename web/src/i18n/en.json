@@ -1310,5 +1310,7 @@
   "ui.downloads.updateQuestion": "How do I update an existing installation?",
   "ui.downloads.updateAnswer": "Use your original download channel. The website’s Android app can check for updates in the app; update iOS through the App Store. If a signature mismatch is reported, keep your current app and get a compatible package from its original channel.",
   "ui.downloads.privacy": "Privacy policy",
-  "ui.downloads.terms": "Terms of service"
+  "ui.downloads.terms": "Terms of service",
+  "ui.totp.enrollmentRequired": "Verify your password, email, or an existing Passkey before adding an authenticator.",
+  "ui.totp.enrollmentExpired": "Enrollment expired. Verify your identity again."
 }

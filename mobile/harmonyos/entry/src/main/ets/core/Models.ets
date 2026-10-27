@@ -41,7 +41,7 @@ export interface PasskeyRegistration { credentialRawId: string; clientDataJSON: 
 export interface PasskeyItem { id: number; name: string; transports?: string; lastUsedAt?: string; createdAt: string; }
 export interface PasskeyList { passkeys: PasskeyItem[]; }
 export interface TotpStatus { enabled: boolean; recoveryCodesCount: number; }
-export interface TotpSetup { secret: string; qrCodeUrl: string; recoveryCodes: string[]; }
+export interface TotpSetup { secret: string; qrCodeUrl: string; recoveryCodes: string[]; enrollmentId: string; expiresInSeconds: number; }
 export interface SensitiveStatus { verified: boolean; remainingSeconds: number; preferredMethod?: string; methods?: string[]; }
 export interface QrApprovalProof { proofId: string; expiresInSeconds: number; }
 export interface AdaptiveAuthStatus {

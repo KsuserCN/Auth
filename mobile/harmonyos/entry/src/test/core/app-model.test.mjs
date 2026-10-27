@@ -506,3 +506,34 @@ for (const codeType of ['approve_sensitive', 'approve_recovery']) {
     assert.equal(h.calls.some(request => endpoint(request) === '/auth/verify-sensitive'), false)
   })
 }
+
+test('TOTP enrollment always obtains a dedicated proof and confirms the server enrollment without client recovery codes', async () => {
+  const h = await fixture(async request => {
+    const pathname = endpoint(request)
+    if (pathname === '/auth/check-sensitive-verification') return reply({ verified: true, methods: ['password', 'totp', 'qr'], preferredMethod: 'totp', remainingSeconds: 300 })
+    if (pathname === '/auth/totp/enrollment/verify') return reply({ proofId: 'enrollment-proof', expiresInSeconds: 300 })
+    if (pathname === '/auth/totp/registration-options') {
+      assert.deepEqual(JSON.parse(request.body), { proofId: 'enrollment-proof' })
+      return reply({ enrollmentId: 'enrollment-id', expiresInSeconds: 600, secret: 'fixture-secret', qrCodeUrl: 'otpauth://totp/fixture', recoveryCodes: ['SERVERAA'] })
+    }
+    if (pathname === '/auth/totp/registration-verify') {
+      assert.deepEqual(JSON.parse(request.body), { code: '123456', enrollmentId: 'enrollment-id' })
+      return reply()
+    }
+    if (pathname === '/auth/passkey/list') return reply({ passkeys: [] })
+    if (pathname === '/auth/totp/status') return reply({ enabled: true, recoveryCodesCount: 1 })
+    if (pathname === '/auth/adaptive-auth/status') return reply({ riskScore: 0 })
+    throw new Error('Unexpected request: ' + pathname)
+  })
+  await h.model.setupTotp()
+  assert.equal(h.model.challengeKind, 'sensitive')
+  assert.equal(h.model.sensitive.verified, false)
+  assert.deepEqual(h.model.sensitive.methods, ['password'])
+  assert.equal(h.model.totpSetup, null)
+  await h.model.verifySensitive('password', 'fixture-password')
+  assert.equal(h.model.totpSetup.enrollmentId, 'enrollment-id')
+  await h.model.enableTotp('123456')
+  assert.equal(h.model.totpSetup, null)
+  assert.deepEqual(h.calls.filter(request => request.method === 'POST').map(endpoint),
+    ['/auth/totp/enrollment/verify', '/auth/totp/registration-options', '/auth/totp/registration-verify'])
+})

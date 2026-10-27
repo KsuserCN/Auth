@@ -75,6 +75,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import cn.ksuser.auth.core.env.EnvironmentProvider
 import cn.ksuser.auth.core.network.runCatchingCancellable
+import cn.ksuser.auth.core.network.ApiException
 import cn.ksuser.auth.data.repository.SecurityDashboardLoader
 import cn.ksuser.auth.core.settings.L10n
 import cn.ksuser.auth.core.settings.DisplayTime
@@ -136,6 +137,7 @@ internal fun SecurityScreen(
     var pendingTotpSetup by remember { mutableStateOf<TotpRegistrationOptions?>(null) }
     var totpCode by rememberSaveable { mutableStateOf("") }
     var showSensitiveDialog by remember { mutableStateOf(false) }
+    var showTotpEnrollmentDialog by remember { mutableStateOf(false) }
     var showAddPasskeyDialog by remember { mutableStateOf(false) }
     var newPasskeyUseHardware by remember { mutableStateOf(false) }
     var newPasskeyName by rememberSaveable { mutableStateOf("Ksuser Android") }
@@ -159,6 +161,16 @@ internal fun SecurityScreen(
     var loadGeneration by remember { mutableStateOf(0) }
     var passkeysLoaded by remember { mutableStateOf(false) }
     var riskDetailsExpanded by rememberSaveable(user?.uuid) { mutableStateOf(false) }
+
+    LaunchedEffect(pendingTotpSetup?.enrollmentId) {
+        val setup = pendingTotpSetup ?: return@LaunchedEffect
+        delay(setup.expiresInSeconds.coerceAtMost(600) * 1000)
+        if (pendingTotpSetup?.enrollmentId == setup.enrollmentId) {
+            pendingTotpSetup = null
+            totpCode = ""
+            onMessage(L10n.text("TOTP 绑定已过期，请重新验证"))
+        }
+    }
 
     suspend fun issueAccountRecoveryTicket(showCreatedMessage: Boolean = true) {
         val hadExistingTicket = accountRecoveryTicket != null
@@ -225,6 +237,10 @@ internal fun SecurityScreen(
 
     fun requireSensitiveVerification(action: PendingSecurityAction) {
         if (busy || pendingAction != null) return
+        if (action == PendingSecurityAction.SetupTotp) {
+            showTotpEnrollmentDialog = true
+            return
+        }
         scope.launch {
             busy = true
             runCatchingCancellable { container.securityRepository.getSensitiveVerificationStatus() }
@@ -321,12 +337,9 @@ internal fun SecurityScreen(
                 }
             }
             PendingSecurityAction.SetupTotp -> {
-                scope.launch {
-                    runCatchingCancellable { container.securityRepository.getTotpRegistrationOptions() }
-                        .onSuccess { totpCode = ""; pendingTotpSetup = it }
-                        .onFailure { onMessage(it.message ?: L10n.text("生成 TOTP 选项失败")) }
-                    pendingAction = null
-                }
+                // Enrollment always needs its own freshly verified proof, including after generic step-up.
+                pendingAction = null
+                showTotpEnrollmentDialog = true
             }
             PendingSecurityAction.DisableTotp -> {
                 scope.launch {
@@ -622,8 +635,14 @@ internal fun SecurityScreen(
                 LoadingTextButton(text = L10n.text("确认启用"), enabled = recoveryCodesSaved && Regex("[0-9]{6}").matches(totpCode.trim()), onClick = {
                     val setup = pendingTotpSetup ?: return@LoadingTextButton
                     val created = runCatchingCancellable {
-                        container.securityRepository.verifyTotpRegistration(totpCode.trim(), setup.recoveryCodes)
-                    }.onFailure { onMessage(it.message ?: L10n.text("TOTP 启用失败")) }
+                        container.securityRepository.verifyTotpRegistration(setup.enrollmentId, totpCode.trim())
+                    }.onFailure {
+                        if (it is ApiException && it.errorCode in setOf("TOTP_006", "RATE_LIMITED")) {
+                            pendingTotpSetup = null
+                            totpCode = ""
+                            onMessage(L10n.text("TOTP 绑定已失效，请重新验证"))
+                        } else onMessage(it.message ?: L10n.text("TOTP 启用失败"))
+                    }
                         .isSuccess
                     if (created) {
                         pendingTotpSetup = null
@@ -722,6 +741,24 @@ internal fun SecurityScreen(
             },
             confirmButton = {
                 TextButton(onClick = { detailTarget = null }) { Text(L10n.text("关闭")) }
+            },
+        )
+    }
+
+    if (showTotpEnrollmentDialog) {
+        SensitiveVerificationDialog(
+            container = container,
+            onDismiss = { showTotpEnrollmentDialog = false },
+            onVerified = {},
+            onMessage = onMessage,
+            totpEnrollment = true,
+            onTotpEnrollmentVerified = { proofId ->
+                showTotpEnrollmentDialog = false
+                scope.launch {
+                    runCatchingCancellable { container.securityRepository.getTotpRegistrationOptions(proofId) }
+                        .onSuccess { totpCode = ""; pendingTotpSetup = it }
+                        .onFailure { onMessage(it.message ?: L10n.text("生成 TOTP 选项失败")) }
+                }
             },
         )
     }
@@ -1396,6 +1433,8 @@ internal fun SensitiveVerificationDialog(
     onMessage: (String) -> Unit,
     qrApproveCode: String? = null,
     onQrVerified: (String) -> Unit = {},
+    totpEnrollment: Boolean = false,
+    onTotpEnrollmentVerified: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -1408,7 +1447,8 @@ internal fun SensitiveVerificationDialog(
     LaunchedEffect(Unit) {
         runCatchingCancellable { container.securityRepository.getSensitiveVerificationStatus() }
             .onSuccess {
-                val methods = it.methods.filter { method -> method in setOf("password", "email-code", "totp") || (method == "passkey" && activity != null && container.passkeyManager.availability() == PasskeyAvailability.Available) } +
+                val credentialMethods = if (totpEnrollment) setOf("password", "email-code") else setOf("password", "email-code", "totp")
+                val methods = it.methods.filter { method -> method in credentialMethods || (method == "passkey" && activity != null && container.passkeyManager.availability() == PasskeyAvailability.Available) } +
                     if ("passkey" in it.methods && activity != null && container.securityKeyManager.available(activity)) listOf("security-key") else emptyList()
                 status = it.copy(methods = methods)
                 selectedMethod = it.preferredMethod?.takeIf { method -> method in methods } ?: methods.firstOrNull().orEmpty()
@@ -1418,7 +1458,7 @@ internal fun SensitiveVerificationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(L10n.text(if (qrApproveCode == null) "敏感操作验证" else "验证并批准扫码请求")) },
+        title = { Text(L10n.text(if (totpEnrollment) "验证并绑定 TOTP" else if (qrApproveCode == null) "敏感操作验证" else "验证并批准扫码请求")) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                 Text(L10n.format("可用方式: {0}", status?.methods?.joinToString().orEmpty()))
@@ -1481,7 +1521,20 @@ internal fun SensitiveVerificationDialog(
             LoadingTextButton(text = L10n.text("验证"), enabled = selectedMethod in status?.methods.orEmpty(), onClick = {
                 runCatchingCancellable {
                     require(selectedMethod in status?.methods.orEmpty()) { L10n.text("当前设备没有可用的验证方式，请在其他设备配置密码、邮箱或 TOTP") }
-                    if (qrApproveCode != null) {
+                    if (totpEnrollment) {
+                        when (selectedMethod) {
+                            "password" -> container.securityRepository.verifyTotpEnrollment("password", password = password)
+                            "email-code" -> container.securityRepository.verifyTotpEnrollment("email-code", code = code.trim())
+                            "passkey", "security-key" -> {
+                                if (activity == null) error(L10n.text("当前上下文不支持 Passkey"))
+                                val options = container.securityRepository.totpEnrollmentPasskeyOptions()
+                                val payload = if (selectedMethod == "security-key") container.securityKeyManager.getForAuthentication(activity, options)
+                                    else container.passkeyManager.getForAuthentication(activity, options)
+                                container.securityRepository.verifyTotpEnrollmentPasskey(options.challengeId, payload)
+                            }
+                            else -> error(L10n.text("不支持的验证方式"))
+                        }
+                    } else if (qrApproveCode != null) {
                         when (selectedMethod) {
                             "password" -> container.securityRepository.verifyQrApproval(qrApproveCode, "password", password = password)
                             "email-code" -> container.securityRepository.verifyQrApproval(qrApproveCode, "email-code", code = code.trim())
@@ -1521,7 +1574,8 @@ internal fun SensitiveVerificationDialog(
                     null
                     }
                 }.onSuccess { proofId ->
-                    if (qrApproveCode == null) onVerified() else onQrVerified(requireNotNull(proofId))
+                    if (totpEnrollment) onTotpEnrollmentVerified(requireNotNull(proofId))
+                    else if (qrApproveCode == null) onVerified() else onQrVerified(requireNotNull(proofId))
                 }
                     .onFailure { onMessage(it.message ?: L10n.text("验证失败")) }
             })

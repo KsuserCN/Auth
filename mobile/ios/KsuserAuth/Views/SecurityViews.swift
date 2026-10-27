@@ -256,6 +256,7 @@ struct SensitiveVerificationView: View {
     @State private var resendAt = Date.distantPast
     private var methods: [String] {
         let available = request.status.methods ?? []
+        if request.totpEnrollment { return available.filter { ["password", "email-code", "passkey"].contains($0) } }
         return request.qrApprovalCode == nil ? available : available.filter { ["password", "email-code", "totp", "passkey"].contains($0) }
     }
     private let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]

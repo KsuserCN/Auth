@@ -98,6 +98,7 @@ struct LocalizedMessage: ExpressibleByStringLiteral, ExpressibleByStringInterpol
     init(error: any Error) { content = .error(error) }
     init(errorCode: String?, params: [String: JSONValue]?, statusCode: Int) { content = .api(errorCode, params, statusCode) }
     init(stringInterpolation: StringInterpolation) { content = .key(stringInterpolation.key, stringInterpolation.arguments) }
+    var apiErrorCode: String? { if case .api(let code, _, _) = content { return code }; return nil }
     var rendered: String {
         switch content {
         case .key(let key, let arguments): return L10n.format(key, arguments.map(\.rendered))

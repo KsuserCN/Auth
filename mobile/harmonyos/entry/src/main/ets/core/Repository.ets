@@ -79,8 +79,21 @@ export class Repository {
   renamePasskey(id: number, name: string): Promise<Object> { return this.client.request<Object>('/auth/passkey/' + id + '/rename', 'PUT', { newName: name.trim() } as ApiBody); }
   deletePasskey(id: number): Promise<Object> { return this.client.request<Object>('/auth/passkey/' + id, 'DELETE'); }
   totpStatus(): Promise<TotpStatus> { return this.client.request<TotpStatus>('/auth/totp/status'); }
-  setupTotp(): Promise<TotpSetup> { return this.post<TotpSetup>('/auth/totp/registration-options'); }
-  enableTotp(code: string, recoveryCodes: string[]): Promise<Object> { return this.post<Object>('/auth/totp/registration-verify', { code: code.trim(), recoveryCodes: recoveryCodes }); }
+  verifyTotpEnrollment(method: string, value: string): Promise<QrApprovalProof> {
+    const body: ApiBody = { method: method };
+    if (method === 'password') { body.password = value; } else { body.code = value.trim(); }
+    return this.post<QrApprovalProof>('/auth/totp/enrollment/verify', body);
+  }
+  totpEnrollmentPasskeyOptions(): Promise<PasskeyAuthenticationOptions> {
+    return this.post<PasskeyAuthenticationOptions>('/auth/totp/enrollment/passkey/options');
+  }
+  verifyTotpEnrollmentPasskey(options: PasskeyAuthenticationOptions, payload: PasskeyAssertion): Promise<QrApprovalProof> {
+    return this.post<QrApprovalProof>('/auth/totp/enrollment/passkey/verify', { passkeyChallengeId: options.challengeId,
+      credential: { credentialRawId: payload.credentialRawId, clientDataJSON: payload.clientDataJSON,
+        authenticatorData: payload.authenticatorData, signature: payload.signature } });
+  }
+  setupTotp(proofId: string): Promise<TotpSetup> { return this.post<TotpSetup>('/auth/totp/registration-options', { proofId: proofId }); }
+  enableTotp(code: string, enrollmentId: string): Promise<Object> { return this.post<Object>('/auth/totp/registration-verify', { code: code.trim(), enrollmentId: enrollmentId }); }
   disableTotp(): Promise<Object> { return this.post<Object>('/auth/totp/disable'); }
   recoveryCodes(regenerate: boolean): Promise<string[]> {
     const empty: ApiBody = {};

@@ -390,6 +390,23 @@ private struct AccountRefreshTask {
     func verifySensitive(method: String, password: String? = nil, code: String? = nil, recoveryCode: String? = nil) async {
         guard let verification = sensitiveRequest else { return }
         await run(message: "正在验证身份…") {
+            if verification.totpEnrollment {
+                let accountID = self.user?.uuid
+                let proof: QrApprovalProof
+                if method == "passkey" {
+                    let options = try await self.repository.totpEnrollmentPasskeyOptions()
+                    let assertion = try await self.native.authenticatePasskey(options: options)
+                    proof = try await self.repository.verifyTOTPEnrollmentPasskey(options: options, payload: assertion)
+                } else {
+                    guard ["password", "email-code"].contains(method) else { throw APIError.invalidResponse }
+                    proof = try await self.repository.verifyTOTPEnrollment(method: method, password: password, code: code)
+                }
+                guard self.user?.uuid == accountID, self.sensitiveRequest?.id == verification.id else { return }
+                let setup = try await self.repository.startTOTP(proofId: proof.proofId)
+                guard self.user?.uuid == accountID, self.sensitiveRequest?.id == verification.id else { return }
+                self.totpSetup = setup; self.sensitiveRequest = nil; self.sensitiveContinuation = nil
+                return
+            }
             if let approveCode = verification.qrApprovalCode {
                 guard let pending = self.qrConfirmation, pending.code == approveCode, pending.expiresAt > Date() else { throw APIError.invalidResponse }
                 let proof: QrApprovalProof
@@ -442,12 +459,24 @@ private struct AccountRefreshTask {
         }
     }
     func startTOTP() async {
-        await requireSensitive(title: "启用验证器") { self.totpSetup = try await self.repository.startTOTP() }
+        await run {
+            let status = try await self.repository.sensitiveStatus()
+            guard (status.methods ?? []).contains(where: { ["password", "email-code", "passkey"].contains($0) }) else {
+                self.errorMessage = "请先配置可验证的密码、邮箱或通行密钥"; return
+            }
+            self.totpSetup = nil; self.sensitiveContinuation = nil
+            self.sensitiveRequest = SensitiveRequest(title: "启用验证器", status: status, totpEnrollment: true)
+        }
     }
     func confirmTOTP(code: String) async {
         guard let setup = totpSetup else { return }
         await run {
-            try await self.repository.confirmTOTP(code: code, recoveryCodes: setup.recoveryCodes)
+            do { try await self.repository.confirmTOTP(code: code, enrollmentId: setup.enrollmentId) }
+            catch {
+                if case APIError.server(let status, let message) = error,
+                   status == 429 || message.apiErrorCode == "TOTP_006" { self.totpSetup = nil }
+                throw error
+            }
             self.recoveryCodes = setup.recoveryCodes; self.totpSetup = nil; self.totpStatus = try await self.repository.totpStatus(); self.totpStatusLoaded = true; self.noticeMessage = "验证器已启用，请妥善保存恢复码"
         }
     }

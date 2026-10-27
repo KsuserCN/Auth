@@ -48,6 +48,16 @@
           </div>
         </div>
 
+        <div v-else-if="!setupOptions" class="step-container">
+          <p class="step-subtitle">{{ t('ui.totp.enrollmentRequired') }}</p>
+          <div class="step-actions">
+            <el-button @click="handleCancel">{{ t('ui.addPasskey.message009') }}</el-button>
+            <el-button type="primary" @click="sensitiveDialogVisible = true">
+              {{ t('ui.sensitiveVerificationDialog.message008') }}
+            </el-button>
+          </div>
+        </div>
+
         <!-- 设置流程 -->
         <Transition
           :name="stepDirection === 'forward' ? 'step-slide-forward' : 'step-slide-backward'"
@@ -179,6 +189,8 @@
 
     <SensitiveVerificationDialog
       v-model="sensitiveDialogVisible"
+      enrollment-mode
+      disable-qr-method
       @success="handleSensitiveVerificationSuccess"
       @cancel="handleSensitiveVerificationCancel"
     />
@@ -190,7 +202,7 @@ import { computed } from 'vue'
 
 import { t, uiMessage, renderMessage, type LocalizedMessage, LocalizedError } from '@/i18n'
 
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useDark } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { Lock, Lightning, Key, WarningFilled } from '@element-plus/icons-vue'
@@ -198,12 +210,13 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { useRouter } from 'vue-router'
 import QRCode from 'qrcode'
 import {
-  checkSensitiveVerification,
   getTotpStatus,
   getTotpRegistrationOptions,
   verifyTotpRegistration,
+  type TotpRegistrationOptionsResponse,
 } from '@/api/auth'
 import SensitiveVerificationDialog from '@/components/SensitiveVerificationDialog.vue'
+import { ApiError } from '@/utils/apiResult'
 
 const router = useRouter()
 const verifyFormRef = ref<FormInstance>()
@@ -233,9 +246,8 @@ const statusLoading = ref(true)
 const totpEnabled = ref(false)
 
 // TOTP 设置
-const setupOptions = ref<{ secret: string; qrCodeUrl: string; recoveryCodes: string[] } | null>(
-  null,
-)
+const setupOptions = ref<TotpRegistrationOptionsResponse | null>(null)
+let enrollmentExpiryTimer: number | undefined
 const qrcodeCanvas = ref<HTMLCanvasElement | null>(null)
 const qrcodeReady = ref(false)
 const qrcodeRendering = ref(false)
@@ -277,19 +289,11 @@ onMounted(async () => {
 
 const initTotpPage = async () => {
   try {
-    const verificationStatus = await checkSensitiveVerification('login-options')
-    if (!verificationStatus.verified) {
-      ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
-      sensitiveDialogVisible.value = true
-      return
-    }
-
     const status = await getTotpStatus()
     totpEnabled.value = status.enabled
 
     if (!totpEnabled.value) {
-      const options = await getTotpRegistrationOptions()
-      setupOptions.value = options
+      sensitiveDialogVisible.value = true
     }
   } catch (error) {
     console.error('Failed to fetch TOTP status or setup options:', error)
@@ -299,9 +303,29 @@ const initTotpPage = async () => {
   }
 }
 
-const handleSensitiveVerificationSuccess = async () => {
+const handleSensitiveVerificationSuccess = async (proofId?: string) => {
+  if (!proofId) return
   statusLoading.value = true
-  await initTotpPage()
+  try {
+    const options = await getTotpRegistrationOptions(proofId)
+    if (!options.enrollmentId || options.expiresInSeconds <= 0) throw new LocalizedError('ui.totp.message017')
+    setupOptions.value = options
+    if (enrollmentExpiryTimer !== undefined) window.clearTimeout(enrollmentExpiryTimer)
+    enrollmentExpiryTimer = window.setTimeout(() => {
+      setupOptions.value = null
+      verifyInput.value.verificationCode = ''
+      updateStep('qrcode')
+      sensitiveDialogVisible.value = true
+      ElMessage.info(t('ui.totp.enrollmentExpired'))
+    }, options.expiresInSeconds * 1000)
+    updateStep('qrcode')
+    verifyInput.value.verificationCode = ''
+  } catch (error) {
+    console.error('TOTP enrollment initialization failed:', error)
+    setupOptions.value = null
+  } finally {
+    statusLoading.value = false
+  }
 }
 
 const handleSensitiveVerificationCancel = () => {
@@ -378,13 +402,23 @@ const goToRecoveryStep = async () => {
 
     // 验证 TOTP 注册
     await verifyTotpRegistration({
+      enrollmentId: setupOptions.value.enrollmentId,
       code: verifyInput.value.verificationCode.trim(),
-      recoveryCodes: setupOptions.value.recoveryCodes,
     })
+
+    if (enrollmentExpiryTimer !== undefined) window.clearTimeout(enrollmentExpiryTimer)
 
     updateStep('recovery')
   } catch (error: unknown) {
     console.error('Verify TOTP registration failed:', error)
+    if (error instanceof ApiError && ['TOTP_006', 'RATE_LIMITED'].includes(error.errorCode)) {
+      if (enrollmentExpiryTimer !== undefined) window.clearTimeout(enrollmentExpiryTimer)
+      setupOptions.value = null
+      verifyInput.value.verificationCode = ''
+      updateStep('qrcode')
+      sensitiveDialogVisible.value = true
+      ElMessage.info(t('ui.totp.enrollmentExpired'))
+    }
   } finally {
     verifyLoading.value = false
   }
@@ -406,6 +440,10 @@ const handleComplete = async () => {
     completeLoading.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (enrollmentExpiryTimer !== undefined) window.clearTimeout(enrollmentExpiryTimer)
+})
 
 // 工具函数
 const copySecret = async () => {

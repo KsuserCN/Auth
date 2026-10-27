@@ -324,6 +324,51 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(body["approveCode"], "protected-code")
         }
     }
+    @MainActor func testTOTPEnrollmentReauthenticatesEvenWhenGeneralSensitiveStateIsAlreadyVerified() async throws {
+        let transport = FixtureTransport(mode: .totpEnrollment)
+        let original = snapshot(token: "fresh")
+        let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+        let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+        model.user = original.profile
+        await model.startTOTP()
+        XCTAssertTrue(model.sensitiveRequest?.totpEnrollment == true)
+        XCTAssertNil(model.totpSetup)
+        var calls = await transport.inputRequests
+        XCTAssertFalse(calls.contains { $0.url?.path == "/auth/totp/registration-options" })
+        await model.verifySensitive(method: "password", password: "fixture-password")
+        XCTAssertEqual(model.totpSetup?.enrollmentId, "enrollment-id")
+        XCTAssertNil(model.sensitiveRequest)
+        await model.confirmTOTP(code: "123456")
+        XCTAssertNil(model.errorMessage)
+        calls = await transport.inputRequests
+        let mutationPaths = calls.filter { $0.httpMethod == "POST" }.compactMap { $0.url?.path }
+        XCTAssertEqual(mutationPaths, ["/auth/totp/enrollment/verify", "/auth/totp/registration-options", "/auth/totp/registration-verify"])
+        let confirmation = try XCTUnwrap(calls.first { $0.url?.path == "/auth/totp/registration-verify" }?.httpBody)
+        let body = try JSONDecoder().decode([String: String].self, from: confirmation)
+        XCTAssertEqual(body["enrollmentId"], "enrollment-id")
+        XCTAssertNil(body["recoveryCodes"])
+    }
+    @MainActor func testTOTPEnrollmentRetainsRetryableSetupAndDiscardsTerminalFailures() async {
+        for (errorCode, status, retainSetup) in [("TOTP_008", 400, true), ("TOTP_006", 400, false), ("RATE_LIMITED", 429, false)] {
+            let transport = FixtureTransport(mode: .totpEnrollment)
+            await transport.setTotpConfirmationFailure(errorCode: errorCode, status: status)
+            let original = snapshot(token: "fresh")
+            let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+            let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+            model.user = original.profile
+            await model.startTOTP()
+            await model.verifySensitive(method: "password", password: "fixture-password")
+            XCTAssertNotNil(model.totpSetup)
+            await model.confirmTOTP(code: "123456")
+            XCTAssertEqual(model.totpSetup != nil, retainSetup, errorCode)
+            XCTAssertNotNil(model.errorMessage)
+            if !retainSetup {
+                await model.startTOTP()
+                XCTAssertTrue(model.sensitiveRequest?.totpEnrollment == true)
+                XCTAssertNil(model.totpSetup)
+            }
+        }
+    }
     func testLegacyQRPreviewDecodesWithoutConsoleTarget() throws {
         let preview = try JSONDecoder().decode(QrScanPreview.self, from: Data(#"{"codeType":"approve_login","expiresInSeconds":120}"#.utf8))
         XCTAssertFalse(preview.isConsoleLogin)
@@ -397,7 +442,7 @@ final class CoreTests: XCTestCase {
         try await repository.verifySensitive(method: "email-code", password: nil, code: code, recoveryCode: nil)
         try await repository.verifySensitive(method: "totp", password: nil, code: code, recoveryCode: "  abcd-efgh \n")
         _ = try await repository.verifyMFA(challenge: MFAChallenge(challengeId: "fixture-challenge", method: "totp", methods: ["totp"], source: "password"), code: code, recoveryCode: "  abcd-efgh \n")
-        try await repository.confirmTOTP(code: code, recoveryCodes: ["server-issued-recovery-code"])
+        try await repository.confirmTOTP(code: code, enrollmentId: "server-issued-enrollment")
         _ = try await repository.verifyTOTP(code: code, recoveryCode: "  abcd-efgh \n")
         try await repository.changePassword(password)
         try await repository.renamePasskey(1, name: "  iPhone \n")
@@ -429,6 +474,8 @@ final class CoreTests: XCTestCase {
             XCTAssertEqual(body["code"], .string("123456")); XCTAssertEqual(body["recoveryCode"], .string("ABCD-EFGH"))
         }
         XCTAssertEqual(try bodies("/auth/totp/registration-verify").first?["code"], .string("123456"))
+        XCTAssertEqual(try bodies("/auth/totp/registration-verify").first?["enrollmentId"], .string("server-issued-enrollment"))
+        XCTAssertNil(try bodies("/auth/totp/registration-verify").first?["recoveryCodes"])
         XCTAssertEqual(try bodies("/auth/update/password").first?["newPassword"], .string(password))
         XCTAssertEqual(try bodies("/auth/passkey/1/rename").first?["newName"], .string("iPhone"))
     }
@@ -778,7 +825,7 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr, passwordValidation, sensitiveQrApproval, recoveryQrApproval }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr, passwordValidation, sensitiveQrApproval, recoveryQrApproval, totpEnrollment }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
@@ -790,11 +837,13 @@ private actor FixtureTransport: HTTPTransport {
     var revokedThirdPartyAuthorization = false
     var revokedOfficialAuthorization = false
     var inputRequests: [URLRequest] = []
+    private var totpConfirmationFailure: (errorCode: String, status: Int)?
     private var refreshGate: CheckedContinuation<Void, Never>?
     init(mode: Mode) { self.mode = mode }
     func counters() -> (refreshes: Int, protectedCalls: Int) { (refreshes, protectedCalls) }
     func waitForRefresh() async { while refreshGate == nil { await Task.yield() } }
     func releaseRefresh() { refreshGate?.resume(); refreshGate = nil }
+    func setTotpConfirmationFailure(errorCode: String, status: Int) { totpConfirmationFailure = (errorCode, status) }
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let path = request.url!.path
         if path == "/auth/csrf-token" { return response(request, 200, #"{"code":200,"data":{"csrfToken":"csrf-fixture"}}"#, cookie: "XSRF-TOKEN=csrf-fixture; Path=/; Secure; SameSite=Lax") }
@@ -818,6 +867,27 @@ private actor FixtureTransport: HTTPTransport {
             }
             lastMutation = request
             return response(request, 200, #"{"code":200,"data":{"completed":true}}"#)
+        }
+        if mode == .totpEnrollment {
+            inputRequests.append(request)
+            if path == "/auth/check-sensitive-verification" {
+                return response(request, 200, #"{"code":200,"data":{"verified":true,"remainingSeconds":300,"methods":["password","totp","qr"],"preferredMethod":"totp"}}"#)
+            }
+            if path == "/auth/totp/enrollment/verify" {
+                return response(request, 200, #"{"code":200,"data":{"proofId":"enrollment-proof","expiresInSeconds":300}}"#)
+            }
+            if path == "/auth/totp/registration-options" {
+                return response(request, 200, #"{"code":200,"data":{"secret":"fixture-secret","qrCodeUrl":"otpauth://totp/fixture","recoveryCodes":["SERVERAA"],"enrollmentId":"enrollment-id","expiresInSeconds":600}}"#)
+            }
+            if path == "/auth/totp/registration-verify" {
+                lastMutation = request
+                if let failure = totpConfirmationFailure {
+                    return response(request, failure.status, "{\"code\":\(failure.status),\"errorCode\":\"\(failure.errorCode)\"}")
+                }
+                return response(request, 200, #"{"code":200}"#)
+            }
+            if path == "/auth/totp/status" { return response(request, 200, #"{"code":200,"data":{"enabled":true,"recoveryCodesCount":1}}"#) }
+            throw APIError.invalidResponse
         }
         if mode == .sensitiveQrApproval || mode == .recoveryQrApproval {
             inputRequests.append(request)

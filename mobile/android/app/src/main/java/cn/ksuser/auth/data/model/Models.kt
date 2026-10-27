@@ -175,7 +175,14 @@ data class TotpRegistrationOptions(
     val secret: String,
     val qrCodeUrl: String,
     val recoveryCodes: List<String>,
+    val enrollmentId: String,
+    val expiresInSeconds: Long,
 )
+
+data class TotpEnrollmentVerificationRequest(val method: String, val password: String? = null, val code: String? = null)
+data class TotpEnrollmentProof(val proofId: String, val expiresInSeconds: Long)
+data class TotpEnrollmentPasskeyRequest(val passkeyChallengeId: String, val credential: PasskeyAuthenticationVerifyRequest)
+data class TotpRegistrationOptionsRequest(val proofId: String)
 
 data class TotpVerifyResponse(
     val success: Boolean,
@@ -456,8 +463,8 @@ data class DeleteAccountRequest(
 )
 
 data class TotpRegistrationVerifyRequest(
+    val enrollmentId: String,
     val code: String,
-    val recoveryCodes: List<String>,
 )
 
 data class TotpVerifyRequest(

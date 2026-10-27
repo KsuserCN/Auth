@@ -1310,5 +1310,7 @@
   "ui.downloads.updateQuestion": "已经安装了 App，如何更新？",
   "ui.downloads.updateAnswer": "请通过原安装渠道获取更新。官网 Android 版可在 App 内检查更新，iOS 版通过 App Store 更新。若提示签名不一致，请保留当前应用并通过原渠道获取兼容的安装包。",
   "ui.downloads.privacy": "隐私政策",
-  "ui.downloads.terms": "服务协议"
+  "ui.downloads.terms": "服务协议",
+  "ui.totp.enrollmentRequired": "启用验证器前，请重新验证密码、邮箱或已有 Passkey。",
+  "ui.totp.enrollmentExpired": "绑定已过期，请重新验证身份。"
 }

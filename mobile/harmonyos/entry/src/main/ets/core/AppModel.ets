@@ -80,6 +80,7 @@ export class AppModel {
   private pendingSensitiveResult: ((result: ActionResult) => void) | null = null;
   private pendingSensitiveGeneration: number = 0;
   private qrApprovalCode: string = '';
+  private totpEnrollmentPending: boolean = false;
   consentExpiresAt: number = 0;
   private pendingRawQr: string = '';
   private logGeneration: number = 0;
@@ -180,7 +181,7 @@ export class AppModel {
     this.profileState = emptyResourceState(); this.passkeysState = emptyResourceState();
     this.totpState = emptyResourceState(); this.riskState = emptyResourceState();
     this.sessionsState = emptyResourceState(); this.logsState = emptyResourceState(); this.appsState = emptyResourceState();
-    this.mfa = null; this.sensitive = null; this.qr = null; this.consent = null;
+    this.mfa = null; this.sensitive = null; this.totpEnrollmentPending = false; this.qr = null; this.consent = null;
     this.codeSentAt = 0; this.codeSentType = ''; this.codeSentEmail = '';
     this.cancelPendingSensitive(); this.staged?.client.invalidate(); this.staged = null; this.pendingRawQr = '';
     this.closeChallenge();
@@ -324,7 +325,7 @@ export class AppModel {
     if (this.challengeKind === 'mfa') {
       this.authGeneration++; this.staged?.client.invalidate(); this.staged = null; this.client?.invalidate(); this.mfa = null; this.pendingRawQr = '';
     }
-    this.cancelPendingSensitive(); this.qrApprovalCode = ''; this.sensitive = null; this.qr = null; this.consent = null;
+    this.cancelPendingSensitive(); this.qrApprovalCode = ''; this.totpEnrollmentPending = false; this.sensitive = null; this.qr = null; this.consent = null;
     this.closeChallenge();
   }
   private cancelPendingSensitive(): void {
@@ -369,6 +370,12 @@ export class AppModel {
   async verifySensitive(method: string, value: string, recovery: boolean = false): Promise<ActionResult> {
     return await this.run(async () => {
       if (!this.sensitive?.methods?.includes(method)) { throw new UserFacingError('当前操作不支持此验证方式'); }
+      if (this.totpEnrollmentPending) {
+        if (!['password', 'email-code'].includes(method)) { throw new UserFacingError('请使用已有密码、邮箱或通行密钥验证'); }
+        const version = this.accountGeneration;
+        const proof = await this.repository().verifyTotpEnrollment(method, value); this.checkAccount(version);
+        await this.completeTotpEnrollment(proof.proofId); return;
+      }
       if (this.qrApprovalCode) {
         const version = this.accountGeneration;
         const proof = await this.repository().verifyQrApproval(this.qrApprovalCode, method, value, recovery); this.checkAccount(version);
@@ -380,6 +387,15 @@ export class AppModel {
   async verifySensitivePasskey(): Promise<ActionResult> {
     return await this.run(async () => {
       if (!this.sensitive?.methods?.includes('passkey')) { throw new UserFacingError('当前操作不支持通行密钥'); }
+      if (this.totpEnrollmentPending) {
+        const version = this.accountGeneration;
+        const options = await this.repository().totpEnrollmentPasskeyOptions(); this.checkAccount(version);
+        try {
+          const proof = await this.repository().verifyTotpEnrollmentPasskey(options, await this.services().authenticate(options)); this.checkAccount(version);
+          await this.completeTotpEnrollment(proof.proofId);
+        } finally { this.passkeyOrigin = this.services().readLastOrigin(); }
+        return;
+      }
       if (this.qrApprovalCode) {
         const code = this.qrApprovalCode; const version = this.accountGeneration;
         const options = await this.repository().qrApprovalPasskeyOptions(code); this.checkAccount(version);
@@ -569,16 +585,30 @@ export class AppModel {
     });
   }
   async setupTotp(): Promise<ActionResult> {
-    return await this.protect('启用身份验证器', async () => {
-      const version = this.accountGeneration; const setup = await this.repository().setupTotp(); this.checkAccount(version); this.totpSetup = setup;
+    return await this.run(async () => {
+      const version = this.accountGeneration; const status = await this.repository().sensitiveStatus(); this.checkAccount(version);
+      const methods = (status.methods ?? []).filter((method: string) => ['password', 'email-code', 'passkey'].includes(method));
+      if (!methods.length) { throw new UserFacingError('请先配置可验证的密码、邮箱或通行密钥'); }
+      this.cancelPendingSensitive(); this.qrApprovalCode = ''; this.totpSetup = null; this.totpEnrollmentPending = true;
+      this.sensitive = { verified: false, remainingSeconds: 0, methods: methods,
+        preferredMethod: methods.includes(status.preferredMethod ?? '') ? status.preferredMethod : methods[0] };
+      this.sensitiveTitle = '启用身份验证器'; this.showChallenge('sensitive');
     });
   }
+  private async completeTotpEnrollment(proofId: string): Promise<void> {
+    const version = this.accountGeneration;
+    if (!proofId || !this.totpEnrollmentPending) { throw new UserFacingError('请重新验证身份'); }
+    const setup = await this.repository().setupTotp(proofId); this.checkAccount(version);
+    if (!this.totpEnrollmentPending) { throw new UserFacingError('绑定流程已取消，请重试'); }
+    this.totpSetup = setup; this.totpEnrollmentPending = false; this.sensitive = null; this.closeChallenge();
+  }
   async enableTotp(code: string): Promise<ActionResult> {
-    return await this.protect('启用身份验证器', async () => {
+    return await this.run(async () => {
       if (!this.totpSetup) { throw new UserFacingError('请先获取验证器绑定信息'); }
-      const version = this.accountGeneration; const recoveryCodes = this.totpSetup.recoveryCodes;
-      await this.repository().enableTotp(code, recoveryCodes); this.checkAccount(version);
-      this.totpSetup = null; this.recoveryCodes = recoveryCodes; await this.fetchSecurity(); this.notice = '验证器已启用，请妥善保存恢复码';
+      const version = this.accountGeneration; const setup = this.totpSetup;
+      try { await this.repository().enableTotp(code, setup.enrollmentId); this.checkAccount(version); }
+      catch (error) { if (error instanceof ApiError && ['TOTP_006', 'RATE_LIMITED'].includes(error.errorCode)) { this.totpSetup = null; } throw error as Error; }
+      this.totpSetup = null; this.recoveryCodes = setup.recoveryCodes; await this.fetchSecurity(); this.notice = '验证器已启用，请妥善保存恢复码';
     });
   }
   async disableTotp(): Promise<ActionResult> {

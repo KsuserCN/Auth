@@ -20,6 +20,10 @@ public interface UserSessionRepository extends JpaRepository<UserSession, Long> 
     @Query("SELECT s FROM UserSession s JOIN FETCH s.user WHERE s.id = :id AND s.expiresAt > :now AND s.revokedAt IS NULL")
     Optional<UserSession> findActiveSessionById(@Param("id") Long id, @Param("now") LocalDateTime now);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM UserSession s JOIN FETCH s.user WHERE s.id = :id AND s.expiresAt > :now AND s.revokedAt IS NULL")
+    Optional<UserSession> findActiveSessionByIdForUpdate(@Param("id") Long id, @Param("now") LocalDateTime now);
+
     Optional<UserSession> findByIdAndUser(Long id, User user);
 
     void deleteByUser(User user);

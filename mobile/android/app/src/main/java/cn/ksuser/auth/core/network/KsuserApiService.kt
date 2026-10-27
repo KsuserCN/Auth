@@ -248,7 +248,22 @@ interface KsuserApiService {
     suspend fun getTotpStatus(): Response<ApiEnvelope<TotpStatus>>
 
     @POST("/auth/totp/registration-options")
-    suspend fun getTotpRegistrationOptions(): Response<ApiEnvelope<TotpRegistrationOptions>>
+    suspend fun getTotpRegistrationOptions(
+        @Body request: cn.ksuser.auth.data.model.TotpRegistrationOptionsRequest,
+    ): Response<ApiEnvelope<TotpRegistrationOptions>>
+
+    @POST("/auth/totp/enrollment/verify")
+    suspend fun verifyTotpEnrollment(
+        @Body request: cn.ksuser.auth.data.model.TotpEnrollmentVerificationRequest,
+    ): Response<ApiEnvelope<cn.ksuser.auth.data.model.TotpEnrollmentProof>>
+
+    @POST("/auth/totp/enrollment/passkey/options")
+    suspend fun totpEnrollmentPasskeyOptions(@Body request: Map<String, String> = emptyMap()): Response<ApiEnvelope<PasskeyAuthenticationOptions>>
+
+    @POST("/auth/totp/enrollment/passkey/verify")
+    suspend fun verifyTotpEnrollmentPasskey(
+        @Body request: cn.ksuser.auth.data.model.TotpEnrollmentPasskeyRequest,
+    ): Response<ApiEnvelope<cn.ksuser.auth.data.model.TotpEnrollmentProof>>
 
     @POST("/auth/totp/registration-verify")
     suspend fun verifyTotpRegistration(

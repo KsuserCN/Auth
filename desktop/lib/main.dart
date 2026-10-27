@@ -3339,10 +3339,63 @@ class AppController extends ChangeNotifier {
     });
   }
 
-  Future<TotpRegistrationOptionsResponse> getTotpRegistrationOptions() async {
+  Future<String> verifyTotpEnrollment({
+    required String method,
+    String? password,
+    String? code,
+  }) async {
+    final Map<String, dynamic> body = <String, dynamic>{'method': method};
+    if (password != null) {
+      body['password'] = password;
+    }
+    if (code != null) {
+      body['code'] = code.trim();
+    }
+    final dynamic data = await _apiClient.post(
+      '/auth/totp/enrollment/verify',
+      authorized: true,
+      body: body,
+    );
+    final String proof = asString(asMap(data)['proofId']) ?? '';
+    if (proof.isEmpty) throw ApiException(desktopL10n.verifyYourIdentityFirst);
+    return proof;
+  }
+
+  Future<String> verifyTotpEnrollmentWithPasskey() async {
+    if (!usesNativePasskey || !await PasskeyPlatform.isAvailable()) {
+      throw ApiException(passkeyUnavailableMessage);
+    }
+    final dynamic data = await _apiClient.post(
+      '/auth/totp/enrollment/passkey/options',
+      authorized: true,
+    );
+    final PasskeyAssertionOptions options = PasskeyAssertionOptions.fromJson(
+      asMap(data),
+    );
+    final PasskeyAssertionResult assertion = await PasskeyPlatform.getAssertion(
+      options: options,
+      origin: passkeyOrigin,
+    );
+    final dynamic result = await _apiClient.post(
+      '/auth/totp/enrollment/passkey/verify',
+      authorized: true,
+      body: <String, dynamic>{
+        'passkeyChallengeId': options.challengeId,
+        'credential': assertion.toJson(),
+      },
+    );
+    final String proof = asString(asMap(result)['proofId']) ?? '';
+    if (proof.isEmpty) throw ApiException(desktopL10n.verifyYourIdentityFirst);
+    return proof;
+  }
+
+  Future<TotpRegistrationOptionsResponse> getTotpRegistrationOptions(
+    String proofId,
+  ) async {
     return runBusyAction(() => desktopL10n.gettingTotpConfiguration, () async {
       final dynamic data = await _apiClient.post(
         '/auth/totp/registration-options',
+        body: <String, dynamic>{'proofId': proofId},
         authorized: true,
       );
       return TotpRegistrationOptionsResponse.fromJson(asMap(data));
@@ -3351,7 +3404,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> verifyTotpRegistration({
     required String code,
-    required List<String> recoveryCodes,
+    required String enrollmentId,
   }) async {
     await runBusyAction(() => desktopL10n.enablingTotp, () async {
       await _apiClient.post(
@@ -3359,7 +3412,7 @@ class AppController extends ChangeNotifier {
         authorized: true,
         body: <String, dynamic>{
           'code': code.trim(),
-          'recoveryCodes': recoveryCodes,
+          'enrollmentId': enrollmentId,
         },
       );
       totpStatus = await _loadTotpStatus();
@@ -8472,11 +8525,7 @@ class _TotpPanel extends StatelessWidget {
               FilledButton.tonal(
                 onPressed: () async {
                   if (!enabled) {
-                    await _runWithSensitiveVerification(
-                      context,
-                      controller: controller,
-                      action: () => _showEnableTotpDialog(context, controller),
-                    );
+                    await _showEnableTotpDialog(context, controller);
                     return;
                   }
                   await _runWithSensitiveVerification(
@@ -9169,6 +9218,8 @@ Future<bool> _showSensitiveVerificationDialog(
   required AppController controller,
   SensitiveVerificationStatus? initialStatus,
   String purpose = 'login-options',
+  bool forTotpEnrollment = false,
+  ValueChanged<String>? onEnrollmentVerified,
 }) async {
   final bool? verified = await showLocalizedDialog<bool>(
     context: context,
@@ -9176,6 +9227,8 @@ Future<bool> _showSensitiveVerificationDialog(
       return _SensitiveVerificationDialog(
         controller: controller,
         purpose: purpose,
+        forTotpEnrollment: forTotpEnrollment,
+        onEnrollmentVerified: onEnrollmentVerified,
         initialStatus: initialStatus,
       );
     },
@@ -9188,11 +9241,15 @@ class _SensitiveVerificationDialog extends StatefulWidget {
     required this.controller,
     this.initialStatus,
     this.purpose = 'login-options',
+    this.forTotpEnrollment = false,
+    this.onEnrollmentVerified,
   });
 
   final AppController controller;
   final SensitiveVerificationStatus? initialStatus;
   final String purpose;
+  final bool forTotpEnrollment;
+  final ValueChanged<String>? onEnrollmentVerified;
 
   @override
   State<_SensitiveVerificationDialog> createState() =>
@@ -9230,6 +9287,12 @@ class _SensitiveVerificationDialogState
   @override
   void initState() {
     super.initState();
+    if (widget.forTotpEnrollment) {
+      _methods = const <SensitiveVerificationMethod>[
+        SensitiveVerificationMethod.password,
+        SensitiveVerificationMethod.emailCode,
+      ];
+    }
     _loadStatus();
   }
 
@@ -9252,7 +9315,7 @@ class _SensitiveVerificationDialogState
           await widget.controller.checkSensitiveVerification(
             purpose: widget.purpose,
           );
-      if (status.verified) {
+      if (status.verified && !widget.forTotpEnrollment) {
         if (mounted) {
           Navigator.of(context).pop(true);
         }
@@ -9269,9 +9332,21 @@ class _SensitiveVerificationDialogState
           : status.methods;
       final List<SensitiveVerificationMethod> methods =
           <SensitiveVerificationMethod>{
-            ...normalizedMethods,
-            SensitiveVerificationMethod.qr,
-          }.toList();
+                ...normalizedMethods,
+                if (!widget.forTotpEnrollment) SensitiveVerificationMethod.qr,
+              }
+              .where(
+                (method) =>
+                    !widget.forTotpEnrollment ||
+                    method == SensitiveVerificationMethod.password ||
+                    method == SensitiveVerificationMethod.emailCode ||
+                    (method == SensitiveVerificationMethod.passkey &&
+                        widget.controller.usesNativePasskey),
+              )
+              .toList();
+      if (methods.isEmpty) {
+        throw ApiException(desktopL10n.verifyYourIdentityFirst);
+      }
       final List<SensitiveVerificationMethod> preferredOrder =
           <SensitiveVerificationMethod>[
             ...<SensitiveVerificationMethod?>[
@@ -9500,6 +9575,30 @@ class _SensitiveVerificationDialogState
       _verifying = true;
     });
     try {
+      if (widget.forTotpEnrollment) {
+        final String proof;
+        if (_selectedMethod == SensitiveVerificationMethod.passkey) {
+          proof = await widget.controller.verifyTotpEnrollmentWithPasskey();
+        } else if (_selectedMethod == SensitiveVerificationMethod.password ||
+            _selectedMethod == SensitiveVerificationMethod.emailCode) {
+          proof = await widget.controller.verifyTotpEnrollment(
+            method: sensitiveVerificationMethodValue(_selectedMethod),
+            password: _selectedMethod == SensitiveVerificationMethod.password
+                ? _passwordController.text
+                : null,
+            code: _selectedMethod == SensitiveVerificationMethod.emailCode
+                ? _codeController.text
+                : null,
+          );
+        } else {
+          throw ApiException(desktopL10n.verifyYourIdentityFirst);
+        }
+        if (mounted) {
+          widget.onEnrollmentVerified?.call(proof);
+          Navigator.of(context).pop(true);
+        }
+        return;
+      }
       switch (_selectedMethod) {
         case SensitiveVerificationMethod.password:
           await widget.controller.verifySensitiveOperation(
@@ -10095,8 +10194,18 @@ Future<void> _showEnableTotpDialog(
 ) async {
   final NavigatorState navigator = Navigator.of(context);
   final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
+  String? proofId;
+  final bool verified = await _showSensitiveVerificationDialog(
+    context,
+    controller: controller,
+    forTotpEnrollment: true,
+    onEnrollmentVerified: (proof) {
+      proofId = proof;
+    },
+  );
+  if (!verified || proofId == null || !context.mounted) return;
   final TotpRegistrationOptionsResponse options = await controller
-      .getTotpRegistrationOptions();
+      .getTotpRegistrationOptions(proofId!);
   if (!navigator.context.mounted) {
     return;
   }
@@ -10161,7 +10270,7 @@ Future<void> _showEnableTotpDialog(
                             try {
                               await controller.verifyTotpRegistration(
                                 code: codeController.text,
-                                recoveryCodes: options.recoveryCodes,
+                                enrollmentId: options.enrollmentId,
                               );
                               if (navigator.context.mounted) {
                                 Navigator.of(context).pop();
@@ -10176,6 +10285,12 @@ Future<void> _showEnableTotpDialog(
                                 );
                               }
                             } catch (error) {
+                              if (context.mounted &&
+                                  error is ApiException &&
+                                  (error.errorCode == 'TOTP_006' ||
+                                      error.errorCode == 'RATE_LIMITED')) {
+                                Navigator.of(context).pop();
+                              }
                               if (context.mounted) {
                                 showAppMessage(
                                   messenger.context,
@@ -11372,10 +11487,14 @@ class TotpRegistrationOptionsResponse {
     required this.secret,
     required this.qrCodeUrl,
     required this.recoveryCodes,
+    required this.enrollmentId,
+    required this.expiresInSeconds,
   });
 
   factory TotpRegistrationOptionsResponse.fromJson(Map<String, dynamic> json) {
     return TotpRegistrationOptionsResponse(
+      enrollmentId: asString(json['enrollmentId']) ?? '',
+      expiresInSeconds: asInt(json['expiresInSeconds']) ?? 0,
       secret: asString(json['secret']) ?? '',
       qrCodeUrl: asString(json['qrCodeUrl']) ?? '',
       recoveryCodes: asList(
@@ -11384,6 +11503,8 @@ class TotpRegistrationOptionsResponse {
     );
   }
 
+  final String enrollmentId;
+  final int expiresInSeconds;
   final String secret;
   final String qrCodeUrl;
   final List<String> recoveryCodes;

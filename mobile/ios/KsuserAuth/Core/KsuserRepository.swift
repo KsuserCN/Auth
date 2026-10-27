@@ -142,9 +142,24 @@ extension KsuserRepositoryProviding {
         }
     }
     func totpStatus() async throws -> TotpStatus { try await client.request("/auth/totp/status") }
-    func startTOTP() async throws -> TotpRegistrationOptions { try await client.request("/auth/totp/registration-options", method: "POST", body: [:]) }
-    func confirmTOTP(code: String, recoveryCodes: [String]) async throws {
-        let _: EmptyPayload = try await client.request("/auth/totp/registration-verify", method: "POST", body: ["code": .string(trimmedUserInput(code)), "recoveryCodes": .array(recoveryCodes.map(JSONValue.string))])
+    func verifyTOTPEnrollment(method: String, password: String?, code: String?) async throws -> QrApprovalProof {
+        var body: [String: JSONValue] = ["method": .string(method)]
+        if let password { body["password"] = .string(password) }
+        if let code { body["code"] = .string(trimmedUserInput(code)) }
+        return try await client.request("/auth/totp/enrollment/verify", method: "POST", body: body)
+    }
+    func totpEnrollmentPasskeyOptions() async throws -> PasskeyAuthenticationOptions {
+        try await client.request("/auth/totp/enrollment/passkey/options", method: "POST", body: [:])
+    }
+    func verifyTOTPEnrollmentPasskey(options: PasskeyAuthenticationOptions, payload: PasskeyAuthenticationPayload) async throws -> QrApprovalProof {
+        try await client.request("/auth/totp/enrollment/passkey/verify", method: "POST", body: [
+            "passkeyChallengeId": .string(options.challengeId),
+            "credential": .object(["credentialRawId": .string(payload.credentialRawId), "clientDataJSON": .string(payload.clientDataJSON),
+                "authenticatorData": .string(payload.authenticatorData), "signature": .string(payload.signature)])])
+    }
+    func startTOTP(proofId: String) async throws -> TotpRegistrationOptions { try await client.request("/auth/totp/registration-options", method: "POST", body: ["proofId": .string(proofId)]) }
+    func confirmTOTP(code: String, enrollmentId: String) async throws {
+        let _: EmptyPayload = try await client.request("/auth/totp/registration-verify", method: "POST", body: ["code": .string(trimmedUserInput(code)), "enrollmentId": .string(enrollmentId)])
     }
     func verifyTOTP(code: String?, recoveryCode: String?) async throws -> Bool {
         var body: [String: JSONValue] = [:]; if let code { body["code"] = .string(trimmedUserInput(code)) }; if let recoveryCode { body["recoveryCode"] = .string(trimmedUserInput(recoveryCode).uppercased()) }

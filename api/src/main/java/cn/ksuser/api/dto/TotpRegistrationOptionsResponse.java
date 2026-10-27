@@ -8,6 +8,13 @@ public class TotpRegistrationOptionsResponse {
     private String secret;
     private String qrCodeUrl;
     private String[] recoveryCodes;
+    private String enrollmentId;
+    private long expiresInSeconds;
+
+    public String getEnrollmentId() { return enrollmentId; }
+    public void setEnrollmentId(String enrollmentId) { this.enrollmentId = enrollmentId; }
+    public long getExpiresInSeconds() { return expiresInSeconds; }
+    public void setExpiresInSeconds(long expiresInSeconds) { this.expiresInSeconds = expiresInSeconds; }
 
     public TotpRegistrationOptionsResponse() {
     }

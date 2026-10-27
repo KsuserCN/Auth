@@ -1037,11 +1037,46 @@ export interface TotpRegistrationOptionsResponse {
   secret: string
   qrCodeUrl: string
   recoveryCodes: string[]
+  enrollmentId: string
+  expiresInSeconds: number
 }
 
-export const getTotpRegistrationOptions = async (): Promise<TotpRegistrationOptionsResponse> => {
+export interface TotpEnrollmentProofResponse {
+  proofId: string
+  expiresInSeconds: number
+}
+
+export const verifyTotpEnrollment = async (data: {
+  method: 'password' | 'email-code'
+  password?: string
+  code?: string
+}): Promise<TotpEnrollmentProofResponse> => {
+  const response = await request.post<ApiResponse<TotpEnrollmentProofResponse>>(
+    '/auth/totp/enrollment/verify', data,
+  )
+  return (response as unknown as ApiResponse<TotpEnrollmentProofResponse>).data
+}
+
+export const getTotpEnrollmentPasskeyOptions = async (): Promise<PasskeySensitiveVerificationOptions> => {
+  const response = await request.post<ApiResponse<PasskeySensitiveVerificationOptions>>(
+    '/auth/totp/enrollment/passkey/options', {},
+  )
+  return (response as unknown as ApiResponse<PasskeySensitiveVerificationOptions>).data
+}
+
+export const verifyTotpEnrollmentPasskey = async (
+  passkeyChallengeId: string,
+  credential: PasskeySensitiveVerificationRequest,
+): Promise<TotpEnrollmentProofResponse> => {
+  const response = await request.post<ApiResponse<TotpEnrollmentProofResponse>>(
+    '/auth/totp/enrollment/passkey/verify', { passkeyChallengeId, credential },
+  )
+  return (response as unknown as ApiResponse<TotpEnrollmentProofResponse>).data
+}
+
+export const getTotpRegistrationOptions = async (proofId: string): Promise<TotpRegistrationOptionsResponse> => {
   const response = await request.post<ApiResponse<TotpRegistrationOptionsResponse>>(
-    '/auth/totp/registration-options',
+    '/auth/totp/registration-options', { proofId },
   )
   return (response as unknown as ApiResponse<TotpRegistrationOptionsResponse>).data
 }
@@ -1049,11 +1084,11 @@ export const getTotpRegistrationOptions = async (): Promise<TotpRegistrationOpti
 /**
  * 确认 TOTP 注册
  * POST /auth/totp/registration-verify
- * 必须提交 6 位动态码 + registration-options 返回的 recoveryCodes
+ * 必须提交绑定流程 ID 和 6 位动态码；恢复码由服务端保存。
  */
 export interface TotpRegistrationVerifyRequest {
+  enrollmentId: string
   code: string
-  recoveryCodes: string[]
 }
 
 export const verifyTotpRegistration = async (

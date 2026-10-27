@@ -196,16 +196,11 @@ public class TotpService {
             // 计算当前时间步长
             long currentStep = System.currentTimeMillis() / 1000 / TIME_INTERVAL;
             
-            // 防重放检查
-            if (userTotp.shouldRejectStep(currentStep)) {
-                return false;
-            }
-
             // 检查码是否匹配（允许时间误差：前一个、当前、后一个）
             boolean codeMatches = false;
             for (int offset = -1; offset <= 1; offset++) {
                 long step = currentStep + offset;
-                if (verifyTotpCode(decryptedSecret, code, step)) {
+                if (!userTotp.shouldRejectStep(step) && verifyTotpCode(decryptedSecret, code, step)) {
                     // 验证成功，更新 last_used_step
                     userTotp.updateLastUsedStep(step);
                     userTotpRepository.save(userTotp);
@@ -330,96 +325,78 @@ public class TotpService {
         }
     }
 
-    /**
-     * 确认 TOTP 注册（注册流程的第二步）
-     * @param userId 用户 ID
-     * @param code TOTP 码
-     * @param masterEncryptionKey 主加密密钥
-     * @return 注册是否成功
-     */
-    @Transactional
+    /** The former user-only enrollment API cannot authorize credential creation. */
+    @Deprecated
     public boolean confirmTotpRegistration(Long userId, String code, String[] recoveryCodes, byte[] masterEncryptionKey) {
+        return false;
+    }
+
+    byte[] encryptEnrollmentRecoveryCodes(String[] recoveryCodes, byte[] masterKey) {
         try {
-            Optional<UserTotp> existingOpt = userTotpRepository.findByUserId(userId);
-            if (existingOpt.isEmpty()) {
-                return false;
-            }
+            validateEnrollmentRecoveryCodes(recoveryCodes);
+            return encryptAesGcm(String.join("\n", recoveryCodes).getBytes(StandardCharsets.UTF_8), masterKey);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to encrypt enrollment recovery codes", ex);
+        }
+    }
 
-            if (recoveryCodes == null || recoveryCodes.length == 0) {
-                return false;
-            }
+    String[] decryptEnrollmentRecoveryCodes(byte[] ciphertext, byte[] masterKey) {
+        try {
+            String[] recoveryCodes = new String(decryptAesGcm(ciphertext, masterKey), StandardCharsets.UTF_8).split("\n");
+            validateEnrollmentRecoveryCodes(recoveryCodes);
+            return recoveryCodes;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to decrypt enrollment recovery codes", ex);
+        }
+    }
 
-            UserTotp userTotp = existingOpt.get();
-            
-            // 检查是否有待确认的密钥
-            if (userTotp.getPendingSecretCiphertext() == null) {
-                return false;
-            }
+    private void validateEnrollmentRecoveryCodes(String[] recoveryCodes) {
+        if (recoveryCodes == null || recoveryCodes.length != RECOVERY_CODES_COUNT
+            || Arrays.stream(recoveryCodes).anyMatch(value -> value == null || !value.matches("[A-Z]{8}"))
+            || new HashSet<>(Arrays.asList(recoveryCodes)).size() != RECOVERY_CODES_COUNT) {
+            throw new IllegalArgumentException("Invalid server-generated recovery codes");
+        }
+    }
 
-            // 检查是否过期
-            if (userTotp.isPendingSecretExpired()) {
-                userTotp.clearPendingSecret();
-                userTotpRepository.save(userTotp);
-                return false;
-            }
-
-            // 使用待确认的密钥验证码
-            byte[] decryptedSecret = decryptAesGcm(userTotp.getPendingSecretCiphertext(), masterEncryptionKey);
-            
-            // 计算当前时间步长
-            long currentStep = System.currentTimeMillis() / 1000 / TIME_INTERVAL;
-            
-            // 检查码是否匹配（允许时间误差）
-            boolean codeMatches = false;
+    Long matchEnrollmentStep(byte[] ciphertext, String code, byte[] masterKey, long currentStep) {
+        if (code == null || !code.matches("[0-9]{6}")) return null;
+        try {
+            byte[] secret = decryptAesGcm(ciphertext, masterKey);
             for (int offset = -1; offset <= 1; offset++) {
                 long step = currentStep + offset;
-                if (verifyTotpCode(decryptedSecret, code, step)) {
-                    codeMatches = true;
-                    break;
-                }
+                if (verifyTotpCode(secret, code, step)) return step;
             }
+            return null;
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to verify pending enrollment", ex);
+        }
+    }
 
-            if (!codeMatches) {
-                return false;
+    /** Invoked inside the enrollment transaction while its user and session are locked. */
+    void activateEnrollment(Long userId, byte[] ciphertext, String[] recoveryCodes,
+                            long matchedStep, byte[] masterKey) {
+        validateEnrollmentRecoveryCodes(recoveryCodes);
+        UserTotp config = userTotpRepository.findByUserId(userId).orElseGet(UserTotp::new);
+        if (Boolean.TRUE.equals(config.getIsEnabled())) throw new IllegalStateException("TOTP already enabled");
+        config.setUserId(userId);
+        config.setSecretKeyCiphertext(ciphertext);
+        config.setKeyVersion(1);
+        config.setIsEnabled(true);
+        config.setConfirmedAt(LocalDateTime.now());
+        config.setLastUsedStep(matchedStep);
+        config.clearPendingSecret();
+        userTotpRepository.save(config);
+        recoveryCodeRepository.deleteByUserId(userId);
+        try {
+            for (String code : recoveryCodes) {
+                byte[] bytes = code.getBytes(StandardCharsets.UTF_8);
+                recoveryCodeRepository.save(new TotpRecoveryCode(userId, sha256Hash(bytes), encryptAesGcm(bytes, masterKey)));
             }
-
-            // 将待确认的密钥移到正式密钥
-            userTotp.setSecretKeyCiphertext(userTotp.getPendingSecretCiphertext());
-            userTotp.setKeyVersion(1);
-            userTotp.setIsEnabled(true);
-            userTotp.setConfirmedAt(LocalDateTime.now());
-            userTotp.clearPendingSecret();
-            userTotp.setLastUsedStep(currentStep);
-            userTotpRepository.save(userTotp);
-
-            // 删除旧的恢复码
-            recoveryCodeRepository.deleteByUserId(userId);
-
-            // 保存恢复码（SHA-256 哈希 + AES-GCM 密文）
-            for (String recoveryCode : recoveryCodes) {
-                if (recoveryCode == null) {
-                    continue;
-                }
-                String normalizedRecoveryCode = recoveryCode.trim().toUpperCase(Locale.ROOT);
-                if (!normalizedRecoveryCode.matches("^[A-Z]{8}$")) {
-                    continue;
-                }
-
-                byte[] recoveryCodeBytes = normalizedRecoveryCode.getBytes(StandardCharsets.UTF_8);
-                byte[] codeHash = sha256Hash(recoveryCodeBytes);
-                byte[] codeCiphertext = encryptAesGcm(recoveryCodeBytes, masterEncryptionKey);
-                TotpRecoveryCode codeEntity = new TotpRecoveryCode(userId, codeHash, codeCiphertext);
-                recoveryCodeRepository.save(codeEntity);
-            }
-
-            long savedCount = recoveryCodeRepository.countByUserIdAndUnused(userId);
-            if (savedCount == 0) {
-                return false;
-            }
-
-            return true;
-        } catch (Exception e) {
-            return false;
+            // Surface constraint failures before publishing the completed enrollment.
+            recoveryCodeRepository.flush();
+            userTotpRepository.flush();
+        } catch (Exception ex) {
+            throw new IllegalStateException("Unable to save TOTP credential", ex);
         }
     }
 

@@ -137,7 +137,7 @@ struct PasskeyListItem: Codable, Sendable, Identifiable {
 }
 struct PasskeyListResponse: Codable, Sendable { let passkeys: [PasskeyListItem] }
 struct TotpStatus: Codable, Sendable { var enabled: Bool; var recoveryCodesCount: Int }
-struct TotpRegistrationOptions: Codable, Sendable { let secret: String; let qrCodeUrl: String; let recoveryCodes: [String] }
+struct TotpRegistrationOptions: Codable, Sendable { let secret: String; let qrCodeUrl: String; let recoveryCodes: [String]; let enrollmentId: String; let expiresInSeconds: Int }
 struct SensitiveVerificationStatus: Codable, Sendable { let verified: Bool; let remainingSeconds: Int; let preferredMethod: String?; let methods: [String]? }
 struct AdaptiveAuthStatus: Codable, Sendable {
     let sessionId: Int64?; let riskScore: Int; let riskLevel: String; let policyDecision: String?; let policyVersion: String?
@@ -220,9 +220,10 @@ struct OAuthAccountStatusItem: Codable, Sendable {
 struct OAuthAccountStatus: Codable, Sendable { let appleBound: Bool?; let qqBound: Bool?; let hasPassword: Bool? }
 struct SensitiveRequest: Identifiable { let id = UUID(); let localizedTitle: LocalizedMessage; let status: SensitiveVerificationStatus
     let qrApprovalCode: String?
+    let totpEnrollment: Bool
     var title: String { localizedTitle.rendered }
-    init(title: LocalizedMessage, status: SensitiveVerificationStatus, qrApprovalCode: String? = nil) {
-        localizedTitle = title; self.status = status; self.qrApprovalCode = qrApprovalCode
+    init(title: LocalizedMessage, status: SensitiveVerificationStatus, qrApprovalCode: String? = nil, totpEnrollment: Bool = false) {
+        localizedTitle = title; self.status = status; self.qrApprovalCode = qrApprovalCode; self.totpEnrollment = totpEnrollment
     }
 }
 struct QrApprovalProof: Codable, Sendable { let proofId: String; let expiresInSeconds: Int }

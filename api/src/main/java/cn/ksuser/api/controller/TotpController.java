@@ -4,9 +4,9 @@ import cn.ksuser.api.result.ApiResultCode;
 
 import cn.ksuser.api.dto.*;
 import cn.ksuser.api.entity.User;
-import cn.ksuser.api.entity.UserTotp;
-import cn.ksuser.api.repository.UserTotpRepository;
 import cn.ksuser.api.service.TotpService;
+import cn.ksuser.api.service.TotpEnrollmentService;
+import cn.ksuser.api.service.TotpEnrollmentProofService;
 import cn.ksuser.api.service.UserService;
 import cn.ksuser.api.service.SensitiveOperationService;
 import cn.ksuser.api.service.RateLimitService;
@@ -17,13 +17,11 @@ import cn.ksuser.api.util.SensitiveLogUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Map;
 import java.util.Optional;
-import java.time.LocalDateTime;
 
 /**
  * TOTP（Time-based One-Time Password）控制器
@@ -34,206 +32,73 @@ import java.time.LocalDateTime;
 public class TotpController {
 
     private final TotpService totpService;
+    private final TotpEnrollmentService enrollments;
     private final JwtUtil jwtUtil;
     private final UserService userService;
-    private final UserTotpRepository userTotpRepository;
-    private final PasswordEncoder passwordEncoder;
     private final EncryptionUtil encryptionUtil;
     private final SensitiveOperationService sensitiveOperationService;
     private final RateLimitService rateLimitService;
     private final SensitiveLogUtil sensitiveLogUtil;
 
     public TotpController(TotpService totpService, UserService userService,
-                          UserTotpRepository userTotpRepository,
-                          PasswordEncoder passwordEncoder, JwtUtil jwtUtil,
+                          JwtUtil jwtUtil,
                           EncryptionUtil encryptionUtil,
                           SensitiveOperationService sensitiveOperationService,
                           RateLimitService rateLimitService,
-                          SensitiveLogUtil sensitiveLogUtil) {
+                          SensitiveLogUtil sensitiveLogUtil,
+                          TotpEnrollmentService enrollments) {
         this.totpService = totpService;
+        this.enrollments = enrollments;
         this.jwtUtil = jwtUtil;
         this.userService = userService;
-        this.userTotpRepository = userTotpRepository;
-        this.passwordEncoder = passwordEncoder;
         this.encryptionUtil = encryptionUtil;
         this.sensitiveOperationService = sensitiveOperationService;
         this.rateLimitService = rateLimitService;
         this.sensitiveLogUtil = sensitiveLogUtil;
     }
 
-    /**
-     * 获取 TOTP 注册选项
-     * 第一步：生成秘钥和恢复码，并生成 QR 码
-     * 秘钥会临时存储在数据库的 pending_secret_ciphertext 字段，有效期 10 分钟
-     */
+    /** A fresh independent proof starts one session-bound enrollment; it does not enable TOTP. */
     @PostMapping("/registration-options")
     public ResponseEntity<ApiResponse<TotpRegistrationOptionsResponse>> getTotpRegistrationOptions(
-            Authentication authentication) {
-        if (authentication == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
+            Authentication authentication,
+            @RequestBody(required = false) TotpRegistrationStartRequest request,
+            HttpServletRequest httpRequest) {
+        if (request == null || request.proofId() == null || request.proofId().isBlank()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
-
-        String userUuid = (String) authentication.getPrincipal();
-        Optional<User> userOpt = userService.findByUuid(userUuid);
-        
-        if (userOpt.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
-        }
-
-        User user = userOpt.get();
-        
-        // 检查用户是否已启用 TOTP
-        if (totpService.isTotpEnabled(user.getId())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.TOTP_001));
-        }
-
-        try {
-            byte[] masterKey = encryptionUtil.getMasterKey();
-            
-            // 删除旧的待确认 TOTP（如果存在）
-            Optional<UserTotp> existingOpt = userTotpRepository.findByUserId(user.getId());
-            if (existingOpt.isPresent()) {
-                UserTotp existing = existingOpt.get();
-                if (existing.getIsEnabled()) {
-                    // 已启用，不允许重新注册
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, ApiResultCode.TOTP_001));
-                }
-                // 未启用但存在，删除旧的待确认配置
-                userTotpRepository.delete(existing);
-            }
-            
-            // 生成新的秘钥和恢复码（优先显示绑定邮箱）
-            String accountName = user.getEmail() != null && !user.getEmail().isBlank()
-                ? user.getEmail()
-                : user.getUsername();
-            Map<String, Object> secretData = totpService.generateTotpSecret(user.getId(), accountName, masterKey);
-            
-            // 创建新的 UserTotp 记录，临时存储待确认密钥
-            byte[] encryptedSecret = java.util.Base64.getDecoder()
-                .decode((String) secretData.get("encryptedSecret"));
-            
-            UserTotp userTotp = new UserTotp();
-            userTotp.setUserId(user.getId());
-            userTotp.setPendingSecretCiphertext(encryptedSecret);
-            userTotp.setPendingExpiresAt(LocalDateTime.now().plusMinutes(10)); // 10 分钟有效期
-            userTotp.setIsEnabled(false);
-            userTotpRepository.save(userTotp);
-            
-            TotpRegistrationOptionsResponse response = new TotpRegistrationOptionsResponse(
-                (String) secretData.get("secret"),
-                (String) secretData.get("qrCodeUrl"),
-                (String[]) secretData.get("recoveryCodes")
-            );
-
-            return ResponseEntity.status(HttpStatus.OK)
-                .body(new ApiResponse<>(200, ApiResultCode.TOTP_002, response));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, ApiResultCode.TOTP_003));
-        }
+        TotpRegistrationOptionsResponse options = enrollments.start(authentication, httpRequest, request.proofId());
+        return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.TOTP_002, options));
     }
 
-    /**
-     * 确认 TOTP 注册
-     * 第二步：用户使用 Google Authenticator 等应用生成的 6 位码来确认注册
-     * 此操作会：
-     * 1. 验证码是否正确
-     * 2. 将待确认秘钥移至正式秘钥
-     * 3. 保存恢复码
-     * 4. 标记 TOTP 为已启用
-     */
+    /** Only the server-held enrollment can supply the secret and recovery codes being committed. */
     @PostMapping("/registration-verify")
     public ResponseEntity<ApiResponse<String>> confirmTotpRegistration(
-            Authentication authentication,
-            @RequestBody TotpRegistrationConfirmRequest request,
+            Authentication authentication, @RequestBody TotpRegistrationConfirmRequest request,
             HttpServletRequest httpRequest) {
+        if (request == null || request.getEnrollmentId() == null || request.getEnrollmentId().isBlank()
+            || request.getCode() == null || !request.getCode().trim().matches("^[0-9]{6}$")) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.TOTP_005));
+        }
         long startTime = System.currentTimeMillis();
-        
-        if (authentication == null) {
-            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "not_authenticated", startTime);
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ApiResponse<>(401, ApiResultCode.UNAUTHENTICATED));
-        }
-
-        if (request.getCode() == null || request.getCode().isEmpty()) {
-            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "empty_verification_code", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.AUTH_018));
-        }
-
-        if (request.getRecoveryCodes() == null || request.getRecoveryCodes().length == 0) {
-            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "empty_recovery_codes", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.TOTP_004));
-        }
-
-        String userUuid = (String) authentication.getPrincipal();
-        Optional<User> userOpt = userService.findByUuid(userUuid);
-        
-        if (userOpt.isEmpty()) {
-            sensitiveLogUtil.logEnableTotp(httpRequest, null, false, "user_not_found", startTime);
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(new ApiResponse<>(404, ApiResultCode.AUTH_005));
-        }
-
-        User user = userOpt.get();
-        
-        // 检查用户是否已启用 TOTP
-        if (totpService.isTotpEnabled(user.getId())) {
-            sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "totp_already_enabled", startTime);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponse<>(400, ApiResultCode.TOTP_001));
-        }
-
+        Long userId = authentication == null ? null : userService.findByUuid(authentication.getName()).map(User::getId).orElse(null);
+        boolean success;
         try {
-            byte[] masterKey = encryptionUtil.getMasterKey();
-            
-            // 从数据库获取待确认的秘钥和恢复码列表
-            Optional<UserTotp> userTotpOpt = userTotpRepository.findByUserId(user.getId());
-            if (userTotpOpt.isEmpty()) {
-                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "totp_not_initialized", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.TOTP_005));
-            }
-
-            UserTotp userTotp = userTotpOpt.get();
-            
-            // 检查是否过期
-            if (userTotp.isPendingSecretExpired()) {
-                userTotpRepository.delete(userTotp);
-                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "pending_secret_expired", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.TOTP_006));
-            }
-
-            // 使用 registration-options 返回给客户端的同一组恢复码进行确认保存
-            
-            // 确认注册
-            boolean success = totpService.confirmTotpRegistration(
-                user.getId(), 
-                request.getCode(), 
-                request.getRecoveryCodes(),
-                masterKey
-            );
-
-            if (success) {
-                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), true, null, startTime);
-                return ResponseEntity.status(HttpStatus.OK)
-                    .body(new ApiResponse<>(200, ApiResultCode.TOTP_007));
-            } else {
-                sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, "invalid_or_expired_verification_code", startTime);
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponse<>(400, ApiResultCode.TOTP_008));
-            }
-        } catch (Exception e) {
-            sensitiveLogUtil.logEnableTotp(httpRequest, user.getId(), false, e.getMessage(), startTime);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ApiResponse<>(500, ApiResultCode.TOTP_009));
+            success = enrollments.confirm(authentication, httpRequest, request.getEnrollmentId(), request.getCode().trim());
+        } catch (RuntimeException failure) {
+            sensitiveLogUtil.logEnableTotp(httpRequest, userId, false, "enrollment_confirmation_failed", startTime);
+            throw failure;
         }
+        sensitiveLogUtil.logEnableTotp(httpRequest, userId, success, success ? null : "enrollment_code_invalid", startTime);
+        return success
+            ? ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.TOTP_007))
+            : ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.TOTP_008));
+    }
+
+    @ExceptionHandler(TotpEnrollmentProofService.EnrollmentFailure.class)
+    public ResponseEntity<ApiResponse<Void>> enrollmentFailure(TotpEnrollmentProofService.EnrollmentFailure failure) {
+        return ResponseEntity.status(failure.status())
+            .body(new ApiResponse<>(failure.status().value(), failure.resultCode()));
     }
 
     /**

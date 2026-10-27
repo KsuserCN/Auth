@@ -137,7 +137,7 @@ struct TOTPView: View {
                                 Text(L10n.text("停用后，验证器及其恢复码将无法再用于双重验证。"))
                             }
                     } else {
-                        AsyncActionButton(title: L10n.text("开始设置"), isBusy: model.isBusy) { await model.requireSensitive(title: "启用验证器") { await model.startTOTP() } }
+                        AsyncActionButton(title: L10n.text("开始设置"), isBusy: model.isBusy) { await model.startTOTP() }
                     }
                 }
             }
