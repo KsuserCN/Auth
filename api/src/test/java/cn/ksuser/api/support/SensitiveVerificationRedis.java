@@ -45,6 +45,13 @@ public final class SensitiveVerificationRedis {
             return entry == null ? -2L : entry.expiresAtSeconds() - nowSeconds;
         });
         when(template.delete(anyString())).thenAnswer(call -> entries.remove(call.getArgument(0)) != null);
+        when(values.increment(anyString())).thenAnswer(call -> {
+            String key = call.getArgument(0);
+            Entry old = liveEntry(key);
+            long value = old == null ? 1 : Long.parseLong(old.value()) + 1;
+            entries.put(key, new Entry(Long.toString(value), Long.MAX_VALUE));
+            return value;
+        });
         when(template.execute(any(RedisScript.class), anyList(), anyString())).thenAnswer(call -> {
             List<String> keys = call.getArgument(1);
             String key = keys.getFirst();

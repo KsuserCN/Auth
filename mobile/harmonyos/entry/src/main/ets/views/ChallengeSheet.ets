@@ -64,6 +64,7 @@ export struct ChallengeSheet {
       case 'approve_login': return '确认网页登录';
       case 'approve_mfa': return '批准网页登录的双重验证';
       case 'approve_sensitive': return '批准网页敏感操作';
+      case 'approve_recovery': return '批准账号恢复';
       case 'approve_console_login': return '确认登录管理中心';
       case 'approve_official': return this.model.qr?.preview.consoleApplication ? '确认登录管理中心' : '确认官方应用授权';
       default: return '确认网页请求';

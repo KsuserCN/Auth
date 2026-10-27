@@ -1394,6 +1394,8 @@ internal fun SensitiveVerificationDialog(
     onDismiss: () -> Unit,
     onVerified: () -> Unit,
     onMessage: (String) -> Unit,
+    qrApproveCode: String? = null,
+    onQrVerified: (String) -> Unit = {},
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -1416,7 +1418,7 @@ internal fun SensitiveVerificationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(L10n.text("敏感操作验证")) },
+        title = { Text(L10n.text(if (qrApproveCode == null) "敏感操作验证" else "验证并批准扫码请求")) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(AppSpacing.S8)) {
                 Text(L10n.format("可用方式: {0}", status?.methods?.joinToString().orEmpty()))
@@ -1479,6 +1481,23 @@ internal fun SensitiveVerificationDialog(
             LoadingTextButton(text = L10n.text("验证"), enabled = selectedMethod in status?.methods.orEmpty(), onClick = {
                 runCatchingCancellable {
                     require(selectedMethod in status?.methods.orEmpty()) { L10n.text("当前设备没有可用的验证方式，请在其他设备配置密码、邮箱或 TOTP") }
+                    if (qrApproveCode != null) {
+                        when (selectedMethod) {
+                            "password" -> container.securityRepository.verifyQrApproval(qrApproveCode, "password", password = password)
+                            "email-code" -> container.securityRepository.verifyQrApproval(qrApproveCode, "email-code", code = code.trim())
+                            "totp" -> container.securityRepository.verifyQrApproval(qrApproveCode, "totp",
+                                code = if (recoveryMode) null else code.trim(),
+                                recoveryCode = if (recoveryMode) code.trim().uppercase() else null)
+                            "passkey", "security-key" -> {
+                                if (activity == null) error(L10n.text("当前上下文不支持 Passkey"))
+                                val options = container.securityRepository.qrApprovalPasskeyOptions(qrApproveCode)
+                                val payload = if (selectedMethod == "security-key") container.securityKeyManager.getForAuthentication(activity, options)
+                                    else container.passkeyManager.getForAuthentication(activity, options)
+                                container.securityRepository.verifyQrApprovalPasskey(qrApproveCode, options.challengeId, payload)
+                            }
+                            else -> error(L10n.text("不支持的验证方式"))
+                        }
+                    } else {
                     when (selectedMethod) {
                         "password" -> container.securityRepository.verifySensitivePassword(password)
                         "email-code" -> container.securityRepository.verifySensitiveEmailCode(code.trim())
@@ -1499,7 +1518,11 @@ internal fun SensitiveVerificationDialog(
                         }
                         else -> error(L10n.text("不支持的验证方式"))
                     }
-                }.onSuccess { onVerified() }
+                    null
+                    }
+                }.onSuccess { proofId ->
+                    if (qrApproveCode == null) onVerified() else onQrVerified(requireNotNull(proofId))
+                }
                     .onFailure { onMessage(it.message ?: L10n.text("验证失败")) }
             })
         },

@@ -232,6 +232,7 @@ import {
   pollQrStatus,
   sendSensitiveVerificationCode,
   type QrChallengeStatusResponse,
+  type QrSensitivePurpose,
   verifyPasskeySensitiveOperation,
   verifySensitiveOperation,
 } from '@/api/auth'
@@ -246,9 +247,11 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean
     disableQrMethod?: boolean
+    purpose?: QrSensitivePurpose
   }>(),
   {
     disableQrMethod: false,
+    purpose: 'login-options',
   },
 )
 
@@ -422,7 +425,7 @@ const initDialog = async () => {
   passkeySupported.value = isWebAuthnSupported()
 
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification(props.purpose)
     appleBound.value = await getAppleStatus()
       .then((result) => result.enabled)
       .catch(() => false)
@@ -560,7 +563,7 @@ const startQrPolling = () => {
 const startQrVerification = async () => {
   try {
     qrRefreshing.value = true
-    const payload = await initQrSensitive()
+    const payload = await initQrSensitive(props.purpose)
     qrChallengeId.value = payload.challengeId
     qrPollToken.value = payload.pollToken
     qrExpiresInSeconds.value = payload.expiresInSeconds

@@ -60,6 +60,7 @@
   </el-dialog>
 
   <SensitiveVerificationDialog
+    purpose="session-transfer"
     v-model="sensitiveDialogVisible"
     :disable-qr-method="sensitiveDialogDisableQr"
     @success="handleSensitiveVerificationSuccess"
@@ -153,7 +154,7 @@ const runWithSensitiveVerification = async (
 ) => {
   const disableQrMethod = options?.disableQrMethod ?? false
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification('session-transfer')
     if (status.verified) {
       sensitiveDialogDisableQr.value = false
       await action()

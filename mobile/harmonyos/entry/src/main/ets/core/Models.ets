@@ -43,6 +43,7 @@ export interface PasskeyList { passkeys: PasskeyItem[]; }
 export interface TotpStatus { enabled: boolean; recoveryCodesCount: number; }
 export interface TotpSetup { secret: string; qrCodeUrl: string; recoveryCodes: string[]; }
 export interface SensitiveStatus { verified: boolean; remainingSeconds: number; preferredMethod?: string; methods?: string[]; }
+export interface QrApprovalProof { proofId: string; expiresInSeconds: number; }
 export interface AdaptiveAuthStatus {
   sessionId?: number; riskScore: number; riskLevel: string; policyDecision?: string; trusted: boolean;
   requiresStepUp: boolean; sessionFrozen: boolean; sensitiveVerified: boolean; sensitiveVerificationRemainingSeconds: number;
@@ -98,6 +99,7 @@ export interface ApiBody {
   authenticatorData?: string; signature?: string; attestationObject?: string; transports?: string;
   newName?: string; method?: string; type?: string; key?: string; value?: string | boolean;
   field?: string; stringValue?: string; confirmText?: string; approveCode?: string; transferCode?: string;
+  proofId?: string; credential?: ApiBody;
   target?: string; recoveryCodes?: string[]; ticket?: string; approve?: boolean; grantMode?: string;
   grantTtlSeconds?: number; loginWeb?: boolean;
 }

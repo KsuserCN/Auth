@@ -254,7 +254,10 @@ struct SensitiveVerificationView: View {
     @State private var code = ""
     @State private var recovery = false
     @State private var resendAt = Date.distantPast
-    private var methods: [String] { request.status.methods ?? [] }
+    private var methods: [String] {
+        let available = request.status.methods ?? []
+        return request.qrApprovalCode == nil ? available : available.filter { ["password", "email-code", "totp", "passkey"].contains($0) }
+    }
     private let columns = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
     private var canVerify: Bool { switch method { case "password": !password.isEmpty; case "email-code", "totp": !code.isEmpty; case "passkey", "apple": true; default: false } }
     var body: some View {

@@ -16,6 +16,7 @@ import cn.ksuser.api.util.JwtUtil;
 import cn.ksuser.api.util.EncryptionUtil;
 import cn.ksuser.api.util.SensitiveLogUtil;
 import cn.ksuser.api.util.ClientLanguage;
+import cn.ksuser.api.util.SensitiveSessionContext;
 import jakarta.mail.MessagingException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -1109,7 +1110,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "session-transfer")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
@@ -1125,7 +1126,7 @@ public class AuthController {
 
         String userAgent = rateLimitService.getClientUserAgent(request);
         try {
-            if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "session-transfer")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
             }
@@ -1383,16 +1384,18 @@ public class AuthController {
                 .body(new ApiResponse<>(401, ApiResultCode.AUTH_005));
         }
 
+        UserSession initiator = currentQrSession(user, request);
+        if (initiator == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(new ApiResponse<>(401, ApiResultCode.AUTH_069));
+        String purpose = request.getParameter("purpose");
+        if (purpose == null || !SensitiveOperationService.QR_PURPOSES.contains(purpose)) {
+            return ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.AUTH_090));
+        }
         String webIp = rateLimitService.getClientIp(request);
         String userAgent = rateLimitService.getClientUserAgent(request);
-        QrChallengeService.QrChallengePayload payload = qrChallengeService.createChallenge(
-            QrChallengeService.ChallengeType.SENSITIVE,
-            user.getId(),
-            null,
-            SessionTransferService.TARGET_WEB,
-            webIp,
-            userAgent
-        );
+        QrChallengeService.QrChallengePayload payload = qrChallengeService.createSensitiveChallenge(
+            user.getId(), initiator.getId(), initiator.getSessionVersion(), purpose,
+            SessionTransferService.TARGET_WEB, webIp, userAgent);
         return ResponseEntity.status(HttpStatus.OK)
             .body(new ApiResponse<>(200, ApiResultCode.AUTH_081, toQrInitResponse(payload)));
     }
@@ -1422,6 +1425,19 @@ public class AuthController {
                 challenge.getIpLocation(),
                 expiresInSeconds > 0 ? expiresInSeconds : 0L
             );
+            if (QrChallengeService.ChallengeType.SENSITIVE.value().equals(challenge.getType())) {
+                String purpose = challenge.getOperationPurpose() == null ? "" : challenge.getOperationPurpose();
+                response.setTargetName(switch (purpose) {
+                    case "change-password" -> "修改密码";
+                    case "change-email" -> "修改邮箱";
+                    case "delete-account" -> "注销账号";
+                    case "session-transfer" -> "账号恢复授权";
+                    case "console-verification" -> "管理员身份验证";
+                    default -> "管理登录方式";
+                });
+            } else if (QrChallengeService.ChallengeType.RECOVERY.value().equals(challenge.getType())) {
+                response.setTargetName("账号恢复授权");
+            }
             if (QrChallengeService.ChallengeType.CONSOLE_LOGIN.value().equals(challenge.getType())) {
                 response.setTargetName("Ksuser Console");
                 response.setTargetOrigin(consoleSessionService.consoleOrigin());
@@ -1601,48 +1617,53 @@ public class AuthController {
                 );
                 result.put("transferCode", transferPayload.getTransferCode());
                 result.put("verified", true);
-            } else if (challengeType == QrChallengeService.ChallengeType.RECOVERY) {
-                Long sponsorSessionId = getCurrentSessionId(request);
-                UserSession sponsorSession = sponsorSessionId == null
-                    ? null
-                    : userSessionService.findActiveSessionById(sponsorSessionId).orElse(null);
-                if (sponsorSession == null || !user.getId().equals(sponsorSession.getUser().getId())) {
-                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("errorCode", ApiResultCode.QR_REJECT_2));
-                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ApiResponse<>(401, ApiResultCode.AUTH_069));
-                }
-
-                String sponsorIp = rateLimitService.getClientIp(request);
-                String sponsorUserAgent = rateLimitService.getClientUserAgent(request);
-                AccountRecoveryService.AccountRecoveryPayload recoveryPayload =
-                    accountRecoveryService.createAuthorization(
-                        user,
-                        sponsorSession.getId(),
-                        sponsorIp,
-                        sponsorUserAgent
-                    );
-                result.put("recoveryCode", recoveryPayload.getRecoveryCode());
-                result.put("verified", true);
-            } else if (challengeType == QrChallengeService.ChallengeType.SENSITIVE) {
-                if (challenge.getRequestedUserId() == null || !challenge.getRequestedUserId().equals(user.getId())) {
-                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("errorCode", ApiResultCode.AUTH_092));
+            } else if (challengeType == QrChallengeService.ChallengeType.RECOVERY
+                    || challengeType == QrChallengeService.ChallengeType.SENSITIVE) {
+                UserSession approver = currentQrSession(user, request);
+                if (approver == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new ApiResponse<>(401, ApiResultCode.AUTH_069));
+                if (requestBody.getProofId() == null || requestBody.getProofId().isBlank()) {
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(new ApiResponse<>(403, ApiResultCode.AUTH_092));
+                        .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
                 }
-                if (challenge.getWebIp() == null || challenge.getWebIp().isBlank()) {
-                    qrChallengeService.rejectChallenge(challenge.getChallengeId(), user.getId(),
-                        Map.of("errorCode", ApiResultCode.QR_REJECT_3));
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, ApiResultCode.AUTH_095));
+                if (!qrChallengeService.isProtectedChallengeValid(challenge)
+                    || (challenge.getRequestedUserId() != null && !challenge.getRequestedUserId().equals(user.getId()))) {
+                    return ResponseEntity.badRequest().body(new ApiResponse<>(400, ApiResultCode.AUTH_086));
                 }
-
-                if (challenge.getConsoleVerificationRequestId() == null
-                    || challenge.getConsoleVerificationRequestId().isBlank()) {
-                    sensitiveOperationService.markVerifiedOnce(user.getUuid(), challenge.getWebIp());
+                String grantKey = null;
+                String grantValue = null;
+                long grantTtl = 900;
+                if (challengeType == QrChallengeService.ChallengeType.RECOVERY) {
+                    AccountRecoveryService.PreparedAuthorization recovery = accountRecoveryService.prepareAuthorization(
+                        user, approver.getId(), rateLimitService.getClientIp(request), rateLimitService.getClientUserAgent(request));
+                    grantKey = recovery.key();
+                    grantValue = recovery.value();
+                    grantTtl = AccountRecoveryService.DEFAULT_TTL_SECONDS;
+                    result.put("recoveryCode", recovery.payload().getRecoveryCode());
+                } else if (challenge.getConsoleVerificationRequestId() != null
+                        && !challenge.getConsoleVerificationRequestId().isBlank()) {
+                    consoleSessionService.validateVerificationRequest(challenge.getConsoleVerificationRequestId(), uuid);
+                    result.put("verificationRequestId", challenge.getConsoleVerificationRequestId());
+                } else {
+                    UserSession initiator = challenge.getInitiatorSessionId() == null ? null
+                        : userSessionService.findActiveSessionById(challenge.getInitiatorSessionId()).orElse(null);
+                    if (initiator == null || !user.getId().equals(initiator.getUser().getId())
+                        || !java.util.Objects.equals(initiator.getSessionVersion(), challenge.getInitiatorSessionVersion())
+                        || challenge.getWebIp() == null || challenge.getWebIp().isBlank()
+                        || challenge.getOperationPurpose() == null
+                        || !SensitiveOperationService.QR_PURPOSES.contains(challenge.getOperationPurpose())) {
+                        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(new ApiResponse<>(401, ApiResultCode.AUTH_069));
+                    }
+                    grantKey = sensitiveOperationService.qrGrantKey(uuid, initiator.getId(),
+                        initiator.getSessionVersion(), challenge.getOperationPurpose());
+                    grantValue = challenge.getWebIp();
                 }
                 result.put("verified", true);
+                result.put("independentProofVerified", true);
+                qrChallengeService.approveProtectedChallenge(challenge, requestBody.getProofId(), user.getId(),
+                    approver.getId(), approver.getSessionVersion(), result, grantKey, grantValue, grantTtl);
+                return ResponseEntity.ok(new ApiResponse<>(200, ApiResultCode.AUTH_096, result));
             }
 
             qrChallengeService.approveChallenge(challenge.getChallengeId(), user.getId(), result);
@@ -2551,7 +2572,7 @@ public class AuthController {
         }
 
         // 检查是否已完成敏感操作验证
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "change-email")) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
@@ -2629,7 +2650,7 @@ public class AuthController {
             }
         }
 
-        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "change-email")) {
             sensitiveLogUtil.logChangeEmail(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
@@ -2673,10 +2694,14 @@ public class AuthController {
         }
 
         // 检查是否已验证
-        boolean isVerified = sensitiveOperationService.isVerified(uuid, clientIp);
+        SensitiveSessionContext verificationContext = SensitiveSessionContext.from(request, jwtUtil);
+        String requestedPurpose = request.getParameter("purpose");
+        boolean isVerified = requestedPurpose == null
+            ? sensitiveOperationService.isVerifiedForAnyPurpose(uuid, clientIp, verificationContext.sessionId(), verificationContext.version())
+            : sensitiveOperationService.isVerified(uuid, clientIp, verificationContext.sessionId(), verificationContext.version(), requestedPurpose);
         
         // 获取剩余时间
-        long remainingSeconds = sensitiveOperationService.getRemainingTime(uuid);
+        long remainingSeconds = sensitiveOperationService.getRemainingTime(uuid, verificationContext.sessionId(), verificationContext.version(), requestedPurpose);
 
         if ("STEP_UP".equalsIgnoreCase(adaptiveStatus.getPolicyDecision())) {
             isVerified = false;
@@ -2790,7 +2815,7 @@ public class AuthController {
         }
 
         // 检查是否已完成敏感操作验证
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "delete-account")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
@@ -2802,7 +2827,7 @@ public class AuthController {
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_139));
         }
 
-        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "delete-account")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
@@ -2863,7 +2888,7 @@ public class AuthController {
         }
 
         // 检查是否已完成敏感操作验证
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "change-password")) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Sensitive verification not completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
@@ -2896,7 +2921,7 @@ public class AuthController {
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_021));
         }
 
-        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "change-password")) {
             sensitiveLogUtil.logChangePassword(request, user.getId(), false, "Sensitive verification not completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
@@ -2937,6 +2962,14 @@ public class AuthController {
             .sameSite("Strict")
             .build();
         response.addHeader("Set-Cookie", responseCookie.toString());
+    }
+
+    private UserSession currentQrSession(User user, HttpServletRequest request) {
+        SensitiveSessionContext context = SensitiveSessionContext.from(request, jwtUtil);
+        if (context.sessionId() == null || context.version() == null) return null;
+        UserSession session = userSessionService.findActiveSessionById(context.sessionId()).orElse(null);
+        return session != null && user.getId().equals(session.getUser().getId())
+            && context.version().equals(session.getSessionVersion()) ? session : null;
     }
 
     private String getAccessToken(HttpServletRequest request) {
@@ -3077,7 +3110,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse<>(401, ApiResultCode.AUTH_068));
         }
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(httpRequest, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
@@ -3124,7 +3157,7 @@ public class AuthController {
         }
 
         String clientIp = rateLimitService.getClientIp(httpRequest);
-        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(httpRequest, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "login-options")) {
             sensitiveLogUtil.logAddPasskey(httpRequest, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));

@@ -30,6 +30,28 @@ class SecurityRepository(
     private val api: KsuserApiService,
     private val gson: Gson,
 ) {
+    suspend fun verifyQrApproval(approveCode: String, method: String, password: String? = null,
+                                 code: String? = null, recoveryCode: String? = null): String {
+        val result = executeEnvelope(gson) { api.verifyQrApproval(
+            cn.ksuser.auth.data.model.QrApprovalVerificationRequest(approveCode, method, password, code, recoveryCode)) }
+        requireCode(result, 200)
+        return result.data?.proofId?.takeIf { it.isNotBlank() } ?: error("扫码验证凭证为空")
+    }
+
+    suspend fun qrApprovalPasskeyOptions(approveCode: String) = executeEnvelope(gson) {
+        api.qrApprovalPasskeyOptions(cn.ksuser.auth.data.model.QrApprovalOptionsRequest(approveCode))
+    }.also { requireCode(it, 200) }.data ?: error("扫码 Passkey 选项为空")
+
+    suspend fun verifyQrApprovalPasskey(approveCode: String, challengeId: String,
+                                      payload: PasskeyAuthenticationPayload): String {
+        val result = executeEnvelope(gson) { api.verifyQrApprovalPasskey(
+            cn.ksuser.auth.data.model.QrApprovalPasskeyRequest(approveCode, challengeId,
+                cn.ksuser.auth.data.model.PasskeyAuthenticationVerifyRequest(payload.credentialRawId,
+                    payload.clientDataJSON, payload.authenticatorData, payload.signature))) }
+        requireCode(result, 200)
+        return result.data?.proofId?.takeIf { it.isNotBlank() } ?: error("扫码验证凭证为空")
+    }
+
     suspend fun issueAccountRecoveryTicket(): AccountRecoveryTicket {
         val envelope = executeEnvelope(gson) { api.issueAccountRecoveryTicket() }
         requireCode(envelope, 200)

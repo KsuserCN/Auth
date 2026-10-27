@@ -131,6 +131,7 @@ private fun PreviewDetailsCard(
             fontWeight = FontWeight.SemiBold,
         )
         PreviewRow(L10n.text("客户端"), preview.clientName)
+        PreviewRow(L10n.text("操作"), preview.targetName)
         PreviewRow(L10n.text("浏览器"), preview.browser)
         PreviewRow(L10n.text("系统"), preview.system)
         PreviewRow(L10n.text("IP 地址"), preview.ipAddress)

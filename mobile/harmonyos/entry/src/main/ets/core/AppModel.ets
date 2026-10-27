@@ -79,6 +79,7 @@ export class AppModel {
   private pendingSensitive: (() => Promise<void>) | null = null;
   private pendingSensitiveResult: ((result: ActionResult) => void) | null = null;
   private pendingSensitiveGeneration: number = 0;
+  private qrApprovalCode: string = '';
   consentExpiresAt: number = 0;
   private pendingRawQr: string = '';
   private logGeneration: number = 0;
@@ -323,7 +324,7 @@ export class AppModel {
     if (this.challengeKind === 'mfa') {
       this.authGeneration++; this.staged?.client.invalidate(); this.staged = null; this.client?.invalidate(); this.mfa = null; this.pendingRawQr = '';
     }
-    this.cancelPendingSensitive(); this.sensitive = null; this.qr = null; this.consent = null;
+    this.cancelPendingSensitive(); this.qrApprovalCode = ''; this.sensitive = null; this.qr = null; this.consent = null;
     this.closeChallenge();
   }
   private cancelPendingSensitive(): void {
@@ -368,12 +369,26 @@ export class AppModel {
   async verifySensitive(method: string, value: string, recovery: boolean = false): Promise<ActionResult> {
     return await this.run(async () => {
       if (!this.sensitive?.methods?.includes(method)) { throw new UserFacingError('当前操作不支持此验证方式'); }
+      if (this.qrApprovalCode) {
+        const version = this.accountGeneration;
+        const proof = await this.repository().verifyQrApproval(this.qrApprovalCode, method, value, recovery); this.checkAccount(version);
+        await this.completeQrApproval(proof.proofId); return;
+      }
       await this.repository().verifySensitive(method, value, recovery); await this.completeSensitive();
     });
   }
   async verifySensitivePasskey(): Promise<ActionResult> {
     return await this.run(async () => {
       if (!this.sensitive?.methods?.includes('passkey')) { throw new UserFacingError('当前操作不支持通行密钥'); }
+      if (this.qrApprovalCode) {
+        const code = this.qrApprovalCode; const version = this.accountGeneration;
+        const options = await this.repository().qrApprovalPasskeyOptions(code); this.checkAccount(version);
+        try {
+          const proof = await this.repository().verifyQrApprovalPasskey(code, options, await this.services().authenticate(options)); this.checkAccount(version);
+          await this.completeQrApproval(proof.proofId);
+        } finally { this.passkeyOrigin = this.services().readLastOrigin(); }
+        return;
+      }
       const options = await this.repository().passkeyAuthenticationOptions(true);
       try {
         await this.repository().verifySensitivePasskey(options, await this.services().authenticate(options));
@@ -638,10 +653,25 @@ export class AppModel {
         this.notice = '此设备已登录账号';
       } else {
         const version = this.accountGeneration;
+        if (['approve_sensitive', 'approve_recovery'].includes(qr.preview.codeType)) {
+          const status = await this.repository().sensitiveStatus(); this.checkAccount(version);
+          const methods = (status.methods ?? []).filter((method: string) => ['password', 'email-code', 'totp', 'passkey'].includes(method));
+          if (!methods.length) { throw new UserFacingError('当前账号没有可用的验证方式，请先设置密码、邮箱或验证器'); }
+          this.qrApprovalCode = qr.code;
+          this.sensitive = { verified: false, remainingSeconds: 0, methods: methods,
+            preferredMethod: methods.includes(status.preferredMethod ?? '') ? status.preferredMethod : methods[0] };
+          this.sensitiveTitle = '验证并批准扫码请求'; this.showChallenge('sensitive'); return;
+        }
         await this.repository().approveQr(qr.code, qr.preview.codeType === 'approve_official'); this.checkAccount(version);
         this.qr = null; this.closeChallenge(); this.notice = '网页请求已批准，请返回原浏览器继续';
       }
     });
+  }
+  private async completeQrApproval(proofId: string): Promise<void> {
+    const qr = this.qr; const code = this.qrApprovalCode; const version = this.accountGeneration;
+    if (!proofId || !qr || qr.code !== code || qr.expiresAt <= Date.now()) { throw new UserFacingError('二维码已过期，请重新扫描'); }
+    await this.repository().approveQr(code, false, true, proofId); this.checkAccount(version);
+    this.qrApprovalCode = ''; this.sensitive = null; this.qr = null; this.closeChallenge(); this.notice = '网页请求已批准，请返回原浏览器继续';
   }
   async rejectQr(): Promise<ActionResult> {
     return await this.run(async () => {

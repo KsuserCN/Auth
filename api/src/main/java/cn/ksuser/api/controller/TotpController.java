@@ -12,6 +12,7 @@ import cn.ksuser.api.service.SensitiveOperationService;
 import cn.ksuser.api.service.RateLimitService;
 import cn.ksuser.api.util.EncryptionUtil;
 import cn.ksuser.api.util.JwtUtil;
+import cn.ksuser.api.util.SensitiveSessionContext;
 import cn.ksuser.api.util.SensitiveLogUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +34,7 @@ import java.time.LocalDateTime;
 public class TotpController {
 
     private final TotpService totpService;
+    private final JwtUtil jwtUtil;
     private final UserService userService;
     private final UserTotpRepository userTotpRepository;
     private final PasswordEncoder passwordEncoder;
@@ -49,6 +51,7 @@ public class TotpController {
                           RateLimitService rateLimitService,
                           SensitiveLogUtil sensitiveLogUtil) {
         this.totpService = totpService;
+        this.jwtUtil = jwtUtil;
         this.userService = userService;
         this.userTotpRepository = userTotpRepository;
         this.passwordEncoder = passwordEncoder;
@@ -346,13 +349,13 @@ public class TotpController {
         String clientIp = rateLimitService.getClientIp(request);
 
         // 检查是否已完成敏感操作验证
-        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
 
-        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             sensitiveLogUtil.logDisableTotp(request, user.getId(), false, "sensitive_verification_not_completed", startTime);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
@@ -398,7 +401,7 @@ public class TotpController {
         String clientIp = rateLimitService.getClientIp(request);
 
         // 检查是否已完成敏感操作验证
-        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
@@ -411,7 +414,7 @@ public class TotpController {
 
         try {
             byte[] masterKey = encryptionUtil.getMasterKey();
-            if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+            if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, userUuid, clientIp, "login-options")) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
             }
@@ -452,13 +455,13 @@ public class TotpController {
         String clientIp = rateLimitService.getClientIp(request);
 
         // 检查是否已完成敏感操作验证
-        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }
         
         byte[] masterKey = encryptionUtil.getMasterKey();
-        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(new ApiResponse<>(403, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED));
         }

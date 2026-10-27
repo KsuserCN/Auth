@@ -57,6 +57,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import cn.ksuser.auth.core.settings.L10n
+import cn.ksuser.auth.ui.SensitiveVerificationDialog
 
 private const val UPDATE_PROMPT_PREFS = "app_update_prompt"
 private const val IGNORED_VERSION_CODE_KEY = "ignored_version_code"
@@ -77,6 +78,7 @@ fun KsuserAuthApp(
         context.getSharedPreferences(UPDATE_PROMPT_PREFS, android.content.Context.MODE_PRIVATE)
     }
     val pendingQrConfirmation = state.pendingQrConfirmation
+    var qrVerificationVisible by remember(pendingQrConfirmation?.code, state.currentUser?.uuid) { mutableStateOf(false) }
     val pendingMobileBridgeConfirmation = state.pendingMobileBridgeConfirmation
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -190,7 +192,11 @@ fun KsuserAuthApp(
                 pending = pendingQrConfirmation,
                 currentUser = state.currentUser,
                 isBusy = state.isBusy,
-                onConfirm = { viewModel.confirmQrAction() },
+                onConfirm = {
+                    if (pendingQrConfirmation.type in setOf(QrConfirmationType.APPROVE_SENSITIVE, QrConfirmationType.APPROVE_RECOVERY)) {
+                        qrVerificationVisible = true
+                    } else viewModel.confirmQrAction()
+                },
                 onCancel = { viewModel.cancelQrAction() },
                 onAuthorizationOptionsChanged = viewModel::updateAuthorizationOptions,
                 errorMessage = state.localizedError,
@@ -209,6 +215,19 @@ fun KsuserAuthApp(
                 snackbarHostState = snackbarHostState,
                 onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
             ) }
+        }
+    }
+
+    if (qrVerificationVisible && pendingQrConfirmation != null) {
+        key(pendingQrConfirmation.code, state.currentUser?.uuid) {
+            SensitiveVerificationDialog(
+                container = container,
+                qrApproveCode = pendingQrConfirmation.code,
+                onDismiss = { qrVerificationVisible = false },
+                onVerified = {},
+                onQrVerified = { proofId -> qrVerificationVisible = false; viewModel.confirmQrAction(proofId) },
+                onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+            )
         }
     }
 

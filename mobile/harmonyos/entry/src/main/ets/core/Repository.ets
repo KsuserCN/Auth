@@ -2,7 +2,7 @@ import { ApiClient, ApiError } from './ApiClient';
 import { AdaptiveAuthStatus, ApiBody, ApiEnvelope, AuthPayload, AuthorizationReturn, BooleanResult,
   MobileAuthorizationContext, OfficialApp, PaginatedLogs, PasskeyAssertion, PasskeyAuthenticationOptions,
   PasskeyItem, PasskeyList, PasskeyRegistration, PasskeyRegistrationOptions, PasswordRequirement, QueryParam,
-  QrPreview, RecoveryTicket, SensitiveLog, SensitiveStatus, SessionItem, ThirdPartyApp, TotpSetup, TotpStatus,
+  QrPreview, QrApprovalProof, RecoveryTicket, SensitiveLog, SensitiveStatus, SessionItem, ThirdPartyApp, TotpSetup, TotpStatus,
   UserProfile, UserSettings } from './Models';
 
 export class Repository {
@@ -113,8 +113,24 @@ export class Repository {
       [{ name: transfer ? 'transferCode' : 'approveCode', value: code }]);
   }
   exchangeTransfer(code: string): Promise<AuthPayload> { return this.post<AuthPayload>('/auth/session-transfer/exchange', { transferCode: code, target: 'mobile' }, false); }
-  approveQr(code: string, official: boolean = false, approve: boolean = true): Promise<Object> {
-    return this.post<Object>(official ? '/auth/qr/official/' + (approve ? 'approve' : 'reject') : '/auth/qr/approve', { approveCode: code });
+  approveQr(code: string, official: boolean = false, approve: boolean = true, proofId?: string): Promise<Object> {
+    const body: ApiBody = { approveCode: code };
+    if (proofId) { body.proofId = proofId; }
+    return this.post<Object>(official ? '/auth/qr/official/' + (approve ? 'approve' : 'reject') : '/auth/qr/approve', body);
+  }
+  verifyQrApproval(approveCode: string, method: string, value: string, recovery: boolean): Promise<QrApprovalProof> {
+    const body: ApiBody = { approveCode: approveCode, method: method };
+    if (method === 'password') { body.password = value; }
+    else if (recovery) { body.recoveryCode = value.trim().toUpperCase(); }
+    else { body.code = value.trim(); }
+    return this.post<QrApprovalProof>('/auth/qr/approval/verify', body);
+  }
+  qrApprovalPasskeyOptions(approveCode: string): Promise<PasskeyAuthenticationOptions> {
+    return this.post<PasskeyAuthenticationOptions>('/auth/qr/approval/passkey/options', { approveCode: approveCode });
+  }
+  verifyQrApprovalPasskey(approveCode: string, options: PasskeyAuthenticationOptions, payload: PasskeyAssertion): Promise<QrApprovalProof> {
+    return this.post<QrApprovalProof>('/auth/qr/approval/passkey/verify', { approveCode: approveCode,
+      passkeyChallengeId: options.challengeId, credential: this.assertionBody(payload) });
   }
   consentContext(ticket: string): Promise<MobileAuthorizationContext> {
     return this.client.request<MobileAuthorizationContext>('/auth/mobile-authorization/context', 'GET', undefined, true, [{ name: 'ticket', value: ticket }]);

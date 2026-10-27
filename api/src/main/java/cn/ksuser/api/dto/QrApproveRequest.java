@@ -2,6 +2,10 @@ package cn.ksuser.api.dto;
 
 public class QrApproveRequest {
     private String approveCode;
+    private String proofId;
+
+    public String getProofId() { return proofId; }
+    public void setProofId(String proofId) { this.proofId = proofId; }
 
     public QrApproveRequest() {
     }

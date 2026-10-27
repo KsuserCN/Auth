@@ -167,7 +167,26 @@ extension KsuserRepositoryProviding {
     func deletePasskey(_ id: Int64) async throws { let _: EmptyPayload = try await client.request("/auth/passkey/\(id)", method: "DELETE") }
     func generateRecoveryTicket() async throws -> AccountRecoveryTicket { try await client.request("/auth/account-recovery/issue", method: "POST", body: [:]) }
     func previewQRCode(code: String, transfer: Bool) async throws -> QrScanPreview { try await client.request("/auth/qr/preview", query: [transfer ? "transferCode" : "approveCode": code]) }
-    func approveQRCode(_ code: String) async throws { let _: EmptyPayload = try await client.request("/auth/qr/approve", method: "POST", body: ["approveCode": .string(code)]) }
+    func approveQRCode(_ code: String, proofId: String? = nil) async throws {
+        var body: [String: JSONValue] = ["approveCode": .string(code)]
+        if let proofId { body["proofId"] = .string(proofId) }
+        let _: EmptyPayload = try await client.request("/auth/qr/approve", method: "POST", body: body)
+    }
+    func verifyQrApproval(_ approveCode: String, method: String, password: String?, code: String?, recoveryCode: String?) async throws -> QrApprovalProof {
+        var body: [String: JSONValue] = ["approveCode": .string(approveCode), "method": .string(method)]
+        if let password { body["password"] = .string(password) }
+        if let code { body["code"] = .string(trimmedUserInput(code)) }
+        if let recoveryCode { body["recoveryCode"] = .string(trimmedUserInput(recoveryCode).uppercased()) }
+        return try await client.request("/auth/qr/approval/verify", method: "POST", body: body)
+    }
+    func qrApprovalPasskeyOptions(_ approveCode: String) async throws -> PasskeyAuthenticationOptions {
+        try await client.request("/auth/qr/approval/passkey/options", method: "POST", body: ["approveCode": .string(approveCode)])
+    }
+    func verifyQrApprovalPasskey(_ approveCode: String, options: PasskeyAuthenticationOptions, payload: PasskeyAuthenticationPayload) async throws -> QrApprovalProof {
+        try await client.request("/auth/qr/approval/passkey/verify", method: "POST", body: [
+            "approveCode": .string(approveCode), "passkeyChallengeId": .string(options.challengeId),
+            "credential": .object(assertionBody(payload))])
+    }
     func approveOfficialQRCode(_ code: String) async throws { let _: EmptyPayload = try await client.request("/auth/qr/official/approve", method: "POST", body: ["approveCode": .string(code)]) }
     func rejectOfficialQRCode(_ code: String) async throws { let _: EmptyPayload = try await client.request("/auth/qr/official/reject", method: "POST", body: ["approveCode": .string(code)]) }
     func exchangeTransfer(_ code: String) async throws -> String {

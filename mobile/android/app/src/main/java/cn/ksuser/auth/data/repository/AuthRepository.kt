@@ -77,8 +77,8 @@ class AuthRepository(
         requireCode(envelope, 200)
     }
 
-    suspend fun approveQrChallenge(approveCode: String) {
-        val envelope = executeEnvelope(gson) { api.approveQrChallenge(QrApproveRequest(approveCode.trim())) }
+    suspend fun approveQrChallenge(approveCode: String, proofId: String? = null) {
+        val envelope = executeEnvelope(gson) { api.approveQrChallenge(QrApproveRequest(approveCode.trim(), proofId)) }
         requireCode(envelope, 200)
     }
 

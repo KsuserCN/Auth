@@ -48,12 +48,13 @@ class AuthControllerSensitiveOnceTest {
         new UsernamePasswordAuthenticationToken(USER_UUID, null, List.of());
     private final MockHttpServletRequest request = new MockHttpServletRequest();
     private SensitiveOperationService sensitive;
+    private SensitiveVerificationRedis redis;
     private AuthController controller;
     private User user;
 
     @BeforeEach
     void setUp() {
-        SensitiveVerificationRedis redis = new SensitiveVerificationRedis();
+        redis = new SensitiveVerificationRedis();
         sensitive = new SensitiveOperationService(redis.template());
         user = new User(USER_UUID, "current", "current@example.com", "stored-hash");
         user.setId(17L);
@@ -62,6 +63,7 @@ class AuthControllerSensitiveOnceTest {
 
         UserSession session = new UserSession();
         session.setId(42L);
+        session.setSessionVersion(0);
         session.setUser(user);
         session.setIpAddress(CLIENT_IP);
         session.setIpLocation("test-location");
@@ -70,6 +72,7 @@ class AuthControllerSensitiveOnceTest {
         when(sessions.findActiveSessionById(42L)).thenReturn(Optional.of(session));
         JwtUtil jwt = mock(JwtUtil.class);
         when(jwt.getSessionId("access-token")).thenReturn(42L);
+        when(jwt.getSessionVersion("access-token")).thenReturn(0);
         request.addHeader("Authorization", "Bearer access-token");
 
         RateLimitService rate = mock(RateLimitService.class);
@@ -98,7 +101,7 @@ class AuthControllerSensitiveOnceTest {
 
     @Test
     void passwordChangeAfterRepeatedStatusAndRiskReadsUsesQrGrantExactlyOnce() {
-        sensitive.markVerifiedOnce(USER_UUID, CLIENT_IP);
+        grant("change-password");
         assertStatusAndRiskRemainVerified();
         assertStatusAndRiskRemainVerified();
 
@@ -111,7 +114,7 @@ class AuthControllerSensitiveOnceTest {
 
     @Test
     void emailChangeAfterRepeatedStatusAndRiskReadsUsesQrGrantExactlyOnce() {
-        sensitive.markVerifiedOnce(USER_UUID, CLIENT_IP);
+        grant("change-email");
         assertStatusAndRiskRemainVerified();
         assertStatusAndRiskRemainVerified();
         ChangeEmailRequest body = new ChangeEmailRequest("changed@example.com", "123456");
@@ -125,7 +128,7 @@ class AuthControllerSensitiveOnceTest {
 
     @Test
     void correctingInvalidPasswordDoesNotRequireScanningAgain() {
-        sensitive.markVerifiedOnce(USER_UUID, CLIENT_IP);
+        grant("change-password");
 
         assertEquals(400, controller.changePassword(new ChangePasswordRequest(""), authentication, request)
             .getStatusCode().value());
@@ -137,7 +140,7 @@ class AuthControllerSensitiveOnceTest {
 
     @Test
     void correctingEmailCodeDoesNotRequireScanningAgain() {
-        sensitive.markVerifiedOnce(USER_UUID, CLIENT_IP);
+        grant("change-email");
         when(codes.verifyCode("changed@example.com", "wrong", CLIENT_IP)).thenReturn(2);
 
         assertEquals(400, controller.changeEmail(new ChangeEmailRequest("changed@example.com", "wrong"),
@@ -150,7 +153,7 @@ class AuthControllerSensitiveOnceTest {
 
     @Test
     void passkeyOptionsPreserveQrGrantUntilRegistrationCompletesExactlyOnce() throws Exception {
-        sensitive.markVerifiedOnce(USER_UUID, CLIENT_IP);
+        grant("login-options");
         PasskeyRegistrationOptionsRequest optionsRequest =
             new PasskeyRegistrationOptionsRequest("Security key", "cross-platform");
         PasskeyRegistrationOptionsResponse options = new PasskeyRegistrationOptionsResponse();
@@ -171,7 +174,7 @@ class AuthControllerSensitiveOnceTest {
         savedPasskey.setName("Security key");
         savedPasskey.setCreatedAt(LocalDateTime.now());
         when(passkeys.verifyRegistration(user, registration)).thenAnswer(call -> {
-            assertFalse(sensitive.isVerified(USER_UUID, CLIENT_IP),
+            assertFalse(sensitive.isVerified(USER_UUID, CLIENT_IP, 42L, 0, "login-options"),
                 "One-time verification must be consumed before registering the credential");
             return savedPasskey;
         });
@@ -184,6 +187,11 @@ class AuthControllerSensitiveOnceTest {
             .getStatusCode().value());
         verify(passkeys).verifyRegistration(user, registration);
         verify(passkeys, times(2)).generateRegistrationOptions(user, "cross-platform");
+    }
+
+    private void grant(String purpose) {
+        redis.template().opsForValue().set(sensitive.qrGrantKey(USER_UUID, 42L, 0, purpose),
+            CLIENT_IP, java.time.Duration.ofMinutes(15));
     }
 
     private void assertStatusAndRiskRemainVerified() {

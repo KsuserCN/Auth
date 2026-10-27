@@ -167,6 +167,9 @@ struct QRConfirmationView: View {
         AppCard {
             CardHeader(title: L10n.text("请求来源"), subtitle: L10n.text("检查设备和网络位置是否与你的操作一致"), icon: "desktopcomputer")
             InfoRow(title: L10n.text("客户端"), value: confirmation.preview.clientName ?? L10n.text("未知客户端"))
+            if let operation = confirmation.preview.targetName {
+                InfoRow(title: L10n.text("操作"), value: L10n.text(operation))
+            }
             let device = [confirmation.preview.system, confirmation.preview.browser].compactMap { $0 }.joined(separator: " · ")
             InfoRow(title: L10n.text("设备"), value: device.isEmpty ? L10n.text("未知") : device)
             InfoRow(title: "IP", value: confirmation.preview.ipAddress ?? L10n.text("未知"))

@@ -79,7 +79,7 @@ class ApplePendingRequestControllerTest {
         when(rate.isIpAllowed(CONTEXT.ip(), RateLimitService.TYPE_LOGIN)).thenReturn(true);
         SensitiveOperationService sensitive = mock(SensitiveOperationService.class);
         when(sensitive.isVerified(CONTEXT.uuid(), CONTEXT.ip())).thenReturn(true);
-        when(sensitive.consumeVerification(CONTEXT.uuid(), CONTEXT.ip())).thenReturn(true);
+        when(sensitive.consumeVerification(eq(CONTEXT.uuid()), eq(CONTEXT.ip()), eq(CONTEXT.sessionId()), any(), eq("login-options"))).thenReturn(true);
         JwtUtil jwt = mock(JwtUtil.class);
         when(jwt.getSessionId("access-token")).thenReturn(CONTEXT.sessionId());
         when(jwt.generateRefreshToken(anyString())).thenReturn("refresh-token");

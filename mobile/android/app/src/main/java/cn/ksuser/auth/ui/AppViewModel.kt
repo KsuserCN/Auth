@@ -549,7 +549,7 @@ class AppViewModel(
         _uiState.update { it.copy(pendingQrConfirmation = pending.copy(grantMode = mode, grantTtlSeconds = ttl, loginWeb = loginWeb)) }
     }
 
-    fun confirmQrAction() {
+    fun confirmQrAction(proofId: String? = null) {
         val pending = _uiState.value.pendingQrConfirmation ?: return
         if (_uiState.value.isBusy || decisionInFlight) return
         if (pending.expiresAtMillis <= System.currentTimeMillis()) {
@@ -559,8 +559,14 @@ class AppViewModel(
         when (pending.type) {
             QrConfirmationType.APPROVE_APPLICATION -> decideApplication(pending, true)
             QrConfirmationType.APPROVE_OFFICIAL -> decideOfficial(pending, true)
+            QrConfirmationType.APPROVE_SENSITIVE, QrConfirmationType.APPROVE_RECOVERY -> {
+                if (proofId.isNullOrBlank()) {
+                    _uiState.update { it.copy(errorDescriptor = null, error = L10n.text("请先完成身份验证")) }
+                    return
+                }
+                approveQrChallenge(pending.code, proofId)
+            }
             QrConfirmationType.APPROVE_LOGIN, QrConfirmationType.APPROVE_MFA,
-            QrConfirmationType.APPROVE_SENSITIVE, QrConfirmationType.APPROVE_RECOVERY,
             QrConfirmationType.APPROVE_CONSOLE_LOGIN -> approveQrChallenge(pending.code)
             QrConfirmationType.LOGIN_THIS_PHONE, QrConfirmationType.SWITCH_AND_LOGIN_THIS_PHONE -> exchangeSessionTransferAndLogin(pending.code)
         }
@@ -717,11 +723,11 @@ class AppViewModel(
         }
     }
 
-    private fun approveQrChallenge(approveCode: String) {
+    private fun approveQrChallenge(approveCode: String, proofId: String? = null) {
         decisionInFlight = true
         _uiState.update { it.copy(isBusy = true, errorDescriptor = null, error = null, message = null) }
         viewModelScope.launch {
-            runCatching { container.authRepository.approveQrChallenge(approveCode) }
+            runCatching { container.authRepository.approveQrChallenge(approveCode, proofId) }
                 .onSuccess { _uiState.update { it.copy(isBusy = false, pendingQrConfirmation = null, message = L10n.text("扫码确认成功")) } }
                 .onFailure { error -> _uiState.update { it.copy(isBusy = false, errorDescriptor = error as? ApiException, error = error.toReadableMessage()) } }
             decisionInFlight = false

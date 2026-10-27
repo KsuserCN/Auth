@@ -58,8 +58,10 @@ public class AdaptiveContinuousAuthService {
         response.setBrowser(session.getBrowser());
         response.setDeviceType(session.getDeviceType());
 
-        boolean sensitiveVerified = sensitiveOperationService.isVerified(user.getUuid(), currentIp);
-        long remainingSeconds = sensitiveOperationService.getRemainingTime(user.getUuid());
+        boolean sensitiveVerified = sensitiveOperationService.isVerifiedForAnyPurpose(
+            user.getUuid(), currentIp, session.getId(), session.getSessionVersion());
+        long remainingSeconds = sensitiveOperationService.getRemainingTime(
+            user.getUuid(), session.getId(), session.getSessionVersion(), null);
         response.setSensitiveVerified(sensitiveVerified);
         response.setSensitiveVerificationRemainingSeconds(Math.max(remainingSeconds, 0));
 

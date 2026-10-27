@@ -152,6 +152,21 @@ interface KsuserApiService {
         @Body request: QrApproveRequest,
     ): Response<ApiEnvelope<Unit>>
 
+    @POST("/auth/qr/approval/verify")
+    suspend fun verifyQrApproval(
+        @Body request: cn.ksuser.auth.data.model.QrApprovalVerificationRequest,
+    ): Response<ApiEnvelope<cn.ksuser.auth.data.model.QrApprovalProof>>
+
+    @POST("/auth/qr/approval/passkey/options")
+    suspend fun qrApprovalPasskeyOptions(
+        @Body request: cn.ksuser.auth.data.model.QrApprovalOptionsRequest,
+    ): Response<ApiEnvelope<PasskeyAuthenticationOptions>>
+
+    @POST("/auth/qr/approval/passkey/verify")
+    suspend fun verifyQrApprovalPasskey(
+        @Body request: cn.ksuser.auth.data.model.QrApprovalPasskeyRequest,
+    ): Response<ApiEnvelope<cn.ksuser.auth.data.model.QrApprovalProof>>
+
     @POST("/auth/account-recovery/issue")
     suspend fun issueAccountRecoveryTicket(): Response<ApiEnvelope<AccountRecoveryTicket>>
 

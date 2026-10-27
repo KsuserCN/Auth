@@ -2919,12 +2919,15 @@ class AppController extends ChangeNotifier {
     });
   }
 
-  Future<SensitiveVerificationStatus> checkSensitiveVerification() async {
+  Future<SensitiveVerificationStatus> checkSensitiveVerification({
+    String? purpose,
+  }) async {
     return runBusyAction(
       () => desktopL10n.checkingVerificationStatus,
       () async {
         final dynamic data = await _apiClient.get(
           '/auth/check-sensitive-verification',
+          query: purpose == null ? null : <String, String>{'purpose': purpose},
           authorized: true,
         );
         return SensitiveVerificationStatus.fromJson(asMap(data));
@@ -3479,9 +3482,10 @@ class AppController extends ChangeNotifier {
     return QrLoginChallenge.fromJson(asMap(data));
   }
 
-  Future<QrLoginChallenge> initQrSensitive() async {
+  Future<QrLoginChallenge> initQrSensitive({required String purpose}) async {
     final dynamic data = await _apiClient.post(
       '/auth/qr/sensitive/init',
+      query: <String, String>{'purpose': purpose},
       authorized: true,
     );
     return QrLoginChallenge.fromJson(asMap(data));
@@ -6997,6 +7001,7 @@ class SecurityPage extends StatelessWidget {
                         onPressed: () => _runWithSensitiveVerification(
                           context,
                           controller: controller,
+                          purpose: 'change-email',
                           action: () =>
                               _showChangeEmailDialog(context, controller),
                         ),
@@ -7008,6 +7013,7 @@ class SecurityPage extends StatelessWidget {
                         onPressed: () => _runWithSensitiveVerification(
                           context,
                           controller: controller,
+                          purpose: 'change-password',
                           action: () =>
                               _showChangePasswordDialog(context, controller),
                         ),
@@ -7019,6 +7025,7 @@ class SecurityPage extends StatelessWidget {
                         onPressed: () => _runWithSensitiveVerification(
                           context,
                           controller: controller,
+                          purpose: 'session-transfer',
                           action: () =>
                               showAccountRecoveryDialog(context, controller),
                         ),
@@ -9099,6 +9106,7 @@ Future<void> _runWithSensitiveVerification(
   BuildContext context, {
   required AppController controller,
   required Future<void> Function() action,
+  String purpose = 'login-options',
 }) async {
   Future<void> runAction() async {
     try {
@@ -9109,6 +9117,7 @@ Future<void> _runWithSensitiveVerification(
         final bool verified = await _showSensitiveVerificationDialog(
           context,
           controller: controller,
+          purpose: purpose,
         );
         if (verified && context.mounted) {
           await action();
@@ -9121,7 +9130,7 @@ Future<void> _runWithSensitiveVerification(
 
   try {
     final SensitiveVerificationStatus status = await controller
-        .checkSensitiveVerification();
+        .checkSensitiveVerification(purpose: purpose);
     if (status.verified) {
       await runAction();
       return;
@@ -9133,6 +9142,7 @@ Future<void> _runWithSensitiveVerification(
     final bool verified = await _showSensitiveVerificationDialog(
       context,
       controller: controller,
+      purpose: purpose,
       initialStatus: status,
     );
     if (verified && context.mounted) {
@@ -9146,6 +9156,7 @@ Future<void> _runWithSensitiveVerification(
     final bool verified = await _showSensitiveVerificationDialog(
       context,
       controller: controller,
+      purpose: purpose,
     );
     if (verified && context.mounted) {
       await runAction();
@@ -9157,12 +9168,14 @@ Future<bool> _showSensitiveVerificationDialog(
   BuildContext context, {
   required AppController controller,
   SensitiveVerificationStatus? initialStatus,
+  String purpose = 'login-options',
 }) async {
   final bool? verified = await showLocalizedDialog<bool>(
     context: context,
     builder: (BuildContext context) {
       return _SensitiveVerificationDialog(
         controller: controller,
+        purpose: purpose,
         initialStatus: initialStatus,
       );
     },
@@ -9174,10 +9187,12 @@ class _SensitiveVerificationDialog extends StatefulWidget {
   const _SensitiveVerificationDialog({
     required this.controller,
     this.initialStatus,
+    this.purpose = 'login-options',
   });
 
   final AppController controller;
   final SensitiveVerificationStatus? initialStatus;
+  final String purpose;
 
   @override
   State<_SensitiveVerificationDialog> createState() =>
@@ -9234,7 +9249,9 @@ class _SensitiveVerificationDialogState
           .isPasskeyAvailable();
       final SensitiveVerificationStatus status =
           widget.initialStatus ??
-          await widget.controller.checkSensitiveVerification();
+          await widget.controller.checkSensitiveVerification(
+            purpose: widget.purpose,
+          );
       if (status.verified) {
         if (mounted) {
           Navigator.of(context).pop(true);
@@ -9383,7 +9400,7 @@ class _SensitiveVerificationDialogState
     });
     try {
       final QrLoginChallenge challenge = await widget.controller
-          .initQrSensitive();
+          .initQrSensitive(purpose: widget.purpose);
       if (!mounted) {
         return;
       }

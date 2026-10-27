@@ -299,6 +299,31 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(current.accessToken, original.accessToken)
         XCTAssertEqual(model.user?.uuid, "console-admin")
     }
+    @MainActor func testProtectedQRAlwaysReauthenticatesBeforeApprovalEvenWithExistingSensitiveState() async throws {
+        for mode in [FixtureTransport.Mode.sensitiveQrApproval, .recoveryQrApproval] {
+            let transport = FixtureTransport(mode: mode)
+            var original = snapshot(token: "fresh")
+            original.profile = UserProfile(uuid: "fixture-user", username: "fixture", email: "fixture@example.invalid")
+            let client = APIClient(environment: environment, storage: MemorySessionStore(original), transport: transport)
+            let model = AppModel(native: FixtureNative(), repository: KsuserRepository(client: client), environment: environment)
+            model.user = original.profile
+            await model.previewQRCode("KSUSER-AUTH-QR:protected-code")
+            await model.approveQRCode()
+            XCTAssertNotNil(model.sensitiveRequest)
+            let beforeApproval = await transport.lastMutation
+            XCTAssertNil(beforeApproval)
+            await model.verifySensitive(method: "password", password: "fixture-password")
+            XCTAssertNil(model.sensitiveRequest)
+            XCTAssertNil(model.qrConfirmation)
+            XCTAssertNil(model.errorMessage)
+            let calls = await transport.inputRequests
+            let mutations = calls.filter { $0.httpMethod == "POST" }
+            XCTAssertEqual(mutations.compactMap { $0.url?.path }, ["/auth/qr/approval/verify", "/auth/qr/approve"])
+            let body = try JSONDecoder().decode([String: String].self, from: XCTUnwrap(mutations.last?.httpBody))
+            XCTAssertEqual(body["proofId"], "independent-proof")
+            XCTAssertEqual(body["approveCode"], "protected-code")
+        }
+    }
     func testLegacyQRPreviewDecodesWithoutConsoleTarget() throws {
         let preview = try JSONDecoder().decode(QrScanPreview.self, from: Data(#"{"codeType":"approve_login","expiresInSeconds":120}"#.utf8))
         XCTAssertFalse(preview.isConsoleLogin)
@@ -753,7 +778,7 @@ private actor LoadingGateTransport: HTTPTransport {
 }
 
 private actor FixtureTransport: HTTPTransport {
-    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr, passwordValidation }
+    enum Mode { case refreshSucceeds, replayUnauthorized, offlineRefresh, refreshSuspends, invalidRefresh, forbiddenRefresh, csrf, transferProfileFails, mfaLogin, pendingApple, partialProfile, partialProfileFetchFails, scanAfterLogin, scanAfterMFALogin, bridgeCancel, bridgeLogin, bridgeExpired, normalizedInput, qqBinding, qqUnbindBlocked, authorizationLists, authorizationRevokeFails, mobileAuthorization, consoleQrLogin, officialQrLogin, applicationQr, passwordValidation, sensitiveQrApproval, recoveryQrApproval }
     let mode: Mode
     var refreshes = 0
     var protectedCalls = 0
@@ -793,6 +818,24 @@ private actor FixtureTransport: HTTPTransport {
             }
             lastMutation = request
             return response(request, 200, #"{"code":200,"data":{"completed":true}}"#)
+        }
+        if mode == .sensitiveQrApproval || mode == .recoveryQrApproval {
+            inputRequests.append(request)
+            if path == "/auth/qr/preview" {
+                let kind = mode == .sensitiveQrApproval ? "approve_sensitive" : "approve_recovery"
+                return response(request, 200, "{\"code\":200,\"data\":{\"codeType\":\"\(kind)\",\"expiresInSeconds\":120}}")
+            }
+            if path == "/auth/check-sensitive-verification" {
+                return response(request, 200, #"{"code":200,"data":{"verified":true,"remainingSeconds":300,"methods":["password","qr"],"preferredMethod":"password"}}"#)
+            }
+            if path == "/auth/qr/approval/verify" {
+                return response(request, 200, #"{"code":200,"data":{"proofId":"independent-proof","expiresInSeconds":60}}"#)
+            }
+            if path == "/auth/qr/approve" {
+                lastMutation = request
+                return response(request, 200, #"{"code":200,"data":{"verified":true}}"#)
+            }
+            throw APIError.invalidResponse
         }
         if mode == .consoleQrLogin {
             if path == "/auth/qr/preview" {

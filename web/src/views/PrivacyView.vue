@@ -405,6 +405,7 @@
     </div>
 
     <SensitiveVerificationDialog
+    purpose="delete-account"
       v-model="sensitiveDialogVisible"
       @success="handleSensitiveVerificationSuccess"
       @cancel="handleSensitiveVerificationCancel"

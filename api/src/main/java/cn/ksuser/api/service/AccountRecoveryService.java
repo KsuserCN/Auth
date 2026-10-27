@@ -40,6 +40,18 @@ public class AccountRecoveryService {
             Long sponsorSessionId,
             String sponsorIp,
             String sponsorUserAgent) {
+        PreparedAuthorization prepared = prepareAuthorization(user, sponsorSessionId, sponsorIp, sponsorUserAgent);
+        try {
+            redisTemplate.opsForValue().set(prepared.key(), prepared.value(), Duration.ofSeconds(DEFAULT_TTL_SECONDS));
+            return prepared.payload();
+        } catch (Exception e) {
+            throw new BusinessStateException(ApiResultCode.RECOVERY_001, e);
+        }
+    }
+
+    /** Builds recovery data without granting it; QR approval publishes it atomically with its proof. */
+    public PreparedAuthorization prepareAuthorization(User user, Long sponsorSessionId, String sponsorIp,
+                                                      String sponsorUserAgent) {
         if (user == null || user.getId() == null) {
             throw new BusinessArgumentException(ApiResultCode.AUTH_005);
         }
@@ -65,16 +77,13 @@ public class AccountRecoveryService {
 
         try {
             String value = objectMapper.writeValueAsString(payload);
-            redisTemplate.opsForValue().set(
-                redisKey(recoveryCode),
-                value,
-                Duration.ofSeconds(DEFAULT_TTL_SECONDS)
-            );
-            return payload.withRecoveryCode(recoveryCode);
+            return new PreparedAuthorization(payload.withRecoveryCode(recoveryCode), redisKey(recoveryCode), value);
         } catch (Exception e) {
             throw new BusinessStateException(ApiResultCode.RECOVERY_001, e);
         }
     }
+
+    public record PreparedAuthorization(AccountRecoveryPayload payload, String key, String value) {}
 
     public AccountRecoveryPayload getAuthorization(String recoveryCode) {
         String normalized = normalizeRecoveryCode(recoveryCode);

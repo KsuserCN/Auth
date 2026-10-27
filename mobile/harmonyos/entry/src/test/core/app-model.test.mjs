@@ -477,3 +477,32 @@ test('registration uses server password validation before sending the registrati
   const result = await h.model.register('username', 'fixture@example.invalid', 'password', '123456')
   assert.equal(result.status, 'failure'); assert.equal(registerCalls, 0); assert.deepEqual(h.model.profile, oldProfile)
 })
+
+for (const codeType of ['approve_sensitive', 'approve_recovery']) {
+  test(codeType + ' always verifies an independent credential before sending QR approval', async () => {
+    const h = await fixture(async request => {
+      const pathname = endpoint(request)
+      if (pathname === '/auth/qr/preview') return reply({ codeType, expiresInSeconds: 60 })
+      if (pathname === '/auth/check-sensitive-verification') return reply({ verified: true, methods: ['password', 'qr'], preferredMethod: 'password', remainingSeconds: 300 })
+      if (pathname === '/auth/qr/approval/verify') {
+        assert.deepEqual(JSON.parse(request.body), { approveCode: 'approve-code', method: 'password', password: 'fixture-password' })
+        return reply({ proofId: 'independent-proof', expiresInSeconds: 60 })
+      }
+      if (pathname === '/auth/qr/approve') {
+        assert.deepEqual(JSON.parse(request.body), { approveCode: 'approve-code', proofId: 'independent-proof' })
+        return reply({ verified: true })
+      }
+      throw new Error('Unexpected request: ' + pathname)
+    })
+    await h.model.scan()
+    await h.model.confirmQr()
+    assert.equal(h.model.challengeKind, 'sensitive')
+    assert.equal(h.model.sensitive.verified, false)
+    assert.equal(h.calls.some(request => endpoint(request) === '/auth/qr/approve'), false)
+    await h.model.verifySensitive('password', 'fixture-password')
+    assert.equal(h.model.qr, null)
+    const mutationPaths = h.calls.filter(request => request.method === 'POST').map(endpoint)
+    assert.deepEqual(mutationPaths, ['/auth/qr/approval/verify', '/auth/qr/approve'])
+    assert.equal(h.calls.some(request => endpoint(request) === '/auth/verify-sensitive'), false)
+  })
+}

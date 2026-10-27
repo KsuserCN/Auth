@@ -277,7 +277,7 @@ onMounted(async () => {
 
 const initTotpPage = async () => {
   try {
-    const verificationStatus = await checkSensitiveVerification()
+    const verificationStatus = await checkSensitiveVerification('login-options')
     if (!verificationStatus.verified) {
       ElMessage.info(t('ui.mobileBridgeQrSidebarAction.message007'))
       sensitiveDialogVisible.value = true

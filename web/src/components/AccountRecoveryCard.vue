@@ -86,6 +86,7 @@
   </el-dialog>
 
   <SensitiveVerificationDialog
+    purpose="session-transfer"
     v-model="sensitiveDialogVisible"
     :disable-qr-method="true"
     @success="handleSensitiveVerificationSuccess"
@@ -169,7 +170,7 @@ const refreshTicket = async () => {
 
 const runWithSensitiveVerification = async (action: () => Promise<void>) => {
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification('session-transfer')
     if (status.verified) {
       await action()
       return

@@ -212,7 +212,7 @@ onMounted(async () => {
 
   // 进入页面时检查敏感操作验证
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification('delete-account')
     if (!status.verified) {
       ElMessage.warning(t('ui.changeEmail.message017'))
       router.push({

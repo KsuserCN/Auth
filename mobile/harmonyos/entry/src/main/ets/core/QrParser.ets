@@ -36,7 +36,7 @@ export function qrFlow(codeType: string, transfer: boolean): string {
     if (codeType !== 'transfer') { throw new UserFacingError('此二维码不支持登录到手机'); }
     return 'transfer';
   }
-  if (['approve_login', 'approve_mfa', 'approve_sensitive', 'approve_console_login'].includes(codeType)) { return 'approval'; }
+  if (['approve_login', 'approve_mfa', 'approve_sensitive', 'approve_recovery', 'approve_console_login'].includes(codeType)) { return 'approval'; }
   if (codeType === 'approve_official') { return 'official'; }
   if (codeType === 'approve_application') { return 'consent'; }
   throw new UserFacingError('此二维码不属于受支持的网页授权请求');

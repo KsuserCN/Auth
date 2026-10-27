@@ -549,6 +549,7 @@
 
     <SensitiveVerificationDialog
       v-model="sensitiveDialogVisible"
+      :purpose="sensitivePurpose"
       @success="handleSensitiveVerificationSuccess"
       @cancel="handleSensitiveVerificationCancel"
     />
@@ -628,6 +629,7 @@ const adaptiveAuthStatus = ref<AdaptiveAuthStatus | null>(null)
 const adaptiveAuthLoading = ref(false)
 const adaptiveMetrics = ref<AdaptiveRiskMetrics | null>(null)
 const sensitiveDialogVisible = ref(false)
+const sensitivePurpose = ref<'delete-account' | 'login-options'>('login-options')
 let pendingSensitiveAction: null | (() => Promise<void>) = null
 
 // 查询与分页/排序状态
@@ -983,6 +985,7 @@ const goToLoginOptions = () => {
 }
 
 const handleDeleteAccount = async () => {
+  sensitivePurpose.value = 'delete-account'
   try {
     await runWithSensitiveVerification(async () => {
       await router.push('/delete-account')
@@ -994,7 +997,7 @@ const handleDeleteAccount = async () => {
 
 const runWithSensitiveVerification = async (action: () => Promise<void>) => {
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification(sensitivePurpose.value)
     if (status.verified) {
       await action()
       return
@@ -1031,6 +1034,7 @@ const handleSensitiveVerificationCancel = () => {
 }
 
 const openAdaptiveStepUpDialog = () => {
+  sensitivePurpose.value = 'login-options'
   sensitiveDialogVisible.value = true
 }
 </script>

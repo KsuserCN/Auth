@@ -135,7 +135,9 @@ public class AppleAuthController {
     }
     private void requireSensitive(AppleAuthService.Context context) {
         requireActive(context);
-        if(!sensitive.consumeVerification(context.uuid(),context.ip())) throw new SensitiveRequired();
+        UserSession session=sessions.findActiveSessionById(context.sessionId()).orElseThrow(SensitiveRequired::new);
+        if(!sensitive.consumeVerification(context.uuid(),context.ip(),context.sessionId(),session.getSessionVersion(),"login-options"))
+            throw new SensitiveRequired();
     }
     private void limit(HttpServletRequest request) {
         String ip=rate.getClientIp(request);

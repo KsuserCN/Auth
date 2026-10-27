@@ -784,7 +784,7 @@ const runWithSensitiveVerification = async (
 ) => {
   const disableQrMethod = options?.disableQrMethod ?? false
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification('login-options')
     if (status.verified) {
       sensitiveDialogDisableQr.value = false
       await action()

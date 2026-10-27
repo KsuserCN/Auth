@@ -219,9 +219,13 @@ struct OAuthAccountStatusItem: Codable, Sendable {
 }
 struct OAuthAccountStatus: Codable, Sendable { let appleBound: Bool?; let qqBound: Bool?; let hasPassword: Bool? }
 struct SensitiveRequest: Identifiable { let id = UUID(); let localizedTitle: LocalizedMessage; let status: SensitiveVerificationStatus
+    let qrApprovalCode: String?
     var title: String { localizedTitle.rendered }
-    init(title: LocalizedMessage, status: SensitiveVerificationStatus) { localizedTitle = title; self.status = status }
+    init(title: LocalizedMessage, status: SensitiveVerificationStatus, qrApprovalCode: String? = nil) {
+        localizedTitle = title; self.status = status; self.qrApprovalCode = qrApprovalCode
+    }
 }
+struct QrApprovalProof: Codable, Sendable { let proofId: String; let expiresInSeconds: Int }
 typealias TOTPSetup = TotpRegistrationOptions
 
 @MainActor protocol NativeAuthenticationProviding {

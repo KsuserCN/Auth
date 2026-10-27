@@ -119,7 +119,8 @@ public class ConsoleIdentityVerificationService {
         QrChallengeService.QrChallengePayload challenge = qrChallenges.getByChallengeId(challengeId);
         if (challenge == null) return new QrVerificationStatus("expired", 0L, null);
 
-        if (!constantTimeEquals(challenge.getPollToken(), pollToken)
+        if (!Integer.valueOf(2).equals(challenge.getSchemaVersion())
+            || !constantTimeEquals(challenge.getPollToken(), pollToken)
             || !QrChallengeService.ChallengeType.SENSITIVE.value().equals(challenge.getType())
             || !constantTimeEquals(challenge.getConsoleVerificationRequestId(), requestId)
             || challenge.getRequestedUserId() == null
@@ -137,7 +138,9 @@ public class ConsoleIdentityVerificationService {
 
         Map<String, Object> result = challenge.getResult();
         if (challenge.getApprovedByUserId() == null || !challenge.getApprovedByUserId().equals(user.getId())
-            || result == null || !Boolean.TRUE.equals(result.get("verified"))) {
+            || result == null || !Boolean.TRUE.equals(result.get("verified"))
+            || !Boolean.TRUE.equals(result.get("independentProofVerified"))
+            || !constantTimeEquals(requestId, (String) result.get("verificationRequestId"))) {
             throw flowFailure();
         }
         SessionView session = sessions.completeDirectVerification(requestId, principal);

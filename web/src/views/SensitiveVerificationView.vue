@@ -431,6 +431,7 @@ import {
   getAppleStatus,
   getPasskeySensitiveVerificationOptions,
   initQrSensitive,
+  type QrSensitivePurpose,
   pollQrStatus,
   sendSensitiveVerificationCode,
   type QrChallengeStatusResponse,
@@ -445,6 +446,13 @@ import {
 } from '@/utils/webauthn'
 
 const router = useRouter()
+const qrPurpose = (): QrSensitivePurpose => {
+  const destination = String(router.currentRoute.value.query.returnTo || '').split('?')[0]
+  if (destination === '/change-email') return 'change-email'
+  if (destination === '/change-password') return 'change-password'
+  if (destination === '/delete-account') return 'delete-account'
+  return 'login-options'
+}
 const userStore = useUserStore()
 const appleBound = ref(false)
 const appleLoading = ref(false)
@@ -614,7 +622,7 @@ onMounted(async () => {
   if (appleBound.value) void prepareAppleSignIn().catch(() => {})
 
   try {
-    const status = await checkSensitiveVerification()
+    const status = await checkSensitiveVerification(qrPurpose())
 
     if (status.verified && status.remainingSeconds > 0) {
       const returnTo = (router.currentRoute.value.query.returnTo as string) || '/home/login-options'
@@ -755,7 +763,7 @@ const startQrVerification = async () => {
   if (!ensureAuthenticated()) return
   try {
     qrRefreshing.value = true
-    const payload = await initQrSensitive()
+    const payload = await initQrSensitive(qrPurpose())
     qrChallengeId.value = payload.challengeId
     qrPollToken.value = payload.pollToken
     qrExpiresInSeconds.value = payload.expiresInSeconds

@@ -313,6 +313,23 @@ data class SendCodeRequest(
 
 data class QrApproveRequest(
     val approveCode: String,
+    val proofId: String? = null,
+)
+
+data class QrApprovalVerificationRequest(
+    val approveCode: String,
+    val method: String,
+    val password: String? = null,
+    val code: String? = null,
+    val recoveryCode: String? = null,
+)
+
+data class QrApprovalProof(val proofId: String, val expiresInSeconds: Long)
+data class QrApprovalOptionsRequest(val approveCode: String)
+data class QrApprovalPasskeyRequest(
+    val approveCode: String,
+    val passkeyChallengeId: String,
+    val credential: PasskeyAuthenticationVerifyRequest,
 )
 
 data class QrScanPreview(
@@ -323,6 +340,7 @@ data class QrScanPreview(
     val ipAddress: String? = null,
     val ipLocation: String? = null,
     val expiresInSeconds: Long = 0,
+    val targetName: String? = null,
 )
 
 data class AccountRecoveryTicket(

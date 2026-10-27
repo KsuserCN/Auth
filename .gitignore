@@ -75,3 +75,4 @@ api/docs/*
 !api/docs/user-verification-entity.md
 !api/docs/native-app-authorization.md
 !api/docs/open-platform-applications.md
+!api/docs/qr-approval-security.md

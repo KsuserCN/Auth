@@ -388,8 +388,24 @@ private struct AccountRefreshTask {
         }
     }
     func verifySensitive(method: String, password: String? = nil, code: String? = nil, recoveryCode: String? = nil) async {
-        guard sensitiveRequest != nil else { return }
+        guard let verification = sensitiveRequest else { return }
         await run(message: "正在验证身份…") {
+            if let approveCode = verification.qrApprovalCode {
+                guard let pending = self.qrConfirmation, pending.code == approveCode, pending.expiresAt > Date() else { throw APIError.invalidResponse }
+                let proof: QrApprovalProof
+                if method == "passkey" {
+                    let options = try await self.repository.qrApprovalPasskeyOptions(approveCode)
+                    let payload = try await self.native.authenticatePasskey(options: options)
+                    proof = try await self.repository.verifyQrApprovalPasskey(approveCode, options: options, payload: payload)
+                } else {
+                    proof = try await self.repository.verifyQrApproval(approveCode, method: method, password: password, code: code, recoveryCode: recoveryCode)
+                }
+                guard !proof.proofId.isEmpty, self.qrConfirmation?.code == approveCode, pending.expiresAt > Date() else { throw APIError.invalidResponse }
+                try await self.repository.approveQRCode(approveCode, proofId: proof.proofId)
+                self.sensitiveRequest = nil; self.sensitiveContinuation = nil; self.qrConfirmation = nil
+                self.noticeMessage = "请求已批准"
+                return
+            }
             if method == "passkey" {
                 let options = try await self.repository.sensitivePasskeyOptions()
                 let payload = try await self.native.authenticatePasskey(options: options)
@@ -596,6 +612,12 @@ private struct AccountRefreshTask {
                 try await self.finishAuthentication(token: token, staged: staged, source: "session-transfer")
                 self.noticeMessage = "此设备已登录新账号"
             } else {
+                if ["approve_sensitive", "approve_recovery"].contains(pending.preview.codeType) {
+                    let status = try await self.repository.sensitiveStatus()
+                    self.sensitiveContinuation = nil
+                    self.sensitiveRequest = SensitiveRequest(title: "验证并批准扫码请求", status: status, qrApprovalCode: pending.code)
+                    return
+                }
                 if pending.preview.isOfficialAuthorization { try await self.repository.approveOfficialQRCode(pending.code) }
                 else { try await self.repository.approveQRCode(pending.code) }
                 self.noticeMessage = "请求已批准"

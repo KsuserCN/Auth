@@ -17,6 +17,7 @@ import cn.ksuser.api.service.RateLimitService;
 import cn.ksuser.api.service.RegistrationValidationService;
 import cn.ksuser.api.service.UserSessionService;
 import cn.ksuser.api.util.JwtUtil;
+import cn.ksuser.api.util.SensitiveSessionContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -160,7 +161,7 @@ public class OauthController {
         
         // 检查是否已完成敏感操作验证
         String clientIp = rateLimitService.getClientIp(request);
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "login-options")) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
 
@@ -199,7 +200,7 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
         
-        if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
 
@@ -333,7 +334,7 @@ public class OauthController {
         }
 
         String clientIp = rateLimitService.getClientIp(request);
-        if (!sensitiveOperationService.isVerified(uuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
         if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
@@ -350,7 +351,7 @@ public class OauthController {
             if (conflict != null) {
                 return conflict;
             }
-            if (!sensitiveOperationService.consumeVerification(uuid, clientIp)) {
+            if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIp, "login-options")) {
                 return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
             }
             linkOauthAccount("qq", user, pending);
@@ -701,7 +702,7 @@ public class OauthController {
 
                 String uuid = user.getUuid();
                 String clientIpReq = rateLimitService.getClientIp(request);
-                if (!sensitiveOperationService.isVerified(uuid, clientIpReq)) {
+                if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIpReq, "login-options")) {
                     java.util.Map<String, Object> data = new java.util.HashMap<>();
                     data.put("needVerification", true);
 
@@ -733,7 +734,7 @@ public class OauthController {
                     return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
                 }
 
-                if (!sensitiveOperationService.consumeVerification(uuid, clientIpReq)) {
+                if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIpReq, "login-options")) {
                     return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
                 }
 
@@ -1621,7 +1622,7 @@ public class OauthController {
         User user = userOpt.get();
         String clientIp = rateLimitService.getClientIp(request);
 
-        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
 
@@ -1649,7 +1650,7 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
-        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
 
@@ -1970,7 +1971,7 @@ public class OauthController {
                 String callbackIdentity = openid;
                 String uuid = user.getUuid();
                 String clientIpReq = rateLimitService.getClientIp(request);
-                if (!sensitiveOperationService.isVerified(uuid, clientIpReq)) {
+                if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, uuid, clientIpReq, "login-options")) {
                     java.util.Map<String, Object> data = new java.util.HashMap<>();
                     data.put("needVerification", true);
 
@@ -2003,7 +2004,7 @@ public class OauthController {
                     return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
                 }
 
-                if (!sensitiveOperationService.consumeVerification(uuid, clientIpReq)) {
+                if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, uuid, clientIpReq, "login-options")) {
                     return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
                 }
 
@@ -2098,7 +2099,7 @@ public class OauthController {
         User user = userOpt.get();
         String clientIp = rateLimitService.getClientIp(request);
 
-        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
 
@@ -2126,7 +2127,7 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
-        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
 
@@ -2254,7 +2255,7 @@ public class OauthController {
         String clientIp = rateLimitService.getClientIp(request);
         
         // 检查敏感操作验证
-        if (!sensitiveOperationService.isVerified(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).isVerified(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             java.util.Map<String, Object> data = new java.util.HashMap<>();
             data.put("needVerification", true);
 
@@ -2285,7 +2286,7 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.OAUTH_005, data));
         }
 
-        if (!sensitiveOperationService.consumeVerification(userUuid, clientIp)) {
+        if (!SensitiveSessionContext.from(request, jwtUtil).consume(sensitiveOperationService, userUuid, clientIp, "login-options")) {
             return ResponseEntity.status(HttpStatus.ACCEPTED).body(new ApiResponse<>(202, ApiResultCode.SENSITIVE_VERIFICATION_REQUIRED, Map.of("needVerification", true)));
         }
 

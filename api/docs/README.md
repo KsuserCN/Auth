@@ -3,6 +3,7 @@
 > **当前响应契约**：业务接口返回 `code + errorCode + params + data`，四端通过本地文案表解释详细码，不再读取 `msg`。完整定义、全部码表和维护方式见 [统一错误码文档](api-result-codes.md)。旧接口页中的 `msg/message` 示例是历史契约，以统一错误码文档为准。
 
 - [认证实体、历史账号补录与管理员 SQL 维护](user-verification-entity.md)
+- [敏感操作与账号恢复扫码审批](qr-approval-security.md)
 
 
 

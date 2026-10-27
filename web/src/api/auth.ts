@@ -540,10 +540,13 @@ export const initQrMfa = async (mfaChallengeId: string): Promise<QrChallengeInit
   return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
 }
 
-export const initQrSensitive = async (): Promise<QrChallengeInitResponse> => {
+export type QrSensitivePurpose = 'change-password' | 'change-email' | 'delete-account' | 'login-options' | 'session-transfer'
+
+export const initQrSensitive = async (purpose: QrSensitivePurpose): Promise<QrChallengeInitResponse> => {
   const response = await request.post<ApiResponse<QrChallengeInitResponse>>(
     '/auth/qr/sensitive/init',
     {},
+    { params: { purpose } },
   )
   return (response as unknown as ApiResponse<QrChallengeInitResponse>).data
 }
@@ -713,8 +716,8 @@ export interface SensitiveVerificationStatus {
   methods?: Array<'password' | 'email-code' | 'passkey' | 'totp' | 'qr'>
 }
 
-export const checkSensitiveVerification = async (): Promise<SensitiveVerificationStatus> => {
-  const response = await request.get<any>('/auth/check-sensitive-verification')
+export const checkSensitiveVerification = async (purpose?: QrSensitivePurpose): Promise<SensitiveVerificationStatus> => {
+  const response = await request.get<any>('/auth/check-sensitive-verification', { params: { purpose } })
   return response.data as SensitiveVerificationStatus
 }
 
