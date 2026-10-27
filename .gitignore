@@ -77,3 +77,4 @@ api/docs/*
 !api/docs/open-platform-applications.md
 !api/docs/qr-approval-security.md
 !api/docs/totp-enrollment-security.md
+!api/docs/oauth-password-binding-security.md

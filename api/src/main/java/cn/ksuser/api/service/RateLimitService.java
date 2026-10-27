@@ -11,6 +11,9 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.List;
 
 @Service
@@ -55,6 +58,35 @@ public class RateLimitService {
     public enum SendCodeLimit {
         ALLOWED, EMAIL_MINUTE, EMAIL_HOUR, IP_MINUTE, IP_HOUR, UNAVAILABLE
     }
+
+    private static final String PASSWORD_LIMIT_PREFIX = "ratelimit:password:v1:";
+    private static final DefaultRedisScript<Long> ACQUIRE_PASSWORD_ATTEMPT = new DefaultRedisScript<>("""
+        -- Reserve all shared budgets before any expensive credential verification.
+        -- A token counter is created with the pending identity and must keep that original expiry.
+        for i = 1, 4 do
+            local stored = redis.call('GET', KEYS[i])
+            local count = tonumber(stored or '0')
+            if not count or count < 0 or count % 1 ~= 0 then return -1 end
+            if stored and redis.call('TTL', KEYS[i]) < 0 then return -1 end
+            if count >= tonumber(ARGV[i]) then return 1 end
+        end
+        if #KEYS == 5 then
+            local stored = redis.call('GET', KEYS[5])
+            local count = tonumber(stored or '')
+            if not count or count < 0 or count % 1 ~= 0 or redis.call('TTL', KEYS[5]) <= 0 then return 1 end
+            if count >= 5 then return 1 end
+        end
+        for i = 1, 4 do
+            local count = redis.call('INCR', KEYS[i])
+            if count == 1 then
+                redis.call('EXPIRE', KEYS[i], (i == 1 or i == 3) and ARGV[5] or ARGV[6])
+            end
+        end
+        if #KEYS == 5 then redis.call('INCR', KEYS[5]) end
+        return 0
+        """, Long.class);
+
+    public enum PasswordAttemptLimit { ALLOWED, LIMITED, UNAVAILABLE }
     
     // 操作类型常量
     public static final String TYPE_VERIFICATION_CODE = "verify";
@@ -95,6 +127,40 @@ public class RateLimitService {
         if (result == 3) return SendCodeLimit.IP_MINUTE;
         if (result == 4) return SendCodeLimit.IP_HOUR;
         return SendCodeLimit.UNAVAILABLE;
+    }
+
+    /**
+     * A single atomic reservation shared by regular password login and all OAuth bind-existing routes.
+     * The optional token key must already exist with a fixed positive TTL; it is never recreated here.
+     */
+    public PasswordAttemptLimit acquirePasswordAttempt(String accountKey, String ip, String pendingTokenQuotaKey) {
+        if (accountKey == null || accountKey.isBlank() || ip == null || ip.isBlank()
+            || (pendingTokenQuotaKey != null && pendingTokenQuotaKey.isBlank())) return PasswordAttemptLimit.UNAVAILABLE;
+        String account = PASSWORD_LIMIT_PREFIX + "account:" + digest(accountKey);
+        String network = PASSWORD_LIMIT_PREFIX + "ip:" + digest(ip);
+        List<String> keys = pendingTokenQuotaKey == null
+            ? List.of(account + ":minute", account + ":hour", network + ":minute", network + ":hour")
+            : List.of(account + ":minute", account + ":hour", network + ":minute", network + ":hour", pendingTokenQuotaKey);
+        AppProperties.RateLimit limits = appProperties.getRateLimit();
+        try {
+            Long result = redisTemplate.execute(ACQUIRE_PASSWORD_ATTEMPT, keys,
+                Integer.toString(limits.getLoginEmailPerMinute()), Integer.toString(limits.getLoginEmailPerHour()),
+                Integer.toString(limits.getLoginIpPerMinute()), Integer.toString(limits.getLoginIpPerHour()),
+                Long.toString(MINUTE_WINDOW.toSeconds()), Long.toString(HOUR_WINDOW.toSeconds()));
+            if (Long.valueOf(0).equals(result)) return PasswordAttemptLimit.ALLOWED;
+            if (Long.valueOf(1).equals(result)) return PasswordAttemptLimit.LIMITED;
+        } catch (DataAccessException ex) {
+            log.warn("Unable to reserve password authentication quota", ex);
+        }
+        return PasswordAttemptLimit.UNAVAILABLE;
+    }
+
+    private static String digest(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 unavailable", ex);
+        }
     }
 
     /**
@@ -324,17 +390,10 @@ public class RateLimitService {
     }
 
     /**
-     * 成功登录后清除密码登录限制；验证码发送额度独立过期。
+     * Compatibility hook. Successful authentication must not reset shared attempt budgets.
      * @param email 邮箱
      * @param ip IP地址
      */
-    public void clearAllLimits(String email, String ip) {
-        // 清除登录相关的邮箱限制
-        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_LOGIN + ":" + email);
-        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_LOGIN + ":" + email);
-        
-        // 清除登录相关的IP限制
-        redisTemplate.delete(MINUTE_LIMIT_PREFIX + TYPE_LOGIN + ":" + ip);
-        redisTemplate.delete(HOUR_LIMIT_PREFIX + TYPE_LOGIN + ":" + ip);
-    }
+    @Deprecated
+    public void clearAllLimits(String email, String ip) { }
 }

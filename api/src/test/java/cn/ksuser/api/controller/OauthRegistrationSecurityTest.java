@@ -15,6 +15,9 @@ import cn.ksuser.api.repository.UserSettingsRepository;
 import cn.ksuser.api.result.ApiResultCode;
 import cn.ksuser.api.security.SecurityValidator;
 import cn.ksuser.api.service.MfaService;
+import cn.ksuser.api.service.OauthPendingBindingService;
+import cn.ksuser.api.service.OauthBindingCompletionService;
+import cn.ksuser.api.service.PasswordAuthenticationService;
 import cn.ksuser.api.service.AccountRecoveryService;
 import cn.ksuser.api.service.AdaptiveRiskMetricsService;
 import cn.ksuser.api.service.AdaptiveRiskOrchestrationService;
@@ -63,8 +66,8 @@ class OauthRegistrationSecurityTest {
     private static final String CHANGED_IP = "192.0.2.99";
     private static final String USER_AGENT = "registration-security-test";
     private static final String CODE = "012345";
-    private static final String BIND_TOKEN = "pending-fixture";
-    private static final String PENDING_KEY = "oauth:pending-bind:" + BIND_TOKEN;
+    private static final String BIND_TOKEN = "A".repeat(32);
+    private static final String PENDING_KEY = "fixture:oauth-pending-ticket";
     private static final String PASSWORD = "StrongPass123";
 
     private OauthController controller;
@@ -81,6 +84,7 @@ class OauthRegistrationSecurityTest {
     private StringRedisTemplate redis;
     private MockHttpServletRequest http;
     private MockHttpServletResponse servletResponse;
+    private User registeredUser;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -119,6 +123,29 @@ class OauthRegistrationSecurityTest {
         controller = new OauthController(properties, accounts, mock(UserRepository.class), users,
             jwt, sessions, rateLimit, settings, mock(TotpService.class), mock(MfaService.class), logs,
             mock(UserPasskeyRepository.class), mock(SensitiveOperationService.class), redis, validation);
+        // These tests exercise registration policy; ticket state and SQL completion have separate integration tests.
+        OauthPendingBindingService pending = mock(OauthPendingBindingService.class);
+        when(pending.resolve(anyString(), any())).thenAnswer(call -> {
+            String raw = redisState.get(PENDING_KEY);
+            if (!BIND_TOKEN.equals(call.getArgument(1)) || raw == null) {
+                throw new OauthPendingBindingService.BindingFailure(org.springframework.http.HttpStatus.BAD_REQUEST, ApiResultCode.OAUTH_087);
+            }
+            var identity = new ObjectMapper().readTree(raw);
+            return new OauthPendingBindingService.Identity(call.getArgument(0), identity.path("providerUserId").asText(),
+                identity.path("unionId").asText(null));
+        });
+        when(pending.claim(anyString(), eq(BIND_TOKEN), anyLong())).thenAnswer(call ->
+            new OauthPendingBindingService.Claim(BIND_TOKEN, "fixture-owner", call.getArgument(2),
+                pending.resolve(call.getArgument(0), BIND_TOKEN)));
+        OauthBindingCompletionService completion = mock(OauthBindingCompletionService.class);
+        when(completion.complete(any())).thenAnswer(call -> {
+            OauthPendingBindingService.Claim claim = call.getArgument(0);
+            UserOauthAccount account = new UserOauthAccount();
+            account.setUserId(claim.userId()); account.setProvider(claim.identity().provider());
+            account.setProviderUserId(claim.identity().providerUserId()); account.setUnionId(claim.identity().unionId());
+            accounts.save(account); redisState.remove(PENDING_KEY); return registeredUser;
+        });
+        controller.configurePasswordBindingSecurity(mock(PasswordAuthenticationService.class), pending, completion);
         doReturn(IP).when(rateLimit).getClientIp(any());
         doReturn(USER_AGENT).when(rateLimit).getClientUserAgent(any());
         http = new MockHttpServletRequest();
@@ -341,6 +368,7 @@ class OauthRegistrationSecurityTest {
     private User prepareSuccessfulRegistration(String username, String currentIp) {
         User user = new User("registered-uuid", username, EMAIL, "stored-password-hash");
         user.setId(17L);
+        registeredUser = user;
         when(users.register(username, EMAIL, PASSWORD))
             .thenReturn(new RegisterResult(RegisterResult.Status.SUCCESS, user));
         UserSession session = new UserSession();

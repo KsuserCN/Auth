@@ -5,7 +5,10 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "user_oauth_accounts")
+@Table(name = "user_oauth_accounts", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_oauth_provider_user", columnNames = {"provider", "provider_user_id"}),
+    @UniqueConstraint(name = "uk_oauth_provider_union", columnNames = {"provider", "union_id"})
+})
 public class UserOauthAccount {
 
     @Id

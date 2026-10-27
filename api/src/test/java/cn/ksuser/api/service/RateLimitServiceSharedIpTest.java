@@ -84,7 +84,7 @@ class RateLimitServiceSharedIpTest {
     }
 
     @Test
-    void successfulLoginOnlyClearsLoginCountersAndPreservesSharedVerificationQuota() {
+    void successfulLoginCannotClearSharedAttemptOrVerificationBudgets() {
         String email = "same@example.com";
         assertEquals(ALLOWED, service.acquireSendCodePermit(email, IP));
         service.recordEmailRequest(email, RateLimitService.TYPE_LOGIN);
@@ -92,10 +92,10 @@ class RateLimitServiceSharedIpTest {
 
         service.clearAllLimits(email, IP);
 
-        assertNull(redis.get("ratelimit:minute:login:" + email));
-        assertNull(redis.get("ratelimit:hour:login:" + email));
-        assertNull(redis.get("ratelimit:minute:login:" + IP));
-        assertNull(redis.get("ratelimit:hour:login:" + IP));
+        assertEquals("1", redis.get("ratelimit:minute:login:" + email));
+        assertEquals("1", redis.get("ratelimit:hour:login:" + email));
+        assertEquals("1", redis.get("ratelimit:minute:login:" + IP));
+        assertEquals("1", redis.get("ratelimit:hour:login:" + IP));
         assertEquals("1", redis.get(minute(email)));
         assertEquals("1", redis.get(hour(email)));
         assertEquals("1", redis.get(minute(IP)));

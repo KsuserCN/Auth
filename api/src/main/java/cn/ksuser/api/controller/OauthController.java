@@ -14,6 +14,9 @@ import cn.ksuser.api.entity.UserSession;
 import cn.ksuser.api.repository.UserOauthAccountRepository;
 import cn.ksuser.api.repository.UserRepository;
 import cn.ksuser.api.service.RateLimitService;
+import cn.ksuser.api.service.PasswordAuthenticationService;
+import cn.ksuser.api.service.OauthPendingBindingService;
+import cn.ksuser.api.service.OauthBindingCompletionService;
 import cn.ksuser.api.service.RegistrationValidationService;
 import cn.ksuser.api.service.UserSessionService;
 import cn.ksuser.api.util.JwtUtil;
@@ -23,6 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -74,6 +78,18 @@ public class OauthController {
     private final cn.ksuser.api.repository.UserPasskeyRepository userPasskeyRepository;
     private final cn.ksuser.api.service.SensitiveOperationService sensitiveOperationService;
     private final StringRedisTemplate redisTemplate;
+    private PasswordAuthenticationService passwordAuthentication;
+    private OauthPendingBindingService pendingBindings;
+    private OauthBindingCompletionService bindingCompletion;
+
+    @Autowired
+    void configurePasswordBindingSecurity(PasswordAuthenticationService passwordAuthentication,
+                                         OauthPendingBindingService pendingBindings,
+                                         OauthBindingCompletionService bindingCompletion) {
+        this.passwordAuthentication = passwordAuthentication;
+        this.pendingBindings = pendingBindings;
+        this.bindingCompletion = bindingCompletion;
+    }
 
     @Value("${app.qq.oauth.app-id:}")
     private String qqClientId;
@@ -899,7 +915,7 @@ public class OauthController {
     }
 
     /**
-     * 绑定已有账号（前端传入 openid、email、password）
+     * 使用可信 OAuth 待绑定令牌与已有账号凭据开始绑定。
      */
     @PostMapping({"/qq/bind-existing", "/github/bind-existing", "/microsoft/bind-existing", "/google/bind-existing"})
     public ResponseEntity<ApiResponse<Object>> bindExisting(@RequestBody cn.ksuser.api.dto.OauthBindRequest req,
@@ -908,7 +924,7 @@ public class OauthController {
         String provider = resolveProviderFromRequest(request, req.getProvider());
         String email = req.getEmail();
         String password = req.getPassword();
-        if (provider == null || email == null || email.isEmpty() || password == null || password.isEmpty()) {
+        if (provider == null || email == null || email.isBlank() || password == null || password.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiResultCode.OAUTH_007));
         }
 
@@ -919,8 +935,13 @@ public class OauthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(400, ApiFailures.result(ex, ApiResultCode.BAD_REQUEST)));
         }
 
-        // 验证用户凭据（使用 UserService.login）
-        var loginOpt = userService.login(email, password);
+        java.util.Optional<User> loginOpt;
+        try {
+            loginOpt = passwordAuthentication.authenticate(email, password, rateLimitService.getClientIp(request),
+                pendingBindings.quotaKey(req.getBindToken()));
+        } catch (PasswordAuthenticationService.AuthenticationFailure ex) {
+            return ResponseEntity.status(ex.status()).body(new ApiResponse<>(ex.status().value(), ex.resultCode()));
+        }
         if (loginOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(401, ApiResultCode.AUTH_036));
         }
@@ -930,10 +951,8 @@ public class OauthController {
         if (conflict != null) {
             return conflict;
         }
-        linkOauthAccount(provider, user, pending);
-        consumePendingOauthIdentity(req.getBindToken());
-
-        return issueOauthLoginResponse(user, provider, request, response, System.currentTimeMillis(), ApiResultCode.OAUTH_002);
+        OauthPendingBindingService.Claim claim = pendingBindings.claim(provider, req.getBindToken(), user.getId());
+        return issueOauthBindingResponse(user, provider, claim, request, response, System.currentTimeMillis(), ApiResultCode.OAUTH_002);
     }
 
     /**
@@ -988,11 +1007,10 @@ public class OauthController {
         // 为新注册用户初始化默认 settings，确保后续设置相关接口有稳定初始数据
         getOrCreateUserSettings(newUser.getId());
 
-        linkOauthAccount(provider, newUser, pending);
-        consumePendingOauthIdentity(req.getBindToken());
+        OauthPendingBindingService.Claim claim = pendingBindings.claim(provider, req.getBindToken(), newUser.getId());
         sensitiveLogUtil.logRegister(request, newUser.getId(), true, null, startTime);
 
-        return issueOauthLoginResponse(newUser, provider, request, response, startTime, ApiResultCode.OAUTH_003);
+        return issueOauthBindingResponse(newUser, provider, claim, request, response, startTime, ApiResultCode.OAUTH_003);
     }
 
     @PostMapping({"/qq/bind-pending", "/github/bind-pending", "/microsoft/bind-pending", "/google/bind-pending"})
@@ -1028,8 +1046,8 @@ public class OauthController {
         if (conflict != null) {
             return conflict;
         }
-        linkOauthAccount(provider, user, pending);
-        consumePendingOauthIdentity(req.getBindToken());
+        OauthPendingBindingService.Claim claim = pendingBindings.claim(provider, req.getBindToken(), user.getId());
+        bindingCompletion.complete(claim);
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("bound", true);
@@ -2338,12 +2356,7 @@ public class OauthController {
                                                                      String unionId,
                                                                      String operationType,
                                                                      String env) throws Exception {
-        String token = java.util.UUID.randomUUID().toString().replace("-", "");
-        java.util.Map<String, Object> pending = new java.util.HashMap<>();
-        pending.put("provider", provider);
-        pending.put("providerUserId", providerUserId);
-        pending.put("unionId", unionId);
-        redisTemplate.opsForValue().set(pendingOauthKey(token), objectMapper.writeValueAsString(pending), Duration.ofMinutes(15));
+        String token = pendingBindings.create(provider, providerUserId, unionId);
 
         java.util.Map<String, Object> data = new java.util.HashMap<>();
         data.put("needBind", true);
@@ -2356,46 +2369,13 @@ public class OauthController {
         return data;
     }
 
-    private String pendingOauthKey(String token) {
-        return "oauth:pending-bind:" + token;
-    }
-
     private PendingOauthIdentity resolvePendingOauthIdentity(String provider, String bindToken) {
-        String normalizedProvider = normalizeOauthProvider(provider);
-        if (normalizedProvider == null) {
-            throw new BusinessArgumentException(ApiResultCode.OAUTH_086);
-        }
-
-        if (bindToken != null && !bindToken.isBlank()) {
-            String raw = redisTemplate.opsForValue().get(pendingOauthKey(bindToken.trim()));
-            if (raw == null || raw.isBlank()) {
-                throw new BusinessArgumentException(ApiResultCode.OAUTH_087);
-            }
-            try {
-                JsonNode json = objectMapper.readTree(raw);
-                String tokenProvider = normalizeOauthProvider(json.path("provider").asText(null));
-                String providerUserId = json.path("providerUserId").asText(null);
-                String unionId = json.path("unionId").asText(null);
-                if (!normalizedProvider.equals(tokenProvider) || providerUserId == null || providerUserId.isBlank()) {
-                    throw new BusinessArgumentException(ApiResultCode.OAUTH_088);
-                }
-                if (unionId != null && unionId.isBlank()) {
-                    unionId = null;
-                }
-                return new PendingOauthIdentity(providerUserId, unionId);
-            } catch (IllegalArgumentException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                throw new BusinessArgumentException(ApiResultCode.OAUTH_088);
-            }
-        }
-
-        throw new BusinessArgumentException(ApiResultCode.OAUTH_089);
-    }
-
-    private void consumePendingOauthIdentity(String bindToken) {
-        if (bindToken != null && !bindToken.isBlank()) {
-            redisTemplate.delete(pendingOauthKey(bindToken.trim()));
+        try {
+            var identity = pendingBindings.resolve(provider, bindToken);
+            return new PendingOauthIdentity(identity.providerUserId(), identity.unionId());
+        } catch (OauthPendingBindingService.BindingFailure ex) {
+            if (ex.status() == HttpStatus.BAD_REQUEST) throw new BusinessArgumentException(ex.resultCode());
+            throw ex;
         }
     }
 
@@ -2461,6 +2441,34 @@ public class OauthController {
             }
         }
 
+        return issueAuthenticatedOauthLoginResponse(user, provider, request, response, startTime, message);
+    }
+
+    /** A password establishes the target account; binding waits for every required factor. */
+    private ResponseEntity<ApiResponse<Object>> issueOauthBindingResponse(User user, String provider,
+            OauthPendingBindingService.Claim claim, HttpServletRequest request, HttpServletResponse response,
+            long startTime, ApiResultCode message) {
+        UserSettings settings = userSettingsRepository.findByUserId(user.getId()).orElse(null);
+        if (settings != null && Boolean.TRUE.equals(settings.getMfaEnabled())) {
+            List<String> methods = resolveOauthMfaMethods(user.getId()).stream()
+                .filter(method -> "totp".equals(method) || "passkey".equals(method)).toList();
+            if (methods.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ApiResponse<>(403, ApiResultCode.AUTH_045));
+            }
+            String challengeId = mfaService.createOauthBindingChallenge(user.getId(), rateLimitService.getClientIp(request),
+                rateLimitService.getClientUserAgent(request), provider, new HashSet<>(methods), claim);
+            Map<String, Object> data = new HashMap<>();
+            data.put("challengeId", challengeId); data.put("method", methods.get(0));
+            data.put("methods", methods); data.put("provider", provider);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(new ApiResponse<>(201, ApiResultCode.AUTH_MFA_REQUIRED, data));
+        }
+        User bound = bindingCompletion.complete(claim);
+        return issueAuthenticatedOauthLoginResponse(bound, provider, request, response, startTime, message);
+    }
+
+    private ResponseEntity<ApiResponse<Object>> issueAuthenticatedOauthLoginResponse(User user, String provider,
+            HttpServletRequest request, HttpServletResponse response, long startTime, ApiResultCode message) {
         String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
         String userAgent = rateLimitService.getClientUserAgent(request);
         UserSession session = userSessionService.createSession(user, refreshToken, rateLimitService.getClientIp(request), userAgent);
@@ -2474,6 +2482,11 @@ public class OauthController {
         data.put("user", user);
         data.put("provider", provider);
         return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(200, message, data));
+    }
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(OauthPendingBindingService.BindingFailure.class)
+    public ResponseEntity<ApiResponse<Object>> bindingFailure(OauthPendingBindingService.BindingFailure ex) {
+        return ResponseEntity.status(ex.status()).body(new ApiResponse<>(ex.status().value(), ex.result()));
     }
 
     private String resolveProviderFromRequest(HttpServletRequest request, String explicitProvider) {

@@ -2,10 +2,12 @@ package cn.ksuser.api.service;
 
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,10 +22,11 @@ public class MfaService {
         public final String loginMethod;
         public final Set<String> allowedMethods;
         public final long expiresAt;
-        public int failedAttempts; // ✅ 添加失败次数记录
+        public final OauthPendingBindingService.Claim oauthBindingClaim;
+        public volatile int failedAttempts;
 
         public Challenge(Long userId, String clientIp, String userAgent, String loginMethod,
-                         Set<String> allowedMethods, long expiresAt) {
+                         Set<String> allowedMethods, long expiresAt, OauthPendingBindingService.Claim oauthBindingClaim) {
             this.userId = userId;
             this.clientIp = clientIp;
             this.userAgent = userAgent;
@@ -31,10 +34,17 @@ public class MfaService {
             this.allowedMethods = allowedMethods;
             this.expiresAt = expiresAt;
             this.failedAttempts = 0;
+            this.oauthBindingClaim = oauthBindingClaim;
         }
     }
 
     private final Map<String, Challenge> store = new ConcurrentHashMap<>();
+    private final Clock clock;
+
+    public MfaService() { this(Clock.systemUTC()); }
+    MfaService(Clock clock) { this.clock = clock; }
+
+    public record Completion(Long userId, String loginMethod, OauthPendingBindingService.Claim oauthBindingClaim) {}
 
     // challenge 有效期（秒）
     private static final long DEFAULT_TTL_SECONDS = 300; // 5 分钟
@@ -47,9 +57,32 @@ public class MfaService {
     public String createChallenge(Long userId, String clientIp, String userAgent,
                                   String loginMethod, Set<String> allowedMethods) {
         String id = UUID.randomUUID().toString();
-        long expiresAt = Instant.now().getEpochSecond() + DEFAULT_TTL_SECONDS;
+        long expiresAt = clock.instant().getEpochSecond() + DEFAULT_TTL_SECONDS;
         Set<String> normalized = normalizeMethods(allowedMethods);
-        store.put(id, new Challenge(userId, clientIp, userAgent, loginMethod, normalized, expiresAt));
+        store.put(id, new Challenge(userId, clientIp, userAgent, loginMethod, normalized, expiresAt, null));
+        return id;
+    }
+
+    /** Only a complete independent factor can authorize writing a new OAuth login credential. */
+    public String createOauthBindingChallenge(Long userId, String clientIp, String userAgent,
+            String loginMethod, Set<String> allowedMethods, OauthPendingBindingService.Claim claim) {
+        if (claim == null || !Objects.equals(userId, claim.userId())) {
+            throw new IllegalArgumentException("OAuth binding target does not match MFA user");
+        }
+        Set<String> normalized = new HashSet<>();
+        if (allowedMethods != null) {
+            for (String method : allowedMethods) {
+                if (method == null) continue;
+                String value = method.trim().toLowerCase(Locale.ROOT);
+                if ("totp".equals(value) || "passkey".equals(value)) normalized.add(value);
+            }
+        }
+        if (normalized.isEmpty()) {
+            throw new IllegalArgumentException("OAuth binding requires an existing MFA credential");
+        }
+        String id = UUID.randomUUID().toString();
+        store.put(id, new Challenge(userId, clientIp, normalizeUserAgent(userAgent), loginMethod,
+            Collections.unmodifiableSet(normalized), clock.instant().getEpochSecond() + DEFAULT_TTL_SECONDS, claim));
         return id;
     }
 
@@ -62,7 +95,7 @@ public class MfaService {
             if (method == null || method.isBlank()) {
                 continue;
             }
-            String value = method.trim().toLowerCase();
+            String value = method.trim().toLowerCase(Locale.ROOT);
             if ("totp".equals(value) || "passkey".equals(value) || "qr".equals(value)) {
                 normalized.add(value);
             }
@@ -81,16 +114,11 @@ public class MfaService {
         if (challengeId == null) return null;
         Challenge chal = store.get(challengeId);
         if (chal == null) return null;
-        long now = Instant.now().getEpochSecond();
-        if (chal.expiresAt < now) {
+        if (isExpiredOrExhausted(chal)) {
             store.remove(challengeId); // 过期则删除
             return null;
         }
-        // ✅ 检查是否超过最大失败次数
-        if (chal.failedAttempts >= MAX_FAILED_ATTEMPTS) {
-            store.remove(challengeId); // 超过失败次数则删除
-            return null;
-        }
+        if (!matchesBindingContext(chal, clientIp, userAgent)) return null;
         return chal.userId;
     }
 
@@ -99,15 +127,15 @@ public class MfaService {
             return false;
         }
         Challenge chal = store.get(challengeId);
-        if (chal == null) {
+        if (chal == null || isExpiredOrExhausted(chal)) {
             return false;
         }
-        return chal.allowedMethods.contains(method.trim().toLowerCase());
+        return chal.allowedMethods.contains(method.trim().toLowerCase(Locale.ROOT));
     }
 
     public Set<String> getAllowedMethods(String challengeId) {
         Challenge chal = store.get(challengeId);
-        if (chal == null) {
+        if (chal == null || isExpiredOrExhausted(chal)) {
             return Set.of();
         }
         return chal.allowedMethods;
@@ -126,10 +154,10 @@ public class MfaService {
      */
     public void recordFailedAttempt(String challengeId) {
         if (challengeId == null) return;
-        Challenge chal = store.get(challengeId);
-        if (chal != null) {
+        store.computeIfPresent(challengeId, (id, chal) -> {
             chal.failedAttempts++;
-        }
+            return chal;
+        });
     }
 
     /**
@@ -149,5 +177,33 @@ public class MfaService {
         if (challengeId != null) {
             store.remove(challengeId);
         }
+    }
+
+    /** Claims MFA completion once, retaining its trusted binding metadata after removal. */
+    public Completion claimSuccessfulChallenge(String challengeId, String clientIp, String userAgent) {
+        if (challengeId == null) return null;
+        Completion[] completed = new Completion[1];
+        store.computeIfPresent(challengeId, (id, chal) -> {
+            if (isExpiredOrExhausted(chal)) return null;
+            if (!matchesBindingContext(chal, clientIp, userAgent)) return chal;
+            completed[0] = new Completion(chal.userId, chal.loginMethod, chal.oauthBindingClaim);
+            return null;
+        });
+        return completed[0];
+    }
+
+    private boolean isExpiredOrExhausted(Challenge challenge) {
+        return challenge.expiresAt <= clock.instant().getEpochSecond()
+            || challenge.failedAttempts >= MAX_FAILED_ATTEMPTS;
+    }
+
+    private boolean matchesBindingContext(Challenge challenge, String clientIp, String userAgent) {
+        // Existing QR MFA moves between devices. New OAuth credential creation stays at its initiator.
+        return challenge.oauthBindingClaim == null || (Objects.equals(challenge.clientIp, clientIp)
+            && Objects.equals(challenge.userAgent, normalizeUserAgent(userAgent)));
+    }
+
+    private static String normalizeUserAgent(String userAgent) {
+        return userAgent == null || userAgent.isBlank() ? "unknown" : userAgent.trim();
     }
 }

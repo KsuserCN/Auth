@@ -88,6 +88,18 @@ public class AuthController {
     private ConsoleSessionService consoleSessionService;
     private OfficialQrAuthorizationService officialQrAuthorizationService;
     private MobileAuthorizationService mobileAuthorizationService;
+    private PasswordAuthenticationService passwordAuthenticationService;
+    private OauthBindingCompletionService oauthBindingCompletionService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setPasswordAuthenticationService(PasswordAuthenticationService service) {
+        this.passwordAuthenticationService = service;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setOauthBindingCompletionService(OauthBindingCompletionService service) {
+        this.oauthBindingCompletionService = service;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     public void setMobileAuthorizationService(MobileAuthorizationService service) {
@@ -480,8 +492,7 @@ public class AuthController {
         // 将 RefreshToken 设置到 HttpOnly Cookie (包含 SameSite=Strict CSRF 保护)
         setRefreshTokenCookie(response, refreshToken);
 
-        // 清除登录额度；验证码发送额度独立过期，避免登录重置共享网络的发码限制。
-        rateLimitService.clearAllLimits(email, clientIp);
+        // Password and delivery budgets expire naturally; another successful login cannot reset them.
 
         // 记录成功登录日志
         sensitiveLogUtil.logLogin(request, user.getId(), "EMAIL_CODE", true, null, startTime);
@@ -517,24 +528,18 @@ public class AuthController {
                 .body(new ApiResponse<>(400, ApiResultCode.AUTH_017));
         }
 
-        // 速率限制检查
-        if (!rateLimitService.isEmailAllowed(email, RateLimitService.TYPE_LOGIN)) {
-            sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Rate limit exceeded", startTime);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, ApiResultCode.AUTH_035));
+        User user;
+        try {
+            if (passwordAuthenticationService == null) {
+                return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(new ApiResponse<>(503, ApiResultCode.INTERNAL_ERROR));
+            }
+            user = passwordAuthenticationService.authenticate(email, password, clientIp).orElse(null);
+        } catch (PasswordAuthenticationService.AuthenticationFailure failure) {
+            sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Password authentication rejected", startTime);
+            return ResponseEntity.status(failure.status())
+                .body(new ApiResponse<>(failure.status().value(), failure.resultCode()));
         }
-        if (!rateLimitService.isIpAllowed(clientIp, RateLimitService.TYPE_LOGIN)) {
-            sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Rate limit exceeded", startTime);
-            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .body(new ApiResponse<>(429, ApiResultCode.AUTH_035));
-        }
-
-        // 记录请求
-        rateLimitService.recordEmailRequest(email, RateLimitService.TYPE_LOGIN);
-        rateLimitService.recordIpRequest(clientIp, RateLimitService.TYPE_LOGIN);
-
-        // 执行登录
-        User user = userService.login(email, password).orElse(null);
         if (user == null) {
             sensitiveLogUtil.logLogin(request, null, "PASSWORD", false, "Invalid email or password", startTime);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -1897,9 +1902,9 @@ public class AuthController {
         }
 
         long startTime = System.currentTimeMillis();
+        String loginMethod = mfaService.getLoginMethod(requestBody.getChallengeId());
+        String logMethod = Arrays.asList(loginMethod, "mfa").toString();
         try {
-            String loginMethod = mfaService.getLoginMethod(requestBody.getChallengeId());
-            String logMethod = Arrays.asList(loginMethod, "mfa").toString();
             byte[] masterKey = encryptionUtil.getMasterKey();
             boolean ok = false;
             String verifyMethod = "unknown";
@@ -1937,8 +1942,13 @@ public class AuthController {
                 }
             }
 
-            // ✅ 验证通过后，消费并删除challenge
-            mfaService.consumeChallenge(requestBody.getChallengeId());
+            MfaService.Completion completed = mfaService.claimSuccessfulChallenge(
+                requestBody.getChallengeId(), clientIp, userAgent);
+            if (completed == null || !user.getId().equals(completed.userId())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_105));
+            }
+            user = completeMfaOauthBinding(user, completed);
 
             // 正常创建会话并下发 token
             String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
@@ -1953,9 +1963,11 @@ public class AuthController {
 
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
+        } catch (OauthPendingBindingService.BindingFailure failure) {
+            sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, "OAuth binding completion rejected", startTime);
+            return ResponseEntity.status(failure.status())
+                .body(new ApiResponse<>(failure.status().value(), failure.result()));
         } catch (Exception e) {
-            String loginMethod = mfaService.getLoginMethod(requestBody.getChallengeId());
-            String logMethod = Arrays.asList(loginMethod, "mfa").toString();
             sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, e.getMessage(), startTime);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, ApiResultCode.AUTH_109));
@@ -2024,7 +2036,13 @@ public class AuthController {
                     .body(new ApiResponse<>(400, ApiResultCode.AUTH_112));
             }
 
-            mfaService.consumeChallenge(requestBody.getMfaChallengeId());
+            MfaService.Completion completed = mfaService.claimSuccessfulChallenge(
+                requestBody.getMfaChallengeId(), clientIp, userAgent);
+            if (completed == null || !user.getId().equals(completed.userId())) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponse<>(400, ApiResultCode.AUTH_083));
+            }
+            user = completeMfaOauthBinding(user, completed);
 
             String refreshToken = jwtUtil.generateRefreshToken(user.getUuid());
             UserSession session = userSessionService.createSession(user, refreshToken, clientIp, userAgent);
@@ -2036,6 +2054,10 @@ public class AuthController {
 
             return ResponseEntity.status(HttpStatus.OK)
                 .body(new ApiResponse<>(200, ApiResultCode.AUTH_034, new TokenResponse(accessToken)));
+        } catch (OauthPendingBindingService.BindingFailure failure) {
+            sensitiveLogUtil.logLogin(httpRequest, user.getId(), logMethod, false, "OAuth binding completion rejected", startTime);
+            return ResponseEntity.status(failure.status())
+                .body(new ApiResponse<>(failure.status().value(), failure.result()));
         } catch (IllegalArgumentException e) {
             mfaService.recordFailedAttempt(requestBody.getMfaChallengeId());
             int remaining = mfaService.getRemainingAttempts(requestBody.getMfaChallengeId());
@@ -2051,6 +2073,16 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ApiResponse<>(500, ApiResultCode.AUTH_115));
         }
+    }
+
+    private User completeMfaOauthBinding(User user, MfaService.Completion completed) {
+        if (completed.oauthBindingClaim() == null) return user;
+        if (oauthBindingCompletionService == null) throw new IllegalStateException("OAuth binding completion unavailable");
+        User boundUser = oauthBindingCompletionService.complete(completed.oauthBindingClaim());
+        if (boundUser == null || !user.getId().equals(boundUser.getId())) {
+            throw new IllegalStateException("OAuth binding completion target mismatch");
+        }
+        return boundUser;
     }
 
     /**

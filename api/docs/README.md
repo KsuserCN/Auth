@@ -5,6 +5,7 @@
 - [认证实体、历史账号补录与管理员 SQL 维护](user-verification-entity.md)
 - [敏感操作与账号恢复扫码审批](qr-approval-security.md)
 - [TOTP 首次绑定与授权](totp-enrollment-security.md)
+- [OAuth 绑定密码限速与 MFA 提交](oauth-password-binding-security.md)
 
 
 
